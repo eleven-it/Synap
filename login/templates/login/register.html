@@ -1,81 +1,36 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Registrarse - FixSync</title>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-        import { firebaseConfig, backendRoutes } from "/login/firebase-config.js";
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-
-        // Obtener CSRF Token desde cookies
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== "") {
-                const cookies = document.cookie.split(";");
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
-                }
-            }
-            return cookieValue;
-        }
-        const csrftoken = getCookie("csrftoken");
-
-        function registerUser(event) {
-            event.preventDefault();
-
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-
-            createUserWithEmailAndPassword(auth, email, password)
-                .then((userCredential) => {
-                    return userCredential.user.getIdToken();
-                })
-                .then((idToken) => {
-                    return fetch(backendRoutes.login, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "X-CSRFToken": csrftoken
-                        },
-                        body: JSON.stringify({ idToken })
-                    });
-                })
-                .then((response) => {
-                    if (response.ok) {
-                        window.location.href = "/dashboard/";
-                    } else {
-                        alert("Error al iniciar sesión después del registro.");
-                    }
-                })
-                .catch((error) => {
-                    alert("Error al registrarse: " + error.message);
-                });
-        }
-
-        window.registerUser = registerUser;
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <title>FixSync - Registro</title>
+  {% load static %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="/static/login/firebase-init.js"></script>
 </head>
-<body class="bg-gray-100 flex justify-center items-center min-h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-lg w-96">
-        <h2 class="text-center text-2xl font-semibold mb-6">Crear Cuenta</h2>
-        <form onsubmit="registerUser(event)">
-            <input type="email" id="email" placeholder="Correo" class="w-full p-3 border rounded-lg mb-3" required />
-            <input type="password" id="password" placeholder="Contraseña" class="w-full p-3 border rounded-lg mb-3" required />
-            <button class="w-full bg-black text-white py-3 rounded-lg">Registrarse</button>
-        </form>
-        <div class="text-center mt-4 space-y-2">
-            <p class="text-gray-500">¿Ya tenés cuenta?</p>
-            <a href="{% url 'login:login' %}" class="text-blue-600 hover:underline">Iniciar Sesión</a>
-        </div>
-    </div>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-4 text-center">Crear cuenta</h2>
+    <form onsubmit="registerUser(event)">
+      <div class="mb-4">
+        <label for="nombre" class="block text-gray-700 text-sm font-bold mb-2">Nombre completo</label>
+        <input id="nombre" type="text" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <div class="mb-4">
+        <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Correo electrónico</label>
+        <input id="email" type="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <div class="mb-4">
+        <label for="password" class="block text-gray-700 text-sm font-bold mb-2">Contraseña</label>
+        <input id="password" type="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <p id="error-message" class="text-red-500 text-sm hidden mb-4"></p>
+      <div class="flex items-center justify-between">
+        <button type="submit" class="bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+          Registrarse
+        </button>
+      </div>
+    </form>
+    <p class="mt-4 text-sm text-center">¿Ya tenés cuenta? <a href="{% url 'login:login' %}" class="text-blue-500 hover:underline">Iniciar sesión</a></p>
+  </div>
 </body>
 </html>

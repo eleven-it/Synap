@@ -1,5 +1,6 @@
 import json
 import firebase_admin.auth as auth
+import logging
 
 from django.urls import reverse
 from django.http import HttpResponse
@@ -8,7 +9,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from firebase_admin import auth
 from django.views.decorators.csrf import csrf_exempt
-import logging
+from django.contrib.auth.decorators import login_required
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +59,17 @@ export {{ firebaseConfig, backendRoutes, getCookie }};
 """
     return HttpResponse(js_content, content_type="application/javascript")
 
-
-
 @csrf_exempt
 def login_view(request):
     if request.session.get("user"):
-        return redirect("dashboard:home")
+        tipo = request.session["user"].get("tipo_usuario")
+
+        if tipo == "cliente":
+            return redirect("clientes:dashboard")
+        elif tipo == "proveedor":
+            return redirect("proveedores:dashboard")
+        else:
+            return redirect("login:completar_perfil")
 
     if request.method == "POST":
         try:
@@ -84,7 +90,6 @@ def login_view(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return render(request, "login/login.html")
-
 
 def logout_view(request):
     request.session.flush()  # Elimina toda la sesión
@@ -113,3 +118,13 @@ def perfil_view(request):
         return redirect("login:login")  # Redirige si no está logueado
 
     return render(request, "login/perfil.html", {"user": request.session["user"]})
+
+def dashboard_view(request):
+    if "user" not in request.session:
+        return redirect("login:login")
+
+    user_info = request.session.get("user", {})
+    return render(request, "dashboard/dashboard.html", {"user": user_info})
+
+def completar_perfil_view(request):
+    return render(request, "login/completar_perfil.html")

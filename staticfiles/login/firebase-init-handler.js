@@ -4,12 +4,17 @@ import {
   getRedirectResult,
   browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-
+import {
+  getFirestore,
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { firebaseConfig, backendRoutes, getCookie } from "/login/firebase-config.js";
 
 console.log("🔁 Ejecutando firebase-init-handler.js...");
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 auth.useDeviceLanguage();
 
 auth.setPersistence(browserSessionPersistence)
@@ -31,16 +36,12 @@ auth.setPersistence(browserSessionPersistence)
           },
           credentials: "same-origin",
           body: JSON.stringify({ idToken })
+        }).then(() => {
+          return verificarTipoUsuarioYRedirigir(result.user);
         });
       });
     } else {
       console.warn("⚠️ No se recibió ningún usuario desde el redirect.");
-    }
-  })
-  .then((response) => {
-    if (response && response.ok) {
-      console.log("✅ Redirigiendo al dashboard...");
-      window.location.href = "/dashboard/";
     }
   })
   .catch((error) => {
@@ -50,4 +51,25 @@ auth.setPersistence(browserSessionPersistence)
 
 function showError(message) {
   alert(message);
+}
+
+// 🔍 Verificar tipo_usuario y redirigir según corresponda
+async function verificarTipoUsuarioYRedirigir(user) {
+  const usuarioRef = doc(db, "usuarios", user.uid);
+  const docSnap = await getDoc(usuarioRef);
+
+  if (!docSnap.exists() || !docSnap.data().tipo_usuario) {
+    console.log("👤 Usuario sin tipo. Redirigiendo a completar perfil.");
+    window.location.href = "/login/completar-perfil/";
+    return;
+  }
+
+  const tipo = docSnap.data().tipo_usuario;
+  console.log("✅ Tipo de usuario:", tipo);
+
+  if (tipo === "cliente") {
+    window.location.href = "/clientes/dashboard/";
+  } else {
+    window.location.href = "/proveedores/dashboard/";
+  }
 }

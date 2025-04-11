@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'login',
     'clientes',
     'dashboard',
+    'proveedores',
     
     # Terceros
     'theme',
@@ -54,7 +55,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
-    #'middleware.firebase_auth_middleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',    
 ]
 
 # URLs y WSGI

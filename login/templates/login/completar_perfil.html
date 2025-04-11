@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>FixSync - Completar perfil</title>
+  {% load static %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="/static/login/firebase-init.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-4 text-center">Completar perfil</h2>
+    <p class="text-gray-600 text-sm text-center mb-6">Seleccioná el tipo de cuenta para continuar:</p>
+
+    <div class="flex flex-col gap-4">
+      <button onclick="guardarTipoUsuario('cliente')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded w-full">
+        🏡 Soy cliente
+      </button>
+
+      <button onclick="guardarTipoUsuario('proveedor')" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded w-full">
+        🛠️ Soy proveedor
+      </button>
+    </div>
+
+    <p id="error-message" class="text-red-500 text-sm mt-4 hidden text-center"></p>
+  </div>
+</body>
+</html>
