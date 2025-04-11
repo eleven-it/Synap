@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # Nombre: actualizar_repo_servidor.sh
-# Descripción: Actualiza y sincroniza cambios de FixSync en la rama 1.0 usando merge, con resolución asistida de conflictos.
-# Repositorio: https://github.com/eleven-it/FixSync.git
+# Descripción: Actualiza FixSync en la rama 1.0 con autenticación SSH, merge, backup y resolución asistida de conflictos.
 
 mensaje_commit=${1:-"Actualización automática desde el servidor"}
 log_dir="./logs"
@@ -24,17 +23,37 @@ if [ ! -d ".git" ]; then
   exit 1
 fi
 
+# Verificar si el repositorio está usando HTTPS en vez de SSH
+remote_url=$(git remote get-url origin)
+
+if [[ "$remote_url" == https://* ]]; then
+  echo ""
+  echo "⚠️  ADVERTENCIA: Estás usando HTTPS como método de autenticación."
+  echo "🔐 GitHub ya no permite autenticación con usuario/contraseña. Se recomienda SSH."
+  echo "🔄 Actualizando la URL remota a usar SSH..."
+  echo ""
+
+  # Reemplazar automáticamente la URL remota por SSH
+  git remote set-url origin git@github.com:eleven-it/FixSync.git
+
+  echo "✅ URL del remoto actualizada a: git@github.com:eleven-it/FixSync.git"
+  echo ""
+  sleep 1
+fi
+
+# Cambiar a la rama principal
 echo "📌 Cambiando a la rama 1.0..."
 git checkout 1.0
 echo ""
 
+# Crear rama de respaldo
 backup_branch="respaldo_$fecha_slug"
 echo "🛡️  Creando rama de respaldo: $backup_branch"
 git checkout -b "$backup_branch"
 git checkout 1.0
 echo ""
 
-# Verificar si hay archivos modificados sin agregar
+# Detectar archivos modificados sin agregar (unstaged)
 if ! git diff --quiet; then
   echo "⚠️  Se detectaron archivos modificados sin agregar (unstaged)."
   echo ""
@@ -124,10 +143,16 @@ git commit -m "$mensaje_commit"
 echo ""
 
 echo "🚀 Subiendo cambios al repositorio remoto..."
-git push origin 1.0
-echo ""
+if git push origin 1.0; then
+  echo ""
+  echo "$timestamp - Cambios subidos a rama 1.0 con mensaje: \"$mensaje_commit\"" >> "$log_file"
+  echo "✅ CAMBIOS SUBIDOS CORRECTAMENTE"
+else
+  echo ""
+  echo "❌ Error: El push al repositorio remoto falló."
+  echo "🧾 Verificá si estás autenticado correctamente con GitHub."
+  echo ""
+  exit 1
+fi
 
-echo "$timestamp - Cambios subidos a rama 1.0 con mensaje: \"$mensaje_commit\"" >> "$log_file"
-
-echo "✅ CAMBIOS SUBIDOS CORRECTAMENTE"
 echo ""
