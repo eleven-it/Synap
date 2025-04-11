@@ -17,13 +17,21 @@ services:
   web:
     build: .
     container_name: django_app
-    command: ["gunicorn", "--bind", "0.0.0.0:8000", "django_project.wsgi:application"]
+    command:
+      [
+        "gunicorn",
+        "--certfile=/certs/localhost.pem",
+        "--keyfile=/certs/localhost-key.pem",
+        "--bind", "0.0.0.0:8000",
+        "django_project.wsgi:application"
+      ]
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
-       - ./firebase_credentials.json:/app/firebase_credentials.json  # Montar la clave en el contenedor
+      - ./firebase_credentials.json:/app/firebase_credentials.json  # Montar la clave en el contenedor
+      - ./certs:/certs
     ports:
-      - "8000:8000"
+      - "443:8000"
     depends_on:
       - db
     env_file:

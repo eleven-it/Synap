@@ -7,8 +7,97 @@
   <title>Iniciar sesión - FixSync</title>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <script type="module" src="{% static 'login/firebase-init.js' %}"></script>
+  <script type="module" src="{% static 'login/firebase-init.js' %}">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+    import {
+      getAuth,
+      signInWithEmailAndPassword,
+      signInWithRedirect,
+      getRedirectResult,
+      GoogleAuthProvider,
+      OAuthProvider,
+      browserPopupRedirectResolver
+    } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
+    import { firebaseConfig, backendRoutes, getCookie } from "/login/firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    auth.useDeviceLanguage(); // mejora experiencia local
+
+    const provider = new GoogleAuthProvider();
+
+    const sendTokenToBackend = (idToken) => {
+      const csrftoken = getCookie("csrftoken");
+      fetch(backendRoutes.login, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken
+        },
+        body: JSON.stringify({ idToken })
+      })
+        .then((response) => {
+          if (response.ok) {
+            window.location.href = "/dashboard/";
+          } else {
+            throw new Error("Error al validar las credenciales.");
+          }
+        })
+        .catch((error) => {
+          showError(error.message);
+        });
+    };
+
+    const showError = (message) => {
+      const msg = document.getElementById("error-message");
+      msg.innerText = message;
+      msg.classList.remove("hidden");
+    };
+
+    // Si venimos de Google redirect, procesar login
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          const user = result.user;
+          console.log("✅ Usuario autenticado con Google (redirect):", user.email);
+          return user.getIdToken().then((idToken) => sendTokenToBackend(idToken));
+        }
+      })
+      .catch((error) => {
+        if (error.code !== "auth/no-auth-event") {
+          showError("Error con Google: " + error.message);
+        }
+      });
+
+    window.loginUser = (event) => {
+      event.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      document.getElementById("error-message").classList.add("hidden");
+
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => userCredential.user.getIdToken())
+        .then((idToken) => sendTokenToBackend(idToken))
+        .catch((error) => {
+          showError(
+            error.code === "auth/invalid-credential"
+              ? "Correo o contraseña incorrectos."
+              : "Error: " + error.message
+          );
+        });
+    };
+
+    window.loginWithGoogle = () => {
+      console.log("🟡 Redireccionando a Google login...");
+      signInWithRedirect(auth, provider, browserPopupRedirectResolver);
+    };
+
+    window.loginWithApple = () => {
+      const provider = new OAuthProvider("apple.com");
+      signInWithRedirect(auth, provider);
+    };
+  </script>
 </head>
 
 <body class="min-h-screen bg-gradient-to-t from-[#0a0a0a] via-[#121212] to-[#1c1c1c] flex items-center justify-center text-white font-sans">

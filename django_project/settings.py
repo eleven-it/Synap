@@ -151,6 +151,7 @@ FIREBASE_CONFIG = {
     "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
     "appId": os.getenv("FIREBASE_APP_ID"),
     "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
+    "clientId": os.getenv("FIREBASE_CLIENT_ID"),  
 }
 
 # Ruta del archivo de credenciales de Firebase

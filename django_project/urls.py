@@ -18,12 +18,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('', include('clientes.urls')),  # Incluir las URLs de clientes
     path("login/", include("login.urls")),  
     path("dashboard/", include("dashboard.urls", namespace="dashboard")),
+    path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
 ]
 
 if settings.DEBUG:
