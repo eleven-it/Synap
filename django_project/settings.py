@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
 
     # Apps propias
+    'core',
     'login',
     'clientes',
     'dashboard',
@@ -74,6 +75,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.usuario_y_permisos',
             ],
         },
     },

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-7xl mx-auto py-10">
+  <h1 class="text-2xl font-bold mb-6">Administración de Usuarios</h1>
+
+  <form method="post">
+    {% csrf_token %}
+    <table class="min-w-full table-auto text-left text-sm">
+      <thead>
+        <tr class="bg-gray-100 text-gray-700">
+          <th class="px-4 py-2">Email</th>
+          <th class="px-4 py-2">Nombre</th>
+          <th class="px-4 py-2">Rol</th>
+          <th class="px-4 py-2">Permisos adicionales</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for usuario in usuarios %}
+        <tr class="border-b hover:bg-gray-50">
+          <td class="px-4 py-2">{{ usuario.email }}</td>
+          <td class="px-4 py-2">{{ usuario.nombre }}</td>
+          <td class="px-4 py-2">
+            <select name="rol_{{ usuario.uid }}" class="rounded border-gray-300">
+              <option value="">---</option>
+              {% for rol in roles %}
+              <option value="{{ rol.id }}" {% if usuario.rol == rol %}selected{% endif %}>{{ rol.nombre }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td class="px-4 py-2 space-y-1">
+            {% for permiso in permisos %}
+              <label class="inline-flex items-center">
+                <input type="checkbox" name="perm_{{ usuario.uid }}" value="{{ permiso.id }}"
+                       {% if permiso in usuario.permisos_extra.all %}checked{% endif %}
+                       class="rounded border-gray-300 text-purple-600">
+                <span class="ml-1 text-xs">{{ permiso.nombre }}</span>
+              </label><br>
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="mt-6">
+      <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
+        Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

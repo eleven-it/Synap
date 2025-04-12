@@ -19,7 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
-
+from core.views import error_403_view
 
 urlpatterns = [
     path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
@@ -28,7 +28,12 @@ urlpatterns = [
     # path("dashboard/", include("dashboard.urls", namespace="dashboard")),
     path("clientes/", include("clientes.urls", namespace="clientes")),
     path("proveedores/", include("proveedores.urls", namespace="proveedores")),
+    path("core/", include("core.urls", namespace="core")),
+
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
+
+# ⛔ Handler global de error 403    
+handler403 = "core.views.error_403_view"

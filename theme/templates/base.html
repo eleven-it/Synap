@@ -18,7 +18,6 @@
     <!-- Header -->
     <header class="bg-gradient-to-r from-purple-600 to-blue-500 text-white shadow">
         <div class="flex justify-between items-center py-4 px-2 sm:px-4">
-          
           <!-- Izquierda: Botón de menú + Logo -->
           <div class="flex items-center space-x-2">
             <!-- Botón de menú -->
@@ -26,94 +25,75 @@
                 <svg class="w-7 h-7" viewBox="0 0 24 24" fill="url(#gridGradient)" xmlns="http://www.w3.org/2000/svg">
                     <defs>
                       <linearGradient id="gridGradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-                        <stop offset="0%" stop-color="#EC4899"/> <!-- bright fuchsia -->
-                        <stop offset="100%" stop-color="#3B82F6"/> <!-- bright blue -->
+                        <stop offset="0%" stop-color="#EC4899"/>
+                        <stop offset="100%" stop-color="#3B82F6"/>
                       </linearGradient>
                     </defs>
-                  
-                    <!-- Bloque superior izquierdo -->
                     <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                    <!-- Bloque superior derecho -->
                     <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                    <!-- Bloque inferior izquierdo -->
                     <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                    <!-- Bloque inferior derecho -->
                     <rect x="13" y="13" width="8" height="8" rx="1.5" />
-                  </svg>
-                                    
+                </svg>
             </button>
-      
-            <!-- Logo / Marca -->
             <span class="text-lg font-semibold">FixSync</span>
           </div>
-      
+
           <!-- Derecha: Usuario -->
           <div class="relative pr-2">
             <button @click="openUserMenu = !openUserMenu" class="flex items-center space-x-2 hover:text-gray-200">
               <span class="hidden sm:inline">{{ user.name|default:user.email }}</span>
               <img src="https://ui-avatars.com/api/?name={{ user.name|default:user.email }}" class="w-8 h-8 rounded-full" alt="avatar">
             </button>
-      
-            <!-- Dropdown usuario -->
             <div x-show="openUserMenu" class="absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-md py-2 z-50">
               <a href="#" class="block px-4 py-2 hover:bg-gray-100">🔐 Mi perfil</a>
               <a href="{% url 'login:logout' %}" class="block px-4 py-2 hover:bg-gray-100">🚪 Cerrar sesión</a>
             </div>
           </div>
         </div>
-      </header>
-      
+    </header>
+
     <!-- Menú flotante de módulos -->
-    <div
-    x-show="openMenu"
-    @click.outside="openMenu = false"
-    class="absolute mt-2 ml-2 bg-white rounded-lg shadow-lg p-4 w-64 z-50"
-    >
-    <div class="grid grid-cols-3 gap-4">
-        
-        <!-- Módulo 1 -->
-        <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
-        <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2"
-            viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                d="M9.75 3.75h4.5m-9 3h13.5m-13.5 3h13.5M4.5 9.75v10.5a.75.75 0 00.75.75h13.5a.75.75 0 00.75-.75V9.75"/>
-        </svg>
-        <span>CRM</span>
-        </a>
+    <div x-show="openMenu" @click.outside="openMenu = false" class="absolute mt-2 ml-2 bg-white rounded-lg shadow-lg p-4 w-64 z-50">
+        <div class="grid grid-cols-3 gap-4">
 
-        <!-- Módulo 2 -->
-        <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
-        <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2"
-            viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                d="M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z"/>
-        </svg>
-        <span>Ventas</span>
-        </a>
+            {% if "ver_crm" in permisos_usuario %}
+            <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
+                <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.75h4.5m-9 3h13.5m-13.5 3h13.5M4.5 9.75v10.5a.75.75 0 00.75.75h13.5a.75.75 0 00.75-.75V9.75"/>
+                </svg>
+                <span>CRM</span>
+            </a>
+            {% endif %}
 
-        <!-- Módulo 3 -->
-        <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
-        <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2"
-            viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                d="M4 6h16M4 12h16M4 18h16"/>
-        </svg>
-        <span>Inventario</span>
-        </a>
+            {% if "ver_ventas" in permisos_usuario %}
+            <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
+                <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z"/>
+                </svg>
+                <span>Ventas</span>
+            </a>
+            {% endif %}
 
-        <!-- Módulo 4 -->
-        <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
-        <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2"
-            viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                d="M3 10h18M3 6h18M3 14h18M3 18h18"/>
-        </svg>
-        <span>Reportes</span>
-        </a>
+            {% if "ver_inventario" in permisos_usuario %}
+            <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
+                <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+                <span>Inventario</span>
+            </a>
+            {% endif %}
 
+            {% if "ver_reportes" in permisos_usuario %}
+            <a href="#" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
+                <svg class="h-6 w-6 gradient-icon mb-1" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 6h18M3 14h18M3 18h18"/>
+                </svg>
+                <span>Reportes</span>
+            </a>
+            {% endif %}
+
+        </div>
     </div>
-    </div>
-
 
     <!-- Main Content -->
     <main class="p-6">
@@ -121,6 +101,3 @@
     </main>
 </body>
 </html>
-
-
-  

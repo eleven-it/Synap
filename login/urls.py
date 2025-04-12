@@ -3,6 +3,7 @@ from . import views
 from .views import firebase_config_js, login_view, logout_view, reset_password_view, register_view, perfil_view, completar_perfil_view
 
 
+
 app_name = "login"  # Definir el namespace para la app
 
 urlpatterns = [
@@ -14,3 +15,4 @@ urlpatterns = [
     path("perfil/", perfil_view, name="perfil"),
     path("completar-perfil/", completar_perfil_view, name="completar_perfil"),
 ]
+

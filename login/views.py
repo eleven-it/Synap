@@ -10,6 +10,7 @@ from django.http import JsonResponse
 from firebase_admin import auth
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
+from core.utils import sincronizar_usuario_desde_firestore
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,8 @@ export {{ firebaseConfig, backendRoutes, getCookie }};
 """
     return HttpResponse(js_content, content_type="application/javascript")
 
+logger = logging.getLogger(__name__)
+
 @csrf_exempt
 def login_view(request):
     if request.session.get("user"):
@@ -80,8 +83,23 @@ def login_view(request):
                 return JsonResponse({"error": "No se recibió ID Token"}, status=400)
 
             decoded_token = auth.verify_id_token(id_token)
-            logger.info(f"🟢 Token decodificado correctamente: {decoded_token}")
-            request.session["user"] = decoded_token
+
+            # 🔁 Sincronizar con Firestore y Django
+            usuario_extendido = sincronizar_usuario_desde_firestore(decoded_token)
+
+            permisos_rol = set(usuario_extendido.rol.permisos.values_list("codigo", flat=True)) if usuario_extendido.rol else set()
+            permisos_directos = set(usuario_extendido.permisos_extra.values_list("codigo", flat=True))
+            todos_permisos = permisos_rol | permisos_directos
+
+            # 💾 Guardar en sesión
+            request.session["user"] = {
+                "uid": usuario_extendido.uid,
+                "email": usuario_extendido.email,
+                "nombre": usuario_extendido.nombre,
+                "rol": usuario_extendido.rol.nombre if usuario_extendido.rol else "",
+                "permisos": list(todos_permisos),
+                "tipo_usuario": usuario_extendido.rol.nombre if usuario_extendido.rol else ""
+            }
 
             return JsonResponse({"message": "Login exitoso"}, status=200)
 
