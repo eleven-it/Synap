@@ -72,7 +72,8 @@ def login_view(request):
                 "nombre": usuario_extendido.nombre,
                 "rol": usuario_extendido.rol.nombre if usuario_extendido.rol else "",
                 "permisos": list(todos_permisos),
-                "tipo_usuario": usuario_extendido.rol.nombre if usuario_extendido.rol else ""
+                "tipo_usuario": usuario_extendido.rol.nombre if usuario_extendido.rol else "",
+                "idioma": usuario_extendido.idioma or "es"
             }
 
             if not usuario_extendido.nombre or not usuario_extendido.rol:
@@ -170,41 +171,41 @@ def completar_perfil_view(request):
     if not user:
         return redirect("login:login")
 
+    try:
+        usuario = UsuarioExtendido.objects.get(uid=user["uid"])
+    except UsuarioExtendido.DoesNotExist:
+        messages.error(request, "El usuario no fue encontrado.")
+        return redirect("login:login")
+
     if request.method == "POST":
         nuevo_nombre = request.POST.get("nombre", "").strip()
         idioma = request.POST.get("idioma", "es")
         rol_nombre = request.POST.get("rol_nombre", "").strip()
 
-        try:
-            usuario = UsuarioExtendido.objects.get(uid=user["uid"])
+        if nuevo_nombre:
+            usuario.nombre = nuevo_nombre
+        if idioma in ["es", "en", "pt"]:
+            usuario.idioma = idioma
+        if rol_nombre:
+            rol = Rol.objects.filter(nombre__iexact=rol_nombre).first()
+            if rol:
+                usuario.rol = rol
 
-            if nuevo_nombre:
-                usuario.nombre = nuevo_nombre
-            if idioma in ["es", "en", "pt"]:
-                usuario.idioma = idioma
-            if rol_nombre:
-                rol = Rol.objects.filter(nombre__iexact=rol_nombre).first()
-                if rol:
-                    usuario.rol = rol
+        usuario.save()
 
-            usuario.save()
+        # Refrescar los datos en la sesión
+        request.session["user"] = {
+            "uid": usuario.uid,
+            "email": usuario.email,
+            "nombre": usuario.nombre,
+            "rol": usuario.rol.nombre if usuario.rol else "",
+            "tipo_usuario": usuario.rol.nombre if usuario.rol else "",
+            "idioma": usuario.idioma,
+        }
 
-            # Actualizar sesión
-            request.session["user"]["nombre"] = usuario.nombre
-            request.session["user"]["rol"] = usuario.rol.nombre if usuario.rol else ""
-            request.session["user"]["tipo_usuario"] = usuario.rol.nombre if usuario.rol else ""
-            request.session["user"]["idioma"] = usuario.idioma
-
-            messages.success(request, "¡Perfil actualizado correctamente!")
-            return render(request, "login/completar_perfil.html", {
-                "user": request.session["user"],
-                "roles": Rol.objects.all()
-            })
-
-        except Exception as e:
-            messages.error(request, f"Ocurrió un error: {str(e)}")
+        messages.success(request, "¡Perfil actualizado correctamente!")
+        return redirect("login:completar_perfil")
 
     return render(request, "login/completar_perfil.html", {
-        "user": request.session.get("user", {}),
-        "roles": Rol.objects.all()
+        "user": request.session["user"],
     })

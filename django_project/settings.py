@@ -26,8 +26,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Allauth apps (requerido y en orden específico)
-    'django.contrib.sites',         # <-- Requerido por allauth
+    # Allauth apps
+    'django.contrib.sites',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'clientes',
     'dashboard',
     'proveedores',
-    
+
     # Terceros
     'theme',
     'tailwind',
@@ -50,13 +50,15 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
+    'core.middleware.IdiomaUsuarioMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'allauth.account.middleware.AccountMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',    
+    'django.contrib.sessions.middleware.SessionMiddleware',
 ]
 
 # URLs y WSGI
@@ -67,7 +69,7 @@ WSGI_APPLICATION = 'django_project.wsgi.application'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # Asegurate de tener esa carpeta
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -81,7 +83,7 @@ TEMPLATES = [
     },
 ]
 
-# Base de datos (ejemplo usando MySQL)
+# Base de datos
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -91,7 +93,6 @@ DATABASES = {
         'HOST': os.getenv('POSTGRES_HOST', 'db'),
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     },
-
     'mysql': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config('DB_NAME', default='mydb'),
@@ -112,20 +113,26 @@ USE_I18N = True
 USE_L10N = True
 USE_TZ = True
 
+LANGUAGES = [
+    ('es', 'Español'),
+    ('en', 'Inglés'),
+    ('pt', 'Portugués'),
+]
+LOCALE_PATHS = [BASE_DIR / 'locale']
+
 # Archivos estáticos
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     BASE_DIR / "theme" / "static",
     BASE_DIR / "theme" / "static_src",
 ]
-
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Tailwind CSS
 TAILWIND_APP_NAME = 'theme'
 INTERNAL_IPS = ['127.0.0.1']
 
-# Google OAuth (desde .env)
+# Google OAuth
 GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
 GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
 
@@ -139,13 +146,12 @@ AUTHENTICATION_BACKENDS = (
 
 SITE_ID = 1
 
-# Opcionales
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_USERNAME_REQUIRED = True
 ACCOUNT_AUTHENTICATION_METHOD = "username_email"
 LOGIN_REDIRECT_URL = '/'
 
-# Configuración de Firebase
+# Firebase
 FIREBASE_CONFIG = {
     "apiKey": os.getenv("FIREBASE_API_KEY"),
     "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
@@ -156,14 +162,11 @@ FIREBASE_CONFIG = {
     "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
     "clientId": os.getenv("FIREBASE_CLIENT_ID"),  
 }
-
-# Ruta del archivo de credenciales de Firebase
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")
-
-# Inicializar Firebase Admin SDK
 cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
 firebase_admin.initialize_app(cred)
 
+# Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
