@@ -1,11 +1,13 @@
 from django.shortcuts import render, redirect
 from firebase_admin import firestore
-from core.decorators import permiso_requerido
+from django.views.decorators.csrf import csrf_exempt
+from core.decorators import tiene_permiso
 
 # Inicializa cliente Firestore
 db = firestore.client()
 
-@permiso_requerido("acceso_publico")
+@csrf_exempt
+@tiene_permiso("administrar_usuarios")
 def dashboard_view(request):
     user = request.session.get("user")
     if not user:
@@ -28,5 +30,3 @@ def dashboard_view(request):
         return redirect("login:login")
 
     return render(request, "proveedores/dashboard.html", {"user": user})
-
-

@@ -1,7 +1,24 @@
 from functools import wraps
-from django.shortcuts import redirect
-from django.urls import reverse
+from django.shortcuts import render
 from django.http import HttpResponseForbidden
+
+def tiene_permiso(codigo_permiso):
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            user = getattr(request, "user", None)
+
+            if not user or not getattr(user, "is_authenticated", False):
+                return render(request, "core/403.html", status=403)
+
+            if hasattr(user, "tiene_permiso") and user.tiene_permiso(codigo_permiso):
+                return view_func(request, *args, **kwargs)
+
+            return render(request, "core/403.html", status=403)
+
+        return _wrapped_view
+    return decorator
+
 
 def permiso_requerido(permiso):
     def decorator(view_func):
@@ -13,8 +30,6 @@ def permiso_requerido(permiso):
             if permiso in permisos:
                 return view_func(request, *args, **kwargs)
 
-            # 🔒 Si no tiene el permiso, renderizar error 403
-            return redirect(reverse("core:error_403"))
+            return render(request, "core/403.html", status=403)
         return _wrapped_view
     return decorator
-

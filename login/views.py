@@ -1,16 +1,14 @@
 import json
-import firebase_admin.auth as auth
 import logging
-
-from django.urls import reverse
-from django.http import HttpResponse
-from django.conf import settings
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
-from firebase_admin import auth
+from django.urls import reverse
+from django.http import JsonResponse, HttpResponse
+from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from firebase_admin import auth, firestore
 from core.utils import sincronizar_usuario_desde_firestore
+from core.models import UsuarioExtendido, Rol
 
 logger = logging.getLogger(__name__)
 
@@ -22,51 +20,30 @@ def firebase_config_js(request):
     reset_url = reverse("login:reset_password")
 
     js_content = f"""
-// Archivo generado automáticamente por Django
+    const firebaseConfig = {{
+        apiKey: "{config['apiKey']}",
+        authDomain: "{config['authDomain']}",
+        projectId: "{config['projectId']}",
+        storageBucket: "{config['storageBucket']}",
+        messagingSenderId: "{config['messagingSenderId']}",
+        appId: "{config['appId']}",
+        measurementId: "{config['measurementId']}",
+        clientId: "{config.get('clientId', '')}"
+    }};
 
-const firebaseConfig = {{
-    apiKey: "{config['apiKey']}",
-    authDomain: "{config['authDomain']}",
-    projectId: "{config['projectId']}",
-    storageBucket: "{config['storageBucket']}",
-    messagingSenderId: "{config['messagingSenderId']}",
-    appId: "{config['appId']}",
-    measurementId: "{config['measurementId']}",
-    clientId: "{config.get('clientId', '')}"
-}};
-
-const backendRoutes = {{
-    login: "{login_url}",
-    logout: "{logout_url}",
-    resetPassword: "{reset_url}"
-}};
-
-function getCookie(name) {{
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {{
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {{
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {{
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }}
-        }}
-    }}
-    return cookieValue;
-}}
-
-export {{ firebaseConfig, backendRoutes, getCookie }};
-"""
+    const backendRoutes = {{
+        login: "{login_url}",
+        logout: "{logout_url}",
+        resetPassword: "{reset_url}"
+    }};
+    """
     return HttpResponse(js_content, content_type="application/javascript")
 
-logger = logging.getLogger(__name__)
 
 @csrf_exempt
 def login_view(request):
     if request.session.get("user"):
         tipo = request.session["user"].get("tipo_usuario")
-
         if tipo == "cliente":
             return redirect("clientes:dashboard")
         elif tipo == "proveedor":
@@ -83,15 +60,12 @@ def login_view(request):
                 return JsonResponse({"error": "No se recibió ID Token"}, status=400)
 
             decoded_token = auth.verify_id_token(id_token)
-
-            # 🔁 Sincronizar con Firestore y Django
             usuario_extendido = sincronizar_usuario_desde_firestore(decoded_token)
 
             permisos_rol = set(usuario_extendido.rol.permisos.values_list("codigo", flat=True)) if usuario_extendido.rol else set()
             permisos_directos = set(usuario_extendido.permisos_extra.values_list("codigo", flat=True))
             todos_permisos = permisos_rol | permisos_directos
 
-            # 💾 Guardar en sesión
             request.session["user"] = {
                 "uid": usuario_extendido.uid,
                 "email": usuario_extendido.email,
@@ -101,7 +75,15 @@ def login_view(request):
                 "tipo_usuario": usuario_extendido.rol.nombre if usuario_extendido.rol else ""
             }
 
-            return JsonResponse({"message": "Login exitoso"}, status=200)
+            if not usuario_extendido.nombre or not usuario_extendido.rol:
+                return JsonResponse({"redirect": reverse("login:completar_perfil")}, status=200)
+
+            if usuario_extendido.rol.nombre.lower() == "cliente":
+                return JsonResponse({"redirect": reverse("clientes:dashboard")}, status=200)
+            elif usuario_extendido.rol.nombre.lower() == "proveedor":
+                return JsonResponse({"redirect": reverse("proveedores:dashboard")}, status=200)
+
+            return JsonResponse({"redirect": reverse("login:completar_perfil")}, status=200)
 
         except Exception as e:
             logger.error(f"❌ Error al verificar token: {str(e)}")
@@ -109,9 +91,11 @@ def login_view(request):
 
     return render(request, "login/login.html")
 
+
 def logout_view(request):
-    request.session.flush()  # Elimina toda la sesión
+    request.session.flush()
     return render(request, "login/logout.html")
+
 
 def reset_password_view(request):
     if request.method == "POST":
@@ -125,24 +109,102 @@ def reset_password_view(request):
 
     return render(request, "login/reset_password.html")
 
+
 def register_view(request):
     if request.session.get("user"):
         return redirect("dashboard:home")
-
     return render(request, "login/register.html")
 
+
 def perfil_view(request):
-    if not request.session.get("user"):
-        return redirect("login:login")  # Redirige si no está logueado
-
-    return render(request, "login/perfil.html", {"user": request.session["user"]})
-
-def dashboard_view(request):
-    if "user" not in request.session:
+    session_user = request.session.get("user")
+    if not session_user:
         return redirect("login:login")
 
-    user_info = request.session.get("user", {})
-    return render(request, "dashboard/dashboard.html", {"user": user_info})
+    try:
+        usuario = UsuarioExtendido.objects.get(uid=session_user["uid"])
+    except UsuarioExtendido.DoesNotExist:
+        messages.error(request, "Usuario no encontrado.")
+        return redirect("login:login")
+
+    if request.method == "POST":
+        nuevo_nombre = request.POST.get("nombre", "").strip()
+        nuevo_idioma = request.POST.get("idioma", "es")
+        nueva_password = request.POST.get("nueva_password", "")
+        confirmar_password = request.POST.get("confirmar_password", "")
+
+        if nuevo_nombre:
+            usuario.nombre = nuevo_nombre
+
+        if nuevo_idioma in ["es", "en", "pt"]:
+            usuario.idioma = nuevo_idioma
+
+        # Validación y cambio de contraseña
+        if nueva_password:
+            if nueva_password != confirmar_password:
+                messages.error(request, "Las contraseñas no coinciden.")
+                return render(request, "login/perfil.html", {
+                    "user": request.session["user"]
+                })
+            try:
+                from firebase_admin import auth
+                auth.update_user(uid=usuario.uid, password=nueva_password)
+                messages.success(request, "Contraseña actualizada correctamente.")
+            except Exception as e:
+                messages.error(request, f"Error al actualizar contraseña: {e}")
+                return render(request, "login/perfil.html", {
+                    "user": request.session["user"]
+                })
+
+        usuario.save()
+
+        # Refrescar sesión
+        request.session["user"]["nombre"] = usuario.nombre
+        request.session["user"]["idioma"] = usuario.idioma
+
+        messages.success(request, "✅ Cambios guardados correctamente.")
+        return redirect("login:perfil")
 
 def completar_perfil_view(request):
-    return render(request, "login/completar_perfil.html")
+    user = request.session.get("user")
+    if not user:
+        return redirect("login:login")
+
+    if request.method == "POST":
+        nuevo_nombre = request.POST.get("nombre", "").strip()
+        idioma = request.POST.get("idioma", "es")
+        rol_nombre = request.POST.get("rol_nombre", "").strip()
+
+        try:
+            usuario = UsuarioExtendido.objects.get(uid=user["uid"])
+
+            if nuevo_nombre:
+                usuario.nombre = nuevo_nombre
+            if idioma in ["es", "en", "pt"]:
+                usuario.idioma = idioma
+            if rol_nombre:
+                rol = Rol.objects.filter(nombre__iexact=rol_nombre).first()
+                if rol:
+                    usuario.rol = rol
+
+            usuario.save()
+
+            # Actualizar sesión
+            request.session["user"]["nombre"] = usuario.nombre
+            request.session["user"]["rol"] = usuario.rol.nombre if usuario.rol else ""
+            request.session["user"]["tipo_usuario"] = usuario.rol.nombre if usuario.rol else ""
+            request.session["user"]["idioma"] = usuario.idioma
+
+            messages.success(request, "¡Perfil actualizado correctamente!")
+            return render(request, "login/completar_perfil.html", {
+                "user": request.session["user"],
+                "roles": Rol.objects.all()
+            })
+
+        except Exception as e:
+            messages.error(request, f"Ocurrió un error: {str(e)}")
+
+    return render(request, "login/completar_perfil.html", {
+        "user": request.session.get("user", {}),
+        "roles": Rol.objects.all()
+    })

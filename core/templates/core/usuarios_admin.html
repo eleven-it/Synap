@@ -1,7 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
+{% if user|tiene_permiso:"administrar_usuarios" %}
 <div class="max-w-7xl mx-auto py-10">
   <h1 class="text-2xl font-bold mb-6">Administración de Usuarios</h1>
+
+  <form method="get" class="mb-6 flex items-center gap-4">
+    <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Buscar por email o nombre"
+           class="border border-gray-300 rounded px-4 py-2 w-full max-w-sm focus:outline-none focus:ring focus:ring-purple-500">
+
+    <select name="rol_filter" class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:ring-purple-500">
+      <option value="">Todos los roles</option>
+      {% for rol in roles %}
+      <option value="{{ rol.id }}" {% if request.GET.rol_filter == rol.id|stringformat:"s" %}selected{% endif %}>{{ rol.nombre }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Filtrar</button>
+  </form>
 
   <form method="post">
     {% csrf_token %}
@@ -38,15 +53,38 @@
             {% endfor %}
           </td>
         </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center py-4 text-gray-500">No se encontraron usuarios.</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
 
-    <div class="mt-6">
+    <div class="mt-6 flex justify-between items-center">
       <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
         Guardar cambios
       </button>
+
+      {% if usuarios.has_other_pages %}
+      <div class="space-x-2">
+        {% if usuarios.has_previous %}
+          <a href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.rol_filter %}rol_filter={{ request.GET.rol_filter }}&{% endif %}page={{ usuarios.previous_page_number }}"
+             class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Anterior</a>
+        {% endif %}
+
+        <span class="text-sm text-gray-700">Página {{ usuarios.number }} de {{ usuarios.paginator.num_pages }}</span>
+
+        {% if usuarios.has_next %}
+          <a href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.rol_filter %}rol_filter={{ request.GET.rol_filter }}&{% endif %}page={{ usuarios.next_page_number }}"
+             class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Siguiente</a>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </form>
 </div>
+{% else %}
+  {% include "core/403.html" %}
+{% endif %}
 {% endblock %}

@@ -22,12 +22,21 @@ class UsuarioExtendido(models.Model):
     nombre = models.CharField(max_length=100, blank=True)
     rol = models.ForeignKey(Rol, on_delete=models.SET_NULL, null=True, blank=True)
     permisos_extra = models.ManyToManyField(Permiso, blank=True, related_name="usuarios_con_permiso_directo")
+    idioma = models.CharField(
+        max_length=10,
+        choices=[("es", "Español"), ("en", "Inglés"), ("pt", "Portugués")],
+        default="es"
+    )
 
     def tiene_permiso(self, codigo_permiso):
         permisos_rol = self.rol.permisos.all() if self.rol else []
         permisos_directos = self.permisos_extra.all()
         todos = set(p.codigo for p in permisos_rol) | set(p.codigo for p in permisos_directos)
         return codigo_permiso in todos
+
+    @property
+    def is_authenticated(self):
+        return True
 
     def __str__(self):
         return self.email
