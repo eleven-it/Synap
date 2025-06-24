@@ -1,0 +1,89 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}Delete Product Mapping - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white rounded-lg shadow-sm border">
+        <div class="p-8 text-center">
+            <!-- Warning Icon -->
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <i class="fas fa-unlink text-red-600 text-xl"></i>
+            </div>
+
+            <!-- Title -->
+            <h1 class="text-2xl font-bold text-gray-900 mb-4">Delete Product Mapping</h1>
+
+            <!-- Warning Message -->
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <p class="text-red-800 font-medium mb-2">⚠️ This action cannot be undone</p>
+                <p class="text-red-700 text-sm">
+                    Are you sure you want to delete the mapping for 
+                    <strong>"{{ object.product.name }}"</strong>? 
+                    This will permanently remove the connection with TiendaNube and stop synchronization.
+                </p>
+            </div>
+
+            <!-- Mapping Details -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6 text-left">
+                <h3 class="font-semibold text-gray-800 mb-3">Mapping Details:</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        {% if object.product.image %}
+                            <img class="h-12 w-12 rounded-lg object-cover mr-3" src="{{ object.product.image.url }}" alt="{{ object.product.name }}">
+                        {% else %}
+                            <div class="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center mr-3">
+                                <i class="fas fa-box text-gray-400"></i>
+                            </div>
+                        {% endif %}
+                        <div>
+                            <div class="font-medium text-gray-900">{{ object.product.name }}</div>
+                            <div class="text-sm text-gray-500">SKU: {{ object.product.sku|default:"N/A" }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-600">TiendaNube ID:</span>
+                            <span class="font-medium">{{ object.tiendanube_id|default:"Not mapped" }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Sync Direction:</span>
+                            <span class="font-medium">{{ object.get_sync_direction_display }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Last Sync:</span>
+                            <span class="font-medium">{{ object.last_sync|default:"Never"|date:"M d, Y H:i" }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-600">Status:</span>
+                            <span class="font-medium">{{ object.active|yesno:"Active,Inactive" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <form method="post">
+                {% csrf_token %}
+                <div class="flex justify-center space-x-4">
+                    <a href="{% url 'tiendanube:mapping_list' %}" 
+                       class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                        Cancel
+                    </a>
+                    <button type="submit" 
+                            class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                        <i class="fas fa-unlink mr-2"></i>Delete Mapping
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube product mapping.
+</div>
+{% endif %}
+{% endblock %} 

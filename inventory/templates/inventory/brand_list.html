@@ -1,0 +1,58 @@
+{% extends "inventory/inventory_base.html" %}
+{% block inventory_content %}
+<div class="bg-white p-6 rounded-lg shadow-md">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-semibold text-gray-800">Brands</h1>
+        {% if perms.inventory.add_brand %}
+        <a href="{% url 'inventory:brand_create' %}" class="btn-primary">
+            <span class="material-icons mr-2">add</span>
+            Create Brand
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm text-gray-900">
+            <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b">
+                <tr>
+                    <th class="px-4 py-3">Name</th>
+                    <th class="px-4 py-3 text-center">Active</th>
+                    <th class="px-4 py-3 text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for brand in brands %}
+                <tr class="border-t hover:bg-gray-50">
+                    <td class="px-4 py-2 font-medium">{{ brand.name }}</td>
+                    <td class="px-4 py-2 text-center">
+                        {% if brand.is_active %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-2 text-center">
+                        <div class="flex justify-center space-x-2">
+                            {% if perms.inventory.change_brand %}
+                            <a href="{% url 'inventory:brand_update' brand.pk %}" class="text-blue-500 hover:text-blue-700" title="Edit">
+                                <span class="material-icons">edit</span>
+                            </a>
+                            {% endif %}
+                            {% if perms.inventory.delete_brand %}
+                            <a href="{% url 'inventory:brand_delete' brand.pk %}" class="text-red-500 hover:text-red-700" title="Delete">
+                                <span class="material-icons">delete</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center p-6 text-gray-500">No brands registered.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock inventory_content %} 

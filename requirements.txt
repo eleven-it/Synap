@@ -5,7 +5,6 @@ gunicorn==21.2.0
 whitenoise==6.9.0
 dj-database-url==0.5.0
 django-tailwind
-django-allauth
 requests
 PyJWT==2.8.0
 cryptography
@@ -16,3 +15,11 @@ fastapi
 firebase-admin
 whitenoise
 uvicorn
+django-redis
+django-crispy-forms==2.1
+crispy-tailwind==1.0.1
+Pillow==10.1.0
+six==1.16.0
+django-widget-tweaks
+celery>=5.2
+django-celery-beat>=2.2

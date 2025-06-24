@@ -9,6 +9,7 @@ from django.contrib import messages
 from firebase_admin import auth, firestore
 from core.utils import sincronizar_usuario_desde_firestore
 from core.models import UsuarioExtendido, Rol
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -20,83 +21,80 @@ def firebase_config_js(request):
     reset_url = reverse("login:reset_password")
 
     js_content = f"""
-    const firebaseConfig = {{
-        apiKey: "{config['apiKey']}",
-        authDomain: "{config['authDomain']}",
-        projectId: "{config['projectId']}",
-        storageBucket: "{config['storageBucket']}",
-        messagingSenderId: "{config['messagingSenderId']}",
-        appId: "{config['appId']}",
-        measurementId: "{config['measurementId']}",
-        clientId: "{config.get('clientId', '')}"
-    }};
+export const firebaseConfig = {{
+    apiKey: "{config['apiKey']}",
+    authDomain: "{config['authDomain']}",
+    projectId: "{config['projectId']}",
+    storageBucket: "{config['storageBucket']}",
+    messagingSenderId: "{config['messagingSenderId']}",
+    appId: "{config['appId']}",
+    measurementId: "{config.get('measurementId', '')}",
+    clientId: "{config.get('clientId', '')}"
+}};
 
-    const backendRoutes = {{
-        login: "{login_url}",
-        logout: "{logout_url}",
-        resetPassword: "{reset_url}"
-    }};
-    """
+export const backendRoutes = {{
+    login: "{login_url}",
+    logout: "{logout_url}",
+    resetPassword: "{reset_url}"
+}};
+
+export function getCookie(name) {{
+    const value = `; ${{document.cookie}}`;
+    const parts = value.split(`; ${{name}}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}}
+"""
+
     return HttpResponse(js_content, content_type="application/javascript")
 
 
 @csrf_exempt
 def login_view(request):
     if request.session.get("user"):
-        tipo = request.session["user"].get("tipo_usuario")
-        if tipo == "cliente":
-            return redirect("clientes:dashboard")
-        elif tipo == "proveedor":
-            return redirect("proveedores:dashboard")
-        else:
-            return redirect("login:completar_perfil")
+        return redirect("core:dashboard")
 
     if request.method == "POST":
         try:
             data = json.loads(request.body)
             id_token = data.get("idToken")
 
-            if not id_token:
-                return JsonResponse({"error": "No se recibió ID Token"}, status=400)
+            if not id_token or not isinstance(id_token, str):
+                return JsonResponse({"error": "ID Token inválido o ausente"}, status=400)
 
             decoded_token = auth.verify_id_token(id_token)
             usuario_extendido = sincronizar_usuario_desde_firestore(decoded_token)
 
-            permisos_rol = set(usuario_extendido.rol.permisos.values_list("codigo", flat=True)) if usuario_extendido.rol else set()
+            permisos_roles = set()
+            if hasattr(usuario_extendido, "roles"):
+                for rol in usuario_extendido.roles.all():
+                    permisos_roles |= set(rol.permisos.values_list("codigo", flat=True))
             permisos_directos = set(usuario_extendido.permisos_extra.values_list("codigo", flat=True))
-            todos_permisos = permisos_rol | permisos_directos
+            permisos_totales = permisos_roles | permisos_directos
 
             request.session["user"] = {
                 "uid": usuario_extendido.uid,
-                "email": usuario_extendido.email,
-                "nombre": usuario_extendido.nombre,
-                "rol": usuario_extendido.rol.nombre if usuario_extendido.rol else "",
-                "permisos": list(todos_permisos),
-                "tipo_usuario": usuario_extendido.rol.nombre if usuario_extendido.rol else "",
                 "idioma": usuario_extendido.idioma or "es"
             }
 
-            if not usuario_extendido.nombre or not usuario_extendido.rol:
-                return JsonResponse({"redirect": reverse("login:completar_perfil")}, status=200)
+            logger.info(f"✅ Login exitoso: {usuario_extendido.email} ({usuario_extendido.uid})")
 
-            if usuario_extendido.rol.nombre.lower() == "cliente":
-                return JsonResponse({"redirect": reverse("clientes:dashboard")}, status=200)
-            elif usuario_extendido.rol.nombre.lower() == "proveedor":
-                return JsonResponse({"redirect": reverse("proveedores:dashboard")}, status=200)
-
-            return JsonResponse({"redirect": reverse("login:completar_perfil")}, status=200)
+            # ✅ Validar y retornar next si está presente
+            next_url = request.GET.get("next")
+            if next_url and urlparse(next_url).path.startswith("/"):
+                return JsonResponse({"redirect": next_url})
+            return JsonResponse({"redirect": reverse("core:dashboard")})
 
         except Exception as e:
-            logger.error(f"❌ Error al verificar token: {str(e)}")
+            logger.error(f"❌ Error en login: {e}")
             return JsonResponse({"error": str(e)}, status=400)
 
+    # Si es GET, devolvemos el login.html normalmente
     return render(request, "login/login.html")
 
 
 def logout_view(request):
     request.session.flush()
     return render(request, "login/logout.html")
-
 
 def reset_password_view(request):
     if request.method == "POST":
@@ -110,12 +108,10 @@ def reset_password_view(request):
 
     return render(request, "login/reset_password.html")
 
-
 def register_view(request):
     if request.session.get("user"):
         return redirect("dashboard:home")
     return render(request, "login/register.html")
-
 
 def perfil_view(request):
     session_user = request.session.get("user")
@@ -188,8 +184,8 @@ def completar_perfil_view(request):
             usuario.idioma = idioma
         if rol_nombre:
             rol = Rol.objects.filter(nombre__iexact=rol_nombre).first()
-            if rol:
-                usuario.rol = rol
+            if rol and rol not in usuario.roles.all():
+                usuario.roles.add(rol)
 
         usuario.save()
 
@@ -198,8 +194,6 @@ def completar_perfil_view(request):
             "uid": usuario.uid,
             "email": usuario.email,
             "nombre": usuario.nombre,
-            "rol": usuario.rol.nombre if usuario.rol else "",
-            "tipo_usuario": usuario.rol.nombre if usuario.rol else "",
             "idioma": usuario.idioma,
         }
 

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto py-10">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">Editar Perfil</h1>
+
+  {% if messages %}
+    <ul class="mb-4">
+      {% for message in messages %}
+        <li class="text-sm {{ message.tags }} text-{{ message.level_tag }}-600">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+    
+    <div>
+      <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre</label>
+      <input type="text" name="nombre" id="nombre" value="{{ user.nombre }}" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500">
+    </div>
+
+    <div>
+      <label for="idioma" class="block text-sm font-medium text-gray-700">Idioma</label>
+      <select name="idioma" id="idioma" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+        <option value="es" {% if user.idioma == "es" %}selected{% endif %}>Español</option>
+        <option value="en" {% if user.idioma == "en" %}selected{% endif %}>Inglés</option>
+        <option value="pt" {% if user.idioma == "pt" %}selected{% endif %}>Portugués</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Cambiar contraseña</label>
+      <input type="password" name="nueva_password" placeholder="Nueva contraseña" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+      <input type="password" name="confirmar_password" placeholder="Confirmar contraseña" class="mt-2 block w-full border border-gray-300 rounded-md px-3 py-2">
+    </div>
+
+    <div>
+      <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
+        Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

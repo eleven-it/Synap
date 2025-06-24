@@ -1,0 +1,103 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}TiendaNube Configuration - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">TiendaNube Configuration</h1>
+        <a href="{% url 'tiendanube:config_wizard' %}" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
+            <i class="fas fa-plus mr-2"></i>Add Store
+        </a>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+        <div class="p-6">
+            {% if configs %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">API URL</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auto Sync</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Sync</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for config in configs %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ config.store_id }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ config.api_url|default:"Default" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% if config.auto_sync %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            Enabled
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            Disabled
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ config.last_sync|default:"Never"|date:"M d, Y H:i" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% with status=config_statuses %}
+                                        {% with status_item=status.config_pk %}
+                                            {% if status_item and status_item.active %}
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    Active
+                                                </span>
+                                            {% else %}
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="{{ status_item.message }}">
+                                                    Inactive
+                                                </span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <a href="{% url 'tiendanube:config_update' config.pk %}" class="text-blue-600 hover:text-blue-900">
+                                            <i class="fas fa-edit"></i> Edit
+                                        </a>
+                                        <a href="{% url 'tiendanube:config_delete' config.pk %}" class="text-red-600 hover:text-red-900">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-gray-400 mb-4">
+                        <i class="fas fa-cog text-6xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No stores found</h3>
+                    <p class="text-gray-500 mb-6">Get started by creating your first TiendaNube store connection.</p>
+                    <a href="{% url 'tiendanube:config_wizard' %}" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition">
+                        <i class="fas fa-plus mr-2"></i>Create Store
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube configuration.
+</div>
+{% endif %}
+{% endblock %} 

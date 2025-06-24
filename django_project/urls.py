@@ -25,15 +25,16 @@ urlpatterns = [
     path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
     path("admin/", admin.site.urls),
     path("login/", include("login.urls")),  
-    # path("dashboard/", include("dashboard.urls", namespace="dashboard")),
+    path("inventory/", include("inventory.urls", namespace="inventory")),    
     path("clientes/", include("clientes.urls", namespace="clientes")),
     path("proveedores/", include("proveedores.urls", namespace="proveedores")),
     path("core/", include("core.urls", namespace="core")),
-
+    path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # ⛔ Handler global de error 403    
 handler403 = "core.views.error_403_view"

@@ -1,0 +1,353 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}Add New Store - TiendaNube Wizard{% endblock %}
+
+{% block tiendanube_content %}
+<div class="max-w-2xl mx-auto mt-12">
+    <!-- Progress Bar -->
+    <div class="w-full bg-gray-200 rounded-full h-2 mb-6">
+        <div id="wizardProgress" class="bg-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+    </div>
+    <!-- Step Indicators -->
+    <div class="flex justify-between items-center mb-8">
+        {% for step_name in wizard_steps %}
+            {% with i=forloop.counter %}
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                        {% if step > i %}bg-green-500 border-green-500 text-white{% elif step == i %}bg-purple-600 border-purple-600 text-white animate-bounce{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
+                        {% if step > i %}
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                        {% else %}{{ i }}{% endif %}
+                    </div>
+                    {% if not forloop.last %}
+                        <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 -translate-y-1/2"></div>
+                    {% endif %}
+                </div>
+                <span class="mt-2 text-xs font-medium {% if step == i %}text-purple-700{% elif step > i %}text-green-600{% else %}text-gray-400{% endif %}">{{ step_name }}</span>
+            </div>
+            {% endwith %}
+        {% endfor %}
+    </div>
+    <div id="wizardStepContent" class="bg-white rounded-lg shadow-sm border p-8 text-center animate-fadeIn">
+        {% if step == 1 %}
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            <div class="animate-slideUp">
+                <label for="app_id" class="block text-sm font-medium text-gray-700 mb-1">App ID *</label>
+                <input type="text" id="app_id" name="app_id" class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition text-center" required value="{{ app_id|default:'' }}">
+            </div>
+            <div class="animate-slideUp" style="animation-delay:0.1s;">
+                <label for="client_secret" class="block text-sm font-medium text-gray-700 mb-1">Client Secret *</label>
+                <div class="relative">
+                    <input type="password" id="client_secret" name="client_secret" class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition pr-10 text-center" required value="{{ client_secret|default:'' }}">
+                    <button type="button" tabindex="-1" onclick="toggleSecretVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none">
+                        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-center animate-fadeIn" style="animation-delay:0.2s;">
+                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                    Next
+                </button>
+            </div>
+        </form>
+        <p class="text-gray-500 mt-6 text-sm animate-fadeIn" style="animation-delay:0.3s;">
+            This wizard will guide you step by step to connect and configure a new TiendaNube store in Synap.<br>
+            You will need your <b>App ID</b> and <b>Client Secret</b> from TiendaNube.<br>
+            You will be able to customize permissions and sync preferences.
+        </p>
+        
+        <!-- Help Section -->
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4 text-left animate-fadeIn" style="animation-delay:0.4s;">
+            <h3 class="text-blue-800 font-semibold mb-2 flex items-center">
+                <i class="fas fa-info-circle mr-2"></i>How to get your App ID and Client Secret
+            </h3>
+            <ol class="text-blue-700 text-sm space-y-2">
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">1</span>
+                    <span>Go to <a href="https://www.tiendanube.com/apps/" target="_blank" class="underline font-semibold">TiendaNube Apps</a></span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">2</span>
+                    <span>Click "Create App" or "New App"</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">3</span>
+                    <span>Fill in the app details (name, description, etc.)</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">4</span>
+                    <span>Set the Redirect URI to: 
+                        <code class="bg-blue-100 px-1 rounded text-xs" id="redirectUriHelpText">{{ redirect_uri }}</code>
+                        <button type="button" onclick="copyRedirectUriHelp()" class="ml-1 px-2 py-1 rounded bg-blue-200 hover:bg-blue-300 text-blue-700 text-xs font-semibold focus:outline-none">Copy</button>
+                    </span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">5</span>
+                    <span>Save the app and copy the <b>App ID</b> and <b>Client Secret</b></span>
+                </li>
+            </ol>
+            <div class="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-xs">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                <strong>Important:</strong> Keep your Client Secret secure and never share it publicly.
+            </div>
+            <div id="redirectUriHelp" class="mt-2 p-2 bg-green-50 border border-green-200 rounded text-green-800 text-xs hidden">
+                <i class="fas fa-check-circle mr-1"></i>
+                <strong>Copied!</strong> Redirect URI copied to clipboard. Paste this URL in your TiendaNube app settings.
+            </div>
+        </div>
+        {% elif step == 2 %}
+        <form method="post" class="space-y-6 animate-fadeIn">
+            {% csrf_token %}
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Select permissions (scopes) *</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_products" {% if 'read_products' in scopes %}checked{% endif %}><span class="ml-2">Read Products</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_products" {% if 'write_products' in scopes %}checked{% endif %}><span class="ml-2">Write Products</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_orders" {% if 'read_orders' in scopes %}checked{% endif %}><span class="ml-2">Read Orders</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_orders" {% if 'write_orders' in scopes %}checked{% endif %}><span class="ml-2">Write Orders</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_customers" {% if 'read_customers' in scopes %}checked{% endif %}><span class="ml-2">Read Customers</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_customers" {% if 'write_customers' in scopes %}checked{% endif %}><span class="ml-2">Write Customers</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_content" {% if 'read_content' in scopes %}checked{% endif %}><span class="ml-2">Read Content</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_content" {% if 'write_content' in scopes %}checked{% endif %}><span class="ml-2">Write Content</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_coupons" {% if 'read_coupons' in scopes %}checked{% endif %}><span class="ml-2">Read Coupons</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_coupons" {% if 'write_coupons' in scopes %}checked{% endif %}><span class="ml-2">Write Coupons</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_scripts" {% if 'write_scripts' in scopes %}checked{% endif %}><span class="ml-2">Write Scripts</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_shipping" {% if 'write_shipping' in scopes %}checked{% endif %}><span class="ml-2">Write Shipping</span></label>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-center animate-fadeIn">
+                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                    Next
+                </button>
+            </div>
+        </form>
+        <p class="text-gray-500 mt-6 text-sm animate-fadeIn">Select the permissions your app will request from the store. Only request what you need.</p>
+        {% elif step == 3 %}
+        <div class="mb-6 animate-fadeIn">
+            <p class="text-gray-700 text-lg mb-2 font-semibold">Authorize Synap to access your TiendaNube store</p>
+            <p class="text-gray-500 text-sm mb-4">You will be redirected to TiendaNube to grant access. After authorizing, you will return here automatically.</p>
+        </div>
+        <a href="{{ auth_url }}" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500 animate-bounce" id="authorizeBtn">
+            Authorize with TiendaNube
+        </a>
+        <div class="mt-6 text-xs text-gray-400 animate-fadeIn flex flex-col items-center">
+            <div class="flex items-center space-x-2">
+                <b>Redirect URI:</b> <span id="redirectUriText" class="text-gray-700">{{ redirect_uri }}</span>
+                <button type="button" onclick="copyRedirectUri()" class="ml-2 px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold focus:outline-none">Copy</button>
+            </div>
+            <div class="mt-1"><b>State:</b> {{ state }}</div>
+            <div id="redirectUriHelp" class="text-green-600 text-xs mt-2 hidden">Copied! Paste this URL in your TiendaNube app settings if you see a redirect_uri error.</div>
+        </div>
+        {% elif step == 4 %}
+        <div class="mb-6 animate-fadeIn">
+            <p class="text-gray-700 text-lg mb-2 font-semibold">Authorization Code Received</p>
+            <p class="text-gray-500 text-sm mb-4">You have authorized Synap. Now, obtain your access token to complete the connection.</p>
+        </div>
+        {% if not access_token %}
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="get_token" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                Get Access Token
+            </button>
+        </form>
+        {% else %}
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 animate-fadeIn">
+            <div class="text-green-700 font-semibold mb-2">Access Token Obtained!</div>
+            <div class="text-xs text-gray-700 break-all"><b>Access Token:</b> {{ access_token }}</div>
+            <div class="text-xs text-gray-700"><b>Store ID:</b> {{ user_id }}</div>
+        </div>
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="continue_prefs" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                Continue to Preferences
+            </button>
+        </form>
+        {% endif %}
+        {% elif step == 5 %}
+        <form method="post" class="space-y-6 animate-fadeIn">
+            {% csrf_token %}
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Synchronization Preferences</label>
+                <div class="flex items-center mb-2 animate-slideUp">
+                    <input type="checkbox" id="auto_sync" name="auto_sync" class="mr-2" {% if auto_sync %}checked{% endif %}>
+                    <label for="auto_sync" class="text-gray-700">Enable automatic synchronization</label>
+                </div>
+                <div class="mb-2 animate-slideUp">
+                    <label for="sync_interval" class="block text-xs font-medium text-gray-500 mb-1">Sync Interval (minutes)</label>
+                    <input type="number" id="sync_interval" name="sync_interval" min="5" max="1440" class="w-32 px-2 py-1 border rounded" value="{{ sync_interval|default:30 }}">
+                </div>
+                <div class="flex flex-wrap gap-4 mt-4">
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_products" class="mr-2" {% if sync_products %}checked{% endif %}><span>Sync Products</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_stock" class="mr-2" {% if sync_stock %}checked{% endif %}><span>Sync Stock</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_variants" class="mr-2" {% if sync_variants %}checked{% endif %}><span>Sync Variants</span></label>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-center animate-fadeIn">
+                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                    Finish
+                </button>
+            </div>
+        </form>
+        {% elif step == 6 %}
+        <div class="mb-6 animate-fadeIn">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Configuration Summary</h2>
+            <p class="text-gray-600 mb-4">Review the details below and click "Register Store in Synap" to finish the setup.</p>
+            {% if tienda_data %}
+            <div class="bg-blue-50 border rounded-lg p-4 text-left text-sm animate-slideUp mb-4">
+                <div><b>Store Name:</b> {{ tienda_data.name }}</div>
+                <div><b>Domain:</b> {{ tienda_data.domains.0.domain }}</div>
+                <div><b>Email:</b> {{ tienda_data.email }}</div>
+                <div><b>Phone:</b> {{ tienda_data.phone }}</div>
+                <div><b>Country:</b> {{ tienda_data.country }}</div>
+                <div><b>Currency:</b> {{ tienda_data.currency }}</div>
+            </div>
+            {% endif %}
+            <div class="bg-gray-50 border rounded-lg p-4 text-left text-sm animate-slideUp">
+                <div><b>App ID:</b> {{ summary.app_id }}</div>
+                <div><b>Store ID:</b> {{ summary.user_id }}</div>
+                <div><b>Access Token:</b> <span class="break-all">{{ summary.access_token }}</span></div>
+                <div><b>Scopes:</b> {{ summary.scopes|join:', ' }}</div>
+                <div><b>Auto Sync:</b> {{ summary.auto_sync|yesno:"Yes,No" }}</div>
+                <div><b>Sync Interval:</b> {{ summary.sync_interval }} min</div>
+                <div><b>Sync Products:</b> {{ summary.sync_products|yesno:"Yes,No" }}</div>
+                <div><b>Sync Stock:</b> {{ summary.sync_stock|yesno:"Yes,No" }}</div>
+                <div><b>Sync Variants:</b> {{ summary.sync_variants|yesno:"Yes,No" }}</div>
+            </div>
+        </div>
+        {% if wizard_error %}
+        <div class="bg-red-100 border border-red-300 text-red-700 rounded-lg p-4 mb-4 animate-fadeIn">
+            <b>{{ wizard_error }}</b>
+        </div>
+        <a href="{% url 'tiendanube:config_list' %}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition font-semibold">Go to Store List</a>
+        {% else %}
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="save_store" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
+                Register Store in Synap
+            </button>
+        </form>
+        {% endif %}
+        {% endif %}
+    </div>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-6 right-6 z-50 hidden px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300"></div>
+    <!-- Confetti Script -->
+    <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50" style="display:none;"></canvas>
+</div>
+
+{% endblock %}
+
+{% block tiendanube_extra_js %}
+<script>
+// Animations
+const fadeIn = [
+    { opacity: 0, transform: 'translateY(20px)' },
+    { opacity: 1, transform: 'translateY(0)' }
+];
+const slideUp = [
+    { opacity: 0, transform: 'translateY(40px)' },
+    { opacity: 1, transform: 'translateY(0)' }
+];
+
+// Progress bar logic
+const step = {{ step|default:1 }};
+const progress = [0, 16, 32, 48, 64, 82, 100];
+document.getElementById('wizardProgress').style.width = progress[step] + '%';
+
+// Toast notification
+function showToast(msg, type='success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = `fixed top-6 right-6 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300 ${type==='success' ? 'bg-green-600' : 'bg-red-600'}`;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3500);
+}
+
+// Confetti (simple, inline, no deps)
+function launchConfetti() {
+    const canvas = document.getElementById('confettiCanvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.display = 'block';
+    const ctx = canvas.getContext('2d');
+    const pieces = Array.from({length: 120}, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * -canvas.height,
+        r: 6 + Math.random() * 8,
+        d: Math.random() * 50,
+        color: `hsl(${Math.random()*360},70%,60%)`,
+        tilt: Math.random() * 10 - 10
+    }));
+    let angle = 0;
+    function draw() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        angle += 0.01;
+        for (let i=0; i<pieces.length; i++) {
+            let p = pieces[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+            p.y += Math.cos(angle + p.d) + 2 + p.r/8;
+            p.x += Math.sin(angle) * 2;
+            if (p.y > canvas.height) {
+                p.x = Math.random() * canvas.width;
+                p.y = Math.random() * -20;
+            }
+        }
+        requestAnimationFrame(draw);
+    }
+    draw();
+    setTimeout(() => { canvas.style.display = 'none'; }, 3500);
+}
+
+// Show confetti and toast on finish
+if (step === 6) {
+    setTimeout(() => {
+        launchConfetti();
+        showToast('Store configuration completed!');
+    }, 500);
+}
+
+function toggleSecretVisibility() {
+    const input = document.getElementById('client_secret');
+    const icon = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.58A9.953 9.953 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.965 9.965 0 01-4.293 5.411M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 3l18 18' />`;
+    } else {
+        input.type = 'password';
+        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />\n<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' />`;
+    }
+}
+
+function copyRedirectUri() {
+    const text = document.getElementById('redirectUriText').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        const help = document.getElementById('redirectUriHelp');
+        help.classList.remove('hidden');
+        setTimeout(() => help.classList.add('hidden'), 2500);
+    });
+}
+
+function copyRedirectUriHelp() {
+    const text = document.getElementById('redirectUriHelpText').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        const help = document.getElementById('redirectUriHelp');
+        help.classList.remove('hidden');
+        setTimeout(() => help.classList.add('hidden'), 2500);
+    });
+}
+</script>
+<style>
+.animate-fadeIn { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(20px);} to { opacity:1; transform:translateY(0);} }
+.animate-slideUp { animation: slideUp 0.7s cubic-bezier(.4,0,.2,1) both; }
+@keyframes slideUp { from { opacity:0; transform:translateY(40px);} to { opacity:1; transform:translateY(0);} }
+</style>
+{% endblock %} 

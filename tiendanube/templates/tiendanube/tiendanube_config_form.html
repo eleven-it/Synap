@@ -1,0 +1,173 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} TiendaNube Configuration - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">
+            {% if object %}Edit{% else %}Create{% endif %} TiendaNube Configuration
+        </h1>
+        <p class="text-gray-600 mt-2">
+            {% if object %}
+                Update your TiendaNube integration settings.
+            {% else %}
+                Configure your TiendaNube integration to start syncing products and stock.
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+        <form method="post" class="p-6">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Store Configuration -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Store Configuration</h3>
+                    
+                    <div>
+                        <label for="{{ form.store_id.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Store ID *
+                        </label>
+                        <input type="text" name="store_id" class="w-full text-base" value="{{ form.store_id.value }}" required>
+                        {% if form.store_id.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.store_id.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Your TiendaNube store identifier</p>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.access_token.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Access Token *
+                        </label>
+                        <input type="text" name="access_token" class="w-full text-base font-mono" autocomplete="off" value="{{ form.access_token.value }}" required>
+                        {% if form.access_token.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.access_token.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">API access token from TiendaNube</p>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.api_url.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            API URL
+                        </label>
+                        <input type="text" name="api_url" class="w-full text-base" value="{{ form.api_url.value }}">
+                        {% if form.api_url.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.api_url.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Leave empty to use default TiendaNube API</p>
+                    </div>
+                </div>
+
+                <!-- Sync Configuration -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Sync Configuration</h3>
+                    
+                    <div>
+                        <label for="{{ form.auto_sync.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Auto Sync
+                        </label>
+                        <div class="flex items-center space-x-3">
+                            {{ form.auto_sync }}
+                            <label for="{{ form.auto_sync.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Enable automatic synchronization
+                            </label>
+                            <button type="button" id="playSyncBtn" class="ml-4 px-2 py-1 rounded bg-green-100 text-green-700 border border-green-300 hover:bg-green-200" title="Activar sincronización">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button type="button" id="stopSyncBtn" class="ml-1 px-2 py-1 rounded bg-red-100 text-red-700 border border-red-300 hover:bg-red-200" title="Desactivar sincronización">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        </div>
+                        {% if form.auto_sync.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.auto_sync.errors|first }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="{{ form.sync_interval.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Sync Interval (minutes)
+                        </label>
+                        {{ form.sync_interval }}
+                        {% if form.sync_interval.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.sync_interval.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">How often to sync (5-1440 minutes)</p>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.webhook_secret.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Webhook Secret
+                        </label>
+                        {{ form.webhook_secret }}
+                        {% if form.webhook_secret.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.webhook_secret.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Secret for webhook verification</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Options -->
+            <div class="mt-8 border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Sync Options</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="flex items-center">
+                        {{ form.sync_products }}
+                        <label for="{{ form.sync_products.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                            Sync Products
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.sync_stock }}
+                        <label for="{{ form.sync_stock.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                            Sync Stock
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.sync_variants }}
+                        <label for="{{ form.sync_variants.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                            Sync Variants
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-8 flex justify-end space-x-3">
+                <a href="{% url 'tiendanube:config_list' %}" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                    {% if object %}Update{% else %}Create{% endif %} Configuration
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube configuration.
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const autoSyncCheckbox = document.getElementById('{{ form.auto_sync.id_for_label }}');
+    const playBtn = document.getElementById('playSyncBtn');
+    const stopBtn = document.getElementById('stopSyncBtn');
+    if (playBtn && autoSyncCheckbox) {
+        playBtn.addEventListener('click', function() {
+            autoSyncCheckbox.checked = true;
+        });
+    }
+    if (stopBtn && autoSyncCheckbox) {
+        stopBtn.addEventListener('click', function() {
+            autoSyncCheckbox.checked = false;
+        });
+    }
+});
+</script>
+{% endblock %} 

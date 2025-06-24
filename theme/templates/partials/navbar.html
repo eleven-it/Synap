@@ -1,0 +1,36 @@
+<div class="flex justify-between items-center py-4 px-2 sm:px-4">
+  <!-- Izquierda: Botón de menú + Logo -->
+  <div class="flex items-center space-x-2">
+    <button @click="openMenu = !openMenu" class="text-white hover:text-gray-200 focus:outline-none">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="url(#gridGradient)" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gridGradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#EC4899"/>
+                <stop offset="100%" stop-color="#3B82F6"/>
+              </linearGradient>
+            </defs>
+            <rect x="3" y="3" width="8" height="8" rx="1.5" />
+            <rect x="13" y="3" width="8" height="8" rx="1.5" />
+            <rect x="3" y="13" width="8" height="8" rx="1.5" />
+            <rect x="13" y="13" width="8" height="8" rx="1.5" />
+        </svg>
+    </button>
+    <span class="text-lg font-semibold">Synap</span>
+  </div>
+
+  <!-- Derecha: Usuario -->
+  <div class="relative pr-2">
+    <button @click="openUserMenu = !openUserMenu" class="flex items-center space-x-2 hover:text-gray-200">
+      {% if user.email %}
+        <span class="hidden sm:inline">{{ user.nombre|default:user.email }}</span>
+        <img src="https://ui-avatars.com/api/?name={{ user.nombre|default:user.email }}" class="w-8 h-8 rounded-full" alt="avatar">
+      {% else %}
+        <span class="text-sm text-red-300 italic">Sin usuario</span>
+      {% endif %}
+    </button>
+    <div x-show="openUserMenu" class="absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-md py-2 z-50">
+      <a href="/login/perfil/" class="block px-4 py-2 hover:bg-gray-100">🔐 Mi perfil</a>
+      <a href="{% url 'login:logout' %}" class="block px-4 py-2 hover:bg-gray-100">🚪 Cerrar sesión</a>
+    </div>
+  </div>
+</div> 

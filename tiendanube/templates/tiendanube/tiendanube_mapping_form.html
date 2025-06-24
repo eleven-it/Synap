@@ -1,0 +1,363 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}{% if object %}Edit{% else %}Create{% endif %} Product Mapping - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">
+            {% if object %}Edit{% else %}Create{% endif %} Product Mapping
+        </h1>
+        <p class="text-gray-600 mt-2">
+            {% if object %}
+                Update the mapping between your product and TiendaNube.
+            {% else %}
+                Create a mapping between your product and TiendaNube to enable synchronization.
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+        <form method="post" class="p-6">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Product Selection -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">Product Information</h3>
+                    
+                    <div>
+                        <label for="{{ form.product.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Product *
+                        </label>
+                        {{ form.product }}
+                        {% if form.product.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.product.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Select the product to map</p>
+                    </div>
+
+                    {% if object and object.product %}
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-medium text-gray-800 mb-2">Selected Product:</h4>
+                        <div class="flex items-center">
+                            {% if object.product.image %}
+                                <img class="h-12 w-12 rounded-lg object-cover mr-3" src="{{ object.product.image.url }}" alt="{{ object.product.name }}">
+                            {% else %}
+                                <div class="h-12 w-12 rounded-lg bg-gray-200 flex items-center justify-center mr-3">
+                                    <i class="fas fa-box text-gray-400"></i>
+                                </div>
+                            {% endif %}
+                            <div>
+                                <div class="font-medium text-gray-900">{{ object.product.name }}</div>
+                                <div class="text-sm text-gray-500">SKU: {{ object.product.sku|default:"N/A" }}</div>
+                                <div class="text-sm text-gray-500">Stock: {{ object.product.stock|default:0 }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- TiendaNube Configuration -->
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-800 border-b pb-2">TiendaNube Configuration</h3>
+                    
+                    <div>
+                        <label for="{{ form.tiendanube_id.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            TiendaNube Product ID
+                        </label>
+                        {{ form.tiendanube_id }}
+                        {% if form.tiendanube_id.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.tiendanube_id.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Leave empty to search and select from TiendaNube</p>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.tiendanube_variant_id.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            TiendaNube Variant ID
+                        </label>
+                        {{ form.tiendanube_variant_id }}
+                        {% if form.tiendanube_variant_id.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.tiendanube_variant_id.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Optional: specific variant ID if product has variants</p>
+                    </div>
+
+                    <div>
+                        <label for="{{ form.sync_direction.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Sync Direction
+                        </label>
+                        {{ form.sync_direction }}
+                        {% if form.sync_direction.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.sync_direction.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Choose which direction to sync data</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sync Options -->
+            <div class="mt-8 border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Sync Options</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            {{ form.sync_stock }}
+                            <label for="{{ form.sync_stock.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Sync Stock Levels
+                            </label>
+                        </div>
+                        {% if form.sync_stock.errors %}
+                            <p class="text-red-500 text-sm">{{ form.sync_stock.errors|first }}</p>
+                        {% endif %}
+                        
+                        <div class="flex items-center">
+                            {{ form.sync_price }}
+                            <label for="{{ form.sync_price.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Sync Prices
+                            </label>
+                        </div>
+                        {% if form.sync_price.errors %}
+                            <p class="text-red-500 text-sm">{{ form.sync_price.errors|first }}</p>
+                        {% endif %}
+                        
+                        <div class="flex items-center">
+                            {{ form.sync_description }}
+                            <label for="{{ form.sync_description.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Sync Descriptions
+                            </label>
+                        </div>
+                        {% if form.sync_description.errors %}
+                            <p class="text-red-500 text-sm">{{ form.sync_description.errors|first }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            {{ form.sync_images }}
+                            <label for="{{ form.sync_images.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Sync Images
+                            </label>
+                        </div>
+                        {% if form.sync_images.errors %}
+                            <p class="text-red-500 text-sm">{{ form.sync_images.errors|first }}</p>
+                        {% endif %}
+                        
+                        <div class="flex items-center">
+                            {{ form.sync_categories }}
+                            <label for="{{ form.sync_categories.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Sync Categories
+                            </label>
+                        </div>
+                        {% if form.sync_categories.errors %}
+                            <p class="text-red-500 text-sm">{{ form.sync_categories.errors|first }}</p>
+                        {% endif %}
+                        
+                        <div class="flex items-center">
+                            {{ form.active }}
+                            <label for="{{ form.active.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Active Mapping
+                            </label>
+                        </div>
+                        {% if form.active.errors %}
+                            <p class="text-red-500 text-sm">{{ form.active.errors|first }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advanced Options -->
+            <div class="mt-8 border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Advanced Options</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="{{ form.sync_interval.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Sync Interval (minutes)
+                        </label>
+                        {{ form.sync_interval }}
+                        {% if form.sync_interval.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.sync_interval.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">How often to sync this product (0 = use global setting)</p>
+                    </div>
+                    
+                    <div>
+                        <label for="{{ form.last_sync.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Last Sync
+                        </label>
+                        {{ form.last_sync }}
+                        {% if form.last_sync.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.last_sync.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Last synchronization timestamp</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-8 flex justify-end space-x-3">
+                <a href="{% url 'tiendanube:mapping_list' %}" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">
+                    Cancel
+                </a>
+                {% if not object %}
+                <button type="button" id="searchTiendaNubeBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-search mr-2"></i>Search TiendaNube
+                </button>
+                {% endif %}
+                <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">
+                    {% if object %}Update{% else %}Create{% endif %} Mapping
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- TiendaNube Search Modal -->
+<div id="searchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Search TiendaNube Products</h3>
+            <button id="closeSearchModal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <div class="mb-4">
+            <input type="text" id="searchTiendaNubeInput" placeholder="Search products in TiendaNube..." 
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        
+        <div id="searchResults" class="space-y-2">
+            <!-- Search results will be populated here -->
+        </div>
+        
+        <div class="mt-4 flex justify-end">
+            <button id="cancelSearch" class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube product mapping.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block tiendanube_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchBtn = document.getElementById('searchTiendaNubeBtn');
+    const searchModal = document.getElementById('searchModal');
+    const closeSearchModal = document.getElementById('closeSearchModal');
+    const cancelSearch = document.getElementById('cancelSearch');
+    const searchInput = document.getElementById('searchTiendanubeInput');
+    const searchResults = document.getElementById('searchResults');
+    
+    if (searchBtn) {
+        searchBtn.addEventListener('click', function() {
+            searchModal.classList.remove('hidden');
+            searchModal.classList.add('flex');
+            searchInput.focus();
+        });
+    }
+    
+    if (closeSearchModal) {
+        closeSearchModal.addEventListener('click', hideSearchModal);
+    }
+    
+    if (cancelSearch) {
+        cancelSearch.addEventListener('click', hideSearchModal);
+    }
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', debounce(function() {
+            searchTiendaNubeProducts(this.value);
+        }, 500));
+    }
+    
+    // Close modal when clicking outside
+    searchModal.addEventListener('click', function(e) {
+        if (e.target === searchModal) {
+            hideSearchModal();
+        }
+    });
+});
+
+function hideSearchModal() {
+    const searchModal = document.getElementById('searchModal');
+    searchModal.classList.add('hidden');
+    searchModal.classList.remove('flex');
+}
+
+async function searchTiendaNubeProducts(query) {
+    if (!query || query.length < 3) {
+        document.getElementById('searchResults').innerHTML = '<p class="text-gray-500 text-center py-4">Enter at least 3 characters to search</p>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/tiendanube/api/products/search/?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            displaySearchResults(data.products);
+        } else {
+            document.getElementById('searchResults').innerHTML = `<p class="text-red-500 text-center py-4">Error: ${data.error}</p>`;
+        }
+    } catch (error) {
+        document.getElementById('searchResults').innerHTML = '<p class="text-red-500 text-center py-4">Connection error</p>';
+    }
+}
+
+function displaySearchResults(products) {
+    const container = document.getElementById('searchResults');
+    
+    if (products.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center py-4">No products found</p>';
+        return;
+    }
+    
+    container.innerHTML = products.map(product => `
+        <div class="border rounded-lg p-3 hover:bg-gray-50 cursor-pointer" onclick="selectProduct('${product.id}', '${product.name}')">
+            <div class="flex items-center">
+                ${product.image ? `<img src="${product.image}" class="h-10 w-10 rounded object-cover mr-3" alt="${product.name}">` : 
+                '<div class="h-10 w-10 rounded bg-gray-200 flex items-center justify-center mr-3"><i class="fas fa-box text-gray-400"></i></div>'}
+                <div class="flex-1">
+                    <div class="font-medium text-gray-900">${product.name}</div>
+                    <div class="text-sm text-gray-500">ID: ${product.id} | Price: $${product.price}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function selectProduct(productId, productName) {
+    document.getElementById('id_tiendanube_id').value = productId;
+    hideSearchModal();
+    
+    // Show success message
+    showSuccess(`Selected: ${productName}`);
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function showSuccess(message) {
+    // Implement success notification
+    console.log('Success:', message);
+}
+</script>
+{% endblock %} 

@@ -1,17 +1,20 @@
 #!/bin/bash
 
-# Nombre: actualizar_repo_servidor.sh
-# Descripción: Actualiza FixSync en la rama 1.0 con autenticación SSH, merge, backup y resolución asistida de conflictos.
+# Nombre: actualizar_repo_synap.sh
+# Descripción: Actualiza Synap en la rama 1.0 con autenticación SSH, merge, backup y resolución asistida de conflictos.
+# Autor: Sebastián Paredes
 
 mensaje_commit=${1:-"Actualización automática desde el servidor"}
 log_dir="./logs"
 log_file="$log_dir/actualizaciones.log"
 timestamp=$(date +"%Y-%m-%d %H:%M:%S")
 fecha_slug=$(date +"%Y%m%d_%H%M")
+rama_principal="1.0"
+remoto_esperado="git@github.com:eleven-it/Synap.git"
 
 echo ""
 echo "========================================"
-echo "  🚀 ACTUALIZANDO REPOSITORIO FixSync"
+echo "  🚀 ACTUALIZANDO REPOSITORIO Synap"
 echo "  📅 Fecha: $timestamp"
 echo "========================================"
 echo ""
@@ -23,61 +26,49 @@ if [ ! -d ".git" ]; then
   exit 1
 fi
 
-# Verificar si el repositorio está usando HTTPS en vez de SSH
-remote_url=$(git remote get-url origin)
+# Verificar y corregir URL remota si es necesario
+remote_url=$(git remote get-url origin 2>/dev/null)
 
-if [[ "$remote_url" == https://* ]]; then
+if [[ "$remote_url" != "$remoto_esperado" ]]; then
+  echo "🔄 Actualizando el remoto 'origin' a: $remoto_esperado"
+  git remote remove origin 2>/dev/null
+  git remote add origin "$remoto_esperado"
+  echo "✅ URL del remoto configurada correctamente."
   echo ""
-  echo "⚠️  ADVERTENCIA: Estás usando HTTPS como método de autenticación."
-  echo "🔐 GitHub ya no permite autenticación con usuario/contraseña. Se recomienda SSH."
-  echo "🔄 Actualizando la URL remota a usar SSH..."
-  echo ""
-
-  # Reemplazar automáticamente la URL remota por SSH
-  git remote set-url origin git@github.com:eleven-it/FixSync.git
-
-  echo "✅ URL del remoto actualizada a: git@github.com:eleven-it/FixSync.git"
-  echo ""
-  sleep 1
 fi
 
 # Cambiar a la rama principal
-echo "📌 Cambiando a la rama 1.0..."
-git checkout 1.0
+echo "📌 Cambiando a la rama principal: $rama_principal..."
+git checkout "$rama_principal" || {
+  echo "❌ Error: No se pudo cambiar a la rama '$rama_principal'."
+  exit 1
+}
 echo ""
 
 # Crear rama de respaldo
 backup_branch="respaldo_$fecha_slug"
 echo "🛡️  Creando rama de respaldo: $backup_branch"
 git checkout -b "$backup_branch"
-git checkout 1.0
+git checkout "$rama_principal"
 echo ""
 
 # Detectar archivos modificados sin agregar (unstaged)
 if ! git diff --quiet; then
-  echo "⚠️  Se detectaron archivos modificados sin agregar (unstaged)."
-  echo ""
-  echo "🔍 Archivos modificados:"
-  echo "-----------------------------"
+  echo "⚠️  Archivos modificados sin agregar (unstaged):"
   git status --short
-  echo "-----------------------------"
-  echo ""
   echo "➕ Agregando automáticamente todos los cambios con: git add ."
   git add .
   echo ""
 fi
 
 # Hacer pull con merge
-echo "🔄 Haciendo pull (con merge)..."
-if ! git pull; then
+echo "🔄 Haciendo pull de origin/$rama_principal (con merge)..."
+if ! git pull origin "$rama_principal"; then
   echo ""
   echo "❌ Conflicto detectado durante el merge."
-  echo ""
   echo "📂 Archivos en conflicto:"
-  echo "-----------------------------"
   conflict_files=$(git diff --name-only --diff-filter=U)
   echo "$conflict_files"
-  echo "-----------------------------"
   echo ""
 
   for file in $conflict_files; do
@@ -99,9 +90,7 @@ if ! git pull; then
         echo "✔ Usada la versión remota."
         ;;
       3)
-        echo "✏️ Abrí el archivo en tu editor, resolvé el conflicto y luego ejecutá:"
-        echo "   git add $file"
-        echo ""
+        echo "✏️ Editá el archivo y ejecutá: git add $file"
         read -p "Presioná Enter cuando lo hayas resuelto..."
         ;;
       *)
@@ -142,10 +131,10 @@ echo "📝 Realizando commit con mensaje: \"$mensaje_commit\""
 git commit -m "$mensaje_commit"
 echo ""
 
-echo "🚀 Subiendo cambios al repositorio remoto..."
-if git push origin 1.0; then
+echo "🚀 Subiendo cambios a la rama '$rama_principal'..."
+if git push origin "$rama_principal"; then
   echo ""
-  echo "$timestamp - Cambios subidos a rama 1.0 con mensaje: \"$mensaje_commit\"" >> "$log_file"
+  echo "$timestamp - Cambios subidos a rama '$rama_principal' con mensaje: \"$mensaje_commit\"" >> "$log_file"
   echo "✅ CAMBIOS SUBIDOS CORRECTAMENTE"
 else
   echo ""

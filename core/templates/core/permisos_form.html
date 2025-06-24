@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex">
+  {% include "core/partials/menu_lateral.html" %}
+  <div class="flex-1 pl-56">
+    <div class="max-w-xl mx-auto py-10 px-4">
+      <h1 class="text-2xl font-bold text-gray-800 mb-6">
+        {% if editar %}✏️ Editar Permiso{% else %}➕ Crear Nuevo Permiso{% endif %}
+      </h1>
+
+      {% if messages %}
+        <div class="mb-4">
+          {% for message in messages %}
+            <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <form method="post" class="bg-white p-6 rounded-lg shadow-md space-y-4">
+        {% csrf_token %}
+        <div>
+          <label for="codigo" class="block text-sm font-medium text-gray-700">Código del Permiso</label>
+          <input type="text" name="codigo" id="codigo" value="{{ permiso.codigo|default:'' }}" 
+                 class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
+                 required {% if editar %}readonly{% endif %}>
+          {% if editar %}
+          <p class="text-xs text-gray-500 mt-1">El código no se puede modificar.</p>
+          {% endif %}
+        </div>
+        <div>
+          <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre Descriptivo</label>
+          <input type="text" name="nombre" id="nombre" value="{{ permiso.nombre|default:'' }}"
+                 class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
+                 required>
+        </div>
+        <div class="text-right">
+          <a href="{% url 'core:listar_permisos' %}" class="text-gray-600 mr-4">Cancelar</a>
+          <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
+            Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% include "core/partials/command_palette.html" %}
+{% endblock %}

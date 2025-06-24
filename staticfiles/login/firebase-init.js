@@ -1,202 +1,113 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { firebaseConfig, backendRoutes } from "/login/firebase-config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getAuth,
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithRedirect,
+  updateProfile,
+  signInWithEmailAndPassword,
+  signInWithPopup,
   GoogleAuthProvider,
   OAuthProvider
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
-
-import { firebaseConfig, backendRoutes, getCookie } from "/login/firebase-config.js";
-
-console.log("✅ Firebase config cargado:", firebaseConfig);
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-auth.useDeviceLanguage();
-console.log("✅ Firebase App inicializado");
 
-const db = getFirestore();
+function getNextParam() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("next") || "/core/dashboard/";
+}
 
-// 🔐 Login con email y contraseña
-window.loginUser = (event) => {
-  event.preventDefault();
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-  document.getElementById("error-message").classList.add("hidden");
+async function sendLoginRequest(idToken) {
+  const next = getNextParam();
 
-  console.log("🔐 Iniciando login con:", email);
+  const response = await fetch(`/login/?next=${encodeURIComponent(next)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ idToken }),
+  });
 
-  signInWithEmailAndPassword(auth, email, password)
-    .then((userCredential) => {
-      console.log("✅ Login exitoso, obteniendo token...");
-      return userCredential.user.getIdToken().then((idToken) => {
-        console.log("🔐 Token obtenido:", idToken);
-        return fetch(backendRoutes.login, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCookie("csrftoken")
-          },
-          credentials: "same-origin",
-          body: JSON.stringify({ idToken })
-        }).then((response) => {
-          console.log("📨 Respuesta del backend:", response.status);
-          return response.json().then(data => {
-            console.log("📨 Cuerpo de la respuesta:", data);
-            return verificarTipoUsuarioYRedirigir(userCredential.user);
-          });
-        });
-      });
-    })
-    .catch((error) => {
-      console.error("❌ Error en loginUser:", error);
-      showError(
-        error.code === "auth/invalid-credential"
-          ? "Correo o contraseña incorrectos."
-          : "Error: " + error.message
-      );
-    });
-};
+  const data = await response.json();
 
-// 🆕 Registro con email y contraseña
-window.registerUser = function (event) {
-  event.preventDefault();
-
-  const nombre = document.getElementById("nombre").value;
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-  const errorBox = document.getElementById("error-message");
-
-  errorBox.classList.add("hidden");
-
-  console.log("📝 Iniciando registro...");
-  console.log("📨 Email:", email);
-  console.log("👤 Nombre:", nombre);
-
-  createUserWithEmailAndPassword(auth, email, password)
-    .then((userCredential) => {
-      const user = userCredential.user;
-      console.log("✅ Usuario creado con UID:", user.uid);
-      localStorage.setItem("nombre", nombre);
-      console.log("➡️ Redirigiendo a completar perfil...");
-      window.location.href = "/login/completar-perfil/";
-    })
-    .catch((error) => {
-      console.error("❌ Error al registrar usuario:", error);
-      errorBox.innerText = "Error: " + error.message;
-      errorBox.classList.remove("hidden");
-    });
-};
-
-// 🚀 Google login
-window.loginWithGoogle = () => {
-  console.log("🔁 Redireccionando a login con Google...");
-  signInWithRedirect(auth, new GoogleAuthProvider());
-};
-
-// 🍏 Apple login
-window.loginWithApple = () => {
-  console.log("🔁 Redireccionando a login con Apple...");
-  signInWithRedirect(auth, new OAuthProvider("apple.com"));
-};
-
-// 🔍 Verificar tipo_usuario después del login
-async function verificarTipoUsuarioYRedirigir(user) {
-  const usuarioRef = doc(db, "usuarios", user.uid);
-  const docSnap = await getDoc(usuarioRef);
-
-  if (!docSnap.exists() || !docSnap.data().tipo_usuario) {
-    console.log("👤 Usuario sin tipo asignado. Redirigiendo a completar perfil.");
-    window.location.href = "/login/completar-perfil/";
-    return;
-  }
-
-  const tipo = docSnap.data().tipo_usuario;
-  console.log("✅ Tipo de usuario:", tipo);
-
-  if (tipo === "cliente") {
-    window.location.href = "/clientes/dashboard/";
+  if (response.ok && data.redirect) {
+    window.location.href = data.redirect;
   } else {
-    window.location.href = "/proveedores/dashboard/";
+    const errorDiv = document.getElementById("error-message");
+    if (errorDiv) {
+      errorDiv.innerText = data.error || "Error desconocido";
+      errorDiv.classList.remove("hidden");
+    }
   }
 }
 
-// 🔁 Guardar tipo de usuario y establecer sesión
-window.guardarTipoUsuario = async function (tipo) {
-  const errorBox = document.getElementById("error-message");
-  const authInstance = getAuth();
+// 🔐 Login por email
+window.loginUser = async function (event) {
+  event.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const errorDiv = document.getElementById("error-message");
 
-  console.log("🧭 Tipo seleccionado:", tipo);
-
-  const unsubscribe = authInstance.onAuthStateChanged(async (user) => {
-    unsubscribe();
-    console.log("👤 Usuario actual:", user);
-
-    if (!user) {
-      errorBox.innerText = "No se detectó sesión activa.";
-      errorBox.classList.remove("hidden");
-      return;
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const idToken = await userCredential.user.getIdToken();
+    await sendLoginRequest(idToken);
+  } catch (error) {
+    if (errorDiv) {
+      errorDiv.innerText = "Credenciales inválidas";
+      errorDiv.classList.remove("hidden");
     }
-
-    try {
-      await setDoc(doc(db, "usuarios", user.uid), {
-        email: user.email,
-        tipo_usuario: tipo,
-        nombre: localStorage.getItem("nombre") || ""
-      }, { merge: true });
-
-      console.log("✅ Tipo de usuario guardado en Firestore");
-
-      const idToken = await user.getIdToken();
-      const csrftoken = getCookie("csrftoken");
-
-      const response = await fetch(backendRoutes.login, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrftoken
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({ idToken })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("❌ Error al enviar token al backend:", errorText);
-        throw new Error("No se pudo establecer sesión con el backend.");
-      }
-
-      console.log("✅ Sesión establecida con backend");
-
-      if (tipo === "cliente") {
-        window.location.href = "/clientes/dashboard/";
-      } else {
-        window.location.href = "/proveedores/dashboard/";
-      }
-    } catch (error) {
-      console.error("❌ Error en guardarTipoUsuario:", error);
-      errorBox.innerText = "Error al guardar el tipo de cuenta. Intentá nuevamente.";
-      errorBox.classList.remove("hidden");
-    }
-  });
+  }
 };
 
-// 🛠️ Mostrar error visual
-const showError = (message) => {
-  const msg = document.getElementById("error-message");
-  if (msg) {
-    msg.innerText = message;
-    msg.classList.remove("hidden");
-  } else {
-    alert(message);
+// 🔐 Login con Google
+window.loginWithGoogle = async function () {
+  const provider = new GoogleAuthProvider();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const idToken = await result.user.getIdToken();
+    await sendLoginRequest(idToken);
+  } catch (error) {
+    console.error("Login con Google falló:", error);
+  }
+};
+
+// 🔐 Login con Apple (placeholder)
+window.loginWithApple = async function () {
+  const provider = new OAuthProvider("apple.com");
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const idToken = await result.user.getIdToken();
+    await sendLoginRequest(idToken);
+  } catch (error) {
+    console.error("Login con Apple falló:", error);
+  }
+};
+
+// ➕ Función de Registro que faltaba
+window.registerUser = async function (event) {
+  event.preventDefault();
+  const nombre = document.getElementById("nombre").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const errorDiv = document.getElementById("error-message");
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Actualizar el perfil del usuario con el nombre
+    await updateProfile(userCredential.user, {
+      displayName: nombre
+    });
+
+    const idToken = await userCredential.user.getIdToken();
+    await sendLoginRequest(idToken); // Reutilizamos el flujo de login
+
+  } catch (error) {
+    if (errorDiv) {
+      errorDiv.innerText = error.message; // Mostrar error de Firebase
+      errorDiv.classList.remove("hidden");
+    }
   }
 };

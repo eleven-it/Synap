@@ -1,0 +1,696 @@
+{% extends "inventory/inventory_base.html" %}
+
+{% block title %}Dashboard TiendaNube - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sync-status-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.25rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #667eea;
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .sync-progress {
+        background: #e5e7eb;
+        border-radius: 8px;
+        height: 8px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+    }
+    
+    .sync-progress-bar {
+        background: linear-gradient(90deg, #10b981, #059669);
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+    
+    .action-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .action-btn:hover {
+        background: #5a67d8;
+        transform: translateY(-1px);
+    }
+    
+    .action-btn:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .action-btn.success {
+        background: #10b981;
+    }
+    
+    .action-btn.warning {
+        background: #f59e0b;
+    }
+    
+    .log-item {
+        background: white;
+        border-radius: 6px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid #e5e7eb;
+    }
+    
+    .log-item.success {
+        border-left-color: #10b981;
+    }
+    
+    .log-item.error {
+        border-left-color: #ef4444;
+    }
+    
+    .log-item.partial {
+        border-left-color: #f59e0b;
+    }
+    
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .status-synced { background: #d1fae5; color: #065f46; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-error { background: #fee2e2; color: #991b1b; }
+    
+    .loading-spinner {
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #667eea;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .env-info {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .env-info.success {
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+    }
+    
+    .env-info.warning {
+        background: #fffbeb;
+        border-color: #fed7aa;
+    }
+</style>
+{% endblock %}
+
+{% block inventory_content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Dashboard TiendaNube</h1>
+            <p class="text-gray-600 mt-2">Integración y sincronización con TiendaNube</p>
+        </div>
+        <div class="flex space-x-3">
+            <button id="testConnectionBtn" class="action-btn">
+                <i class="fas fa-plug mr-2"></i>Probar Conexión
+            </button>
+            <button id="syncProductsBtn" class="action-btn">
+                <i class="fas fa-sync mr-2"></i>Sincronizar Productos
+            </button>
+            <button id="syncStockBtn" class="action-btn">
+                <i class="fas fa-boxes mr-2"></i>Sincronizar Stock
+            </button>
+        </div>
+    </div>
+
+    <!-- Información de Variables de Entorno -->
+    {% if env_configured %}
+        <div class="env-info success">
+            <div class="flex items-center">
+                <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                <div>
+                    <h3 class="font-semibold text-green-800">Variables de Entorno Configuradas</h3>
+                    <p class="text-sm text-green-700 mt-1">
+                        Store ID: {{ store_id }} | API URL: {{ api_url }} | 
+                        Auto Sync: {% if auto_sync %}Activado{% else %}Desactivado{% endif %} | 
+                        Intervalo: {{ sync_interval }} min
+                    </p>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="env-info warning">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                    <div>
+                        <h3 class="font-semibold text-yellow-800">Variables de Entorno No Configuradas</h3>
+                        <p class="text-sm text-yellow-700 mt-1">
+                            Configura TIENDANUBE_STORE_ID y TIENDANUBE_ACCESS_TOKEN en tu archivo .env
+                        </p>
+                    </div>
+                </div>
+                <button id="createConfigBtn" class="action-btn warning">
+                    <i class="fas fa-magic mr-2"></i>Crear Configuración
+                </button>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- Estado de Sincronización -->
+    <div class="sync-status-card">
+        <div class="flex justify-between items-start">
+            <div>
+                <h2 class="text-xl font-semibold mb-2">Estado de Sincronización</h2>
+                <div id="syncStatus" class="text-sm opacity-90">
+                    <div class="loading-spinner"></div>Cargando estado...
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-2xl font-bold" id="syncPercentage">0%</div>
+                <div class="text-sm opacity-90">Sincronizado</div>
+            </div>
+        </div>
+        <div class="sync-progress mt-4">
+            <div class="sync-progress-bar" id="syncProgressBar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Estadísticas -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Total Productos</p>
+                    <div class="stat-number" id="totalProducts">-</div>
+                </div>
+                <i class="fas fa-box text-2xl text-gray-400"></i>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Sincronizados</p>
+                    <div class="stat-number" id="syncedProducts">-</div>
+                </div>
+                <i class="fas fa-check-circle text-2xl text-green-500"></i>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Pendientes</p>
+                    <div class="stat-number" id="pendingProducts">-</div>
+                </div>
+                <i class="fas fa-clock text-2xl text-yellow-500"></i>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Con Errores</p>
+                    <div class="stat-number" id="errorProducts">-</div>
+                </div>
+                <i class="fas fa-exclamation-triangle text-2xl text-red-500"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración -->
+    <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <h3 class="text-lg font-semibold mb-4">Configuración</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Store ID</label>
+                <input type="text" id="storeId" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="{{ store_id|default:'' }}">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Access Token</label>
+                <input type="password" id="accessToken" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Sincronización Automática</label>
+                <select id="autoSync" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="true" {% if auto_sync %}selected{% endif %}>Activada</option>
+                    <option value="false" {% if not auto_sync %}selected{% endif %}>Desactivada</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Intervalo (minutos)</label>
+                <input type="number" id="syncInterval" min="5" max="1440" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="{{ sync_interval|default:30 }}">
+            </div>
+        </div>
+        <div class="mt-4 flex space-x-3">
+            <button id="saveConfigBtn" class="action-btn">
+                <i class="fas fa-save mr-2"></i>Guardar Configuración
+            </button>
+            {% if not tiendanube_config and env_configured %}
+                <button id="createFromEnvBtn" class="action-btn success">
+                    <i class="fas fa-magic mr-2"></i>Crear desde Variables de Entorno
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Logs de Sincronización -->
+    <div class="bg-white rounded-lg shadow-sm border p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Logs de Sincronización</h3>
+            <button id="refreshLogsBtn" class="text-blue-600 hover:text-blue-800">
+                <i class="fas fa-refresh mr-1"></i>Actualizar
+            </button>
+        </div>
+        <div id="syncLogs" class="space-y-3">
+            <div class="text-center text-gray-500 py-8">
+                <div class="loading-spinner mx-auto mb-2"></div>
+                Cargando logs...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmación -->
+<div id="confirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold mb-4" id="modalTitle">Confirmar Acción</h3>
+        <p class="text-gray-600 mb-6" id="modalMessage">¿Estás seguro de que quieres realizar esta acción?</p>
+        <div class="flex justify-end space-x-3">
+            <button id="modalCancel" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
+            <button id="modalConfirm" class="action-btn">Confirmar</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variables globales
+let currentConfig = null;
+let isProcessing = false;
+let envConfigured = {{ env_configured|yesno:"true,false" }};
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    loadSyncStatus();
+    loadConfig();
+    loadSyncLogs();
+    
+    // Event listeners
+    document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
+    document.getElementById('syncProductsBtn').addEventListener('click', () => confirmAction('syncProducts', '¿Sincronizar productos desde TiendaNube?'));
+    document.getElementById('syncStockBtn').addEventListener('click', () => confirmAction('syncStock', '¿Sincronizar stock hacia TiendaNube?'));
+    document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
+    document.getElementById('refreshLogsBtn').addEventListener('click', loadSyncLogs);
+    
+    // Nuevos botones
+    if (document.getElementById('createConfigBtn')) {
+        document.getElementById('createConfigBtn').addEventListener('click', createConfigFromEnv);
+    }
+    if (document.getElementById('createFromEnvBtn')) {
+        document.getElementById('createFromEnvBtn').addEventListener('click', createConfigFromEnv);
+    }
+    
+    // Modal
+    document.getElementById('modalCancel').addEventListener('click', hideModal);
+    document.getElementById('modalConfirm').addEventListener('click', executeConfirmedAction);
+});
+
+// Funciones principales
+async function loadSyncStatus() {
+    try {
+        const response = await fetch('/api/inventory/tiendanube/status/');
+        const data = await response.json();
+        
+        if (response.ok) {
+            updateSyncStatus(data);
+        } else {
+            showError('Error cargando estado de sincronización');
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    }
+}
+
+function updateSyncStatus(data) {
+    const syncStatus = document.getElementById('syncStatus');
+    const syncPercentage = document.getElementById('syncPercentage');
+    const syncProgressBar = document.getElementById('syncProgressBar');
+    
+    if (data.configured) {
+        syncStatus.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                Configurado - Última sincronización: ${data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Nunca'}
+            </div>
+        `;
+        
+        const percentage = data.sync_percentage || 0;
+        syncPercentage.textContent = `${Math.round(percentage)}%`;
+        syncProgressBar.style.width = `${percentage}%`;
+        
+        // Actualizar estadísticas
+        document.getElementById('totalProducts').textContent = data.total_products || 0;
+        document.getElementById('syncedProducts').textContent = data.synced_products || 0;
+        document.getElementById('pendingProducts').textContent = data.pending_products || 0;
+        document.getElementById('errorProducts').textContent = data.error_products || 0;
+    } else {
+        syncStatus.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-triangle text-yellow-400 mr-2"></i>
+                No configurado - Configura los datos de TiendaNube
+            </div>
+        `;
+        syncPercentage.textContent = '0%';
+        syncProgressBar.style.width = '0%';
+    }
+}
+
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/inventory/tiendanube/config/');
+        const data = await response.json();
+        
+        if (response.ok && data.configured) {
+            currentConfig = data;
+            document.getElementById('storeId').value = data.store_id || '';
+            document.getElementById('accessToken').value = data.access_token || '';
+            document.getElementById('autoSync').value = data.auto_sync ? 'true' : 'false';
+            document.getElementById('syncInterval').value = data.sync_interval || 30;
+        }
+    } catch (error) {
+        console.error('Error cargando configuración:', error);
+    }
+}
+
+async function saveConfig() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const config = {
+        store_id: document.getElementById('storeId').value,
+        access_token: document.getElementById('accessToken').value,
+        auto_sync: document.getElementById('autoSync').value === 'true',
+        sync_interval: parseInt(document.getElementById('syncInterval').value)
+    };
+    
+    try {
+        const response = await fetch('/api/inventory/tiendanube/config/', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (response.ok) {
+            showSuccess('Configuración guardada exitosamente');
+            currentConfig = config;
+        } else {
+            const error = await response.json();
+            showError(`Error guardando configuración: ${error.error || 'Error desconocido'}`);
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    } finally {
+        isProcessing = false;
+    }
+}
+
+async function createConfigFromEnv() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const btn = document.getElementById('createFromEnvBtn') || document.getElementById('createConfigBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner"></div>Creando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/inventory/tiendanube/config/create-from-env/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showSuccess('Configuración creada desde variables de entorno');
+            location.reload(); // Recargar para mostrar la nueva configuración
+        } else {
+            showError(`Error creando configuración: ${data.error || 'Error desconocido'}`);
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        isProcessing = false;
+    }
+}
+
+async function testConnection() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const btn = document.getElementById('testConnectionBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner"></div>Probando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/inventory/tiendanube/test-connection/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess('Conexión exitosa con TiendaNube');
+        } else {
+            showError(`Error de conexión: ${data.message}`);
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        isProcessing = false;
+    }
+}
+
+async function loadSyncLogs() {
+    try {
+        const response = await fetch('/api/inventory/tiendanube/logs/?limit=10');
+        const data = await response.json();
+        
+        if (response.ok) {
+            updateSyncLogs(data);
+        } else {
+            showError('Error cargando logs');
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    }
+}
+
+function updateSyncLogs(logs) {
+    const container = document.getElementById('syncLogs');
+    
+    if (logs.length === 0) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-8">No hay logs disponibles</div>';
+        return;
+    }
+    
+    container.innerHTML = logs.map(log => `
+        <div class="log-item ${log.status}">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="status-badge status-${log.sync_type}">${log.sync_type}</span>
+                        <span class="text-sm text-gray-600">${new Date(log.started_at).toLocaleString()}</span>
+                    </div>
+                    <p class="text-sm mt-1">${log.message}</p>
+                    <div class="text-xs text-gray-500 mt-1">
+                        Procesados: ${log.items_processed} | Exitosos: ${log.items_success} | Fallidos: ${log.items_failed}
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="status-badge status-${log.status}">${log.status}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Funciones de utilidad
+function confirmAction(action, message) {
+    if (isProcessing) return;
+    
+    document.getElementById('modalTitle').textContent = 'Confirmar Acción';
+    document.getElementById('modalMessage').textContent = message;
+    document.getElementById('modalConfirm').dataset.action = action;
+    
+    document.getElementById('confirmModal').classList.remove('hidden');
+    document.getElementById('confirmModal').classList.add('flex');
+}
+
+function hideModal() {
+    document.getElementById('confirmModal').classList.add('hidden');
+    document.getElementById('confirmModal').classList.remove('flex');
+}
+
+async function executeConfirmedAction() {
+    const action = document.getElementById('modalConfirm').dataset.action;
+    hideModal();
+    
+    if (action === 'syncProducts') {
+        await syncProducts();
+    } else if (action === 'syncStock') {
+        await syncStock();
+    }
+}
+
+async function syncProducts() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const btn = document.getElementById('syncProductsBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner"></div>Sincronizando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/inventory/tiendanube/sync/products/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ limit: 100, offset: 0 })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess(data.message);
+            loadSyncStatus();
+            loadSyncLogs();
+        } else {
+            showError(`Error en sincronización: ${data.error}`);
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        isProcessing = false;
+    }
+}
+
+async function syncStock() {
+    if (isProcessing) return;
+    isProcessing = true;
+    
+    const btn = document.getElementById('syncStockBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner"></div>Sincronizando...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/api/inventory/tiendanube/sync/stock/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess(data.message);
+            loadSyncLogs();
+        } else {
+            showError(`Error sincronizando stock: ${data.error}`);
+        }
+    } catch (error) {
+        showError('Error de conexión');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        isProcessing = false;
+    }
+}
+
+function showSuccess(message) {
+    // Implementar notificación de éxito
+    console.log('Success:', message);
+}
+
+function showError(message) {
+    // Implementar notificación de error
+    console.error('Error:', message);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %} 

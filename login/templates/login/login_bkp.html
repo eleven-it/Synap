@@ -1,0 +1,61 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Iniciar sesión - Synap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="{% static 'login/firebase-init.js' %}"></script>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-purple-600 to-blue-500 flex items-center justify-center text-white font-sans">
+  <div class="bg-white text-gray-800 shadow-xl rounded-2xl p-8 w-full max-w-md">
+    <h2 class="text-3xl font-bold mb-6 text-center text-gray-900">Iniciar sesión en Synap</h2>
+
+    <button onclick="loginWithGoogle()"
+      class="w-full mb-4 py-3 flex items-center justify-center gap-3 border border-gray-300 text-gray-800 font-semibold rounded-full hover:bg-gray-100 transition-colors">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21.6 12.227c0-.638-.057-1.25-.163-1.837H12v3.475h5.377a4.605 4.605 0 0 1-2 3.018v2.5h3.227c1.89-1.74 2.996-4.302 2.996-7.156z"/>
+        <path d="M12 22c2.7 0 4.968-.9 6.625-2.436l-3.227-2.5c-.895.6-2.035.95-3.398.95-2.614 0-4.828-1.762-5.622-4.124H3.07v2.6A10.002 10.002 0 0 0 12 22z"/>
+        <path d="M6.378 13.89A5.985 5.985 0 0 1 6 12c0-.662.114-1.298.32-1.89v-2.6H3.07A9.998 9.998 0 0 0 2 12c0 1.624.39 3.158 1.07 4.51l3.308-2.62z"/>
+        <path d="M12 6.002c1.47 0 2.79.508 3.832 1.507l2.876-2.876C16.964 2.982 14.695 2 12 2A10.002 10.002 0 0 0 3.07 7.51l3.308 2.6C7.172 7.764 9.386 6.002 12 6.002z"/>
+      </svg>
+      Continuar con Google
+    </button>
+
+    <button onclick="loginWithApple()"
+      class="w-full mb-6 py-3 flex items-center justify-center gap-3 border border-gray-300 text-gray-800 font-semibold rounded-full hover:bg-gray-100 transition-colors">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M16.365 1.43c0 1.14-.427 2.153-1.272 3.035-.928.972-2.05 1.54-3.238 1.45-.088-1.208.433-2.313 1.27-3.172.872-.886 2.097-1.48 3.24-1.5zm4.676 16.747c-.463 1.063-.682 1.54-1.27 2.47-.826 1.292-1.993 2.904-3.45 2.91-1.302.006-1.634-.832-3.415-.824-1.78.008-2.144.83-3.45.825-1.457-.006-2.562-1.475-3.387-2.766C4.173 18.06 2.48 13.6 4.658 9.98c.957-1.663 2.66-2.703 4.53-2.72 1.372-.014 2.663.928 3.415.928.73 0 2.27-1.15 3.828-.982.653.027 2.488.263 3.672 1.98-3.148 1.755-2.636 6.376.538 7.99z"/>
+      </svg>
+      Continuar con Apple
+    </button>
+
+    <div class="flex items-center gap-4 mb-6">
+      <hr class="flex-grow border-gray-300" />
+      <span class="text-sm text-gray-500">o</span>
+      <hr class="flex-grow border-gray-300" />
+    </div>
+
+    <form onsubmit="loginUser(event)">
+      <input id="email" type="email" placeholder="Correo electrónico" required
+        class="w-full p-3 mb-4 rounded-md bg-white text-gray-900 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+      <input id="password" type="password" placeholder="Contraseña" required
+        class="w-full p-3 mb-4 rounded-md bg-white text-gray-900 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+
+      <button type="submit"
+        class="w-full py-3 mt-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-md transition-colors">
+        Ingresar
+      </button>
+    </form>
+
+    <div id="error-message" class="text-red-600 mt-3 text-sm text-center hidden"></div>
+
+    <div class="text-sm text-center mt-6 space-y-2">
+      <a href="{% url 'login:reset_password' %}" class="text-purple-600 hover:underline block">¿Olvidaste tu contraseña?</a>
+      <a href="{% url 'login:register' %}" class="text-blue-600 hover:underline block">¿No tenés cuenta? Registrate</a>
+    </div>
+  </div>
+</body>
+</html>

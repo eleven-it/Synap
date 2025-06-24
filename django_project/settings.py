@@ -19,6 +19,13 @@ ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1', cast=Csv())
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
+
+    # Terceros
+    'theme',
+    'tailwind',
+    'rest_framework',
+    'widget_tweaks',
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -26,40 +33,34 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    # Allauth apps
-    'django.contrib.sites',
-    'allauth',
-    'allauth.account',
-    'allauth.socialaccount',
-
     # Apps propias
     'core',
     'login',
     'clientes',
     'dashboard',
     'proveedores',
-
-    # Terceros
-    'theme',
-    'tailwind',
-    'rest_framework',
+    'inventory',
+    'tiendanube',
+    'django_celery_beat',
+    'celery',
 ]
 
-# Middleware
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    "whitenoise.middleware.WhiteNoiseMiddleware",
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
-    'core.middleware.IdiomaUsuarioMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.AdminAccessMiddleware',
+    'core.middleware.IdiomaUsuarioMiddleware',  
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
 ]
+
+
+HANDLER403 = "core.views.error_403_view"
 
 # URLs y WSGI
 ROOT_URLCONF = 'django_project.urls'
@@ -78,6 +79,8 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.usuario_y_permisos',
+                'core.context_processors.menu_context',
+                'core.context_processors.inventory_menu_context',
             ],
         },
     },
@@ -128,6 +131,10 @@ STATICFILES_DIRS = [
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Archivos de Medios (subidos por usuarios)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Tailwind CSS
 TAILWIND_APP_NAME = 'theme'
 INTERNAL_IPS = ['127.0.0.1']
@@ -141,14 +148,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
 )
 
-SITE_ID = 1
 
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = "username_email"
 LOGIN_REDIRECT_URL = '/'
 
 # Firebase
@@ -180,3 +182,63 @@ REST_FRAMEWORK = {
 }
 
 CSRF_COOKIE_HTTPONLY = False
+
+AUTH_USER_MODEL = 'core.UsuarioExtendido'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',
+    },
+}
+
+# ─────────────────────────────────────────────
+# CONFIGURACIÓN TIENDANUBE
+# ─────────────────────────────────────────────
+
+# Configuración de TiendaNube
+TIENDANUBE_ACCESS_TOKEN = config('TIENDANUBE_ACCESS_TOKEN', default='')
+TIENDANUBE_STORE_ID = config('TIENDANUBE_STORE_ID', default='')
+TIENDANUBE_WEBHOOK_SECRET = config('TIENDANUBE_WEBHOOK_SECRET', default='')
+TIENDANUBE_API_URL = config('TIENDANUBE_API_URL', default='https://api.tiendanube.com/v1')
+TIENDANUBE_AUTO_SYNC = config('TIENDANUBE_AUTO_SYNC', default=True, cast=bool)
+TIENDANUBE_SYNC_INTERVAL = config('TIENDANUBE_SYNC_INTERVAL', default=30, cast=int)
+
+# Configuración de caché para TiendaNube
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://localhost:6379/0'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+# Configuración de logging específica para TiendaNube
+LOGGING['loggers'] = {
+    'tiendanube': {
+        'handlers': ['console'],
+        'level': 'INFO',
+        'propagate': False,
+    },
+}
+
+# Celery settings
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+
+# URL base pública del sitio (para imágenes, enlaces externos, etc.)
+SITE_URL = os.getenv('SITE_URL', 'https://tudominio.com')
+

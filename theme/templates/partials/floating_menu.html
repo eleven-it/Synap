@@ -1,0 +1,13 @@
+<div x-show="openMenu" @click.outside="openMenu = false" class="absolute mt-2 ml-2 bg-white rounded-lg shadow-lg p-4 w-64 z-50">
+    <div class="grid grid-cols-3 gap-4">
+        {% for modulo in modulos_menu %}
+        <a href="{{ modulo.url }}" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
+            {{ modulo.icono_svg|safe }}
+            <span>{{ modulo.nombre }}</span>
+        </a>
+        {% endfor %}
+        {% if not modulos_menu %}
+        <p class="text-gray-500 col-span-3 text-sm italic text-center">Sin módulos habilitados</p>
+        {% endif %}
+    </div>
+</div> 

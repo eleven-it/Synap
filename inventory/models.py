@@ -1,0 +1,347 @@
+from django.db import models
+from django.conf import settings
+from django.utils.translation import gettext_lazy as _
+from core.models import Currency, UnitOfMeasure
+from core.utils.currency import convert_to_base  # Conversion helper
+
+# ─────────────────────────────────────────────
+# MODEL: Main Warehouse
+# ─────────────────────────────────────────────
+class Warehouse(models.Model):
+    name = models.CharField(_("Name"), max_length=255)
+    code = models.CharField(_("Code"), max_length=20, unique=True)
+    address = models.CharField(_("Address"), max_length=255, blank=True)
+    is_active = models.BooleanField(_("Is Active"), default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    class Meta:
+        verbose_name = _("Warehouse")
+        verbose_name_plural = _("Warehouses")
+
+# ─────────────────────────────────────────────
+# MODEL: Physical Location
+# ─────────────────────────────────────────────
+class Location(models.Model):
+    class LocationType(models.TextChoices):
+        INTERNAL = 'internal', _('Internal')
+        SUPPLIER = 'supplier', _('Supplier')
+        CUSTOMER = 'customer', _('Customer')
+        TRANSIT = 'transit', _('In Transit')
+        SCRAP = 'scrap', _('Scrap')
+
+    name = models.CharField(_("Name"), max_length=255)
+    location_type = models.CharField(
+        _("Location Type"),
+        max_length=20,
+        choices=LocationType.choices,
+        default=LocationType.INTERNAL
+    )
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, null=True, blank=True, verbose_name=_("Warehouse"))
+    parent_location = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, verbose_name=_("Parent Location"))
+    is_active = models.BooleanField(_("Is Active"), default=True)
+    allow_operations = models.BooleanField(_("Allow Operations"), default=True)
+
+    def __str__(self):
+        return self.name
+
+    def can_receive_stock(self):
+        return self.is_active and self.allow_operations
+    
+    class Meta:
+        verbose_name = _("Location")
+        verbose_name_plural = _("Locations")
+
+# ─────────────────────────────────────────────
+# MODEL: Product Brand
+# ─────────────────────────────────────────────
+class Brand(models.Model):
+    name = models.CharField(_("Name"), max_length=100, unique=True)
+    is_active = models.BooleanField(_("Active"), default=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        verbose_name = _("Brand")
+        verbose_name_plural = _("Brands")
+        ordering = ['name']
+
+# ─────────────────────────────────────────────
+# MODEL: Product Category
+# ─────────────────────────────────────────────
+class Category(models.Model):
+    name = models.CharField(_("Name"), max_length=100, unique=True)
+    is_active = models.BooleanField(_("Active"), default=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        verbose_name = _("Category")
+        verbose_name_plural = _("Categories")
+        ordering = ['name']
+
+# ─────────────────────────────────────────────
+# MODEL: Product Subcategory
+# ─────────────────────────────────────────────
+class Subcategory(models.Model):
+    name = models.CharField(_("Name"), max_length=100)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='subcategories', verbose_name=_("Category"))
+    is_active = models.BooleanField(_("Active"), default=True)
+
+    class Meta:
+        unique_together = ('name', 'category')
+        verbose_name = _("Subcategory")
+        verbose_name_plural = _("Subcategories")
+        ordering = ['category', 'name']
+
+    def __str__(self):
+        return f"{self.category.name} > {self.name}"
+
+# ─────────────────────────────────────────────
+# MODEL: Product
+# ─────────────────────────────────────────────
+class Product(models.Model):
+    class TrackingMethod(models.TextChoices):
+        NONE = 'none', _('None')
+        LOT = 'lot', _('By Lot')
+        SERIAL = 'serial', _('By Serial Number')
+
+    name = models.CharField(_("Name"), max_length=255)
+    sku = models.CharField(_("SKU"), max_length=100, unique=True)
+    description = models.TextField(_("Description"), blank=True)
+
+    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Brand"))
+    subcategory = models.ForeignKey(Subcategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Subcategory"))
+    image = models.ImageField(_("Image"), upload_to='products/', null=True, blank=True)
+
+    handle = models.SlugField(_("Handle (URL)"), max_length=255, unique=True)
+
+    price = models.DecimalField(_("Price"), max_digits=10, decimal_places=2)
+    price_currency = models.ForeignKey(Currency, on_delete=models.SET_NULL, null=True, verbose_name=_("Price Currency"))
+    uom = models.ForeignKey(UnitOfMeasure, on_delete=models.SET_NULL, null=True, verbose_name=_("Unit of Measure"))
+
+    tracking = models.CharField(
+        _("Tracking"),
+        max_length=10,
+        choices=TrackingMethod.choices,
+        default=TrackingMethod.NONE
+    )
+
+    weight_kg = models.DecimalField(_("Weight (kg)"), max_digits=6, decimal_places=3, null=True, blank=True)
+    volume_m3 = models.DecimalField(_("Volume (m³)"), max_digits=6, decimal_places=3, null=True, blank=True)
+    is_dangerous = models.BooleanField(_("Is Dangerous Good"), default=False)
+    barcode = models.CharField(_("Barcode"), max_length=64, blank=True)
+
+    tiendanube_id = models.BigIntegerField(null=True, blank=True)
+    tiendanube_url = models.URLField(blank=True)
+    is_published = models.BooleanField(_("Is Published"), default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _("Product")
+        verbose_name_plural = _("Products")
+
+    def __str__(self):
+        return f"{self.sku} - {self.name}"
+
+    def requires_tracking(self):
+        return self.tracking in [self.TrackingMethod.LOT, self.TrackingMethod.SERIAL]
+
+    def price_in_base_currency(self, date=None):
+        if self.price_currency:
+            return convert_to_base(self.price, self.price_currency, date)
+        return self.price
+
+# ─────────────────────────────────────────────
+# MODEL: Product Variant
+# ─────────────────────────────────────────────
+class ProductVariant(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants', verbose_name=_("Product"))
+    name = models.CharField(_("Name"), max_length=255)
+    sku = models.CharField(_("SKU"), max_length=100, unique=True)
+    price = models.DecimalField(_("Price"), max_digits=10, decimal_places=2)
+    quantity = models.IntegerField(_("Quantity"), default=0)
+    tiendanube_id = models.BigIntegerField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("Product Variant")
+        verbose_name_plural = _("Product Variants")
+
+    def __str__(self):
+        return f"{self.product.name} - {self.name}"
+
+
+# ─────────────────────────────────────────────
+# MODEL: Stock Lot or Serial Number
+# ─────────────────────────────────────────────
+class StockLot(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    lot_number = models.CharField(_("Lot/Serial Number"), max_length=100)
+    expiration_date = models.DateField(_("Expiration Date"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("Stock Lot")
+        verbose_name_plural = _("Stock Lots")
+
+    def __str__(self):
+        return f"{self.product.sku} - Lote {self.lot_number}"
+
+
+# ─────────────────────────────────────────────
+# MODEL: Stock Quantity per Location
+# ─────────────────────────────────────────────
+class StockQuant(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
+    lot = models.ForeignKey(StockLot, null=True, blank=True, on_delete=models.SET_NULL, verbose_name=_("Lot"))
+    quantity = models.DecimalField(_("Quantity"), max_digits=10, decimal_places=2)
+    reserved_quantity = models.DecimalField(_("Reserved Quantity"), max_digits=10, decimal_places=2, default=0)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('product', 'location', 'lot')
+        verbose_name = _("Stock Quant")
+        verbose_name_plural = _("Stock Quants")
+
+    def __str__(self):
+        return f"{self.product.sku} @ {self.location.name} = {self.quantity}"
+
+    @property
+    def available_quantity(self):
+        return max(self.quantity - self.reserved_quantity, 0)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.reserved_quantity > self.quantity:
+            raise ValidationError(_("The reserved quantity cannot be greater than the available stock."))
+
+    def value_in_base_currency(self, date=None):
+        unit_price = self.product.price_in_base_currency(date)
+        return unit_price * self.quantity
+
+
+# ─────────────────────────────────────────────
+# MODEL: Stock Move
+# ─────────────────────────────────────────────
+class StockMove(models.Model):
+    class MoveType(models.TextChoices):
+        INCOMING = 'incoming', _('Incoming')
+        OUTGOING = 'outgoing', _('Outgoing')
+        INTERNAL = 'internal', _('Internal Transfer')
+        ADJUSTMENT = 'adjustment', _('Adjustment')
+
+    class State(models.TextChoices):
+        DRAFT = 'draft', _('Draft')
+        CONFIRMED = 'confirmed', _('Confirmed')
+        DONE = 'done', _('Done')
+        CANCELLED = 'cancelled', _('Cancelled')
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    quantity = models.DecimalField(_("Quantity"), max_digits=10, decimal_places=2)
+    from_location = models.ForeignKey(Location, related_name='moves_out', on_delete=models.CASCADE, verbose_name=_("From Location"))
+    to_location = models.ForeignKey(Location, related_name='moves_in', on_delete=models.CASCADE, verbose_name=_("To Location"))
+    lot = models.ForeignKey(StockLot, null=True, blank=True, on_delete=models.SET_NULL, verbose_name=_("Lot"))
+
+    move_type = models.CharField(_("Move Type"), max_length=20, choices=MoveType.choices)
+    reference = models.CharField(_("Reference"), max_length=255, blank=True)
+    origin = models.CharField(_("Origin"), max_length=255, blank=True)
+
+    state = models.CharField(_("State"), max_length=20, choices=State.choices, default=State.DRAFT)
+
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='stock_moves_created', on_delete=models.SET_NULL, null=True, verbose_name=_("Created By"))
+    validated_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='stock_moves_validated', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Validated By"))
+    validated_at = models.DateTimeField(_("Validated At"), null=True, blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _("Stock Move")
+        verbose_name_plural = _("Stock Moves")
+
+    def __str__(self):
+        return f"{self.product.sku} - {self.quantity} ({self.get_state_display()})"
+
+    def affects_stock(self):
+        return self.state == self.State.DONE
+
+    def value_in_base_currency(self, date=None):
+        unit_price = self.product.price_in_base_currency(date)
+        return unit_price * self.quantity
+
+# ─────────────────────────────────────────────
+# MODEL: Inventory Adjustment
+# ─────────────────────────────────────────────
+class InventoryAdjustment(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
+    expected_quantity = models.DecimalField(_("Expected Quantity"), max_digits=10, decimal_places=2)
+    real_quantity = models.DecimalField(_("Real Quantity"), max_digits=10, decimal_places=2)
+    reason = models.TextField(_("Reason"))
+    counted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name=_("Counted By"))
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = _("Inventory Adjustment")
+        verbose_name_plural = _("Inventory Adjustments")
+
+    @property
+    def difference(self):
+        return self.real_quantity - self.expected_quantity
+
+    def value_difference_in_base_currency(self, date=None):
+        unit_price = self.product.price_in_base_currency(date)
+        return unit_price * self.difference
+
+# ─────────────────────────────────────────────
+# MODEL: Stock Reservation
+# ─────────────────────────────────────────────
+class StockReservation(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = 'active', _('Active')
+        USED = 'used', _('Used')
+        CANCELLED = 'cancelled', _('Cancelled')
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
+    quantity = models.DecimalField(_("Quantity"), max_digits=10, decimal_places=2)
+    reserved_for = models.CharField(_("Reserved For"), max_length=255)  # order number, production, etc.
+    status = models.CharField(_("Status"), max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    reserved_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _("Stock Reservation")
+        verbose_name_plural = _("Stock Reservations")
+
+    def is_active(self):
+        return self.status == self.Status.ACTIVE
+
+# ─────────────────────────────────────────────
+# MODEL: Replenishment Rule
+# ─────────────────────────────────────────────
+class ReplenishmentRule(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
+    location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
+    min_quantity = models.DecimalField(_("Min Quantity"), max_digits=10, decimal_places=2)
+    max_quantity = models.DecimalField(_("Max Quantity"), max_digits=10, decimal_places=2)
+    method = models.CharField(_("Method"), max_length=20, default='manual')
+
+    class Meta:
+        verbose_name = _("Replenishment Rule")
+        verbose_name_plural = _("Replenishment Rules")
+
+    def needs_replenishment(self, current_quantity):
+        return current_quantity < self.min_quantity
+
+    def __str__(self):
+        return f"Rule for {self.product.sku} @ {self.location.name}"
+
+
+

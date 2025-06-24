@@ -1,0 +1,117 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}TiendaNube Sync Logs - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Sync Logs</h1>
+        <div class="flex space-x-2">
+            <button id="refreshLogsBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-refresh mr-2"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+        <div class="p-6">
+            {% if logs %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for log in logs %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if log.sync_type == 'products' %}bg-blue-100 text-blue-800
+                                        {% elif log.sync_type == 'stock' %}bg-green-100 text-green-800
+                                        {% elif log.sync_type == 'webhook' %}bg-purple-100 text-purple-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ log.sync_type|title }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if log.status == 'success' %}bg-green-100 text-green-800
+                                        {% elif log.status == 'error' %}bg-red-100 text-red-800
+                                        {% elif log.status == 'partial' %}bg-yellow-100 text-yellow-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ log.status|title }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                    {{ log.message }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ log.started_at|date:"M d, Y H:i" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% if log.duration %}
+                                        {{ log.duration|floatformat:1 }}s
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <div class="text-xs">
+                                        <div>Processed: {{ log.items_processed|default:0 }}</div>
+                                        <div>Success: {{ log.items_success|default:0 }}</div>
+                                        <div>Failed: {{ log.items_failed|default:0 }}</div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="{% url 'tiendanube:log_detail' log.pk %}" class="text-blue-600 hover:text-blue-900">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-gray-400 mb-4">
+                        <i class="fas fa-history text-6xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No sync logs found</h3>
+                    <p class="text-gray-500 mb-6">Sync logs will appear here after you start synchronizing with TiendaNube.</p>
+                    <a href="{% url 'tiendanube:dashboard' %}" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition">
+                        <i class="fas fa-sync mr-2"></i>Start Sync
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube sync logs.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block tiendanube_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const refreshBtn = document.getElementById('refreshLogsBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            location.reload();
+        });
+    }
+});
+</script>
+{% endblock %} 

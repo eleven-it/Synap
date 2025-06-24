@@ -18,11 +18,15 @@ RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     python3-dev
 
+# Actualizar certificados de CA del sistema operativo
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+
 # Copiar los archivos al contenedor
 COPY requirements.txt requirements.txt
 
-# Instalar dependencias
-RUN pip install --no-cache-dir -r requirements.txt
+# Instalar dependencias y forzar la reinstalación de certifi
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --upgrade --force-reinstall certifi
 
 # Configurar variables de entorno para Firebase
 #ENV FIREBASE_CREDENTIALS_PATH=/app/firebase_credentials.json

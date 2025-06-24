@@ -4,30 +4,25 @@ import {
   getRedirectResult,
   browserSessionPersistence
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 import { firebaseConfig, backendRoutes, getCookie } from "/login/firebase-config.js";
 
-console.log("🔁 Ejecutando firebase-init-handler.js...");
+// 🔧 Inicialización
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 auth.useDeviceLanguage();
 
-auth.setPersistence(browserSessionPersistence)
-  .then(() => {
-    console.log("🔒 Persistence configurada");
-    return getRedirectResult(auth);
-  })
-  .then((result) => {
-    console.log("🔍 Resultado del redirect:", result);
+// 🔍 Obtener el parámetro `next` de la URL
+function getNextParam() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("next");
+}
 
+// 🔐 Persistencia y manejo del login por redirect
+auth.setPersistence(browserSessionPersistence)
+  .then(() => getRedirectResult(auth))
+  .then((result) => {
     if (result && result.user) {
       return result.user.getIdToken().then((idToken) => {
-        console.log("➡️ Enviando ID token al backend...");
         return fetch(backendRoutes.login, {
           method: "POST",
           headers: {
@@ -36,40 +31,19 @@ auth.setPersistence(browserSessionPersistence)
           },
           credentials: "same-origin",
           body: JSON.stringify({ idToken })
-        }).then(() => {
-          return verificarTipoUsuarioYRedirigir(result.user);
+        }).then(response => {
+          if (!response.ok) throw new Error("Error al iniciar sesión.");
+          return response.json();
+        }).then((data) => {
+          const nextParam = getNextParam();
+          const redirectUrl = nextParam || data.redirect || "/core/dashboard/";
+          window.location.href = redirectUrl;
         });
       });
     } else {
-      console.warn("⚠️ No se recibió ningún usuario desde el redirect.");
+      console.warn("⚠️ No se recibió usuario en el redirect.");
     }
   })
   .catch((error) => {
-    console.error("❌ Error en redirect login:", error);
-    showError("Error al procesar login: " + error.message);
+    alert("Error al iniciar sesión: " + error.message);
   });
-
-function showError(message) {
-  alert(message);
-}
-
-// 🔍 Verificar tipo_usuario y redirigir según corresponda
-async function verificarTipoUsuarioYRedirigir(user) {
-  const usuarioRef = doc(db, "usuarios", user.uid);
-  const docSnap = await getDoc(usuarioRef);
-
-  if (!docSnap.exists() || !docSnap.data().tipo_usuario) {
-    console.log("👤 Usuario sin tipo. Redirigiendo a completar perfil.");
-    window.location.href = "/login/completar-perfil/";
-    return;
-  }
-
-  const tipo = docSnap.data().tipo_usuario;
-  console.log("✅ Tipo de usuario:", tipo);
-
-  if (tipo === "cliente") {
-    window.location.href = "/clientes/dashboard/";
-  } else {
-    window.location.href = "/proveedores/dashboard/";
-  }
-}

@@ -1,0 +1,326 @@
+{% extends "tiendanube/tiendanube_base.html" %}
+
+{% block title %}TiendaNube Product Mapping - Synap{% endblock %}
+
+{% block tiendanube_content %}
+{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
+<div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Product Mapping</h1>
+        <div class="flex space-x-2">
+            <button id="syncMappingBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                <i class="fas fa-sync mr-2"></i>Sync Mapping
+            </button>
+            <a href="{% url 'tiendanube:mapping_create' %}" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
+                <i class="fas fa-plus mr-2"></i>Add Mapping
+            </a>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-white rounded-lg shadow-sm border p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <input type="text" id="searchInput" placeholder="Search by product name..." 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select id="statusFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <option value="">All Status</option>
+                    <option value="mapped">Mapped</option>
+                    <option value="unmapped">Unmapped</option>
+                    <option value="error">Error</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select id="categoryFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button id="clearFiltersBtn" class="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border">
+        <div class="p-6">
+            {% if mappings %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TiendaNube ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Sync</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for mapping in mappings %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        {% if mapping.product.image %}
+                                            <img class="h-10 w-10 rounded-lg object-cover mr-3" src="{{ mapping.product.image.url }}" alt="{{ mapping.product.name }}">
+                                        {% else %}
+                                            <div class="h-10 w-10 rounded-lg bg-gray-200 flex items-center justify-center mr-3">
+                                                <i class="fas fa-box text-gray-400"></i>
+                                            </div>
+                                        {% endif %}
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">{{ mapping.product.name }}</div>
+                                            <div class="text-sm text-gray-500">SKU: {{ mapping.product.sku|default:"N/A" }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {% if mapping.tiendanube_id %}
+                                        <span class="font-mono">{{ mapping.tiendanube_id }}</span>
+                                    {% else %}
+                                        <span class="text-gray-400">Not mapped</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if mapping.tiendanube_id %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            <i class="fas fa-check mr-1"></i>Mapped
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            <i class="fas fa-exclamation mr-1"></i>Unmapped
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% if mapping.last_sync %}
+                                        {{ mapping.last_sync|date:"M d, Y H:i" }}
+                                    {% else %}
+                                        <span class="text-gray-400">Never</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if mapping.sync_stock %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <i class="fas fa-sync mr-1"></i>Synced
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                            <i class="fas fa-pause mr-1"></i>Paused
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <a href="{% url 'tiendanube:mapping_update' mapping.pk %}" class="text-blue-600 hover:text-blue-900" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {% if mapping.tiendanube_id %}
+                                            <button class="text-green-600 hover:text-green-900" title="Sync Now" onclick="syncProduct({{ mapping.pk }})">
+                                                <i class="fas fa-sync"></i>
+                                            </button>
+                                        {% endif %}
+                                        <a href="{% url 'tiendanube:mapping_delete' mapping.pk %}" class="text-red-600 hover:text-red-900" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-gray-400 mb-4">
+                        <i class="fas fa-link text-6xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">No product mappings found</h3>
+                    <p class="text-gray-500 mb-6">Start by creating mappings between your products and TiendaNube.</p>
+                    <a href="{% url 'tiendanube:mapping_create' %}" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition">
+                        <i class="fas fa-plus mr-2"></i>Create First Mapping
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+    ⚠️ You do not have permission to access TiendaNube product mapping.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block tiendanube_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const statusFilter = document.getElementById('statusFilter');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    const syncMappingBtn = document.getElementById('syncMappingBtn');
+    
+    // Search functionality
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            filterTable();
+        });
+    }
+    
+    // Filter functionality
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function() {
+            filterTable();
+        });
+    }
+    
+    if (categoryFilter) {
+        categoryFilter.addEventListener('change', function() {
+            filterTable();
+        });
+    }
+    
+    // Clear filters
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', function() {
+            searchInput.value = '';
+            statusFilter.value = '';
+            categoryFilter.value = '';
+            filterTable();
+        });
+    }
+    
+    // Sync mapping
+    if (syncMappingBtn) {
+        syncMappingBtn.addEventListener('click', function() {
+            if (confirm('Are you sure you want to sync all product mappings?')) {
+                syncAllMappings();
+            }
+        });
+    }
+});
+
+function filterTable() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('statusFilter').value;
+    const categoryFilter = document.getElementById('categoryFilter').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        const productName = row.querySelector('td:first-child').textContent.toLowerCase();
+        const status = row.querySelector('td:nth-child(3)').textContent.toLowerCase();
+        const category = row.querySelector('td:first-child').getAttribute('data-category');
+        
+        let show = true;
+        
+        // Search filter
+        if (searchTerm && !productName.includes(searchTerm)) {
+            show = false;
+        }
+        
+        // Status filter
+        if (statusFilter && !status.includes(statusFilter)) {
+            show = false;
+        }
+        
+        // Category filter
+        if (categoryFilter && category !== categoryFilter) {
+            show = false;
+        }
+        
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+async function syncProduct(mappingId) {
+    try {
+        const response = await fetch(`/tiendanube/api/mapping/${mappingId}/sync/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess('Product synced successfully');
+            location.reload();
+        } else {
+            showError(`Sync error: ${data.error}`);
+        }
+    } catch (error) {
+        showError('Connection error');
+    }
+}
+
+async function syncAllMappings() {
+    const btn = document.getElementById('syncMappingBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<div class="loading-spinner"></div>Syncing...';
+    btn.disabled = true;
+    
+    try {
+        const response = await fetch('/tiendanube/api/mapping/sync-all/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showSuccess(`Synced ${data.synced_count} products successfully`);
+            location.reload();
+        } else {
+            showError(`Sync error: ${data.error}`);
+        }
+    } catch (error) {
+        showError('Connection error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+function showSuccess(message) {
+    // Implement success notification
+    console.log('Success:', message);
+}
+
+function showError(message) {
+    // Implement error notification
+    console.error('Error:', message);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %} 

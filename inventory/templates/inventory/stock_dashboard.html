@@ -1,0 +1,63 @@
+{% extends "inventory/inventory_base.html" %}
+
+{% block inventory_content %}
+{% if puede_inventory_ver_dashboard %}
+<div class="max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">📦 Inventory Dashboard</h1>
+  <p class="text-gray-600 mb-8">Welcome to the inventory dashboard. Here you can see the current stock status by product and location.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-purple-700 mb-2">Total Products</h2>
+      <p class="text-3xl font-bold text-gray-800">{{ quants|length }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-purple-700 mb-2">Total Locations</h2>
+      <p class="text-3xl font-bold text-gray-800">{{ total_locations }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-purple-700 mb-2">Total Stock Movements</h2>
+      <p class="text-3xl font-bold text-gray-800">-</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-xl font-semibold text-purple-700 mb-4">Stock by Product & Location</h2>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm text-gray-900">
+        <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
+          <tr>
+            <th class="px-4 py-3">SKU</th>
+            <th class="px-4 py-3">Product</th>
+            <th class="px-4 py-3">Location</th>
+            <th class="px-4 py-3 text-right">Available Stock</th>
+            <th class="px-4 py-3 text-right">Reserved</th>
+            <th class="px-4 py-3 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for quant in quants %}
+          <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+            <td class="px-4 py-2">{{ quant.product.sku }}</td>
+            <td class="px-4 py-2">{{ quant.product.name }}</td>
+            <td class="px-4 py-2">{{ quant.location.name }}</td>
+            <td class="px-4 py-2 text-right">{{ quant.quantity|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right text-yellow-600">{{ quant.reserved_quantity|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right font-semibold">{{ quant.disponible|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center p-6 text-gray-500">No stock registered.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="p-6 text-center text-red-600 font-semibold">
+  ⚠️ You do not have permission to view the inventory dashboard.
+</div>
+{% endif %}
+{% endblock inventory_content %}

@@ -1,0 +1,21 @@
+{% extends "inventory/inventory_base.html" %}
+
+{% block inventory_content %}
+<div class="max-w-lg mx-auto bg-white p-8 rounded-lg shadow text-center">
+  <h1 class="text-2xl font-bold mb-4">{{ title }}</h1>
+  
+  <p class="text-gray-700 mb-6">
+    Are you sure you want to delete the subcategory "<strong>{{ object.name }}</strong>"? This action cannot be undone.
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="flex justify-center space-x-4">
+      <a href="{% url 'inventory:subcategory_list' %}" class="btn-secondary">Cancel</a>
+      <button type="submit" class="btn-danger">
+        Yes, delete
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %} 

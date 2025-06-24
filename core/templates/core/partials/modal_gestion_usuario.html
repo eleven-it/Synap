@@ -1,0 +1,169 @@
+<!-- Modal de Gestión de Usuario -->
+<div x-data="editUserModal()"
+     @open-edit-user-modal.window="openModal($event.detail.userId)"
+     x-show="isOpen" 
+     @keydown.escape.window="isOpen = false" 
+     class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" x-cloak>
+  
+  <div class="bg-white rounded-lg w-full max-w-4xl p-6 flex flex-col" @click.away="isOpen = false" style="height: 70vh;">
+    <div class="flex justify-between items-center pb-3 border-b">
+      <h3 class="text-2xl font-bold">Gestionar Usuario: <span x-text="selectedUser?.nombre_completo || 'Cargando...'"></span></h3>
+      <button @click="isOpen = false" class="text-gray-400 hover:text-gray-600 p-2">&times;</button>
+    </div>
+  
+    <div class="grid grid-cols-2 gap-6 mt-4 flex-grow overflow-hidden">
+      <!-- Sección de Roles -->
+      <div class="flex flex-col">
+        <h4 class="text-lg font-semibold mb-2">Roles</h4>
+        <div class="grid grid-cols-2 gap-4 flex-grow overflow-hidden">
+          <!-- Panel Izquierdo: Roles Disponibles -->
+          <div class="border rounded-md p-2 flex flex-col">
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Disponibles</h5>
+            <input type="text" x-model="searchTermRoles" placeholder="Buscar roles..." class="w-full px-2 py-1 border rounded mb-2 text-sm">
+            <div class="flex-grow overflow-y-auto">
+              <template x-for="rol in availableRoles" :key="rol.id">
+                <button @click="assignRole(rol)" class="w-full text-left p-1 text-sm rounded hover:bg-gray-100" x-text="rol.nombre"></button>
+              </template>
+            </div>
+          </div>
+          <!-- Panel Derecho: Roles Asignados -->
+          <div class="border rounded-md p-2 flex flex-col">
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Asignados</h5>
+            <div class="flex-grow overflow-y-auto">
+              <template x-for="rol in assignedRoles" :key="rol.id">
+                <div class="flex items-center justify-between p-1 text-sm bg-gray-50 rounded">
+                  <span x-text="rol.nombre"></span>
+                  <button @click="unassignRole(rol)" class="text-red-500 hover:text-red-700">×</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Sección de Permisos Adicionales -->
+      <div class="flex flex-col">
+        <h4 class="text-lg font-semibold mb-2">Permisos Adicionales</h4>
+        <div class="grid grid-cols-2 gap-4 flex-grow overflow-hidden">
+          <!-- Panel Izquierdo: Permisos Disponibles -->
+          <div class="border rounded-md p-2 flex flex-col">
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Disponibles</h5>
+            <input type="text" x-model="searchTermPerms" placeholder="Buscar permisos..." class="w-full px-2 py-1 border rounded mb-2 text-sm">
+            <div class="flex-grow overflow-y-auto">
+              <template x-for="permiso in availablePermissions" :key="permiso.id">
+                <button @click="assignPermission(permiso)" class="w-full text-left p-1 text-sm rounded hover:bg-gray-100" x-text="permiso.nombre"></button>
+              </template>
+            </div>
+          </div>
+          <!-- Panel Derecho: Permisos Asignados (Directos) -->
+          <div class="border rounded-md p-2 flex flex-col">
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Asignados Directamente</h5>
+            <div class="flex-grow overflow-y-auto">
+              <!-- Permisos heredados (solo visualización) -->
+              <template x-for="permiso in inheritedPermissions" :key="'inherited-' + permiso.id">
+                <div class="flex items-center justify-between p-1 text-sm bg-blue-50 text-blue-700 rounded" title="Heredado de un rol">
+                  <span x-text="permiso.nombre"></span>
+                  <span>🔒</span>
+                </div>
+              </template>
+              <!-- Permisos directos -->
+              <template x-for="permiso in directPermissions" :key="permiso.id">
+                <div class="flex items-center justify-between p-1 text-sm bg-gray-50 rounded">
+                  <span x-text="permiso.nombre"></span>
+                  <button @click="unassignPermission(permiso)" class="text-red-500 hover:text-red-700">×</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="flex justify-end pt-4 border-t mt-4">
+      <button type="button" @click="isOpen = false" class="px-4 py-2 rounded border mr-2">Cancelar</button>
+      <button @click="saveUserChanges()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Guardar Cambios</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function editUserModal() {
+  return {
+    isOpen: false,
+    selectedUser: null,
+    allRoles: [],
+    allPermissions: [],
+    assignedRoles: [],
+    directPermissions: [],
+    inheritedPermissions: [],
+    searchTermRoles: '',
+    searchTermPerms: '',
+
+    openModal(userId) {
+      this.isOpen = true;
+      Promise.all([
+        fetch(`/core/api/users/${userId}/`).then(res => res.json()),
+        fetch("{% url 'core:api_role_list_create' %}").then(res => res.json()),
+        fetch("{% url 'core:api_permission_list' %}").then(res => res.json())
+      ]).then(([userData, rolesData, permsData]) => {
+        this.selectedUser = userData;
+        this.assignedRoles = userData.roles || [];
+        this.directPermissions = userData.permisos_directos || [];
+        this.allRoles = rolesData.results || rolesData;
+        this.allPermissions = permsData;
+        this.calculateInheritedPermissions();
+      });
+    },
+
+    saveUserChanges() {
+        const payload = {
+            roles_ids: this.assignedRoles.map(r => r.id),
+            permisos_ids: this.directPermissions.map(p => p.id),
+        };
+        fetch(`/core/api/users/${this.selectedUser.id}/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify(payload)
+        }).then(res => {
+            if (res.ok) { this.isOpen = false; location.reload(); }
+            else { alert('Error al guardar.'); }
+        });
+    },
+    
+    calculateInheritedPermissions() {
+        const inheritedIds = new Set();
+        this.assignedRoles.forEach(rol => {
+            (rol.permisos || []).forEach(p => inheritedIds.add(p.id));
+        });
+        this.inheritedPermissions = this.allPermissions.filter(p => inheritedIds.has(p.id));
+    },
+
+    get availableRoles() {
+      if (!this.allRoles) return [];
+      const assignedIds = new Set(this.assignedRoles.map(r => r.id));
+      let filtered = this.allRoles.filter(r => !assignedIds.has(r.id));
+      if (this.searchTermRoles) {
+        filtered = filtered.filter(r => r.nombre.toLowerCase().includes(this.searchTermRoles.toLowerCase()));
+      }
+      return filtered;
+    },
+
+    get availablePermissions() {
+      if (!this.allPermissions) return [];
+      const assignedDirectIds = new Set(this.directPermissions.map(p => p.id));
+      const inheritedIds = new Set(this.inheritedPermissions.map(p => p.id));
+      let filtered = this.allPermissions.filter(p => !assignedDirectIds.has(p.id) && !inheritedIds.has(p.id));
+      if (this.searchTermPerms) {
+        filtered = filtered.filter(p => (p.nombre.toLowerCase().includes(this.searchTermPerms.toLowerCase()) || p.codigo.toLowerCase().includes(this.searchTermPerms.toLowerCase())));
+      }
+      return filtered;
+    },
+
+    assignRole(rol) { this.assignedRoles.push(rol); this.calculateInheritedPermissions(); },
+    unassignRole(rol) { this.assignedRoles = this.assignedRoles.filter(r => r.id !== rol.id); this.calculateInheritedPermissions(); },
+    assignPermission(permiso) { this.directPermissions.push(permiso); },
+    unassignPermission(permiso) { this.directPermissions = this.directPermissions.filter(p => p.id !== permiso.id); },
+    isPermissionInherited(permiso) { return this.inheritedPermissions.some(p => p.id === permiso.id); }
+  }
+}
+</script> 

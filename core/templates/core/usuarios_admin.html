@@ -1,90 +1,27 @@
-{% extends "base.html" %}
-{% block content %}
-{% if user|tiene_permiso:"administrar_usuarios" %}
-<div class="max-w-7xl mx-auto py-10">
-  <h1 class="text-2xl font-bold mb-6">Administración de Usuarios</h1>
+{% extends "core/admin_base.html" %}
+{% load static %}
 
-  <form method="get" class="mb-6 flex items-center gap-4">
-    <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Buscar por email o nombre"
-           class="border border-gray-300 rounded px-4 py-2 w-full max-w-sm focus:outline-none focus:ring focus:ring-purple-500">
-
-    <select name="rol_filter" class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring focus:ring-purple-500">
-      <option value="">Todos los roles</option>
-      {% for rol in roles %}
-      <option value="{{ rol.id }}" {% if request.GET.rol_filter == rol.id|stringformat:"s" %}selected{% endif %}>{{ rol.nombre }}</option>
-      {% endfor %}
-    </select>
-
-    <button type="submit" class="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Filtrar</button>
-  </form>
-
-  <form method="post">
-    {% csrf_token %}
-    <table class="min-w-full table-auto text-left text-sm">
-      <thead>
-        <tr class="bg-gray-100 text-gray-700">
-          <th class="px-4 py-2">Email</th>
-          <th class="px-4 py-2">Nombre</th>
-          <th class="px-4 py-2">Rol</th>
-          <th class="px-4 py-2">Permisos adicionales</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for usuario in usuarios %}
-        <tr class="border-b hover:bg-gray-50">
-          <td class="px-4 py-2">{{ usuario.email }}</td>
-          <td class="px-4 py-2">{{ usuario.nombre }}</td>
-          <td class="px-4 py-2">
-            <select name="rol_{{ usuario.uid }}" class="rounded border-gray-300">
-              <option value="">---</option>
-              {% for rol in roles %}
-              <option value="{{ rol.id }}" {% if usuario.rol == rol %}selected{% endif %}>{{ rol.nombre }}</option>
-              {% endfor %}
-            </select>
-          </td>
-          <td class="px-4 py-2 space-y-1">
-            {% for permiso in permisos %}
-              <label class="inline-flex items-center">
-                <input type="checkbox" name="perm_{{ usuario.uid }}" value="{{ permiso.id }}"
-                       {% if permiso in usuario.permisos_extra.all %}checked{% endif %}
-                       class="rounded border-gray-300 text-purple-600">
-                <span class="ml-1 text-xs">{{ permiso.nombre }}</span>
-              </label><br>
-            {% endfor %}
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="4" class="text-center py-4 text-gray-500">No se encontraron usuarios.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    <div class="mt-6 flex justify-between items-center">
-      <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
-        Guardar cambios
-      </button>
-
-      {% if usuarios.has_other_pages %}
-      <div class="space-x-2">
-        {% if usuarios.has_previous %}
-          <a href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.rol_filter %}rol_filter={{ request.GET.rol_filter }}&{% endif %}page={{ usuarios.previous_page_number }}"
-             class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Anterior</a>
-        {% endif %}
-
-        <span class="text-sm text-gray-700">Página {{ usuarios.number }} de {{ usuarios.paginator.num_pages }}</span>
-
-        {% if usuarios.has_next %}
-          <a href="?{% if request.GET.q %}q={{ request.GET.q }}&{% endif %}{% if request.GET.rol_filter %}rol_filter={{ request.GET.rol_filter }}&{% endif %}page={{ usuarios.next_page_number }}"
-             class="px-3 py-1 border rounded bg-white hover:bg-gray-100">Siguiente</a>
-        {% endif %}
-      </div>
-      {% endif %}
+{% block admin_content %}
+  <div class="max-w-7xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold">Administración de Usuarios</h1>
+      <a href="{% url 'core:crear_usuario' %}" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+        ➕ Crear usuario
+      </a>
     </div>
-  </form>
-</div>
-{% else %}
-  {% include "core/403.html" %}
-{% endif %}
+    {% include "core/usuarios_admin_tabla.html" %}
+    <!-- Paginación si es necesario -->
+  </div>
+
+  <!-- Modales que ahora se gestionarán a sí mismos -->
+  {% include "core/partials/modal_gestion_usuario.html" %}
+  
+  {% include "core/partials/command_palette.html" %}
 {% endblock %}
+
+{% comment %}
+  El bloque extra_js se elimina porque cada modal tendrá su propia lógica interna,
+  o la lógica se moverá a un script global si fuera necesario.
+  Por ahora, la eliminamos para mantenerlo limpio.
+{% endcomment %}
+{% block extra_js %}{% endblock %}
