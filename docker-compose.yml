@@ -29,8 +29,6 @@ services:
     command:
       [
         "gunicorn",
-        "--certfile=/certs/localhost.pem",
-        "--keyfile=/certs/localhost-key.pem",
         "--bind", "0.0.0.0:8000",
         "django_project.wsgi:application"
       ]
