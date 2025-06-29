@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import views
+from .views import stock_initial_wizard, stock_initial_drafts, stock_initial_edit, stock_initial_finish
 
 app_name = 'inventory'
 
@@ -44,4 +45,8 @@ urlpatterns = [
     path('subcategories/<int:pk>/delete/', views.SubcategoryDeleteView.as_view(), name='subcategory_delete'),
 
     path('api/', include('inventory.api.urls')),
+    path('stock-initial/', stock_initial_wizard, name='stock_initial_wizard'),
+    path('stock-initial/drafts/', stock_initial_drafts, name='stock_initial_drafts'),
+    path('stock-initial/edit/<int:draft_id>/', stock_initial_edit, name='stock_initial_edit'),
+    path('stock-initial/finish/<int:draft_id>/', stock_initial_finish, name='stock_initial_finish'),
 ]

@@ -1,0 +1,181 @@
+{% extends 'inventory/inventory_base.html' %}
+{% load static i18n crispy_forms_tags widget_tweaks %}
+{% block inventory_content %}
+<div class="max-w-5xl mx-auto mt-8">
+  <!-- Progress bar y pasos -->
+  <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+    <div id="progress-bar" class="bg-purple-600 h-2.5 rounded-full transition-all duration-500" style="width: 66%"></div>
+  </div>
+  <div class="flex justify-between mb-8">
+    <div class="flex flex-col items-center step-indicator" data-step="2">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center bg-purple-600 text-white font-bold shadow-lg transition-all duration-300">2</div>
+      <span class="mt-2 text-xs font-semibold text-purple-700">{% trans 'Product load' %}</span>
+    </div>
+    <div class="flex flex-col items-center step-indicator" data-step="3">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center bg-gray-300 text-gray-600 font-bold shadow transition-all duration-300">3</div>
+      <span class="mt-2 text-xs font-semibold text-gray-500">{% trans 'Review' %}</span>
+    </div>
+  </div>
+  <!-- Filtros y búsqueda -->
+  <form id="product-filters" method="get" class="flex flex-wrap gap-4 mb-4 items-end">
+    <input type="text" name="search" value="{{ search }}" placeholder="{% trans 'Search by SKU, name or description' %}" class="w-56 py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition" />
+    <select name="category" class="py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition">
+      <option value="">{% trans 'All categories' %}</option>
+      {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if category == cat.id|stringformat:'s' %}selected{% endif %}>{{ cat.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="subcategory" class="py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition">
+      <option value="">{% trans 'All subcategories' %}</option>
+      {% for sub in subcategories %}
+        <option value="{{ sub.id }}" {% if subcategory == sub.id|stringformat:'s' %}selected{% endif %}>{{ sub.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="brand" class="py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition">
+      <option value="">{% trans 'All brands' %}</option>
+      {% for b in brands %}
+        <option value="{{ b.id }}" {% if brand == b.id|stringformat:'s' %}selected{% endif %}>{{ b.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="ptype" class="py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition">
+      <option value="">{% trans 'All types' %}</option>
+      <option value="consumable" {% if ptype == 'consumable' %}selected{% endif %}>{% trans 'Consumable' %}</option>
+      <option value="stockable" {% if ptype == 'stockable' %}selected{% endif %}>{% trans 'Stockable' %}</option>
+      <option value="combo" {% if ptype == 'combo' %}selected{% endif %}>{% trans 'Combo' %}</option>
+    </select>
+    <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded shadow hover:scale-105 transition">{% trans 'Filter' %}</button>
+  </form>
+  <!-- Tabla editable -->
+  <form id="product-load-form" method="post" autocomplete="off">
+    {% csrf_token %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm text-gray-900 border rounded-lg">
+        <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
+          <tr>
+            <th>{% trans 'SKU' %}</th>
+            <th>{% trans 'Product' %}</th>
+            <th>{% trans 'Type' %}</th>
+            <th>{% trans 'Lot' %}</th>
+            <th>{% trans 'Quantity' %} <span class="text-red-500">*</span></th>
+            <th>{% trans 'Expiration' %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in products %}
+          <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+            <td class="font-mono">{{ product.sku }}</td>
+            <td>{{ product.name }}</td>
+            <td>
+              {% if product.type == 'combo' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">{% trans 'Combo' %}</span>
+              {% elif product.type == 'consumable' %}
+                <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">{% trans 'Consumable' %}</span>
+              {% elif product.type == 'stockable' %}
+                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">{% trans 'Stockable' %}</span>
+              {% else %}
+                <span class="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded">{{ product.type }}</span>
+              {% endif %}
+            </td>
+            <td><input type="text" name="lote_{{ product.id }}" class="w-full py-1 px-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 transition" value="{% for item in draft.items.all %}{% if item.producto_id == product.id %}{{ item.lote }}{% endif %}{% endfor %}" /></td>
+            <td><input type="number" name="cantidad_{{ product.id }}" min="0" value="{% for item in draft.items.all %}{% if item.producto_id == product.id %}{{ item.cantidad }}{% endif %}{% endfor %}" required class="w-24 py-1 px-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 transition cantidad-input" /></td>
+            <td><input type="date" name="vencimiento_{{ product.id }}" class="w-full py-1 px-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 transition" value="{% for item in draft.items.all %}{% if item.producto_id == product.id and item.fecha_vencimiento %}{{ item.fecha_vencimiento|date:'Y-m-d' }}{% endif %}{% endfor %}" /></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-gray-400">{% trans 'No products found.' %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Paginación -->
+    <div class="flex justify-between items-center mt-4">
+      <div class="text-sm text-gray-600">
+        {% trans 'Page' %} {{ products.number }} {% trans 'of' %} {{ products.paginator.num_pages }}
+      </div>
+      <div class="flex gap-2">
+        {% if products.has_previous %}
+          <a href="?page={{ products.previous_page_number }}&search={{ search }}&category={{ category }}&subcategory={{ subcategory }}&brand={{ brand }}&ptype={{ ptype }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">&laquo; {% trans 'Previous' %}</a>
+        {% endif %}
+        {% if products.has_next %}
+          <a href="?page={{ products.next_page_number }}&search={{ search }}&category={{ category }}&subcategory={{ subcategory }}&brand={{ brand }}&ptype={{ ptype }}" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">{% trans 'Next' %} &raquo;</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex justify-end mt-6">
+      <button type="submit" name="guardar_productos" class="bg-green-600 text-white px-6 py-2 rounded shadow hover:scale-105 hover:shadow-lg transition-all">{% trans 'Save products' %}</button>
+    </div>
+  </form>
+  <!-- Carga por Excel -->
+  <div class="mt-8">
+    <h3 class="font-semibold mb-2">{% trans 'Bulk load from Excel' %}</h3>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ excel_form|crispy }}
+      <button type="submit" name="cargar_excel" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded shadow hover:scale-105 hover:shadow-lg transition-all">{% trans 'Upload and preview' %}</button>
+    </form>
+    {% if excel_preview %}
+    <div class="mt-4">
+      <h4 class="font-semibold mb-2">{% trans 'Preview:' %}</h4>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm text-gray-900">
+          <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
+            <tr><th>{% trans 'SKU' %}</th><th>{% trans 'Product' %}</th><th>{% trans 'Location' %}</th><th>{% trans 'Quantity' %}</th><th>{% trans 'Lot' %}</th><th>{% trans 'Obs' %}</th></tr>
+          </thead>
+          <tbody>
+            {% for row in excel_preview %}
+            <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+              <td>{{ row.sku }}</td>
+              <td>{{ row.nombre }}</td>
+              <td>{{ row.ubicacion }}</td>
+              <td>{{ row.cantidad }}</td>
+              <td>{{ row.lote }}</td>
+              <td>{{ row.obs }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Paso 3: Revisión y confirmación -->
+  <div class="mt-12 bg-white p-8 rounded-lg shadow space-y-5">
+    <h2 class="text-xl font-bold mb-4">{% trans 'Final review' %}</h2>
+    <p class="mb-4">{% trans 'Check the data before finalizing the initial stock load.' %}</p>
+    <div class="overflow-x-auto mb-4">
+      <table class="min-w-full text-sm text-gray-900">
+        <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
+          <tr><th>{% trans 'SKU' %}</th><th>{% trans 'Product' %}</th><th>{% trans 'Quantity' %}</th><th>{% trans 'Lot' %}</th><th>{% trans 'Expiration' %}</th></tr>
+        </thead>
+        <tbody>
+          {% for item in draft.items.all %}
+          <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+            <td>{{ item.sku }}</td>
+            <td>{{ item.producto }}</td>
+            <td>{{ item.cantidad }}</td>
+            <td>{{ item.lote }}</td>
+            <td>{% if item.fecha_vencimiento %}{{ item.fecha_vencimiento|date:'Y-m-d' }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex justify-between mt-6">
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="finalizar_borrador" class="bg-green-600 text-white px-6 py-2 rounded shadow hover:scale-110 hover:shadow-lg transition-all">{% trans 'Finish and apply stock' %}</button>
+      </form>
+    </div>
+  </div>
+  <!-- Toasts -->
+  {% if messages %}
+  <div id="toast-container" class="fixed top-6 right-6 z-50">
+    {% for message in messages %}
+    <div class="mb-2 px-4 py-3 rounded shadow-lg text-white animate-fade-in {{ message.tags|default:'bg-gray-800' }}"
+         style="background-color: {% if message.tags == 'success' %}#22c55e{% elif message.tags == 'error' %}#ef4444{% elif message.tags == 'info' %}#6366f1{% else %}#334155{% endif %};">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %} 

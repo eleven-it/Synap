@@ -23,3 +23,7 @@ six==1.16.0
 django-widget-tweaks
 celery>=5.2
 django-celery-beat>=2.2
+openpyxl
+django-crispy-forms
+crispy_tailwind
+django-widget-tweaks

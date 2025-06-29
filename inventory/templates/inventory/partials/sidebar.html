@@ -39,6 +39,23 @@
         <span class="material-icons text-purple-600 mr-3">layers</span>
         <span x-show="sidebarOpen" class="text-gray-800 font-medium">Subcategories</span>
       </a>
+      <div class="mt-4">
+        <div class="flex items-center gap-2 text-xs font-bold uppercase text-gray-400 tracking-wider mb-1 ml-4">STOCK</div>
+        <ul class="ml-2">
+          <li>
+            <a href="{% url 'inventory:stock_initial_wizard' %}" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-purple-100 transition {% if request.resolver_match.url_name == 'stock_initial_wizard' %}bg-purple-200 font-bold{% endif %}">
+              <span class="material-icons text-purple-600 mr-3">add_circle_outline</span>
+              <span x-show="sidebarOpen" class="text-gray-800 font-medium">New initial stock</span>
+            </a>
+          </li>
+          <li>
+            <a href="{% url 'inventory:stock_initial_drafts' %}" class="flex items-center gap-2 px-3 py-2 rounded hover:bg-purple-100 transition {% if request.resolver_match.url_name == 'stock_initial_drafts' %}bg-purple-200 font-bold{% endif %}">
+              <span class="material-icons text-purple-600 mr-3">edit_note</span>
+              <span x-show="sidebarOpen" class="text-gray-800 font-medium">Initial stock drafts</span>
+            </a>
+          </li>
+        </ul>
+      </div>
     </nav>
 
     <div class="p-4 border-t text-xs text-gray-400" x-show="sidebarOpen">

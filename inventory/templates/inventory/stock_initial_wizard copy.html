@@ -1,0 +1,97 @@
+{% extends 'inventory/inventory_base.html' %}
+{% load static i18n crispy_forms_tags widget_tweaks %}
+{% block inventory_content %}
+<div class="max-w-3xl mx-auto mt-8">
+  <!-- Progress bar -->
+  <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+    <div id="progress-bar" class="bg-purple-600 h-2.5 rounded-full transition-all duration-500" style="width: 33%"></div>
+  </div>
+  <!-- Step indicator -->
+  <div class="flex justify-between mb-8">
+    <div class="flex flex-col items-center step-indicator" data-step="1">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center bg-purple-600 text-white font-bold shadow-lg transition-all duration-300">1</div>
+      <span class="mt-2 text-xs font-semibold text-purple-700">{% trans 'Warehouse & Location' %}</span>
+    </div>
+  </div>
+  <form id="wizard-form" method="post" enctype="multipart/form-data" class="animate-fade-in" autocomplete="off">
+    {% csrf_token %}
+    <div id="step-1" class="step-content">
+      <h2 class="text-xl font-bold mb-4">{% trans 'Select warehouse and location' %}</h2>
+      <div class="bg-white p-8 rounded-lg shadow space-y-5">
+        <!-- Warehouse -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'Warehouse' %}<span class="text-red-500 ml-1">*</span>
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Select the warehouse where the initial stock will be loaded.' %}</span>
+            </span>
+          </label>
+          {{ draft_form.almacen|add_class:'w-full py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition hover:border-purple-400' }}
+        </div>
+        <!-- Location -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'Location' %}<span class="text-red-500 ml-1">*</span>
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Select the location within the warehouse.' %}</span>
+            </span>
+          </label>
+          {{ draft_form.ubicacion|add_class:'w-full py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition hover:border-purple-400' }}
+        </div>
+        <!-- Comment -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'Comment' %}
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Add any notes or explanations about this initial stock load.' %}</span>
+            </span>
+          </label>
+          {{ draft_form.comentario|add_class:'w-full min-h-[80px] py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition hover:border-purple-400' }}
+        </div>
+        <!-- Tags -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'Tags' %}
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Use tags to classify or filter this load (e.g. Migration, Adjustment).' %}</span>
+            </span>
+          </label>
+          {{ draft_form.tags|add_class:'w-full py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition hover:border-purple-400' }}
+        </div>
+        <!-- External reference -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'External reference' %}
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 8 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Link this load to an external document or system.' %}</span>
+            </span>
+          </label>
+          {{ draft_form.referencia_externa|add_class:'w-full py-2 px-3 rounded border border-gray-300 text-base focus:ring-2 focus:ring-purple-500 transition hover:border-purple-400' }}
+        </div>
+        <!-- Supporting documents -->
+        <div>
+          <label class="font-semibold flex items-center mb-1">{% trans 'Supporting documents' %}
+            <span class="ml-1 cursor-pointer group relative">
+              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path d="M18 10c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-8 4a1 1 0 100-2 1 1 0 000 2zm0-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"/></svg>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none z-10">{% trans 'Upload one or more files as supporting documentation. Drag & drop is supported.' %}</span>
+            </span>
+          </label>
+          <div id="drop-area" class="border-2 border-dashed border-purple-400 rounded-lg flex flex-col items-center justify-center p-6 text-center bg-purple-50 hover:bg-purple-100 transition cursor-pointer min-h-[140px] relative">
+            <input type="file" id="fileElem" name="documentos_respaldo" multiple class="hidden">
+            <div class="flex flex-col items-center justify-center w-full pointer-events-none select-none">
+              <svg class="w-10 h-10 text-purple-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16.5V19a2 2 0 002 2h12a2 2 0 002-2v-2.5"/></svg>
+              <span class="text-purple-600 font-semibold text-base">{% trans 'Upload supporting documents' %}</span>
+              <span class="text-xs text-gray-500">{% trans 'PDF, DOC, XLS, JPG, PNG, ZIP up to 10MB each' %}</span>
+              <span class="text-xs text-gray-400">{% trans 'Drag & drop or click to select files' %}</span>
+            </div>
+            <div id="filePills" class="flex flex-wrap gap-2 mt-4 w-full justify-start"></div>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end mt-6">
+        <button type="submit" name="guardar_borrador" class="bg-purple-600 text-white px-6 py-2 rounded shadow hover:scale-105 hover:shadow-lg transition-all">{% trans 'Next' %}</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %} 

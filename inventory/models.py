@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 from core.models import Currency, UnitOfMeasure
 from core.utils.currency import convert_to_base  # Conversion helper
+from django.contrib.auth import get_user_model
 
 # ─────────────────────────────────────────────
 # MODEL: Main Warehouse
@@ -111,7 +112,13 @@ class Product(models.Model):
         NONE = 'none', _('None')
         LOT = 'lot', _('By Lot')
         SERIAL = 'serial', _('By Serial Number')
-
+    TYPE_CHOICES = [
+        ('consumable', _('Consumable')),
+        ('stockable', _('Stockable')),
+        ('service', _('Service')),
+        ('combo', _('Combo')),
+    ]
+    type = models.CharField(_('Product Type'), max_length=20, choices=TYPE_CHOICES, default='stockable')
     name = models.CharField(_("Name"), max_length=255)
     sku = models.CharField(_("SKU"), max_length=100, unique=True)
     description = models.TextField(_("Description"), blank=True)
@@ -124,7 +131,7 @@ class Product(models.Model):
 
     price = models.DecimalField(_("Price"), max_digits=10, decimal_places=2)
     price_currency = models.ForeignKey(Currency, on_delete=models.SET_NULL, null=True, verbose_name=_("Price Currency"))
-    uom = models.ForeignKey(UnitOfMeasure, on_delete=models.SET_NULL, null=True, verbose_name=_("Unit of Measure"))
+    uom = models.ForeignKey('core.UnitOfMeasure', on_delete=models.SET_NULL, null=True, blank=True)
 
     tracking = models.CharField(
         _("Tracking"),
@@ -342,6 +349,68 @@ class ReplenishmentRule(models.Model):
 
     def __str__(self):
         return f"Rule for {self.product.sku} @ {self.location.name}"
+
+class InitialStockDraft(models.Model):
+    ESTADO_CHOICES = [
+        ('borrador', 'Borrador'),
+        ('finalizado', 'Finalizado'),
+        ('cancelado', 'Cancelado'),
+    ]
+    creado_por = models.ForeignKey(get_user_model(), on_delete=models.CASCADE, related_name='stockdrafts_creados')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_ultima_modificacion = models.DateTimeField(auto_now=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='borrador')
+    comentario = models.TextField(blank=True)
+    almacen = models.ForeignKey('Warehouse', on_delete=models.CASCADE, verbose_name='Warehouse')
+    ubicacion = models.ForeignKey('Location', on_delete=models.CASCADE, verbose_name='Location')
+    es_carga_masiva = models.BooleanField(default=False)
+    archivo_excel = models.FileField(upload_to='stock_initial_excels/', null=True, blank=True)
+    tags = models.CharField(max_length=255, blank=True)
+    referencia_externa = models.CharField(max_length=255, blank=True)
+    # Eliminar 'motivo' y 'adjuntos', agregar relación a documentos de respaldo
+    # Para múltiples archivos, usar un modelo relacionado:
+    # documentos_respaldo = models.ManyToManyField('InitialStockDraftDocument', blank=True)
+
+    class Meta:
+        verbose_name = 'Borrador de Stock Inicial'
+        verbose_name_plural = 'Borradores de Stock Inicial'
+
+class InitialStockDraftItem(models.Model):
+    borrador = models.ForeignKey(InitialStockDraft, on_delete=models.CASCADE, related_name='items')
+    producto = models.ForeignKey('Product', on_delete=models.CASCADE)
+    sku = models.CharField(max_length=100)
+    cantidad = models.DecimalField(max_digits=10, decimal_places=2)
+    lote = models.CharField(max_length=100, blank=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
+    observaciones = models.TextField(blank=True)
+    uom = models.ForeignKey('core.UnitOfMeasure', on_delete=models.SET_NULL, null=True, blank=True)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    ubicacion_detalle = models.ForeignKey('Location', on_delete=models.SET_NULL, null=True, blank=True, related_name='stockdraft_items')
+
+    class Meta:
+        verbose_name = 'Detalle de Borrador de Stock Inicial'
+        verbose_name_plural = 'Detalles de Borrador de Stock Inicial'
+
+class InitialStockDraftDocument(models.Model):
+    borrador = models.ForeignKey(InitialStockDraft, on_delete=models.CASCADE, related_name='documentos_respaldo')
+    archivo = models.FileField(upload_to='stock_initial_attachments/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    def __str__(self):
+        return self.archivo.name
+
+# ─────────────────────────────────────────────
+# MODEL: Product Combo Item
+# ─────────────────────────────────────────────
+class ProductComboItem(models.Model):
+    combo = models.ForeignKey(Product, related_name='combo_items', limit_choices_to={'type': 'combo'}, on_delete=models.CASCADE)
+    component = models.ForeignKey(Product, related_name='as_component', limit_choices_to={'type__in': ['consumable', 'stockable']}, on_delete=models.CASCADE)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    class Meta:
+        verbose_name = _('Combo Component')
+        verbose_name_plural = _('Combo Components')
+        unique_together = ('combo', 'component')
+    def __str__(self):
+        return f"{self.combo} - {self.component} x {self.quantity}"
 
 
 

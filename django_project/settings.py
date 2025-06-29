@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'tiendanube',
     'django_celery_beat',
     'celery',
+    'crispy_forms',
+    'crispy_tailwind',
 ]
 
 MIDDLEWARE = [
@@ -241,4 +243,7 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # URL base pública del sitio (para imágenes, enlaces externos, etc.)
 SITE_URL = os.getenv('SITE_URL', 'https://tudominio.com')
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = "tailwind"
+CRISPY_TEMPLATE_PACK = "tailwind"
 

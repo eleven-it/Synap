@@ -1,0 +1,51 @@
+{% extends 'inventory/inventory_base.html' %}
+{% load i18n %}
+{% block inventory_content %}
+<div class="max-w-4xl mx-auto mt-8 animate-fade-in">
+  <h2 class="text-2xl font-bold mb-4">{% trans 'Initial stock drafts' %}</h2>
+  <div class="overflow-x-auto mb-6">
+    <table class="min-w-full text-sm text-gray-900">
+      <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
+        <tr><th>{% trans 'ID' %}</th><th>{% trans 'Location' %}</th><th>{% trans 'Comment' %}</th><th>{% trans 'Status' %}</th><th>{% trans 'Created by' %}</th><th>{% trans 'Date' %}</th><th>{% trans 'Actions' %}</th></tr>
+      </thead>
+      <tbody>
+        {% for draft in drafts %}
+        <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
+          <td>{{ draft.id }}</td>
+          <td>{{ draft.ubicacion }}</td>
+          <td>{{ draft.comentario|default:'-' }}</td>
+          <td><span class="px-2 py-1 rounded text-white {{ draft.estado|yesno:'bg-green-600,bg-yellow-500,bg-gray-400' }}">{{ draft.get_estado_display }}</span></td>
+          <td>{{ draft.creado_por }}</td>
+          <td>{{ draft.fecha_creacion|date:'d/m/Y H:i' }}</td>
+          <td class="flex gap-2">
+            <a href="{% url 'inventory:stock_initial_edit' draft.id %}" class="bg-blue-600 text-white px-3 py-1 rounded shadow hover:scale-105 transition-all">{% trans 'Edit' %}</a>
+            {% if draft.estado == 'borrador' %}
+            <form method="post" action="{% url 'inventory:stock_initial_finish' draft.id %}">
+              {% csrf_token %}
+              <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded shadow hover:scale-110 transition-all">{% trans 'Finish' %}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-gray-400">{% trans 'No drafts registered.' %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if messages %}
+  <div id="toast-container" class="fixed top-6 right-6 z-50">
+    {% for message in messages %}
+    <div class="mb-2 px-4 py-3 rounded shadow-lg text-white animate-fade-in {{ message.tags|default:'bg-gray-800' }}"
+         style="background-color: {% if message.tags == 'success' %}#22c55e{% elif message.tags == 'error' %}#ef4444{% elif message.tags == 'info' %}#6366f1{% else %}#334155{% endif %};">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<script>
+// Toasts auto-hide
+setTimeout(() => { const toast = document.getElementById('toast-container'); if(toast) toast.style.display = 'none'; }, 4000);
+</script>
+{% endblock %} 

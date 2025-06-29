@@ -1,7 +1,0 @@
-# TiendaNube Configuration
-TIENDANUBE_ACCESS_TOKEN=your-tiendanube-access-token
-TIENDANUBE_STORE_ID=your-store-id
-TIENDANUBE_WEBHOOK_SECRET=your-webhook-secret
-TIENDANUBE_API_URL=https://api.tiendanube.com/v1
-TIENDANUBE_AUTO_SYNC=True
-TIENDANUBE_SYNC_INTERVAL=30 

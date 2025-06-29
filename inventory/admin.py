@@ -1,9 +1,8 @@
-
 # Register your models here.
 from django.contrib import admin
 from .models import (
     Product, ProductVariant, Location, StockMove,
-    StockLot, StockQuant, ReplenishmentRule
+    StockLot, StockQuant, ReplenishmentRule, ProductComboItem
 )
 
 @admin.register(Product)
@@ -46,3 +45,5 @@ class ReplenishmentRuleAdmin(admin.ModelAdmin):
     list_display = ('product', 'location', 'min_quantity', 'max_quantity')
     list_filter = ('location',)
     search_fields = ('product__sku',)
+
+admin.site.register(ProductComboItem)
