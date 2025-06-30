@@ -141,6 +141,7 @@ def perfil_view(request):
             if nueva_password != confirmar_password:
                 messages.error(request, "Las contraseñas no coinciden.")
                 return render(request, "login/perfil.html", {
+                    "usuario": usuario,
                     "user": request.session["user"]
                 })
             try:
@@ -150,6 +151,7 @@ def perfil_view(request):
             except Exception as e:
                 messages.error(request, f"Error al actualizar contraseña: {e}")
                 return render(request, "login/perfil.html", {
+                    "usuario": usuario,
                     "user": request.session["user"]
                 })
 
@@ -161,6 +163,12 @@ def perfil_view(request):
 
         messages.success(request, "✅ Cambios guardados correctamente.")
         return redirect("login:perfil")
+
+    # GET request - mostrar el formulario
+    return render(request, "login/perfil.html", {
+        "usuario": usuario,
+        "user": request.session["user"]
+    })
 
 def completar_perfil_view(request):
     user = request.session.get("user")

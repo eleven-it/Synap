@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-30 18:48-0300\n"
+"POT-Creation-Date: 2025-06-30 19:48-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
 #: core/models/currency.py:14
 #: inventory/templates/inventory/product_form.html:79
 msgid "Currency"
@@ -60,18 +61,22 @@ msgid "Role"
 msgstr "Rol"
 
 #: core/models/models.py:34 core/utils/utils.py:125
+#: login/templates/login/perfil.html:116
 msgid "Roles"
 msgstr "Roles"
 
 #: core/models/models.py:88 core/templates/core/perfil.html:26
+#: login/templates/login/perfil.html:91
 msgid "Spanish"
 msgstr "Español"
 
 #: core/models/models.py:88 core/templates/core/perfil.html:27
+#: login/templates/login/perfil.html:94
 msgid "English"
 msgstr "Inglés"
 
 #: core/models/models.py:88 core/templates/core/perfil.html:28
+#: login/templates/login/perfil.html:97
 msgid "Portuguese"
 msgstr "Portugués"
 
@@ -116,7 +121,8 @@ msgstr "Ej: cantidad, peso, volumen, longitud, etc."
 #: core/models/uom_models.py:14
 msgid ""
 "Multiplicative factor with respect to the reference unit of the category."
-msgstr "Factor multiplicador respecto a la unidad de referencia de la categoría."
+msgstr ""
+"Factor multiplicador respecto a la unidad de referencia de la categoría."
 
 #: core/models/uom_models.py:18
 msgid "Marks if this is the base unit of its category."
@@ -145,7 +151,9 @@ msgstr "Volver al inicio"
 msgid ""
 "Are you sure you want to delete the currency \"<strong>%(object.name)s "
 "(%(object.code)s)</strong>\"? This action cannot be undone."
-msgstr "¿Estás seguro de que deseas eliminar la moneda \"<strong>%(object.name)s (%(object.code)s)</strong>\"? Esta acción no se puede deshacer."
+msgstr ""
+"¿Estás seguro de que deseas eliminar la moneda \"<strong>%(object.name)s "
+"(%(object.code)s)</strong>\"? Esta acción no se puede deshacer."
 
 #: core/templates/core/currency/currency_confirm_delete.html:14
 #: core/templates/core/currency/currency_form.html:31
@@ -324,7 +332,12 @@ msgid ""
 "<strong>%(object.to_currency.code)s</strong> dated "
 "<strong>%(object.date|date:\"Y-m-d\")s</strong>? This action cannot be "
 "undone."
-msgstr "¿Estás seguro de que deseas eliminar el tipo de cambio de <strong>%(object.from_currency.code)s</strong> a <strong>%(object.to_currency.code)s</strong> del <strong>%(object.date|date:\"Y-m-d\")s</strong>? Esta acción no se puede deshacer."
+msgstr ""
+"¿Estás seguro de que deseas eliminar el tipo de cambio de "
+"<strong>%(object.from_currency.code)s</strong> a "
+"<strong>%(object.to_currency.code)s</strong> del "
+"<strong>%(object.date|date:\"Y-m-d\")s</strong>? Esta acción no se puede "
+"deshacer."
 
 #: core/templates/core/currency/exchange_rate_form.html:12
 msgid "From Currency"
@@ -372,13 +385,15 @@ msgstr "¡Hola, %(user.nombre_completo|default:user.email)s!"
 msgid ""
 "Welcome to Synap's admin panel. From here you can manage users, roles and "
 "permissions."
-msgstr "Bienvenido al panel de administración de Synap. Desde aquí puedes gestionar usuarios, roles y permisos."
+msgstr ""
+"Bienvenido al panel de administración de Synap. Desde aquí puedes gestionar "
+"usuarios, roles y permisos."
 
 #: core/templates/core/dashboard.html:12
 msgid "Your Roles"
 msgstr "Tus Roles"
 
-#: core/templates/core/dashboard.html:22
+#: core/templates/core/dashboard.html:22 login/templates/login/perfil.html:128
 msgid "No roles assigned"
 msgstr "Sin roles asignados"
 
@@ -406,7 +421,9 @@ msgstr "Historial de Actividad"
 msgid ""
 "This module can show performed operations, recent changes or user-related "
 "activity."
-msgstr "Este módulo puede mostrar operaciones realizadas, cambios recientes o actividad relacionada con el usuario."
+msgstr ""
+"Este módulo puede mostrar operaciones realizadas, cambios recientes o "
+"actividad relacionada con el usuario."
 
 #: core/templates/core/historial.html:11
 msgid "No activity recorded yet."
@@ -524,7 +541,9 @@ msgstr "No hay roles definidos."
 msgid ""
 "Are you sure you want to delete the configuration \"<strong>%(object.key)s</"
 "strong>\"? This action cannot be undone."
-msgstr "¿Estás seguro de que deseas eliminar la configuración \"<strong>%(object.key)s</strong>\"? Esta acción no se puede deshacer."
+msgstr ""
+"¿Estás seguro de que deseas eliminar la configuración "
+"\"<strong>%(object.key)s</strong>\"? Esta acción no se puede deshacer."
 
 #: core/templates/core/system_config/system_config_form.html:12
 #: core/templates/core/system_config/system_config_list.html:18
@@ -561,7 +580,10 @@ msgid ""
 "Are you sure you want to delete the unit of measure "
 "\"<strong>%(object.name)s (%(object.code)s)</strong>\"? This action cannot "
 "be undone."
-msgstr "¿Estás seguro de que deseas eliminar la unidad de medida \"<strong>%(object.name)s (%(object.code)s)</strong>\"? Esta acción no se puede deshacer."
+msgstr ""
+"¿Estás seguro de que deseas eliminar la unidad de medida "
+"\"<strong>%(object.name)s (%(object.code)s)</strong>\"? Esta acción no se "
+"puede deshacer."
 
 #: core/templates/core/uom/uom_form.html:14
 msgid "Name (e.g. Kilogram)"
@@ -592,10 +614,12 @@ msgid "Create New User - Step 1 of 2"
 msgstr "Crear Nuevo Usuario - Paso 1 de 2"
 
 #: core/templates/core/usuarios_crear_form.html:12
+#: login/templates/login/perfil.html:63
 msgid "Email Address"
 msgstr "Dirección de Correo"
 
 #: core/templates/core/usuarios_crear_form.html:20
+#: login/templates/login/perfil.html:50
 msgid "Full Name"
 msgstr "Nombre Completo"
 
@@ -611,7 +635,9 @@ msgstr "No hay configuración del sistema definida."
 #, python-format
 msgid ""
 "No exchange rate found from %(from_code)s to %(to_code)s for date %(date)s."
-msgstr "No se encontró tipo de cambio de %(from_code)s a %(to_code)s para la fecha %(date)s."
+msgstr ""
+"No se encontró tipo de cambio de %(from_code)s a %(to_code)s para la fecha "
+"%(date)s."
 
 #: core/utils/uom.py:13
 msgid "Units do not belong to the same category"
@@ -719,7 +745,8 @@ msgstr "Error al crear usuario en Firebase: %(error)s"
 #: core/views/views.py:171
 #, python-format
 msgid "User created locally, but not synced with Firebase: %(error)s"
-msgstr "Usuario creado localmente, pero no sincronizado con Firebase: %(error)s"
+msgstr ""
+"Usuario creado localmente, pero no sincronizado con Firebase: %(error)s"
 
 #: core/views/views.py:173
 #, python-format
@@ -1489,7 +1516,8 @@ msgstr "Etiquetas"
 #: inventory/templates/inventory/stock_initial_wizard copy.html:56
 #: inventory/templates/inventory/stock_initial_wizard.html:56
 msgid "Use tags to classify or filter this load (e.g. Migration, Adjustment)."
-msgstr "Usa etiquetas para clasificar o filtrar esta carga (ej. Migración, Ajuste)."
+msgstr ""
+"Usa etiquetas para clasificar o filtrar esta carga (ej. Migración, Ajuste)."
 
 #: inventory/templates/inventory/stock_initial_wizard copy.html:63
 #: inventory/templates/inventory/stock_initial_wizard.html:63
@@ -1561,6 +1589,66 @@ msgstr "El nombre es obligatorio."
 #: inventory/views/brands.py:82
 msgid "Ya existe una marca con ese nombre."
 msgstr "Ya existe una marca con ese nombre."
+
+#: login/templates/login/perfil.html:9
+msgid "User Profile"
+msgstr "Perfil de Usuario"
+
+#: login/templates/login/perfil.html:10
+msgid "Manage your account settings and preferences"
+msgstr "Gestiona la configuración y preferencias de tu cuenta"
+
+#: login/templates/login/perfil.html:43
+msgid "Basic Information"
+msgstr "Información Básica"
+
+#: login/templates/login/perfil.html:57
+msgid "Enter your full name"
+msgstr "Ingresa tu nombre completo"
+
+#: login/templates/login/perfil.html:74
+msgid "User ID"
+msgstr "ID de Usuario"
+
+#: login/templates/login/perfil.html:85
+msgid "Preferred Language"
+msgstr "Idioma Preferido"
+
+#: login/templates/login/perfil.html:105
+msgid "Last Access"
+msgstr "Último Acceso"
+
+#: login/templates/login/perfil.html:139
+msgid "Change Password"
+msgstr "Cambiar Contraseña"
+
+#: login/templates/login/perfil.html:145
+msgid "New Password"
+msgstr "Nueva Contraseña"
+
+#: login/templates/login/perfil.html:152
+msgid "Enter new password"
+msgstr "Ingresa la nueva contraseña"
+
+#: login/templates/login/perfil.html:163
+msgid "Confirm New Password"
+msgstr "Confirmar Nueva Contraseña"
+
+#: login/templates/login/perfil.html:170
+msgid "Confirm new password"
+msgstr "Confirma la nueva contraseña"
+
+#: login/templates/login/perfil.html:181
+msgid "Leave password fields empty if you don't want to change your password"
+msgstr "Deja los campos de contraseña vacíos si no quieres cambiar tu contraseña"
+
+#: login/templates/login/perfil.html:190
+msgid "Sign Out"
+msgstr "Cerrar Sesión"
+
+#: login/templates/login/perfil.html:196
+msgid "Save Changes"
+msgstr "Guardar Cambios"
 
 #: tiendanube/models.py:16
 msgid "Auto Sync"
@@ -1681,3 +1769,7 @@ msgstr "Mapeo de Productos de TiendaNube"
 #: tiendanube/models.py:93
 msgid "TiendaNube Product Mappings"
 msgstr "Mapeos de Productos de TiendaNube"
+
+#: login/templates/login/perfil.html:107
+msgid "Never"
+msgstr "Nunca"

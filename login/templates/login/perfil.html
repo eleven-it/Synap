@@ -1,60 +1,270 @@
 {% extends "base.html" %}
+{% load i18n %}
+
 {% block content %}
-<div class="bg-white shadow rounded p-6 max-w-3xl mx-auto">
-  <h2 class="text-2xl font-bold mb-4">Perfil de Usuario</h2>
+<div class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header con animación -->
+        <div class="text-center mb-8 animate-fade-in">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">👤 {% trans "User Profile" %}</h1>
+            <p class="text-gray-600">{% trans "Manage your account settings and preferences" %}</p>
+        </div>
 
-  <form method="post">
-    {% csrf_token %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Nombre</label>
-        <input type="text" name="nombre" value="{{ user.name|default:user.nombre|default:'' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500">
-      </div>
+        <!-- Mensajes de feedback -->
+        {% if messages %}
+        <div class="mb-6 space-y-2">
+            {% for message in messages %}
+            <div class="p-4 rounded-lg shadow-sm border-l-4 animate-slide-in-right
+                        {% if message.tags == 'success' %}bg-green-50 border-green-400 text-green-700
+                        {% elif message.tags == 'error' %}bg-red-50 border-red-400 text-red-700
+                        {% else %}bg-blue-50 border-blue-400 text-blue-700{% endif %}">
+                <div class="flex items-center">
+                    <span class="material-icons mr-2 text-lg">
+                        {% if message.tags == 'success' %}check_circle
+                        {% elif message.tags == 'error' %}error
+                        {% else %}info{% endif %}
+                    </span>
+                    {{ message }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" value="{{ user.email }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-500" readonly>
-      </div>
+        <!-- Formulario principal -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden animate-fade-in-up">
+            <form method="post" class="p-8">
+                {% csrf_token %}
+                
+                <!-- Información básica -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <span class="material-icons mr-2 text-purple-600">person</span>
+                        {% trans "Basic Information" %}
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Nombre -->
+                        <div class="space-y-2">
+                            <label for="nombre" class="block text-sm font-medium text-gray-700">
+                                {% trans "Full Name" %}
+                            </label>
+                            <input type="text" 
+                                   id="nombre"
+                                   name="nombre" 
+                                   value="{{ usuario.nombre|default:'' }}" 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                                   placeholder="{% trans 'Enter your full name' %}">
+                        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">UID</label>
-        <input type="text" value="{{ user.user_id|default:user.uid }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-500" readonly>
-      </div>
+                        <!-- Email (readonly) -->
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                {% trans "Email Address" %}
+                            </label>
+                            <input type="email" 
+                                   value="{{ usuario.email }}" 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                   readonly>
+                        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Último acceso</label>
-        <input type="text" value="{{ user.auth_time|default:user.ultimo_acceso|date:'d/m/Y H:i' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 text-gray-500" readonly>
-      </div>
+                        <!-- UID (readonly) -->
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                {% trans "User ID" %}
+                            </label>
+                            <input type="text" 
+                                   value="{{ usuario.uid }}" 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed font-mono text-sm"
+                                   readonly>
+                        </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Idioma preferido</label>
-        <select name="idioma" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500">
-          <option value="es" {% if user.idioma == "es" %}selected{% endif %}>Español</option>
-          <option value="en" {% if user.idioma == "en" %}selected{% endif %}>Inglés</option>
-          <option value="pt" {% if user.idioma == "pt" %}selected{% endif %}>Portugués</option>
-        </select>
-      </div>
+                        <!-- Idioma -->
+                        <div class="space-y-2">
+                            <label for="idioma" class="block text-sm font-medium text-gray-700">
+                                {% trans "Preferred Language" %}
+                            </label>
+                            <select id="idioma" 
+                                    name="idioma" 
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200">
+                                <option value="es" {% if usuario.idioma == "es" %}selected{% endif %}>
+                                    🇪🇸 {% trans "Spanish" %}
+                                </option>
+                                <option value="en" {% if usuario.idioma == "en" %}selected{% endif %}>
+                                    🇺🇸 {% trans "English" %}
+                                </option>
+                                <option value="pt" {% if usuario.idioma == "pt" %}selected{% endif %}>
+                                    🇧🇷 {% trans "Portuguese" %}
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Último acceso -->
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                {% trans "Last Access" %}
+                            </label>
+                            <input type="text" 
+                                                                       value="{{ usuario.ultimo_acceso|date:'d/m/Y H:i'|default:_('Never') }}" 
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                   readonly>
+                        </div>
+
+                        <!-- Roles -->
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                {% trans "Roles" %}
+                            </label>
+                            <div class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 min-h-[52px] flex items-center">
+                                {% if usuario.roles.all %}
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for rol in usuario.roles.all %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                            {{ rol.nombre }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-gray-500">{% trans "No roles assigned" %}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cambio de contraseña -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <span class="material-icons mr-2 text-purple-600">lock</span>
+                        {% trans "Change Password" %}
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-2">
+                            <label for="nueva_password" class="block text-sm font-medium text-gray-700">
+                                {% trans "New Password" %}
+                            </label>
+                            <div class="relative">
+                                <input type="password" 
+                                       id="nueva_password"
+                                       name="nueva_password"
+                                       class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                                       placeholder="{% trans 'Enter new password' %}">
+                                <button type="button" 
+                                        onclick="togglePassword('nueva_password')"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                    <span class="material-icons text-lg">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label for="confirmar_password" class="block text-sm font-medium text-gray-700">
+                                {% trans "Confirm New Password" %}
+                            </label>
+                            <div class="relative">
+                                <input type="password" 
+                                       id="confirmar_password"
+                                       name="confirmar_password"
+                                       class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                                       placeholder="{% trans 'Confirm new password' %}">
+                                <button type="button" 
+                                        onclick="togglePassword('confirmar_password')"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                    <span class="material-icons text-lg">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm text-gray-500 mt-2">
+                        💡 {% trans "Leave password fields empty if you don't want to change your password" %}
+                    </p>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-200">
+                    <a href="{% url 'login:logout' %}" 
+                       class="inline-flex items-center px-6 py-3 border border-red-300 text-red-700 bg-white rounded-lg hover:bg-red-50 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
+                        <span class="material-icons mr-2">logout</span>
+                        {% trans "Sign Out" %}
+                    </a>
+                    
+                    <button type="submit" 
+                            class="inline-flex items-center px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200">
+                        <span class="material-icons mr-2">save</span>
+                        {% trans "Save Changes" %}
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-    <hr class="my-6">
-
-    <h3 class="text-lg font-semibold mb-2">Cambiar contraseña</h3>
-    
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Nueva contraseña</label>
-      <input type="password" name="nueva_password"
-             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Confirmar nueva contraseña</label>
-      <input type="password" name="confirmar_password"
-             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-purple-500 focus:border-purple-500">
-    </div>
-    
-    <div class="mt-6 flex justify-between items-center">
-      <a href="{% url 'login:logout' %}" class="inline-block bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition">Cerrar sesión</a>
-      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded">Guardar cambios</button>
-    </div>
-  </form>
 </div>
+
+<!-- JavaScript para funcionalidades -->
+<script>
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const button = input.nextElementSibling;
+    const icon = button.querySelector('.material-icons');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility_off';
+    } else {
+        input.type = 'password';
+        icon.textContent = 'visibility';
+    }
+}
+
+// Auto-hide messages after 5 seconds
+setTimeout(() => {
+    const messages = document.querySelectorAll('[class*="bg-green-50"], [class*="bg-red-50"], [class*="bg-blue-50"]');
+    messages.forEach(msg => {
+        msg.style.opacity = '0';
+        setTimeout(() => msg.remove(), 300);
+    });
+}, 5000);
+</script>
+
+<style>
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+@keyframes slide-in-right {
+    from { 
+        opacity: 0; 
+        transform: translateX(20px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateX(0); 
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.6s ease-out;
+}
+
+.animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out;
+}
+
+.animate-slide-in-right {
+    animation: slide-in-right 0.4s ease-out;
+}
+</style>
 {% endblock %}
