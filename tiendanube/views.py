@@ -177,7 +177,6 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             context['state'] = state
         context['wizard_steps'] = [
             'Credentials',
-            'Permissions',
             'Authorize',
             'Token',
             'Preferences',
@@ -193,15 +192,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             client_secret = request.POST.get('client_secret', '').strip()
             session['wizard_app_id'] = app_id
             session['wizard_client_secret'] = client_secret
-            session['wizard_step'] = 2
-            return self.get(request, *args, **kwargs)
-        elif step == 2:
-            scopes = request.POST.getlist('scopes')
-            if not scopes:
-                scopes = ['read_products', 'write_products']
-            session['wizard_scopes'] = scopes
             session['wizard_step'] = 3
-            # Aquí luego se redirigirá al paso de autorización OAuth
             return self.get(request, *args, **kwargs)
         elif step == 4 and 'get_token' in request.POST:
             # Obtener access_token desde TiendaNube

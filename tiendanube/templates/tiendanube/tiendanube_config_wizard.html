@@ -100,33 +100,6 @@
                 <strong>Copied!</strong> Redirect URI copied to clipboard. Paste this URL in your TiendaNube app settings.
             </div>
         </div>
-        {% elif step == 2 %}
-        <form method="post" class="space-y-6 animate-fadeIn">
-            {% csrf_token %}
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Select permissions (scopes) *</label>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_products" {% if 'read_products' in scopes %}checked{% endif %}><span class="ml-2">Read Products</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_products" {% if 'write_products' in scopes %}checked{% endif %}><span class="ml-2">Write Products</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_orders" {% if 'read_orders' in scopes %}checked{% endif %}><span class="ml-2">Read Orders</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_orders" {% if 'write_orders' in scopes %}checked{% endif %}><span class="ml-2">Write Orders</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_customers" {% if 'read_customers' in scopes %}checked{% endif %}><span class="ml-2">Read Customers</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_customers" {% if 'write_customers' in scopes %}checked{% endif %}><span class="ml-2">Write Customers</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_content" {% if 'read_content' in scopes %}checked{% endif %}><span class="ml-2">Read Content</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_content" {% if 'write_content' in scopes %}checked{% endif %}><span class="ml-2">Write Content</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="read_coupons" {% if 'read_coupons' in scopes %}checked{% endif %}><span class="ml-2">Read Coupons</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_coupons" {% if 'write_coupons' in scopes %}checked{% endif %}><span class="ml-2">Write Coupons</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_scripts" {% if 'write_scripts' in scopes %}checked{% endif %}><span class="ml-2">Write Scripts</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="scopes" value="write_shipping" {% if 'write_shipping' in scopes %}checked{% endif %}><span class="ml-2">Write Shipping</span></label>
-                </div>
-            </div>
-            <div class="mt-8 flex justify-center animate-fadeIn">
-                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                    Next
-                </button>
-            </div>
-        </form>
-        <p class="text-gray-500 mt-6 text-sm animate-fadeIn">Select the permissions your app will request from the store. Only request what you need.</p>
         {% elif step == 3 %}
         <div class="mb-6 animate-fadeIn">
             <p class="text-gray-700 text-lg mb-2 font-semibold">Authorize Synap to access your TiendaNube store</p>
