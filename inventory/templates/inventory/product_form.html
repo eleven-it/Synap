@@ -62,9 +62,13 @@
                     {% if form.subcategory.errors %}<p class="text-red-500 text-xs mt-1">{{ form.subcategory.errors|first }}</p>{% endif %}
                 </div>
                 <div>
-                    <label for="{{ form.brand.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">Brand</label>
-                    {{ form.brand|add_class:"mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm" }}
-                    {% if form.brand.errors %}<p class="text-red-500 text-xs mt-1">{{ form.brand.errors|first }}</p>{% endif %}
+                    <label for="brand_combobox" class="block text-xs font-semibold text-gray-700 mb-1">Brand</label>
+                    <div class="relative">
+                        <input type="text" id="brand_combobox" name="brand_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a brand..." oninput="onBrandInput()" onfocus="onBrandInput()" />
+                        <input type="hidden" id="brand_id" name="brand" value="{{ form.brand.value|default:'' }}" />
+                        <div id="brand_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                    </div>
+                    <p id="brand_error" class="text-red-500 text-xs mt-1 hidden"></p>
                 </div>
                 <div>
                     <label for="{{ form.handle.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">Handle (URL)</label>
@@ -245,6 +249,88 @@ function attachEntityFormHandler(selectId) {
       }
     });
   };
+}
+
+// --- Brand Combobox ---
+let brandTimeout = null;
+let lastBrandResults = [];
+function onBrandInput() {
+    clearTimeout(brandTimeout);
+    brandTimeout = setTimeout(async () => {
+        const input = document.getElementById('brand_combobox');
+        const dropdown = document.getElementById('brand_dropdown');
+        const hiddenId = document.getElementById('brand_id');
+        const error = document.getElementById('brand_error');
+        const q = input.value.trim();
+        if (!q) {
+            dropdown.innerHTML = '';
+            dropdown.classList.add('hidden');
+            hiddenId.value = '';
+            return;
+        }
+        const res = await fetch('/inventory/api/brands/search/?q=' + encodeURIComponent(q));
+        const data = await res.json();
+        lastBrandResults = data.results || [];
+        let html = '';
+        let foundExact = false;
+        lastBrandResults.forEach(b => {
+            if (b.name.toLowerCase() === q.toLowerCase()) foundExact = true;
+            html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
+        });
+        if (!foundExact) {
+            html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' onclick='createBrandFromInput()'>Crear "${q}"</div>`;
+        }
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+        error.classList.add('hidden');
+    }, 200);
+}
+function selectBrand(id, name) {
+    document.getElementById('brand_combobox').value = name;
+    document.getElementById('brand_id').value = id;
+    document.getElementById('brand_dropdown').classList.add('hidden');
+}
+async function createBrandFromInput() {
+    const input = document.getElementById('brand_combobox');
+    const hiddenId = document.getElementById('brand_id');
+    const error = document.getElementById('brand_error');
+    const name = input.value.trim();
+    if (!name) return;
+    const res = await fetch('/inventory/api/brands/create/', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken')},
+        body: new URLSearchParams({name})
+    });
+    const data = await res.json();
+    if (data.success) {
+        selectBrand(data.id, data.name);
+    } else {
+        error.textContent = data.error || 'Error al crear la marca';
+        error.classList.remove('hidden');
+    }
+}
+// Cierra el dropdown si se hace click fuera
+window.addEventListener('click', function(e) {
+    const box = document.getElementById('brand_combobox');
+    const drop = document.getElementById('brand_dropdown');
+    if (!box.contains(e.target) && !drop.contains(e.target)) {
+        drop.classList.add('hidden');
+    }
+});
+// Utilidad para CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 </script>
 {% endblock %} 
