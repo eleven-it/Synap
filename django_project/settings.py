@@ -165,6 +165,7 @@ AUTHENTICATION_BACKENDS = (
 
 
 LOGIN_REDIRECT_URL = '/core/dashboard/'
+LOGIN_URL = '/login/'
 
 # Firebase
 FIREBASE_CONFIG = {
