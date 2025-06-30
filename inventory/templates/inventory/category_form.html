@@ -1,4 +1,5 @@
 {% if request.GET.modal == '1' %}
+{% load widget_tweaks %}
 <form method="post" id="categoryModalForm">
     {% csrf_token %}
     <div class="mb-4">
