@@ -236,6 +236,11 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             from .models import TiendaNubeConfig
             # Verificar si ya existe la tienda en Synap
             store_id = session.get('wizard_user_id')
+            access_token = session.get('wizard_access_token')
+            if not store_id or not access_token:
+                context = self.get_context_data()
+                context['wizard_error'] = 'No se pudo obtener la autorización de Tiendanube. Por favor, completa el proceso de autorización antes de continuar.'
+                return self.render_to_response(context)
             if TiendaNubeConfig.objects.filter(store_id=store_id).exists():
                 # Ya existe, mostrar error amigable
                 context = self.get_context_data()
@@ -244,7 +249,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             # Crear la nueva configuración de tienda
             TiendaNubeConfig.objects.create(
                 store_id=store_id,
-                access_token=session.get('wizard_access_token'),
+                access_token=access_token,
                 api_url='https://api.tiendanube.com/v1',
                 auto_sync=session.get('wizard_auto_sync', True),
                 sync_interval=session.get('wizard_sync_interval', 30),
