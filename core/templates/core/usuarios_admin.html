@@ -1,12 +1,13 @@
 {% extends "core/admin_base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block admin_content %}
   <div class="max-w-7xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold">Administración de Usuarios</h1>
+      <h1 class="text-2xl font-bold">{% trans "User Administration" %}</h1>
       <a href="{% url 'core:crear_usuario' %}" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
-        ➕ Crear usuario
+        ➕ {% trans "Create user" %}
       </a>
     </div>
     {% include "core/usuarios_admin_tabla.html" %}

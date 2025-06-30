@@ -8,6 +8,7 @@ from django.core.paginator import Paginator
 from core.constantes_permisos import PERMISOS_POR_MODULO
 from firebase_admin import auth, firestore
 import logging
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def usuarios_admin_view(request):
             except Exception as e:
                 logger.warning(f"⚠️ Error al sincronizar con Firestore para {usuario.email}: {e}")
 
-        messages.success(request, "✅ Cambios guardados exitosamente.")
+        messages.success(request, _("✅ Changes saved successfully."))
         return redirect("core:usuarios")
 
     # 🔽 Render final
@@ -106,7 +107,7 @@ def listar_permisos(request):
 @tiene_permiso("administrar.usuarios")
 def crear_usuario_view(request):
     if not request.user.tiene_permiso("administrar.usuarios"):
-        messages.error(request, "No tienes permiso para crear usuarios.")
+        messages.error(request, _("You do not have permission to create users."))
         return redirect("core:usuarios")
 
     context = permisos_contextuales(request, "usuarios.crear", roles_permitidos=["Administrador"])
@@ -125,16 +126,16 @@ def crear_usuario_view(request):
         roles_ids = request.POST.getlist("roles")
 
         if not email or not password or not confirmar or not nombre:
-            messages.error(request, "Todos los campos son obligatorios.")
+            messages.error(request, _("All fields are required."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
 
         if password != confirmar:
-            messages.error(request, "Las contraseñas no coinciden.")
+            messages.error(request, _("Passwords do not match."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
 
         # ⚠️ Verificar si el usuario ya existe localmente
         if UsuarioExtendido.objects.filter(email=email).exists():
-            messages.error(request, "Ya existe un usuario con ese email en la base de datos.")
+            messages.error(request, _("A user with that email already exists in the database."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
 
         # 1. Crear en Firebase Auth
@@ -142,10 +143,10 @@ def crear_usuario_view(request):
             firebase_user = auth.create_user(email=email, password=password, display_name=nombre)
             uid = firebase_user.uid
         except auth.EmailAlreadyExistsError:
-            messages.error(request, "Ese email ya está registrado en Firebase.")
+            messages.error(request, _("That email is already registered in Firebase."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
         except Exception as e:
-            messages.error(request, f"Error al crear usuario en Firebase: {e}")
+            messages.error(request, _("Error creating user in Firebase: %(error)s") % {'error': e})
             return render(request, "core/usuarios_form.html", {"roles": roles})
 
         # 2. Crear en DB local
@@ -167,9 +168,9 @@ def crear_usuario_view(request):
                 "roles": [Rol.objects.get(id=r).nombre for r in roles_ids]
             })
         except Exception as e:
-            messages.warning(request, f"Usuario creado localmente, pero no se sincronizó con Firebase: {e}")
+            messages.warning(request, _("User created locally, but not synced with Firebase: %(error)s") % {'error': e})
 
-        messages.success(request, f"✅ Usuario {email} creado correctamente.")
+        messages.success(request, _("✅ User %(email)s created successfully.") % {'email': email})
         return redirect("core:usuarios")
 
     return render(request, "core/usuarios_form.html", {
@@ -181,7 +182,7 @@ def crear_usuario_view(request):
 def eliminar_permiso(request, permiso_id):
     permiso = get_object_or_404(Permiso, id=permiso_id)
     permiso.delete()
-    messages.success(request, "Permiso eliminado.")
+    messages.success(request, _("Permission deleted."))
     return redirect("core:listar_permisos")
 
 

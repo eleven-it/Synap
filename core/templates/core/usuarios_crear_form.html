@@ -1,14 +1,15 @@
 {% extends "core/admin_base.html" %}
+{% load i18n %}
 
 {% block admin_content %}
 <div class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow" x-data="userCreateForm()">
-  <h1 class="text-2xl font-bold mb-6">Crear Nuevo Usuario - Paso 1 de 2</h1>
+  <h1 class="text-2xl font-bold mb-6">{% blocktrans %}Create New User - Step 1 of 2{% endblocktrans %}</h1>
   
   <form method="post" class="space-y-6">
     {% csrf_token %}
     
     <div>
-      <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700">Dirección de Email</label>
+      <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-gray-700">{% trans "Email Address" %}</label>
       <input type="email" name="{{ form.email.name }}" id="{{ form.email.id_for_label }}" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
       {% if form.email.errors %}
         <p class="text-red-500 text-xs mt-1">{{ form.email.errors|first }}</p>
@@ -16,7 +17,7 @@
     </div>
 
     <div>
-      <label for="{{ form.nombre.id_for_label }}" class="block text-sm font-medium text-gray-700">Nombre Completo</label>
+      <label for="{{ form.nombre.id_for_label }}" class="block text-sm font-medium text-gray-700">{% trans "Full Name" %}</label>
       <input type="text" name="{{ form.nombre.name }}" id="{{ form.nombre.id_for_label }}" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
       {% if form.nombre.errors %}
         <p class="text-red-500 text-xs mt-1">{{ form.nombre.errors|first }}</p>

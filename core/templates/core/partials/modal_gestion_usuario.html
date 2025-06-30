@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Modal de Gestión de Usuario -->
 <div x-data="editUserModal()"
      @open-edit-user-modal.window="openModal($event.detail.userId)"
@@ -43,12 +44,12 @@
       
       <!-- Sección de Permisos Adicionales -->
       <div class="flex flex-col">
-        <h4 class="text-lg font-semibold mb-2">Permisos Adicionales</h4>
+        <h4 class="text-lg font-semibold mb-2">{% trans "Additional Permissions" %}</h4>
         <div class="grid grid-cols-2 gap-4 flex-grow overflow-hidden">
           <!-- Panel Izquierdo: Permisos Disponibles -->
           <div class="border rounded-md p-2 flex flex-col">
-            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Disponibles</h5>
-            <input type="text" x-model="searchTermPerms" placeholder="Buscar permisos..." class="w-full px-2 py-1 border rounded mb-2 text-sm">
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">{% trans "Available" %}</h5>
+            <input type="text" x-model="searchTermPerms" placeholder="{% trans 'Search permissions...' %}" class="w-full px-2 py-1 border rounded mb-2 text-sm">
             <div class="flex-grow overflow-y-auto">
               <template x-for="permiso in availablePermissions" :key="permiso.id">
                 <button @click="assignPermission(permiso)" class="w-full text-left p-1 text-sm rounded hover:bg-gray-100" x-text="permiso.nombre"></button>
@@ -57,7 +58,7 @@
           </div>
           <!-- Panel Derecho: Permisos Asignados (Directos) -->
           <div class="border rounded-md p-2 flex flex-col">
-            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">Asignados Directamente</h5>
+            <h5 class="font-semibold text-gray-600 text-sm mb-2 text-center">{% trans "Assigned" %}</h5>
             <div class="flex-grow overflow-y-auto">
               <!-- Permisos heredados (solo visualización) -->
               <template x-for="permiso in inheritedPermissions" :key="'inherited-' + permiso.id">

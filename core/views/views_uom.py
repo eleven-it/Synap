@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.urls import reverse_lazy
 from ..models import UnitOfMeasure
 from ..forms import UoMForm
+from django.utils.translation import gettext_lazy as _
 
 class UoMListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = UnitOfMeasure
@@ -20,7 +21,7 @@ class UoMCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Crear Unidad de Medida"
+        context['titulo'] = _("Create Unit of Measure")
         return context
 
 class UoMUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -32,7 +33,7 @@ class UoMUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Editar Unidad de Medida"
+        context['titulo'] = _("Edit Unit of Measure")
         return context
 
 class UoMDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -43,5 +44,5 @@ class UoMDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Confirmar Eliminación"
+        context['titulo'] = _("Confirm Deletion")
         return context 

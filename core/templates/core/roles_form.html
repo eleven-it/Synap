@@ -1,12 +1,13 @@
 {% extends "core/admin_base.html" %}
+{% load i18n %}
 {% block admin_content %}
 <div class="max-w-4xl mx-auto">
-  <h1 class="text-2xl font-bold mb-6">{% if form.instance.pk %}Editar Rol{% else %}Crear Rol{% endif %}</h1>
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">{% if editar %}{% trans "Edit Role" %}{% else %}{% trans "Create New Role" %}{% endif %}</h1>
 
   <form method="post" class="bg-white shadow-md rounded-lg px-8 pt-6 pb-8 mb-4">
     {% csrf_token %}
     <div class="mb-4">
-      <label for="{{ form.name.id_for_label }}" class="block text-gray-700 text-sm font-bold mb-2">Nombre del Rol:</label>
+      <label for="{{ form.name.id_for_label }}" class="block text-gray-700 text-sm font-bold mb-2">{% trans "Role Name" %}:</label>
       {{ form.name }}
       {% if form.name.errors %}
         <p class="text-red-500 text-xs italic">{{ form.name.errors.0 }}</p>
@@ -24,12 +25,8 @@
     </div>
 
     <div class="flex items-center justify-between">
-      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-        Guardar Rol
-      </button>
-      <a href="{% url 'core:listar_roles' %}" class="inline-block align-baseline font-bold text-sm text-purple-600 hover:text-purple-800">
-        Cancelar
-      </a>
+      <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">{% trans "Save" %}</button>
+      <a href="{% url 'core:roles_listar' %}" class="text-gray-600 mr-4">{% trans "Cancel" %}</a>
     </div>
   </form>
 </div>

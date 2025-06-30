@@ -1,8 +1,9 @@
+{% load i18n %}
 <div x-data="commandPalette()" @keydown.window.prevent.ctrl.k="open = true" @keydown.window.prevent.meta.k="open = true">
   <template x-if="open">
     <div class="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-start justify-center pt-32" @click.self="open = false">
       <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-4 animate-fade-in">
-        <input x-model="query" @keydown.escape="open = false" autofocus type="text" placeholder="Buscar acción o módulo..." class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg mb-3">
+        <input x-model="query" @keydown.escape="open = false" autofocus type="text" placeholder="{% trans 'Search action or module...' %}" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg mb-3">
         <ul>
           <template x-for="item in filtered" :key="item.label">
             <li>
@@ -13,7 +14,7 @@
             </li>
           </template>
           <template x-if="filtered.length === 0">
-            <li class="text-gray-400 px-3 py-2">Sin resultados</li>
+            <li class="text-gray-400 px-3 py-2">{% trans 'No results' %}</li>
           </template>
         </ul>
       </div>
@@ -26,11 +27,11 @@ function commandPalette() {
     open: false,
     query: '',
     items: [
-      { label: 'Administrar usuarios', url: '/core/usuarios/', icon: 'group' },
-      { label: 'Administrar roles', url: '/core/roles/', icon: 'admin_panel_settings' },
-      { label: 'Administrar permisos', url: '/core/permisos/', icon: 'vpn_key' },
-      { label: 'Dashboard', url: '/dashboard/', icon: 'dashboard' },
-      // Agrega más acciones aquí
+      { label: gettext('Manage users'), url: '/core/usuarios/', icon: 'group' },
+      { label: gettext('Manage roles'), url: '/core/roles/', icon: 'admin_panel_settings' },
+      { label: gettext('Manage permissions'), url: '/core/permisos/', icon: 'vpn_key' },
+      { label: gettext('Dashboard'), url: '/dashboard/', icon: 'dashboard' },
+      // Add more actions here
     ],
     get filtered() {
       if (!this.query) return this.items;

@@ -1,28 +1,29 @@
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 class SystemConfiguration(models.Model):
     key = models.CharField(
         max_length=255, 
         unique=True, 
-        help_text="La clave única para la configuración (ej: 'main.site.name')."
+        help_text=_("The unique key for the configuration (e.g. 'main.site.name').")
     )
     value = models.TextField(
         blank=True,
-        help_text="El valor de la configuración."
+        help_text=_("The value of the configuration.")
     )
     description = models.CharField(
         max_length=255, 
         blank=True, 
-        help_text="Descripción de lo que hace esta configuración."
+        help_text=_("Description of what this configuration does.")
     )
     is_active = models.BooleanField(
         default=True,
-        help_text="Indica si esta configuración está activa y en uso."
+        help_text=_("Indicates if this configuration is active and in use.")
     )
 
     class Meta:
-        verbose_name = "Configuración del Sistema"
-        verbose_name_plural = "Configuraciones del Sistema"
+        verbose_name = _("System Configuration")
+        verbose_name_plural = _("System Configurations")
 
     def __str__(self):
         return self.key

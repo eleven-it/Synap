@@ -1,6 +1,7 @@
 from rest_framework import generics, status, views
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 
 from core.models import UsuarioExtendido, Rol, Permiso
 from core.api.serializers import UsuarioDetalleSerializer, RolSerializer, PermisoSerializer
@@ -9,14 +10,14 @@ class UserDetailApiView(views.APIView):
     """ API para obtener y actualizar detalles de un usuario. """
     def get(self, request, user_id, *args, **kwargs):
         if not request.user.tiene_permiso("usuarios.ver"):
-            return Response({"error": "Permiso denegado"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": _("Permission denied")}, status=status.HTTP_403_FORBIDDEN)
         usuario = get_object_or_404(UsuarioExtendido, id=user_id)
         serializer = UsuarioDetalleSerializer(usuario)
         return Response(serializer.data)
 
     def post(self, request, user_id, *args, **kwargs):
         if not request.user.tiene_permiso("usuarios.editar"):
-            return Response({"error": "Permiso denegado"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": _("Permission denied")}, status=status.HTTP_403_FORBIDDEN)
         usuario = get_object_or_404(UsuarioExtendido, id=user_id)
         
         roles_ids = request.data.get('roles_ids', [])
@@ -35,21 +36,21 @@ class PermissionListApiView(generics.ListAPIView):
 
     def get(self, request, *args, **kwargs):
         if not request.user.tiene_permiso("usuarios.ver"):
-            return Response({"error": "Permiso denegado"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": _("Permission denied")}, status=status.HTTP_403_FORBIDDEN)
         return super().get(request, *args, **kwargs)
 
 class RoleDetailApiView(views.APIView):
     """ API para obtener y actualizar un rol. """
     def get(self, request, rol_id, *args, **kwargs):
         if not request.user.tiene_permiso("usuarios.roles.ver"):
-            return Response({"error": "Permiso denegado"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": _("Permission denied")}, status=status.HTTP_403_FORBIDDEN)
         rol = get_object_or_404(Rol.objects.prefetch_related('permisos'), id=rol_id)
         serializer = RolSerializer(rol)
         return Response(serializer.data)
 
     def put(self, request, rol_id, *args, **kwargs):
         if not request.user.tiene_permiso("usuarios.roles.editar"):
-            return Response({"error": "Permiso denegado"}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": _("Permission denied")}, status=status.HTTP_403_FORBIDDEN)
         rol = get_object_or_404(Rol, id=rol_id)
 
         rol.nombre = request.data.get('nombre', rol.nombre)
@@ -71,10 +72,10 @@ class RoleListCreateApiView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         nombre = request.data.get('nombre', '').strip()
         if not nombre:
-            return Response({"error": "El nombre es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": _("Name is required.")}, status=status.HTTP_400_BAD_REQUEST)
         
         if Rol.objects.filter(nombre__iexact=nombre).exists():
-            return Response({"error": "Ya existe un rol con este nombre."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": _("A role with this name already exists.")}, status=status.HTTP_400_BAD_REQUEST)
 
         # Usamos el serializador para crear la instancia del rol (sin permisos aún)
         serializer = self.get_serializer(data=request.data)

@@ -1,3 +1,4 @@
+{% load i18n %}
 <!-- Modal de Gestión de Roles -->
 <div x-show="isModalOpen" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click.away="isModalOpen = false">
   <div class="relative top-20 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white" @click.stop>
@@ -14,17 +15,17 @@
     <div class="mt-5">
       <!-- Campo Nombre del Rol -->
       <div class="mb-6">
-        <label for="rol_nombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Rol</label>
+        <label for="rol_nombre" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Role Name" %}</label>
         <input type="text" id="rol_nombre" x-model="currentRole.nombre" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500">
       </div>
 
       <!-- Selector de Permisos -->
-      <h4 class="text-lg font-semibold mb-3">Permisos</h4>
+      <h4 class="text-lg font-semibold mb-3">{% trans "Permissions" %}</h4>
       <div class="grid grid-cols-2 gap-4">
         <!-- Panel Izquierdo: Permisos Disponibles -->
         <div>
-          <h5 class="font-bold mb-2">Disponibles</h5>
-          <input type="text" x-model="searchTerm" placeholder="Buscar permiso..." class="w-full border p-2 rounded mb-2">
+          <h5 class="font-bold mb-2">{% trans "Available" %}</h5>
+          <input type="text" x-model="searchTerm" placeholder="{% trans 'Search permission...' %}" class="w-full border p-2 rounded mb-2">
           <div class="border rounded-lg h-64 overflow-y-auto p-2">
             <template x-for="permiso in availablePermissions" :key="permiso.id">
               <div @click="assignPermission(permiso)" class="cursor-pointer p-2 hover:bg-gray-100 rounded">
@@ -36,7 +37,7 @@
         </div>
         <!-- Panel Derecho: Permisos Asignados -->
         <div>
-          <h5 class="font-bold mb-2">Asignados</h5>
+          <h5 class="font-bold mb-2">{% trans "Assigned" %}</h5>
           <div class="border rounded-lg h-64 overflow-y-auto p-2 bg-gray-50">
             <template x-for="permiso in assignedPermissions" :key="permiso.id">
               <div @click="unassignPermission(permiso)" class="cursor-pointer p-2 hover:bg-red-100 rounded">

@@ -14,6 +14,7 @@ from django.http import JsonResponse
 from io import StringIO
 import logging
 import re
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def crear_editar_permiso_view(request, permiso_id=None):
         nombre = request.POST.get("nombre", "").strip()
         
         if not codigo or not nombre:
-            messages.error(request, "El código y el nombre son obligatorios.")
+            messages.error(request, _("Code and name are required."))
         else:
             # Para edición, excluimos el propio objeto de la validación de unicidad
             query = Permiso.objects.filter(codigo=codigo)
@@ -64,15 +65,15 @@ def crear_editar_permiso_view(request, permiso_id=None):
                 query = query.exclude(pk=permiso_id)
 
             if query.exists():
-                messages.error(request, f"El permiso con el código '{codigo}' ya existe.")
+                messages.error(request, _("A permission with code '%(code)s' already exists.") % {'code': codigo})
             else:
                 if editar:
                     permiso.nombre = nombre # Solo se puede editar el nombre
                     permiso.save()
-                    messages.success(request, "Permiso actualizado exitosamente.")
+                    messages.success(request, _("Permission updated successfully."))
                 else:
                     Permiso.objects.create(codigo=codigo, nombre=nombre)
-                    messages.success(request, "Permiso creado exitosamente.")
+                    messages.success(request, _("Permission created successfully."))
                 return redirect("core:listar_permisos")
 
     return render(request, "core/permisos_form.html", {"permiso": permiso, "editar": editar})
@@ -83,7 +84,7 @@ def crear_editar_permiso_view(request, permiso_id=None):
 def eliminar_permiso_view(request, permiso_id):
     permiso = get_object_or_404(Permiso, id=permiso_id)
     permiso.delete()
-    messages.success(request, f"Permiso '{permiso.codigo}' eliminado correctamente.")
+    messages.success(request, _("Permission '%(code)s' deleted successfully.") % {'code': permiso.codigo})
     return redirect("core:listar_permisos")
 
 
@@ -95,7 +96,7 @@ def sincronizar_sistema_view(request):
     con el resultado de cada paso.
     """
     if request.method != "POST":
-        return JsonResponse({'status': 'error', 'message': 'Método no permitido'}, status=405)
+        return JsonResponse({'status': 'error', 'message': _('Method not allowed')}, status=405)
 
     results = []
     

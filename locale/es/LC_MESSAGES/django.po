@@ -1,0 +1,1683 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-06-30 18:48-0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+#: core/models/currency.py:14
+#: inventory/templates/inventory/product_form.html:79
+msgid "Currency"
+msgstr "Moneda"
+
+#: core/models/currency.py:15 core/templates/core/currency/currency_list.html:7
+#: core/utils/utils.py:147
+msgid "Currencies"
+msgstr "Monedas"
+
+#: core/models/currency.py:26
+msgid "Exchange Rate"
+msgstr "Tipo de Cambio"
+
+#: core/models/currency.py:27
+#: core/templates/core/currency/exchange_rate_list.html:7
+#: core/utils/utils.py:153
+msgid "Exchange Rates"
+msgstr "Tipos de Cambio"
+
+#: core/models/models.py:11
+msgid "Detailed description of the permission"
+msgstr "Descripción detallada del permiso"
+
+#: core/models/models.py:12
+msgid "Module to which it belongs"
+msgstr "Módulo al que pertenece"
+
+#: core/models/models.py:16
+msgid "Permission"
+msgstr "Permiso"
+
+#: core/models/models.py:17
+#: core/templates/core/partials/modal_gestion_rol.html:23
+#: core/utils/utils.py:131
+msgid "Permissions"
+msgstr "Permisos"
+
+#: core/models/models.py:33
+msgid "Role"
+msgstr "Rol"
+
+#: core/models/models.py:34 core/utils/utils.py:125
+msgid "Roles"
+msgstr "Roles"
+
+#: core/models/models.py:88 core/templates/core/perfil.html:26
+msgid "Spanish"
+msgstr "Español"
+
+#: core/models/models.py:88 core/templates/core/perfil.html:27
+msgid "English"
+msgstr "Inglés"
+
+#: core/models/models.py:88 core/templates/core/perfil.html:28
+msgid "Portuguese"
+msgstr "Portugués"
+
+#: core/models/models.py:113
+msgid "Extended User"
+msgstr "Usuario Extendido"
+
+#: core/models/models.py:114
+msgid "Extended Users"
+msgstr "Usuarios Extendidos"
+
+#: core/models/system_config.py:8
+msgid "The unique key for the configuration (e.g. 'main.site.name')."
+msgstr "La clave única para la configuración (ej: 'main.site.name')."
+
+#: core/models/system_config.py:12
+msgid "The value of the configuration."
+msgstr "El valor de la configuración."
+
+#: core/models/system_config.py:17
+msgid "Description of what this configuration does."
+msgstr "Descripción de lo que hace esta configuración."
+
+#: core/models/system_config.py:21
+msgid "Indicates if this configuration is active and in use."
+msgstr "Indica si esta configuración está activa y en uso."
+
+#: core/models/system_config.py:25
+#: core/templates/core/system_config/system_config_list.html:7
+#: core/utils/utils.py:159
+msgid "System Configuration"
+msgstr "Configuración del Sistema"
+
+#: core/models/system_config.py:26
+msgid "System Configurations"
+msgstr "Configuraciones del Sistema"
+
+#: core/models/uom_models.py:9
+msgid "E.g. quantity, weight, volume, length, etc."
+msgstr "Ej: cantidad, peso, volumen, longitud, etc."
+
+#: core/models/uom_models.py:14
+msgid ""
+"Multiplicative factor with respect to the reference unit of the category."
+msgstr "Factor multiplicador respecto a la unidad de referencia de la categoría."
+
+#: core/models/uom_models.py:18
+msgid "Marks if this is the base unit of its category."
+msgstr "Marca si esta es la unidad base de su categoría."
+
+#: core/models/uom_models.py:26
+#: inventory/templates/inventory/product_form.html:85
+msgid "Unit of Measure"
+msgstr "Unidad de Medida"
+
+#: core/models/uom_models.py:27 core/templates/core/uom/uom_list.html:7
+#: core/utils/utils.py:139
+msgid "Units of Measure"
+msgstr "Unidades de Medida"
+
+#: core/templates/core/403.html:6
+msgid "You do not have sufficient permissions to access this section."
+msgstr "No tienes permisos suficientes para acceder a esta sección."
+
+#: core/templates/core/403.html:8
+msgid "Back to home"
+msgstr "Volver al inicio"
+
+#: core/templates/core/currency/currency_confirm_delete.html:8
+#, python-format
+msgid ""
+"Are you sure you want to delete the currency \"<strong>%(object.name)s "
+"(%(object.code)s)</strong>\"? This action cannot be undone."
+msgstr "¿Estás seguro de que deseas eliminar la moneda \"<strong>%(object.name)s (%(object.code)s)</strong>\"? Esta acción no se puede deshacer."
+
+#: core/templates/core/currency/currency_confirm_delete.html:14
+#: core/templates/core/currency/currency_form.html:31
+#: core/templates/core/currency/exchange_rate_confirm_delete.html:14
+#: core/templates/core/currency/exchange_rate_form.html:35
+#: core/templates/core/permisos_form.html:40
+#: core/templates/core/roles_form.html:29
+#: core/templates/core/system_config/system_config_confirm_delete.html:14
+#: core/templates/core/system_config/system_config_form.html:31
+#: core/templates/core/uom/uom_confirm_delete.html:14
+#: core/templates/core/uom/uom_form.html:48
+#: inventory/templates/inventory/brand_confirm_delete.html:13
+#: inventory/templates/inventory/brand_form.html:21
+#: inventory/templates/inventory/category_form.html:20
+#: inventory/templates/inventory/category_form_modal.html:19
+#: inventory/templates/inventory/location_confirm_delete.html:11
+#: inventory/templates/inventory/location_form.html:41
+#: inventory/templates/inventory/product_confirm_delete.html:11
+#: inventory/templates/inventory/product_form.html:13
+#: inventory/templates/inventory/subcategory_confirm_delete.html:15
+#: inventory/templates/inventory/subcategory_form.html:26
+#: inventory/templates/inventory/warehouse_confirm_delete.html:11
+#: inventory/templates/inventory/warehouse_form.html:26
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: core/templates/core/currency/currency_confirm_delete.html:17
+#: core/templates/core/currency/exchange_rate_confirm_delete.html:17
+#: core/templates/core/system_config/system_config_confirm_delete.html:17
+#: core/templates/core/uom/uom_confirm_delete.html:17
+#: core/views/views_uom.py:47
+msgid "Confirm Deletion"
+msgstr "Confirmar Eliminación"
+
+#: core/templates/core/currency/currency_form.html:12
+msgid "Code (e.g. USD, ARS)"
+msgstr "Código (ej. USD, ARS)"
+
+#: core/templates/core/currency/currency_form.html:16
+msgid "Name (e.g. US Dollar)"
+msgstr "Nombre (ej. Dólar Estadounidense)"
+
+#: core/templates/core/currency/currency_form.html:20
+msgid "Symbol (e.g. $)"
+msgstr "Símbolo (ej. $)"
+
+#: core/templates/core/currency/currency_form.html:25
+#: core/templates/core/currency/currency_list.html:33
+#: core/templates/core/currency/exchange_rate_form.html:29
+#: core/templates/core/currency/exchange_rate_list.html:35
+#: core/templates/core/system_config/system_config_form.html:25
+#: core/templates/core/system_config/system_config_list.html:41
+#: core/templates/core/uom/uom_form.html:40
+#: core/templates/core/uom/uom_list.html:33 inventory/models.py:65
+#: inventory/models.py:80 inventory/models.py:96 inventory/models.py:316
+#: inventory/templates/inventory/brand_form.html:17
+#: inventory/templates/inventory/brand_list.html:20
+#: inventory/templates/inventory/category_form.html:16
+#: inventory/templates/inventory/category_form_modal.html:15
+#: inventory/templates/inventory/category_list.html:20
+#: inventory/templates/inventory/location_form.html:32
+#: inventory/templates/inventory/subcategory_form.html:22
+#: inventory/templates/inventory/subcategory_list.html:21
+#: inventory/templates/inventory/warehouse_form.html:22
+msgid "Active"
+msgstr "Activo"
+
+#: core/templates/core/currency/currency_form.html:34
+#: core/templates/core/currency/exchange_rate_form.html:38
+#: core/templates/core/permisos_form.html:42
+#: core/templates/core/roles_form.html:28
+#: core/templates/core/system_config/system_config_form.html:34
+#: core/templates/core/uom/uom_form.html:51
+#: inventory/templates/inventory/brand_form.html:22
+#: inventory/templates/inventory/category_form.html:21
+#: inventory/templates/inventory/category_form_modal.html:20
+#: inventory/templates/inventory/location_form.html:42
+#: inventory/templates/inventory/subcategory_form.html:27
+#: inventory/templates/inventory/warehouse_form.html:27
+msgid "Save"
+msgstr "Guardar"
+
+#: core/templates/core/currency/currency_list.html:10
+#: core/views/views_currency.py:24
+msgid "Create Currency"
+msgstr "Crear Moneda"
+
+#: core/templates/core/currency/currency_list.html:18
+#: core/templates/core/uom/uom_list.html:18 inventory/models.py:13
+msgid "Code"
+msgstr "Código"
+
+#: core/templates/core/currency/currency_list.html:19
+#: core/templates/core/perfil.html:19 core/templates/core/uom/uom_list.html:19
+#: inventory/models.py:12 inventory/models.py:38 inventory/models.py:64
+#: inventory/models.py:79 inventory/models.py:94 inventory/models.py:122
+#: inventory/models.py:176 inventory/templates/inventory/brand_form.html:11
+#: inventory/templates/inventory/brand_list.html:19
+#: inventory/templates/inventory/category_form.html:10
+#: inventory/templates/inventory/category_form_modal.html:9
+#: inventory/templates/inventory/category_list.html:19
+#: inventory/templates/inventory/location_form.html:11
+#: inventory/templates/inventory/product_list.html:22
+#: inventory/templates/inventory/subcategory_form.html:11
+#: inventory/templates/inventory/subcategory_list.html:19
+#: inventory/templates/inventory/warehouse_form.html:11
+msgid "Name"
+msgstr "Nombre"
+
+#: core/templates/core/currency/currency_list.html:20
+#: core/templates/core/uom/uom_list.html:20
+msgid "Symbol"
+msgstr "Símbolo"
+
+#: core/templates/core/currency/currency_list.html:21
+#: core/templates/core/currency/exchange_rate_list.html:22
+#: core/templates/core/system_config/system_config_list.html:21
+#: core/templates/core/uom/uom_list.html:21 inventory/models.py:324
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+#: tiendanube/models.py:54
+msgid "Status"
+msgstr "Estado"
+
+#: core/templates/core/currency/currency_list.html:22
+#: core/templates/core/currency/exchange_rate_list.html:23
+#: core/templates/core/system_config/system_config_list.html:22
+#: core/templates/core/uom/uom_list.html:22
+#: inventory/templates/inventory/brand_list.html:21
+#: inventory/templates/inventory/category_list.html:21
+#: inventory/templates/inventory/product_list.html:26
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+#: inventory/templates/inventory/subcategory_list.html:22
+msgid "Actions"
+msgstr "Acciones"
+
+#: core/templates/core/currency/currency_list.html:35
+#: core/templates/core/currency/exchange_rate_list.html:37
+#: core/templates/core/system_config/system_config_list.html:43
+#: core/templates/core/uom/uom_list.html:35
+msgid "Inactive"
+msgstr "Inactivo"
+
+#: core/templates/core/currency/currency_list.html:40
+#: core/templates/core/currency/exchange_rate_list.html:42
+#: core/templates/core/roles_listar.html:42
+#: core/templates/core/system_config/system_config_list.html:48
+#: core/templates/core/uom/uom_list.html:40
+#: inventory/templates/inventory/stock_initial_drafts copy.html:21
+#: inventory/templates/inventory/stock_initial_drafts.html:21
+msgid "Edit"
+msgstr "Editar"
+
+#: core/templates/core/currency/currency_list.html:43
+#: core/templates/core/currency/exchange_rate_list.html:45
+#: core/templates/core/system_config/system_config_list.html:51
+#: core/templates/core/uom/uom_list.html:43
+#: inventory/templates/inventory/brand_confirm_delete.html:14
+#: inventory/templates/inventory/location_confirm_delete.html:12
+#: inventory/templates/inventory/product_confirm_delete.html:12
+#: inventory/templates/inventory/subcategory_confirm_delete.html:16
+#: inventory/templates/inventory/warehouse_confirm_delete.html:12
+msgid "Delete"
+msgstr "Eliminar"
+
+#: core/templates/core/currency/currency_list.html:51
+msgid "No currencies registered."
+msgstr "No hay monedas registradas."
+
+#: core/templates/core/currency/exchange_rate_confirm_delete.html:8
+#, python-format
+msgid ""
+"Are you sure you want to delete the exchange rate from "
+"<strong>%(object.from_currency.code)s</strong> to "
+"<strong>%(object.to_currency.code)s</strong> dated "
+"<strong>%(object.date|date:\"Y-m-d\")s</strong>? This action cannot be "
+"undone."
+msgstr "¿Estás seguro de que deseas eliminar el tipo de cambio de <strong>%(object.from_currency.code)s</strong> a <strong>%(object.to_currency.code)s</strong> del <strong>%(object.date|date:\"Y-m-d\")s</strong>? Esta acción no se puede deshacer."
+
+#: core/templates/core/currency/exchange_rate_form.html:12
+msgid "From Currency"
+msgstr "Moneda Origen"
+
+#: core/templates/core/currency/exchange_rate_form.html:16
+msgid "To Currency"
+msgstr "Moneda Destino"
+
+#: core/templates/core/currency/exchange_rate_form.html:20
+#: core/templates/core/currency/exchange_rate_list.html:20
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+msgid "Date"
+msgstr "Fecha"
+
+#: core/templates/core/currency/exchange_rate_form.html:24
+#: core/templates/core/currency/exchange_rate_list.html:21
+msgid "Rate"
+msgstr "Tasa"
+
+#: core/templates/core/currency/exchange_rate_list.html:10
+#: core/views/views_currency.py:71
+msgid "Create Exchange Rate"
+msgstr "Crear Tipo de Cambio"
+
+#: core/templates/core/currency/exchange_rate_list.html:18
+msgid "From"
+msgstr "Desde"
+
+#: core/templates/core/currency/exchange_rate_list.html:19
+msgid "To"
+msgstr "Hasta"
+
+#: core/templates/core/currency/exchange_rate_list.html:53
+msgid "No exchange rates registered."
+msgstr "No hay tipos de cambio registrados."
+
+#: core/templates/core/dashboard.html:7
+#, python-format
+msgid "Hello, %(user.nombre_completo|default:user.email)s!"
+msgstr "¡Hola, %(user.nombre_completo|default:user.email)s!"
+
+#: core/templates/core/dashboard.html:8
+msgid ""
+"Welcome to Synap's admin panel. From here you can manage users, roles and "
+"permissions."
+msgstr "Bienvenido al panel de administración de Synap. Desde aquí puedes gestionar usuarios, roles y permisos."
+
+#: core/templates/core/dashboard.html:12
+msgid "Your Roles"
+msgstr "Tus Roles"
+
+#: core/templates/core/dashboard.html:22
+msgid "No roles assigned"
+msgstr "Sin roles asignados"
+
+#: core/templates/core/dashboard.html:26
+msgid "Email"
+msgstr "Correo"
+
+#: core/templates/core/dashboard.html:30 core/templates/core/perfil.html:24
+msgid "Language"
+msgstr "Idioma"
+
+#: core/templates/core/dashboard.html:31
+msgid "Not specified"
+msgstr "No especificado"
+
+#: core/templates/core/dashboard.html:37
+msgid "Assigned permissions"
+msgstr "Permisos asignados"
+
+#: core/templates/core/historial.html:5
+msgid "Activity History"
+msgstr "Historial de Actividad"
+
+#: core/templates/core/historial.html:8
+msgid ""
+"This module can show performed operations, recent changes or user-related "
+"activity."
+msgstr "Este módulo puede mostrar operaciones realizadas, cambios recientes o actividad relacionada con el usuario."
+
+#: core/templates/core/historial.html:11
+msgid "No activity recorded yet."
+msgstr "(Sin actividad registrada aún.)"
+
+#: core/templates/core/partials/command_palette.html:6
+msgid "Search action or module..."
+msgstr "Buscar acción o módulo..."
+
+#: core/templates/core/partials/command_palette.html:17
+msgid "No results"
+msgstr "Sin resultados"
+
+#: core/templates/core/partials/modal_gestion_rol.html:18
+#: core/templates/core/roles_form.html:10
+msgid "Role Name"
+msgstr "Nombre del Rol"
+
+#: core/templates/core/partials/modal_gestion_rol.html:27
+#: core/templates/core/partials/modal_gestion_usuario.html:51
+msgid "Available"
+msgstr "Disponibles"
+
+#: core/templates/core/partials/modal_gestion_rol.html:28
+msgid "Search permission..."
+msgstr "Buscar permiso..."
+
+#: core/templates/core/partials/modal_gestion_rol.html:40
+#: core/templates/core/partials/modal_gestion_usuario.html:61
+msgid "Assigned"
+msgstr "Asignados"
+
+#: core/templates/core/partials/modal_gestion_usuario.html:47
+msgid "Additional Permissions"
+msgstr "Permisos Adicionales"
+
+#: core/templates/core/partials/modal_gestion_usuario.html:52
+msgid "Search permissions..."
+msgstr "Buscar permisos..."
+
+#: core/templates/core/perfil.html:5
+msgid "Edit Profile"
+msgstr "Editar Perfil"
+
+#: core/templates/core/perfil.html:33
+msgid "Change password"
+msgstr "Cambiar contraseña"
+
+#: core/templates/core/perfil.html:34
+msgid "New password"
+msgstr "Nueva contraseña"
+
+#: core/templates/core/perfil.html:35
+msgid "Confirm password"
+msgstr "Confirmar contraseña"
+
+#: core/templates/core/perfil.html:40
+msgid "Save changes"
+msgstr "Guardar cambios"
+
+#: core/templates/core/permisos_form.html:9
+msgid "Edit Permission"
+msgstr "Editar Permiso"
+
+#: core/templates/core/permisos_form.html:9
+msgid "Create New Permission"
+msgstr "Crear Nuevo Permiso"
+
+#: core/templates/core/permisos_form.html:25
+msgid "Permission Code"
+msgstr "Código del Permiso"
+
+#: core/templates/core/permisos_form.html:30
+msgid "The code cannot be modified."
+msgstr "El código no se puede modificar."
+
+#: core/templates/core/permisos_form.html:34
+msgid "Descriptive Name"
+msgstr "Nombre Descriptivo"
+
+#: core/templates/core/permisos_list.html:76
+msgid "Close"
+msgstr "Cerrar"
+
+#: core/templates/core/permisos_list.html:89
+msgid "Permission Name"
+msgstr "Nombre del Permiso"
+
+#: core/templates/core/permisos_list.html:90
+msgid "Identifier (Codename)"
+msgstr "Identificador (Codename)"
+
+#: core/templates/core/permisos_list.html:101
+msgid "No permissions available."
+msgstr "No hay permisos disponibles."
+
+#: core/templates/core/roles_form.html:5
+msgid "Edit Role"
+msgstr "Editar Rol"
+
+#: core/templates/core/roles_form.html:5
+msgid "Create New Role"
+msgstr "Crear Nuevo Rol"
+
+#: core/templates/core/roles_listar.html:37
+msgid "more"
+msgstr "más"
+
+#: core/templates/core/roles_listar.html:47
+msgid "No roles defined."
+msgstr "No hay roles definidos."
+
+#: core/templates/core/system_config/system_config_confirm_delete.html:8
+#, python-format
+msgid ""
+"Are you sure you want to delete the configuration \"<strong>%(object.key)s</"
+"strong>\"? This action cannot be undone."
+msgstr "¿Estás seguro de que deseas eliminar la configuración \"<strong>%(object.key)s</strong>\"? Esta acción no se puede deshacer."
+
+#: core/templates/core/system_config/system_config_form.html:12
+#: core/templates/core/system_config/system_config_list.html:18
+msgid "Key"
+msgstr "Clave"
+
+#: core/templates/core/system_config/system_config_form.html:16
+#: core/templates/core/system_config/system_config_list.html:19
+msgid "Value"
+msgstr "Valor"
+
+#: core/templates/core/system_config/system_config_form.html:20
+#: core/templates/core/system_config/system_config_list.html:20
+#: inventory/models.py:124 inventory/templates/inventory/product_form.html:34
+msgid "Description"
+msgstr "Descripción"
+
+#: core/templates/core/system_config/system_config_list.html:10
+#: core/views/views_system_config.py:24
+msgid "Create Configuration"
+msgstr "Crear Configuración"
+
+#: core/templates/core/system_config/system_config_list.html:36
+msgid "-"
+msgstr "-"
+
+#: core/templates/core/system_config/system_config_list.html:59
+msgid "No configurations registered."
+msgstr "No hay configuraciones registradas."
+
+#: core/templates/core/uom/uom_confirm_delete.html:8
+#, python-format
+msgid ""
+"Are you sure you want to delete the unit of measure "
+"\"<strong>%(object.name)s (%(object.code)s)</strong>\"? This action cannot "
+"be undone."
+msgstr "¿Estás seguro de que deseas eliminar la unidad de medida \"<strong>%(object.name)s (%(object.code)s)</strong>\"? Esta acción no se puede deshacer."
+
+#: core/templates/core/uom/uom_form.html:14
+msgid "Name (e.g. Kilogram)"
+msgstr "Nombre (ej. Kilogramo)"
+
+#: core/templates/core/uom/uom_form.html:18
+msgid "Code (e.g. KG, L)"
+msgstr "Código (ej. KG, L)"
+
+#: core/templates/core/uom/uom_list.html:10
+msgid "Create Unit"
+msgstr "Crear Unidad"
+
+#: core/templates/core/uom/uom_list.html:51
+msgid "No units of measure registered."
+msgstr "No hay unidades de medida registradas."
+
+#: core/templates/core/usuarios_admin.html:8
+msgid "User Administration"
+msgstr "Administración de Usuarios"
+
+#: core/templates/core/usuarios_admin.html:10
+msgid "Create user"
+msgstr "Crear usuario"
+
+#: core/templates/core/usuarios_crear_form.html:6
+msgid "Create New User - Step 1 of 2"
+msgstr "Crear Nuevo Usuario - Paso 1 de 2"
+
+#: core/templates/core/usuarios_crear_form.html:12
+msgid "Email Address"
+msgstr "Dirección de Correo"
+
+#: core/templates/core/usuarios_crear_form.html:20
+msgid "Full Name"
+msgstr "Nombre Completo"
+
+#: core/utils/currency.py:12
+msgid "No base currency defined for the system."
+msgstr "No hay moneda base definida para el sistema."
+
+#: core/utils/currency.py:15
+msgid "No system configuration defined."
+msgstr "No hay configuración del sistema definida."
+
+#: core/utils/currency.py:38
+#, python-format
+msgid ""
+"No exchange rate found from %(from_code)s to %(to_code)s for date %(date)s."
+msgstr "No se encontró tipo de cambio de %(from_code)s a %(to_code)s para la fecha %(date)s."
+
+#: core/utils/uom.py:13
+msgid "Units do not belong to the same category"
+msgstr "Las unidades no pertenecen a la misma categoría"
+
+#: core/utils/utils.py:17 core/utils/utils.py:111 core/utils/utils.py:172
+#: inventory/templates/inventory/partials/sidebar.html:15
+#: inventory/templates/inventory/partials/sidebar.html:17
+msgid "Dashboard"
+msgstr "Panel Principal"
+
+#: core/utils/utils.py:45 inventory/templates/inventory/inventory_base.html:34
+#: inventory/templates/inventory/partials/sidebar.html:7
+msgid "Inventory"
+msgstr "Inventario"
+
+#: core/utils/utils.py:90
+msgid "Settings"
+msgstr "Configuración"
+
+#: core/utils/utils.py:100
+msgid "TiendaNube"
+msgstr "TiendaNube"
+
+#: core/utils/utils.py:109
+msgid "Quick Access"
+msgstr "Acceso Rápido"
+
+#: core/utils/utils.py:117
+msgid "Access Management"
+msgstr "Gestión de Acceso"
+
+#: core/utils/utils.py:119
+msgid "Users"
+msgstr "Usuarios"
+
+#: core/utils/utils.py:137
+msgid "General Configuration"
+msgstr "Configuración General"
+
+#: core/utils/utils.py:145
+msgid "Financial Configuration"
+msgstr "Configuración Financiera"
+
+#: core/utils/utils.py:161
+msgid "Configuration"
+msgstr "Configuración"
+
+#: core/utils/utils.py:170
+msgid "Main"
+msgstr "Principal"
+
+#: core/utils/utils.py:178 inventory/models.py:158
+#: inventory/templates/inventory/partials/sidebar.html:19
+#: inventory/templates/inventory/partials/sidebar.html:21
+#: inventory/templates/inventory/product_list.html:7
+msgid "Products"
+msgstr "Productos"
+
+#: core/utils/utils.py:184
+msgid "Stock Management"
+msgstr "Gestión de Stock"
+
+#: core/utils/utils.py:186 inventory/models.py:25
+#: inventory/templates/inventory/partials/sidebar.html:23
+#: inventory/templates/inventory/partials/sidebar.html:25
+msgid "Warehouses"
+msgstr "Almacenes"
+
+#: core/utils/utils.py:192 inventory/models.py:58
+#: inventory/templates/inventory/partials/sidebar.html:27
+#: inventory/templates/inventory/partials/sidebar.html:29
+msgid "Locations"
+msgstr "Ubicaciones"
+
+#: core/views/views.py:87
+msgid "✅ Changes saved successfully."
+msgstr "✅ Cambios guardados exitosamente."
+
+#: core/views/views.py:110
+msgid "You do not have permission to create users."
+msgstr "No tienes permisos para crear usuarios."
+
+#: core/views/views.py:129
+msgid "All fields are required."
+msgstr "Todos los campos son obligatorios."
+
+#: core/views/views.py:133
+msgid "Passwords do not match."
+msgstr "Las contraseñas no coinciden."
+
+#: core/views/views.py:138
+msgid "A user with that email already exists in the database."
+msgstr "Un usuario con ese correo ya existe en la base de datos."
+
+#: core/views/views.py:146
+msgid "That email is already registered in Firebase."
+msgstr "Ese correo ya está registrado en Firebase."
+
+#: core/views/views.py:149
+#, python-format
+msgid "Error creating user in Firebase: %(error)s"
+msgstr "Error al crear usuario en Firebase: %(error)s"
+
+#: core/views/views.py:171
+#, python-format
+msgid "User created locally, but not synced with Firebase: %(error)s"
+msgstr "Usuario creado localmente, pero no sincronizado con Firebase: %(error)s"
+
+#: core/views/views.py:173
+#, python-format
+msgid "✅ User %(email)s created successfully."
+msgstr "✅ Usuario %(email)s creado exitosamente."
+
+#: core/views/views.py:185
+msgid "Permission deleted."
+msgstr "Permiso eliminado."
+
+#: core/views/views_api.py:13 core/views/views_api.py:20
+#: core/views/views_api.py:39 core/views/views_api.py:46
+#: core/views/views_api.py:53
+msgid "Permission denied"
+msgstr "Permiso denegado"
+
+#: core/views/views_api.py:75
+msgid "Name is required."
+msgstr "El nombre es obligatorio."
+
+#: core/views/views_api.py:78
+msgid "A role with this name already exists."
+msgstr "Ya existe un rol con ese nombre."
+
+#: core/views/views_currency.py:36
+msgid "Edit Currency"
+msgstr "Editar Moneda"
+
+#: core/views/views_currency.py:47
+msgid "Confirm Currency Deletion"
+msgstr "Confirmar Eliminación de Moneda"
+
+#: core/views/views_currency.py:83
+msgid "Edit Exchange Rate"
+msgstr "Editar Tipo de Cambio"
+
+#: core/views/views_currency.py:94
+msgid "Confirm Exchange Rate Deletion"
+msgstr "Confirmar Eliminación de Tipo de Cambio"
+
+#: core/views/views_permisos.py:60
+msgid "Code and name are required."
+msgstr "El código y nombre son obligatorios."
+
+#: core/views/views_permisos.py:68
+#, python-format
+msgid "A permission with code '%(code)s' already exists."
+msgstr "Ya existe un permiso con el código '%(code)s'."
+
+#: core/views/views_permisos.py:73
+msgid "Permission updated successfully."
+msgstr "Permiso actualizado exitosamente."
+
+#: core/views/views_permisos.py:76
+msgid "Permission created successfully."
+msgstr "Permiso creado exitosamente."
+
+#: core/views/views_permisos.py:87
+#, python-format
+msgid "Permission '%(code)s' deleted successfully."
+msgstr "Permiso '%(code)s' eliminado exitosamente."
+
+#: core/views/views_permisos.py:99
+msgid "Method not allowed"
+msgstr "Método no permitido"
+
+#: core/views/views_roles.py:28
+msgid "Role name is required."
+msgstr "El nombre del rol es obligatorio."
+
+#: core/views/views_roles.py:30
+msgid "You must select at least one permission."
+msgstr "Debes seleccionar al menos un permiso."
+
+#: core/views/views_roles.py:36
+msgid "Role updated successfully."
+msgstr "Rol actualizado exitosamente."
+
+#: core/views/views_roles.py:39
+msgid "Role created successfully."
+msgstr "Rol creado exitosamente."
+
+#: core/views/views_roles.py:63
+msgid "Cannot delete the Administrator role."
+msgstr "No se puede eliminar el rol de Administrador."
+
+#: core/views/views_roles.py:66
+#, python-format
+msgid "Role '%(name)s' deleted successfully."
+msgstr "Rol '%(name)s' eliminado exitosamente."
+
+#: core/views/views_system_config.py:36
+msgid "Edit Configuration"
+msgstr "Editar Configuración"
+
+#: core/views/views_system_config.py:47
+msgid "Confirm Configuration Deletion"
+msgstr "Confirmar Eliminación de Configuración"
+
+#: core/views/views_uom.py:24
+msgid "Create Unit of Measure"
+msgstr "Crear Unidad de Medida"
+
+#: core/views/views_uom.py:36
+msgid "Edit Unit of Measure"
+msgstr "Editar Unidad de Medida"
+
+#: inventory/forms.py:47
+msgid "La subcategoría seleccionada no pertenece al rubro seleccionado."
+msgstr "La subcategoría seleccionada no pertenece al rubro seleccionado."
+
+#: inventory/models.py:14 inventory/templates/inventory/warehouse_form.html:16
+msgid "Address"
+msgstr "Dirección"
+
+#: inventory/models.py:15 inventory/models.py:47
+msgid "Is Active"
+msgstr "Está Activo"
+
+#: inventory/models.py:24 inventory/models.py:45
+#: inventory/templates/inventory/location_form.html:21
+#: inventory/templates/inventory/stock_initial_wizard copy.html:23
+#: inventory/templates/inventory/stock_initial_wizard.html:23
+msgid "Warehouse"
+msgstr "Almacén"
+
+#: inventory/models.py:32
+msgid "Internal"
+msgstr "Interno"
+
+#: inventory/models.py:33
+msgid "Supplier"
+msgstr "Proveedor"
+
+#: inventory/models.py:34
+msgid "Customer"
+msgstr "Cliente"
+
+#: inventory/models.py:35
+msgid "In Transit"
+msgstr "En Tránsito"
+
+#: inventory/models.py:36
+msgid "Scrap"
+msgstr "Desecho"
+
+#: inventory/models.py:40 inventory/templates/inventory/location_form.html:16
+msgid "Location Type"
+msgstr "Tipo de Ubicación"
+
+#: inventory/models.py:46 inventory/templates/inventory/location_form.html:26
+msgid "Parent Location"
+msgstr "Ubicación Padre"
+
+#: inventory/models.py:48
+msgid "Allow Operations"
+msgstr "Permitir Operaciones"
+
+#: inventory/models.py:57 inventory/models.py:211 inventory/models.py:291
+#: inventory/models.py:321 inventory/models.py:339
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+#: inventory/templates/inventory/stock_initial_edit copy.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:121
+#: inventory/templates/inventory/stock_initial_wizard copy.html:33
+#: inventory/templates/inventory/stock_initial_wizard.html:33
+msgid "Location"
+msgstr "Ubicación"
+
+#: inventory/models.py:71 inventory/models.py:127
+#: inventory/templates/inventory/product_form.html:58
+#: inventory/templates/inventory/product_list.html:23
+msgid "Brand"
+msgstr "Marca"
+
+#: inventory/models.py:72 inventory/templates/inventory/brand_list.html:6
+#: inventory/templates/inventory/partials/sidebar.html:31
+#: inventory/templates/inventory/partials/sidebar.html:33
+msgid "Brands"
+msgstr "Marcas"
+
+#: inventory/models.py:86 inventory/models.py:95 inventory/models.py:126
+#: inventory/templates/inventory/product_form.html:40
+#: inventory/templates/inventory/subcategory_form.html:16
+#: inventory/templates/inventory/subcategory_list.html:20
+msgid "Category"
+msgstr "Categoría"
+
+#: inventory/models.py:87 inventory/templates/inventory/category_list.html:6
+#: inventory/templates/inventory/partials/sidebar.html:35
+#: inventory/templates/inventory/partials/sidebar.html:37
+msgid "Categories"
+msgstr "Categorías"
+
+#: inventory/models.py:100 inventory/models.py:128
+#: inventory/templates/inventory/product_form.html:49
+msgid "Subcategory"
+msgstr "Subcategoría"
+
+#: inventory/models.py:101
+#: inventory/templates/inventory/partials/sidebar.html:39
+#: inventory/templates/inventory/partials/sidebar.html:41
+#: inventory/templates/inventory/subcategory_list.html:6
+msgid "Subcategories"
+msgstr "Subcategorías"
+
+#: inventory/models.py:112
+msgid "None"
+msgstr "Ninguno"
+
+#: inventory/models.py:113
+msgid "By Lot"
+msgstr "Por Lote"
+
+#: inventory/models.py:114
+msgid "By Serial Number"
+msgstr "Por Número de Serie"
+
+#: inventory/models.py:116 inventory/templates/inventory/stock_initial_edit
+#: copy.html:42 copy.html:72
+#: inventory/templates/inventory/stock_initial_edit.html:42
+#: inventory/templates/inventory/stock_initial_edit.html:72
+msgid "Consumable"
+msgstr "Consumible"
+
+#: inventory/models.py:117 inventory/templates/inventory/stock_initial_edit
+#: copy.html:43 copy.html:74
+#: inventory/templates/inventory/stock_initial_edit.html:43
+#: inventory/templates/inventory/stock_initial_edit.html:74
+msgid "Stockable"
+msgstr "Almacenable"
+
+#: inventory/models.py:118
+msgid "Service"
+msgstr "Servicio"
+
+#: inventory/models.py:119 inventory/templates/inventory/stock_initial_edit
+#: copy.html:44 copy.html:70
+#: inventory/templates/inventory/stock_initial_edit.html:44
+#: inventory/templates/inventory/stock_initial_edit.html:70
+msgid "Combo"
+msgstr "Combo"
+
+#: inventory/models.py:121
+msgid "Product Type"
+msgstr "Tipo de Producto"
+
+#: inventory/models.py:123 inventory/models.py:177
+#: inventory/templates/inventory/product_form.html:29
+#: inventory/templates/inventory/product_list.html:21
+#: inventory/templates/inventory/stock_initial_edit copy.html:55 copy.html:121
+#: copy.html:147 inventory/templates/inventory/stock_initial_edit.html:55
+#: inventory/templates/inventory/stock_initial_edit.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:147
+msgid "SKU"
+msgstr "SKU"
+
+#: inventory/models.py:129
+msgid "Image"
+msgstr "Imagen"
+
+#: inventory/models.py:131 inventory/templates/inventory/product_form.html:67
+msgid "Handle (URL)"
+msgstr "Handle (URL)"
+
+#: inventory/models.py:133 inventory/models.py:178
+msgid "Price"
+msgstr "Precio"
+
+#: inventory/models.py:134
+msgid "Price Currency"
+msgstr "Moneda del Precio"
+
+#: inventory/models.py:138
+msgid "Tracking"
+msgstr "Seguimiento"
+
+#: inventory/models.py:144
+msgid "Weight (kg)"
+msgstr "Peso (kg)"
+
+#: inventory/models.py:145
+msgid "Volume (m³)"
+msgstr "Volumen (m³)"
+
+#: inventory/models.py:146
+msgid "Is Dangerous Good"
+msgstr "Es Mercancía Peligrosa"
+
+#: inventory/models.py:147
+msgid "Barcode"
+msgstr "Código de Barras"
+
+#: inventory/models.py:151
+msgid "Is Published"
+msgstr "Está Publicado"
+
+#: inventory/models.py:157 inventory/models.py:175 inventory/models.py:194
+#: inventory/models.py:210 inventory/models.py:255 inventory/models.py:290
+#: inventory/models.py:320 inventory/models.py:338
+#: inventory/templates/inventory/stock_initial_edit copy.html:56 copy.html:121
+#: copy.html:147 inventory/templates/inventory/stock_initial_edit.html:56
+#: inventory/templates/inventory/stock_initial_edit.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:147
+#: tiendanube/models.py:43
+msgid "Product"
+msgstr "Producto"
+
+#: inventory/models.py:179 inventory/models.py:213 inventory/models.py:256
+#: inventory/models.py:322 inventory/templates/inventory/stock_initial_edit
+#: copy.html:59 copy.html:121 copy.html:147
+#: inventory/templates/inventory/stock_initial_edit.html:59
+#: inventory/templates/inventory/stock_initial_edit.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:147
+msgid "Quantity"
+msgstr "Cantidad"
+
+#: inventory/models.py:183
+msgid "Product Variant"
+msgstr "Variante de Producto"
+
+#: inventory/models.py:184
+msgid "Product Variants"
+msgstr "Variantes de Producto"
+
+#: inventory/models.py:195
+msgid "Lot/Serial Number"
+msgstr "Número de Lote/Serie"
+
+#: inventory/models.py:196
+msgid "Expiration Date"
+msgstr "Fecha de Vencimiento"
+
+#: inventory/models.py:199
+msgid "Stock Lot"
+msgstr "Lote de Stock"
+
+#: inventory/models.py:200
+msgid "Stock Lots"
+msgstr "Lotes de Stock"
+
+#: inventory/models.py:212 inventory/models.py:259
+#: inventory/templates/inventory/stock_initial_edit copy.html:58 copy.html:121
+#: copy.html:147 inventory/templates/inventory/stock_initial_edit.html:58
+#: inventory/templates/inventory/stock_initial_edit.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:147
+msgid "Lot"
+msgstr "Lote"
+
+#: inventory/models.py:214
+msgid "Reserved Quantity"
+msgstr "Cantidad Reservada"
+
+#: inventory/models.py:219
+msgid "Stock Quant"
+msgstr "Cantidad de Stock"
+
+#: inventory/models.py:220
+msgid "Stock Quants"
+msgstr "Cantidades de Stock"
+
+#: inventory/models.py:232
+msgid "The reserved quantity cannot be greater than the available stock."
+msgstr "La cantidad reservada no puede ser mayor que el stock disponible."
+
+#: inventory/models.py:244
+msgid "Incoming"
+msgstr "Entrante"
+
+#: inventory/models.py:245
+msgid "Outgoing"
+msgstr "Saliente"
+
+#: inventory/models.py:246
+msgid "Internal Transfer"
+msgstr "Transferencia Interna"
+
+#: inventory/models.py:247
+msgid "Adjustment"
+msgstr "Ajuste"
+
+#: inventory/models.py:250
+msgid "Draft"
+msgstr "Borrador"
+
+#: inventory/models.py:251
+msgid "Confirmed"
+msgstr "Confirmado"
+
+#: inventory/models.py:252
+msgid "Done"
+msgstr "Completado"
+
+#: inventory/models.py:253 inventory/models.py:318
+msgid "Cancelled"
+msgstr "Cancelado"
+
+#: inventory/models.py:257
+msgid "From Location"
+msgstr "Desde Ubicación"
+
+#: inventory/models.py:258
+msgid "To Location"
+msgstr "Hacia Ubicación"
+
+#: inventory/models.py:261
+msgid "Move Type"
+msgstr "Tipo de Movimiento"
+
+#: inventory/models.py:262
+msgid "Reference"
+msgstr "Referencia"
+
+#: inventory/models.py:263
+msgid "Origin"
+msgstr "Origen"
+
+#: inventory/models.py:265
+msgid "State"
+msgstr "Estado"
+
+#: inventory/models.py:267
+msgid "Created By"
+msgstr "Creado Por"
+
+#: inventory/models.py:268
+msgid "Validated By"
+msgstr "Validado Por"
+
+#: inventory/models.py:269
+msgid "Validated At"
+msgstr "Validado En"
+
+#: inventory/models.py:273
+msgid "Stock Move"
+msgstr "Movimiento de Stock"
+
+#: inventory/models.py:274
+msgid "Stock Moves"
+msgstr "Movimientos de Stock"
+
+#: inventory/models.py:292
+msgid "Expected Quantity"
+msgstr "Cantidad Esperada"
+
+#: inventory/models.py:293
+msgid "Real Quantity"
+msgstr "Cantidad Real"
+
+#: inventory/models.py:294
+msgid "Reason"
+msgstr "Motivo"
+
+#: inventory/models.py:295
+msgid "Counted By"
+msgstr "Contado Por"
+
+#: inventory/models.py:300
+msgid "Inventory Adjustment"
+msgstr "Ajuste de Inventario"
+
+#: inventory/models.py:301
+msgid "Inventory Adjustments"
+msgstr "Ajustes de Inventario"
+
+#: inventory/models.py:317
+msgid "Used"
+msgstr "Usado"
+
+#: inventory/models.py:323
+msgid "Reserved For"
+msgstr "Reservado Para"
+
+#: inventory/models.py:328
+msgid "Stock Reservation"
+msgstr "Reserva de Stock"
+
+#: inventory/models.py:329
+msgid "Stock Reservations"
+msgstr "Reservas de Stock"
+
+#: inventory/models.py:340
+msgid "Min Quantity"
+msgstr "Cantidad Mínima"
+
+#: inventory/models.py:341
+msgid "Max Quantity"
+msgstr "Cantidad Máxima"
+
+#: inventory/models.py:342
+msgid "Method"
+msgstr "Método"
+
+#: inventory/models.py:345
+msgid "Replenishment Rule"
+msgstr "Regla de Reposición"
+
+#: inventory/models.py:346
+msgid "Replenishment Rules"
+msgstr "Reglas de Reposición"
+
+#: inventory/models.py:410
+msgid "Combo Component"
+msgstr "Componente de Combo"
+
+#: inventory/models.py:411
+msgid "Combo Components"
+msgstr "Componentes de Combo"
+
+#: inventory/templates/inventory/brand_confirm_delete.html:6
+msgid "Delete Brand"
+msgstr "Eliminar Marca"
+
+#: inventory/templates/inventory/brand_confirm_delete.html:8
+msgid "Are you sure you want to delete this brand?"
+msgstr "¿Estás seguro de que quieres eliminar esta marca?"
+
+#: inventory/templates/inventory/location_confirm_delete.html:6
+msgid "Delete Location"
+msgstr "Eliminar Ubicación"
+
+#: inventory/templates/inventory/location_confirm_delete.html:7
+msgid "Are you sure you want to delete this location?"
+msgstr "¿Estás seguro de que quieres eliminar esta ubicación?"
+
+#: inventory/templates/inventory/partials/sidebar.html:44
+msgid "STOCK"
+msgstr "STOCK"
+
+#: inventory/templates/inventory/partials/sidebar.html:49
+msgid "New initial stock"
+msgstr "Nuevo stock inicial"
+
+#: inventory/templates/inventory/partials/sidebar.html:55
+#: inventory/templates/inventory/stock_initial_drafts copy.html:5
+#: inventory/templates/inventory/stock_initial_drafts.html:5
+msgid "Initial stock drafts"
+msgstr "Borradores de stock inicial"
+
+#: inventory/templates/inventory/product_confirm_delete.html:6
+msgid "Delete Product"
+msgstr "Eliminar Producto"
+
+#: inventory/templates/inventory/product_confirm_delete.html:7
+msgid "Are you sure you want to delete this product?"
+msgstr "¿Estás seguro de que quieres eliminar este producto?"
+
+#: inventory/templates/inventory/product_form.html:15
+msgid "Save Product"
+msgstr "Guardar Producto"
+
+#: inventory/templates/inventory/product_form.html:24
+msgid "Product Name"
+msgstr "Nombre del Producto"
+
+#: inventory/templates/inventory/product_form.html:69
+msgid ""
+"URL amigable sugerida automáticamente a partir del nombre, puedes "
+"modificarla si lo deseas."
+msgstr ""
+"URL amigable sugerida automáticamente a partir del nombre, puedes "
+"modificarla si lo deseas."
+
+#: inventory/templates/inventory/product_form.html:74
+msgid "Sale Price"
+msgstr "Precio de Venta"
+
+#: inventory/templates/inventory/product_form.html:90
+msgid "Tracking Type"
+msgstr "Tipo de Seguimiento"
+
+#: inventory/templates/inventory/product_form.html:97
+msgid "Published"
+msgstr "Publicado"
+
+#: inventory/templates/inventory/product_form.html:100
+msgid "If active, this product will be visible in sales channels."
+msgstr "Si está activo, este producto será visible en los canales de venta."
+
+#: inventory/templates/inventory/product_form.html:107
+msgid "Product Image"
+msgstr "Imagen del Producto"
+
+#: inventory/templates/inventory/product_form.html:114
+msgid "Upload a file"
+msgstr "Subir un archivo"
+
+#: inventory/templates/inventory/product_form.html:115
+msgid "PNG, JPG, GIF up to 10MB"
+msgstr "PNG, JPG, GIF hasta 10MB"
+
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+msgid "ID"
+msgstr "ID"
+
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+#: inventory/templates/inventory/stock_initial_wizard copy.html:43
+#: inventory/templates/inventory/stock_initial_wizard.html:43
+msgid "Comment"
+msgstr "Comentario"
+
+#: inventory/templates/inventory/stock_initial_drafts copy.html:9
+#: inventory/templates/inventory/stock_initial_drafts.html:9
+msgid "Created by"
+msgstr "Creado por"
+
+#: inventory/templates/inventory/stock_initial_drafts copy.html:25
+#: inventory/templates/inventory/stock_initial_drafts.html:25
+msgid "Finish"
+msgstr "Finalizar"
+
+#: inventory/templates/inventory/stock_initial_drafts copy.html:31
+#: inventory/templates/inventory/stock_initial_drafts.html:31
+msgid "No drafts registered."
+msgstr "No hay borradores registrados."
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:12
+#: inventory/templates/inventory/stock_initial_edit.html:12
+msgid "Product load"
+msgstr "Carga de productos"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:16
+#: inventory/templates/inventory/stock_initial_edit.html:16
+msgid "Review"
+msgstr "Revisar"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:21
+#: inventory/templates/inventory/stock_initial_edit.html:21
+msgid "Search by SKU, name or description"
+msgstr "Buscar por SKU, nombre o descripción"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:23
+#: inventory/templates/inventory/stock_initial_edit.html:23
+msgid "All categories"
+msgstr "Todas las categorías"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:29
+#: inventory/templates/inventory/stock_initial_edit.html:29
+msgid "All subcategories"
+msgstr "Todas las subcategorías"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:35
+#: inventory/templates/inventory/stock_initial_edit.html:35
+msgid "All brands"
+msgstr "Todas las marcas"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:41
+#: inventory/templates/inventory/stock_initial_edit.html:41
+msgid "All types"
+msgstr "Todos los tipos"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:46
+#: inventory/templates/inventory/stock_initial_edit.html:46
+msgid "Filter"
+msgstr "Filtrar"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:57
+#: inventory/templates/inventory/stock_initial_edit.html:57
+msgid "Type"
+msgstr "Tipo"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:60 copy.html:147
+#: inventory/templates/inventory/stock_initial_edit.html:60
+#: inventory/templates/inventory/stock_initial_edit.html:147
+msgid "Expiration"
+msgstr "Vencimiento"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:84
+#: inventory/templates/inventory/stock_initial_edit.html:84
+msgid "No products found."
+msgstr "No se encontraron productos."
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:92
+#: inventory/templates/inventory/stock_initial_edit.html:92
+msgid "Page"
+msgstr "Página"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:92
+#: inventory/templates/inventory/stock_initial_edit.html:92
+msgid "of"
+msgstr "de"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:96
+#: inventory/templates/inventory/stock_initial_edit.html:96
+msgid "Previous"
+msgstr "Anterior"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:99
+#: inventory/templates/inventory/stock_initial_edit.html:99
+#: inventory/templates/inventory/stock_initial_wizard copy.html:92
+#: inventory/templates/inventory/stock_initial_wizard.html:92
+msgid "Next"
+msgstr "Siguiente"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:104
+#: inventory/templates/inventory/stock_initial_edit.html:104
+msgid "Save products"
+msgstr "Guardar productos"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:109
+#: inventory/templates/inventory/stock_initial_edit.html:109
+msgid "Bulk load from Excel"
+msgstr "Carga masiva desde Excel"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:113
+#: inventory/templates/inventory/stock_initial_edit.html:113
+msgid "Upload and preview"
+msgstr "Subir y previsualizar"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:117
+#: inventory/templates/inventory/stock_initial_edit.html:117
+msgid "Preview:"
+msgstr "Vista previa:"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:121
+#: inventory/templates/inventory/stock_initial_edit.html:121
+msgid "Obs"
+msgstr "Obs"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:142
+#: inventory/templates/inventory/stock_initial_edit.html:142
+msgid "Final review"
+msgstr "Revisión final"
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:143
+#: inventory/templates/inventory/stock_initial_edit.html:143
+msgid "Check the data before finalizing the initial stock load."
+msgstr "Verifica los datos antes de finalizar la carga de stock inicial."
+
+#: inventory/templates/inventory/stock_initial_edit copy.html:165
+#: inventory/templates/inventory/stock_initial_edit.html:165
+msgid "Finish and apply stock"
+msgstr "Finalizar y aplicar stock"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:13
+#: inventory/templates/inventory/stock_initial_wizard.html:13
+msgid "Warehouse & Location"
+msgstr "Almacén y Ubicación"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:19
+#: inventory/templates/inventory/stock_initial_wizard.html:19
+msgid "Select warehouse and location"
+msgstr "Seleccionar almacén y ubicación"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:26
+#: inventory/templates/inventory/stock_initial_wizard.html:26
+msgid "Select the warehouse where the initial stock will be loaded."
+msgstr "Selecciona el almacén donde se cargará el stock inicial."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:36
+#: inventory/templates/inventory/stock_initial_wizard.html:36
+msgid "Select the location within the warehouse."
+msgstr "Selecciona la ubicación dentro del almacén."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:46
+#: inventory/templates/inventory/stock_initial_wizard.html:46
+msgid "Add any notes or explanations about this initial stock load."
+msgstr "Agrega cualquier nota o explicación sobre esta carga de stock inicial."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:53
+#: inventory/templates/inventory/stock_initial_wizard.html:53
+msgid "Tags"
+msgstr "Etiquetas"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:56
+#: inventory/templates/inventory/stock_initial_wizard.html:56
+msgid "Use tags to classify or filter this load (e.g. Migration, Adjustment)."
+msgstr "Usa etiquetas para clasificar o filtrar esta carga (ej. Migración, Ajuste)."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:63
+#: inventory/templates/inventory/stock_initial_wizard.html:63
+msgid "External reference"
+msgstr "Referencia externa"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:66
+#: inventory/templates/inventory/stock_initial_wizard.html:66
+msgid "Link this load to an external document or system."
+msgstr "Vincula esta carga a un documento o sistema externo."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:73
+#: inventory/templates/inventory/stock_initial_wizard.html:73
+msgid "Supporting documents"
+msgstr "Documentos de respaldo"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:76
+#: inventory/templates/inventory/stock_initial_wizard.html:76
+msgid ""
+"Upload one or more files as supporting documentation. Drag & drop is "
+"supported."
+msgstr ""
+"Sube uno o más archivos como documentación de respaldo. Se admite arrastrar "
+"y soltar."
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:83
+#: inventory/templates/inventory/stock_initial_wizard.html:83
+msgid "Upload supporting documents"
+msgstr "Subir documentos de respaldo"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:84
+#: inventory/templates/inventory/stock_initial_wizard.html:84
+msgid "PDF, DOC, XLS, JPG, PNG, ZIP up to 10MB each"
+msgstr "PDF, DOC, XLS, JPG, PNG, ZIP hasta 10MB cada uno"
+
+#: inventory/templates/inventory/stock_initial_wizard copy.html:85
+#: inventory/templates/inventory/stock_initial_wizard.html:85
+msgid "Drag & drop or click to select files"
+msgstr "Arrastra y suelta o haz clic para seleccionar archivos"
+
+#: inventory/templates/inventory/subcategory_confirm_delete.html:6
+msgid "Delete Subcategory"
+msgstr "Eliminar Subcategoría"
+
+#: inventory/templates/inventory/subcategory_confirm_delete.html:9
+msgid "Are you sure you want to delete the subcategory"
+msgstr "¿Estás seguro de que quieres eliminar la subcategoría"
+
+#: inventory/templates/inventory/subcategory_confirm_delete.html:9
+msgid "This action cannot be undone."
+msgstr "Esta acción no se puede deshacer."
+
+#: inventory/templates/inventory/warehouse_confirm_delete.html:6
+msgid "Delete Warehouse"
+msgstr "Eliminar Almacén"
+
+#: inventory/templates/inventory/warehouse_confirm_delete.html:7
+msgid "Are you sure you want to delete this warehouse?"
+msgstr "¿Estás seguro de que quieres eliminar este almacén?"
+
+#: inventory/views/brands.py:77
+msgid "No tienes permisos para crear marcas."
+msgstr "No tienes permisos para crear marcas."
+
+#: inventory/views/brands.py:80
+msgid "El nombre es obligatorio."
+msgstr "El nombre es obligatorio."
+
+#: inventory/views/brands.py:82
+msgid "Ya existe una marca con ese nombre."
+msgstr "Ya existe una marca con ese nombre."
+
+#: tiendanube/models.py:16
+msgid "Auto Sync"
+msgstr "Sincronización Automática"
+
+#: tiendanube/models.py:17
+msgid "Sync Interval"
+msgstr "Intervalo de Sincronización"
+
+#: tiendanube/models.py:17
+msgid "Interval in minutes for auto-sync."
+msgstr "Intervalo en minutos para sincronización automática."
+
+#: tiendanube/models.py:18
+msgid "Last Sync"
+msgstr "Última Sincronización"
+
+#: tiendanube/models.py:19
+msgid "Sync Products"
+msgstr "Sincronizar Productos"
+
+#: tiendanube/models.py:20 tiendanube/models.py:88
+msgid "Sync Stock"
+msgstr "Sincronizar Stock"
+
+#: tiendanube/models.py:21
+msgid "Sync Variants"
+msgstr "Sincronizar Variantes"
+
+#: tiendanube/models.py:23
+msgid "Webhook Active"
+msgstr "Webhook Activo"
+
+#: tiendanube/models.py:27
+msgid "TiendaNube Configuration"
+msgstr "Configuración de TiendaNube"
+
+#: tiendanube/models.py:28
+msgid "TiendaNube Configurations"
+msgstr "Configuraciones de TiendaNube"
+
+#: tiendanube/models.py:44
+msgid "Stock"
+msgstr "Stock"
+
+#: tiendanube/models.py:45
+msgid "Variant"
+msgstr "Variante"
+
+#: tiendanube/models.py:46
+msgid "Webhook"
+msgstr "Webhook"
+
+#: tiendanube/models.py:47
+msgid "Full Sync"
+msgstr "Sincronización Completa"
+
+#: tiendanube/models.py:49
+msgid "Success"
+msgstr "Éxito"
+
+#: tiendanube/models.py:50 tiendanube/models.py:78
+msgid "Error"
+msgstr "Error"
+
+#: tiendanube/models.py:51
+msgid "Partial"
+msgstr "Parcial"
+
+#: tiendanube/models.py:53
+msgid "Sync Type"
+msgstr "Tipo de Sincronización"
+
+#: tiendanube/models.py:55
+msgid "Message"
+msgstr "Mensaje"
+
+#: tiendanube/models.py:64
+msgid "TiendaNube Sync Log"
+msgstr "Registro de Sincronización de TiendaNube"
+
+#: tiendanube/models.py:65
+msgid "TiendaNube Sync Logs"
+msgstr "Registros de Sincronización de TiendaNube"
+
+#: tiendanube/models.py:76
+msgid "Synced"
+msgstr "Sincronizado"
+
+#: tiendanube/models.py:77
+msgid "Pending"
+msgstr "Pendiente"
+
+#: tiendanube/models.py:79
+msgid "Conflict"
+msgstr "Conflicto"
+
+#: tiendanube/models.py:85
+msgid "Sync Status"
+msgstr "Estado de Sincronización"
+
+#: tiendanube/models.py:86
+msgid "Sync Enabled"
+msgstr "Sincronización Habilitada"
+
+#: tiendanube/models.py:87
+msgid "Sync Price"
+msgstr "Sincronizar Precio"
+
+#: tiendanube/models.py:89
+msgid "Sync Description"
+msgstr "Sincronizar Descripción"
+
+#: tiendanube/models.py:92
+msgid "TiendaNube Product Mapping"
+msgstr "Mapeo de Productos de TiendaNube"
+
+#: tiendanube/models.py:93
+msgid "TiendaNube Product Mappings"
+msgstr "Mapeos de Productos de TiendaNube"

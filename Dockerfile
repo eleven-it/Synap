@@ -16,7 +16,8 @@ RUN node -v && npm -v
 RUN apt-get update && apt-get install -y \
     gcc \
     default-libmysqlclient-dev \
-    python3-dev
+    python3-dev \
+    gettext
 
 # Actualizar certificados de CA del sistema operativo
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates

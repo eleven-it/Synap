@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.conf import settings
 from typing import Dict, List, Set, Optional, Any
 import json
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 MODULOS_MENU = [
     {
-        "nombre": "Dashboard",
+        "nombre": _("Dashboard"),
         "permiso": "usuarios.dashboard",
         "url": "/dashboard/",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
@@ -41,7 +42,7 @@ MODULOS_MENU = [
     #     "orden": 3
     # },
     {
-        "nombre": "Inventory",
+        "nombre": _("Inventory"),
         "permiso": "inventory.ver",
         "url": "/inventory/dashboard/",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
@@ -86,7 +87,7 @@ MODULOS_MENU = [
     #     "orden": 8
     # },
     {
-        "nombre": "Ajustes",
+        "nombre": _("Settings"),
         "permiso": "usuarios.dashboard",
         "url": "/core/dashboard/",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
@@ -96,7 +97,7 @@ MODULOS_MENU = [
         "orden": 9
     },
     {
-        "nombre": "TiendaNube",
+        "nombre": _("TiendaNube"),
         "permiso": "tiendanube.access",
         "url": "/tiendanube/",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M17.5 19a4.5 4.5 0 100-9 5.5 5.5 0 00-10.9 1.5A4.5 4.5 0 006.5 19h11z'/></svg>""",
@@ -105,59 +106,59 @@ MODULOS_MENU = [
 ]
 
 ADMIN_SIDEBAR_MENU = {
-    "Acceso Rápido": [
+    _( "Quick Access" ): [
         {
-            "label": "Dashboard",
+            "label": _( "Dashboard" ),
             "url_name": "core:dashboard",
             "icon": "dashboard",
             "permission": "usuarios.dashboard"
         }
     ],
-    "Gestión de Acceso": [
+    _( "Access Management" ): [
         {
-            "label": "Usuarios",
+            "label": _( "Users" ),
             "url_name": "core:usuarios",
             "icon": "group",
             "permission": "usuarios.ver"
         },
         {
-            "label": "Roles",
+            "label": _( "Roles" ),
             "url_name": "core:listar_roles",
             "icon": "admin_panel_settings",
             "permission": "usuarios.roles.ver"
         },
         {
-            "label": "Permisos",
+            "label": _( "Permissions" ),
             "url_name": "core:listar_permisos",
             "icon": "vpn_key",
             "permission": "usuarios.permisos.ver"
         }
     ],
-    "Configuración General": [
+    _( "General Configuration" ): [
         {
-            "label": "Unidades de Medida",
+            "label": _( "Units of Measure" ),
             "url_name": "core:uom_list",
             "icon": "straighten",
             "permission": "configuracion.uom"
         }
     ],
-    "Configuración Financiera": [
+    _( "Financial Configuration" ): [
         {
-            "label": "Monedas",
+            "label": _( "Currencies" ),
             "url_name": "core:currency_list",
             "icon": "payments",
             "permission": "configuracion.moneda"
         },
         {
-            "label": "Tipos de Cambio",
+            "label": _( "Exchange Rates" ),
             "url_name": "core:exchange_rate_list",
             "icon": "currency_exchange",
             "permission": "configuracion.moneda"
         }
     ],
-    "Configuración del Sistema": [
+    _( "System Configuration" ): [
         {
-            "label": "Configuración",
+            "label": _( "Configuration" ),
             "url_name": "core:system_config_list",
             "icon": "settings",
             "permission": "configuracion.sistema"
@@ -166,29 +167,29 @@ ADMIN_SIDEBAR_MENU = {
 }
 
 INVENTORY_SIDEBAR_MENU = {
-    "Principal": [
+    _( "Main" ): [
         {
-            "label": "Dashboard",
+            "label": _( "Dashboard" ),
             "url_name": "inventory:stock_dashboard",
             "icon": "dashboard",
             "permission": "inventory.ver"
         },
         {
-            "label": "Products",
+            "label": _( "Products" ),
             "url_name": "inventory:product_list",
             "icon": "inventory",
             "permission": "inventory.ver_product"
         }
     ],
-    "Gestión de Stock": [
+    _( "Stock Management" ): [
         {
-            "label": "Warehouses",
+            "label": _( "Warehouses" ),
             "url_name": "inventory:warehouse_list",
             "icon": "warehouse",
             "permission": "inventory.ver_warehouse"
         },
         {
-            "label": "Locations",
+            "label": _( "Locations" ),
             "url_name": "inventory:location_list",
             "icon": "location_on",
             "permission": "inventory.ver_location"

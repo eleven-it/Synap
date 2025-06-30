@@ -1,4 +1,5 @@
 from decimal import Decimal
+from django.utils.translation import gettext_lazy as _
 
 def convert_qty(qty: Decimal, from_uom, to_uom):
     """
@@ -9,7 +10,7 @@ def convert_qty(qty: Decimal, from_uom, to_uom):
     :return: cantidad convertida
     """
     if from_uom.category != to_uom.category:
-        raise ValueError("Las unidades no pertenecen a la misma categoría")
+        raise ValueError(_("Units do not belong to the same category"))
 
     return qty * (from_uom.ratio / to_uom.ratio)
 

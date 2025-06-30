@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.urls import reverse_lazy
 from ..models import SystemConfiguration
 from ..forms import SystemConfigurationForm
+from django.utils.translation import gettext_lazy as _
 
 class SystemConfigurationListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = SystemConfiguration
@@ -20,7 +21,7 @@ class SystemConfigurationCreateView(LoginRequiredMixin, PermissionRequiredMixin,
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Crear Configuración"
+        context['titulo'] = _("Create Configuration")
         return context
 
 class SystemConfigurationUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -32,7 +33,7 @@ class SystemConfigurationUpdateView(LoginRequiredMixin, PermissionRequiredMixin,
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Editar Configuración"
+        context['titulo'] = _("Edit Configuration")
         return context
 
 class SystemConfigurationDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -43,5 +44,5 @@ class SystemConfigurationDeleteView(LoginRequiredMixin, PermissionRequiredMixin,
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Confirmar Eliminación de Configuración"
+        context['titulo'] = _("Confirm Configuration Deletion")
         return context 

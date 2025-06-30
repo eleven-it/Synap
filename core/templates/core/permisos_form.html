@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% load i18n %}
 {% block content %}
 <div class="flex">
   {% include "core/partials/menu_lateral.html" %}
   <div class="flex-1 pl-56">
     <div class="max-w-xl mx-auto py-10 px-4">
       <h1 class="text-2xl font-bold text-gray-800 mb-6">
-        {% if editar %}✏️ Editar Permiso{% else %}➕ Crear Nuevo Permiso{% endif %}
+        {% if editar %}✏️ {% trans "Edit Permission" %}{% else %}➕ {% trans "Create New Permission" %}{% endif %}
       </h1>
 
       {% if messages %}
@@ -21,24 +22,24 @@
       <form method="post" class="bg-white p-6 rounded-lg shadow-md space-y-4">
         {% csrf_token %}
         <div>
-          <label for="codigo" class="block text-sm font-medium text-gray-700">Código del Permiso</label>
+          <label for="codigo" class="block text-sm font-medium text-gray-700">{% trans "Permission Code" %}</label>
           <input type="text" name="codigo" id="codigo" value="{{ permiso.codigo|default:'' }}" 
                  class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
                  required {% if editar %}readonly{% endif %}>
           {% if editar %}
-          <p class="text-xs text-gray-500 mt-1">El código no se puede modificar.</p>
+          <p class="text-xs text-gray-500 mt-1">{% trans "The code cannot be modified." %}</p>
           {% endif %}
         </div>
         <div>
-          <label for="nombre" class="block text-sm font-medium text-gray-700">Nombre Descriptivo</label>
+          <label for="nombre" class="block text-sm font-medium text-gray-700">{% trans "Descriptive Name" %}</label>
           <input type="text" name="nombre" id="nombre" value="{{ permiso.nombre|default:'' }}"
                  class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
                  required>
         </div>
         <div class="text-right">
-          <a href="{% url 'core:listar_permisos' %}" class="text-gray-600 mr-4">Cancelar</a>
+          <a href="{% url 'core:listar_permisos' %}" class="text-gray-600 mr-4">{% trans "Cancel" %}</a>
           <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
-            Guardar
+            {% trans "Save" %}
           </button>
         </div>
       </form>

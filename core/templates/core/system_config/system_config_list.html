@@ -1,12 +1,13 @@
 {% extends "core/admin_base.html" %}
+{% load i18n %}
 
 {% block admin_content %}
 <div class="bg-white p-6 rounded-lg shadow-md">
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-semibold text-gray-800">Configuración del Sistema</h1>
+        <h1 class="text-2xl font-semibold text-gray-800">{% trans "System Configuration" %}</h1>
         <a href="{% url 'core:system_config_create' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
             <span class="material-icons mr-2">add</span>
-            Crear Configuración
+            {% trans "Create Configuration" %}
         </a>
     </div>
 
@@ -14,11 +15,11 @@
         <table class="min-w-full text-sm text-gray-900">
             <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b">
                 <tr>
-                    <th class="px-4 py-3">Clave</th>
-                    <th class="px-4 py-3">Valor</th>
-                    <th class="px-4 py-3">Descripción</th>
-                    <th class="px-4 py-3 text-center">Estado</th>
-                    <th class="px-4 py-3 text-center">Acciones</th>
+                    <th class="px-4 py-3">{% trans "Key" %}</th>
+                    <th class="px-4 py-3">{% trans "Value" %}</th>
+                    <th class="px-4 py-3">{% trans "Description" %}</th>
+                    <th class="px-4 py-3 text-center">{% trans "Status" %}</th>
+                    <th class="px-4 py-3 text-center">{% trans "Actions" %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,22 +33,22 @@
                     </td>
                     <td class="px-4 py-2">
                         <div class="max-w-xs truncate" title="{{ config.description }}">
-                            {{ config.description|default:"-" }}
+                            {{ config.description|default:_('-') }}
                         </div>
                     </td>
                     <td class="px-4 py-2 text-center">
                         {% if config.is_active %}
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Activa</span>
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">{% trans "Active" %}</span>
                         {% else %}
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactiva</span>
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">{% trans "Inactive" %}</span>
                         {% endif %}
                     </td>
                     <td class="px-4 py-2 text-center">
                         <div class="flex justify-center space-x-2">
-                            <a href="{% url 'core:system_config_update' config.pk %}" class="text-blue-500 hover:text-blue-700" title="Editar">
+                            <a href="{% url 'core:system_config_update' config.pk %}" class="text-blue-500 hover:text-blue-700" title="{% trans 'Edit' %}">
                                 <span class="material-icons">edit</span>
                             </a>
-                            <a href="{% url 'core:system_config_delete' config.pk %}" class="text-red-500 hover:text-red-700" title="Eliminar">
+                            <a href="{% url 'core:system_config_delete' config.pk %}" class="text-red-500 hover:text-red-700" title="{% trans 'Delete' %}">
                                 <span class="material-icons">delete</span>
                             </a>
                         </div>
@@ -55,7 +56,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center p-6 text-gray-500">No hay configuraciones registradas.</td>
+                    <td colspan="5" class="text-center p-6 text-gray-500">{% trans "No configurations registered." %}</td>
                 </tr>
                 {% endfor %}
             </tbody>

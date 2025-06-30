@@ -2,18 +2,19 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.core.cache import cache
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class Permiso(models.Model):
     codigo = models.CharField(max_length=50, unique=True, db_index=True)
     nombre = models.CharField(max_length=100)
-    descripcion = models.TextField(blank=True, help_text="Descripción detallada del permiso")
-    modulo = models.CharField(max_length=50, blank=True, help_text="Módulo al que pertenece")
+    descripcion = models.TextField(blank=True, help_text=_("Detailed description of the permission"))
+    modulo = models.CharField(max_length=50, blank=True, help_text=_("Module to which it belongs"))
     activo = models.BooleanField(default=True)
 
     class Meta:
-        verbose_name = "Permiso"
-        verbose_name_plural = "Permisos"
+        verbose_name = _("Permission")
+        verbose_name_plural = _("Permissions")
         ordering = ['modulo', 'codigo']
 
     def __str__(self):
@@ -29,8 +30,8 @@ class Rol(models.Model):
     fecha_modificacion = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Rol"
-        verbose_name_plural = "Roles"
+        verbose_name = _("Role")
+        verbose_name_plural = _("Roles")
         ordering = ['nombre']
 
     def __str__(self):
@@ -84,7 +85,7 @@ class UsuarioExtendido(AbstractBaseUser, PermissionsMixin):
     nombre = models.CharField(max_length=100, blank=True)
     idioma = models.CharField(
         max_length=10,
-        choices=[("es", "Español"), ("en", "Inglés"), ("pt", "Portugués")],
+        choices=[("es", _( "Spanish")), ("en", _( "English")), ("pt", _( "Portuguese"))],
         default="es"
     )
     roles = models.ManyToManyField(Rol, blank=True)
@@ -109,8 +110,8 @@ class UsuarioExtendido(AbstractBaseUser, PermissionsMixin):
     objects = UsuarioManager()
 
     class Meta:
-        verbose_name = "Usuario Extendido"
-        verbose_name_plural = "Usuarios Extendidos"
+        verbose_name = _("Extended User")
+        verbose_name_plural = _("Extended Users")
         ordering = ['email']
 
     def is_admin(self):

@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from core.models import Rol, Permiso
 from core.decorators import tiene_permiso
+from django.utils.translation import gettext_lazy as _
 
 @login_required
 @tiene_permiso("usuarios.roles.ver")
@@ -24,18 +25,18 @@ def crear_editar_rol_view(request, rol_id=None):
         permisos_ids = request.POST.getlist("permisos")
 
         if not nombre:
-            messages.error(request, "El nombre del rol es obligatorio.")
+            messages.error(request, _("Role name is required."))
         elif not permisos_ids:
-            messages.error(request, "Debes seleccionar al menos un permiso.")
+            messages.error(request, _("You must select at least one permission."))
         else:
             if rol:
                 rol.nombre = nombre
                 rol.descripcion = descripcion
                 rol.save()
-                messages.success(request, "Rol actualizado correctamente.")
+                messages.success(request, _("Role updated successfully."))
             else:
                 rol = Rol.objects.create(nombre=nombre, descripcion=descripcion)
-                messages.success(request, "Rol creado correctamente.")
+                messages.success(request, _("Role created successfully."))
 
             permisos = Permiso.objects.filter(id__in=permisos_ids)
             rol.permisos.set(permisos)
@@ -59,8 +60,8 @@ def crear_editar_rol_view(request, rol_id=None):
 def eliminar_rol_view(request, rol_id):
     rol = get_object_or_404(Rol, id=rol_id)
     if rol.nombre.lower() == "administrador":
-        messages.error(request, "No se puede eliminar el rol de Administrador.")
+        messages.error(request, _("Cannot delete the Administrator role."))
     else:
         rol.delete()
-        messages.success(request, f"Rol '{rol.nombre}' eliminado correctamente.")
+        messages.success(request, _("Role '%(name)s' deleted successfully.") % {'name': rol.nombre})
     return redirect("core:listar_roles")

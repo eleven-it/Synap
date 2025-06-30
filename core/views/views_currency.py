@@ -3,6 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from django.urls import reverse_lazy
 from ..models import Currency, ExchangeRate
 from ..forms import CurrencyForm, ExchangeRateForm
+from django.utils.translation import gettext_lazy as _
 
 class CurrencyListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Currency
@@ -20,7 +21,7 @@ class CurrencyCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Crear Moneda"
+        context['titulo'] = _("Create Currency")
         return context
 
 class CurrencyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -32,7 +33,7 @@ class CurrencyUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Editar Moneda"
+        context['titulo'] = _("Edit Currency")
         return context
 
 class CurrencyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -43,7 +44,7 @@ class CurrencyDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Confirmar Eliminación de Moneda"
+        context['titulo'] = _("Confirm Currency Deletion")
         return context
 
 # Vistas para ExchangeRate
@@ -67,7 +68,7 @@ class ExchangeRateCreateView(LoginRequiredMixin, PermissionRequiredMixin, Create
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Crear Tipo de Cambio"
+        context['titulo'] = _("Create Exchange Rate")
         return context
 
 class ExchangeRateUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
@@ -79,7 +80,7 @@ class ExchangeRateUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Update
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Editar Tipo de Cambio"
+        context['titulo'] = _("Edit Exchange Rate")
         return context
 
 class ExchangeRateDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -90,5 +91,5 @@ class ExchangeRateDeleteView(LoginRequiredMixin, PermissionRequiredMixin, Delete
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['titulo'] = "Confirmar Eliminación de Tipo de Cambio"
+        context['titulo'] = _("Confirm Exchange Rate Deletion")
         return context 
