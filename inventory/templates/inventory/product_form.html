@@ -279,7 +279,7 @@ function onBrandInput() {
             html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
         });
         if (!foundExact) {
-            html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' onclick='createBrandFromInput()'>Crear "${q}"</div>`;
+            html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' onclick='createBrandFromInput()'>Crear \"${q}\"</div>`;
         }
         dropdown.innerHTML = html;
         dropdown.classList.remove('hidden');
@@ -316,6 +316,37 @@ window.addEventListener('click', function(e) {
     const drop = document.getElementById('brand_dropdown');
     if (!box.contains(e.target) && !drop.contains(e.target)) {
         drop.classList.add('hidden');
+    }
+});
+// Prevenir que Enter en el input de marca envíe el form principal si el dropdown está abierto
+const brandInput = document.getElementById('brand_combobox');
+if (brandInput) {
+    brandInput.addEventListener('keydown', function(e) {
+        const dropdown = document.getElementById('brand_dropdown');
+        if (e.key === 'Enter' && dropdown && !dropdown.classList.contains('hidden')) {
+            e.preventDefault();
+            // Si hay sugerencias, selecciona la primera
+            const first = dropdown.querySelector('div');
+            if (first) {
+                first.click();
+            }
+        }
+    });
+}
+// Al cargar el formulario, si hay brand_id, buscar el nombre y mostrarlo
+window.addEventListener('DOMContentLoaded', async function() {
+    const brandId = document.getElementById('brand_id')?.value;
+    const brandInput = document.getElementById('brand_combobox');
+    if (brandId && brandInput && !brandInput.value) {
+        // Buscar el nombre de la marca por id
+        const res = await fetch('/inventory/api/brands/search/?q=');
+        const data = await res.json();
+        const found = data.results.find(b => b.id == brandId);
+        if (found) {
+            brandInput.value = found.name;
+        } else {
+            // Si no está en los primeros resultados, buscar por id específico (requiere endpoint extra si hay muchas marcas)
+        }
     }
 });
 // Utilidad para CSRF
