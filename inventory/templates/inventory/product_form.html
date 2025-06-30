@@ -476,7 +476,7 @@ function onCategoryInput(forceShow = false) {
             lastCategoryResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((c, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
                     lastCategoryResults.push(c);
                     optionsCount++;
                 });
@@ -486,7 +486,7 @@ function onCategoryInput(forceShow = false) {
                     html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras categorías</div>`;
                 }
                 data.others.forEach((c, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name}</div>`;
                     lastCategoryResults.push(c);
                     optionsCount++;
                 });
@@ -496,7 +496,7 @@ function onCategoryInput(forceShow = false) {
             const data = await res.json();
             lastCategoryResults = data.results || [];
             lastCategoryResults.forEach((c, idx) => {
-                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name}</div>`;
             });
             let foundExact = lastCategoryResults.some(c => c.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
@@ -527,7 +527,6 @@ function selectCategory(id, name) {
     document.getElementById('category_id').value = id;
     document.getElementById('category_dropdown').classList.add('hidden');
     categoryDropdownIndex = -1;
-    // Opcional: recargar subcategorías
     if (typeof loadSubcategories === 'function') loadSubcategories(id);
 }
 async function createCategoryFromInput() {
@@ -589,6 +588,45 @@ if (categoryInput) {
         }
     });
 }
+window.addEventListener('DOMContentLoaded', async function() {
+    // --- Marca ---
+    const brandId = document.getElementById('brand_id')?.value;
+    const brandInput = document.getElementById('brand_combobox');
+    if (brandId && brandInput && !brandInput.value) {
+        const res = await fetch('/inventory/api/brands/search/?q=');
+        const data = await res.json();
+        const allBrands = (data.top || []).concat(data.others || []);
+        const found = allBrands.find(b => b.id == brandId);
+        if (found) {
+            brandInput.value = found.name;
+        }
+    }
+    // --- Categoría ---
+    const categoryId = document.getElementById('category_id')?.value;
+    const categoryInput = document.getElementById('category_combobox');
+    if (categoryId && categoryInput && !categoryInput.value) {
+        const res = await fetch('/inventory/api/categories/search/?q=');
+        const data = await res.json();
+        const allCats = (data.top || []).concat(data.others || []);
+        const found = allCats.find(c => c.id == categoryId);
+        if (found) {
+            categoryInput.value = found.name;
+        }
+    }
+    // --- Subcategoría ---
+    const subcategoryId = document.getElementById('subcategory_id')?.value;
+    const subcategoryInput = document.getElementById('subcategory_combobox');
+    const categoryIdForSub = document.getElementById('category_id')?.value;
+    if (subcategoryId && subcategoryInput && !subcategoryInput.value && categoryIdForSub) {
+        const res = await fetch(`/inventory/api/subcategories/search/?category_id=${categoryIdForSub}`);
+        const data = await res.json();
+        const allSubs = (data.top || []).concat(data.others || []);
+        const found = allSubs.find(s => s.id == subcategoryId);
+        if (found) {
+            subcategoryInput.value = found.name;
+        }
+    }
+});
 
 // --- Subcategory Combobox ---
 let subcategoryTimeout = null;
@@ -616,7 +654,7 @@ function onSubcategoryInput(forceShow = false) {
             lastSubcategoryResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((s, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
                     lastSubcategoryResults.push(s);
                     optionsCount++;
                 });
@@ -626,7 +664,7 @@ function onSubcategoryInput(forceShow = false) {
                     html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras subcategorías</div>`;
                 }
                 data.others.forEach((s, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
                     lastSubcategoryResults.push(s);
                     optionsCount++;
                 });
@@ -636,7 +674,7 @@ function onSubcategoryInput(forceShow = false) {
             const data = await res.json();
             lastSubcategoryResults = data.results || [];
             lastSubcategoryResults.forEach((s, idx) => {
-                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
             });
             let foundExact = lastSubcategoryResults.some(s => s.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
