@@ -1,8 +1,9 @@
 {% extends "inventory/inventory_base.html" %}
+{% load i18n %}
 {% block inventory_content %}
 <div class="bg-white p-6 rounded-lg shadow-md">
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-semibold text-gray-800">Subcategories</h1>
+        <h1 class="text-2xl font-semibold text-gray-800">{% trans "Subcategories" %}</h1>
         {% if perms.inventory.add_subcategory %}
         <a href="{% url 'inventory:subcategory_create' %}" class="btn-primary">
             <span class="material-icons mr-2">add</span>
@@ -15,10 +16,10 @@
         <table class="min-w-full text-sm text-gray-900">
             <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b">
                 <tr>
-                    <th class="px-4 py-3">Name</th>
-                    <th class="px-4 py-3">Parent Category</th>
-                    <th class="px-4 py-3 text-center">Active</th>
-                    <th class="px-4 py-3 text-center">Actions</th>
+                    <th class="px-4 py-3">{% trans "Name" %}</th>
+                    <th class="px-4 py-3">{% trans "Category" %}</th>
+                    <th class="px-4 py-3 text-center">{% trans "Active" %}</th>
+                    <th class="px-4 py-3 text-center">{% trans "Actions" %}</th>
                 </tr>
             </thead>
             <tbody>

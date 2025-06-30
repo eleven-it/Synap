@@ -123,8 +123,9 @@ class Product(models.Model):
     sku = models.CharField(_("SKU"), max_length=100, unique=True)
     description = models.TextField(_("Description"), blank=True)
 
-    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Brand"))
-    subcategory = models.ForeignKey(Subcategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Subcategory"))
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Category'))
+    brand = models.ForeignKey('Brand', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Brand'))
+    subcategory = models.ForeignKey('Subcategory', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Subcategory'))
     image = models.ImageField(_("Image"), upload_to='products/', null=True, blank=True)
 
     handle = models.SlugField(_("Handle (URL)"), max_length=255, unique=True)

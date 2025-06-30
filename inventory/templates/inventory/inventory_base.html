@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load i18n %}
 
 {% block body_content %}
 <div x-data="{ sidebarOpen: true, commandPaletteOpen: false, openMenu: false, openUserMenu: false }"
@@ -28,4 +29,6 @@
 
 {% block extra_js %}
     {% block inventory_extra_js %}{% endblock inventory_extra_js %}
-{% endblock extra_js %} 
+{% endblock extra_js %}
+
+<title>{% trans "Inventory" %}</title> 

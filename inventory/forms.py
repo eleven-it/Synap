@@ -1,11 +1,12 @@
 from django import forms
 from .models import Product, Brand, Category, Subcategory, InitialStockDraft, InitialStockDraftItem, Warehouse, Location
+from django.utils.translation import gettext_lazy as _
 
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            'name', 'sku', 'description', 'brand', 'subcategory', 'image',
+            'name', 'sku', 'description', 'category', 'brand', 'subcategory', 'image',
             'handle', 'price', 'price_currency', 'uom', 'tracking',
             'is_published'
         ]
@@ -13,6 +14,7 @@ class ProductForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-input'}),
             'sku': forms.TextInput(attrs={'class': 'form-input'}),
             'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 4}),
+            'category': forms.Select(attrs={'class': 'form-select'}),
             'brand': forms.Select(attrs={'class': 'form-select'}),
             'subcategory': forms.Select(attrs={'class': 'form-select'}),
             'image': forms.ClearableFileInput(attrs={'class': 'form-input'}),
@@ -36,6 +38,14 @@ class ProductForm(forms.ModelForm):
                 pass
         elif self.instance.pk and self.instance.subcategory:
             self.fields['subcategory'].queryset = self.instance.subcategory.category.subcategories.order_by('name')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        category = cleaned_data.get('category')
+        subcategory = cleaned_data.get('subcategory')
+        if subcategory and category and subcategory.category != category:
+            self.add_error('subcategory', _('La subcategoría seleccionada no pertenece al rubro seleccionado.'))
+        return cleaned_data
 
 class InitialStockDraftForm(forms.ModelForm):
     almacen = forms.ModelChoiceField(
