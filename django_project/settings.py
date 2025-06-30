@@ -153,7 +153,7 @@ AUTHENTICATION_BACKENDS = (
 )
 
 
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/core/dashboard/'
 
 # Firebase
 FIREBASE_CONFIG = {
@@ -184,6 +184,9 @@ REST_FRAMEWORK = {
 }
 
 CSRF_COOKIE_HTTPONLY = False
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://synap.administranet.com.ar"
 
 AUTH_USER_MODEL = 'core.UsuarioExtendido'
 

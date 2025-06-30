@@ -20,8 +20,10 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
 from core.views import error_403_view
+from django.shortcuts import redirect
 
 urlpatterns = [
+    path('', lambda request: redirect('/core/dashboard/')),  # Redirección raíz
     path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
     path("admin/", admin.site.urls),
     path("login/", include("login.urls")),  
