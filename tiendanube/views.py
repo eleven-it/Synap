@@ -122,6 +122,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
         context['step'] = session.get('wizard_step', 1)
         context['scopes'] = session.get('wizard_scopes', ['read_products', 'write_products'])
         context['redirect_uri'] = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
+        context['redirect_uri'] = context['redirect_uri'].replace('http://', 'https://')
         if context['step'] == 4:
             context['code'] = session.get('wizard_code')
             context['state'] = session.get('wizard_state')
@@ -170,6 +171,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             app_id = context['app_id']
             scopes = context['scopes']
             redirect_uri = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
+            redirect_uri = redirect_uri.replace('http://', 'https://')
             scope_str = ','.join(scopes)
             state = 'synap-' + self.request.session.session_key
             auth_url = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&scope={scope_str}&redirect_uri={redirect_uri}&state={state}"
@@ -200,6 +202,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             client_secret = session.get('wizard_client_secret')
             code = session.get('wizard_code')
             redirect_uri = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
+            redirect_uri = redirect_uri.replace('http://', 'https://')
             data = {
                 'client_id': app_id,
                 'client_secret': client_secret,
