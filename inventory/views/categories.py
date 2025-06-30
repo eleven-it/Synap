@@ -1,7 +1,8 @@
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
+from django.core.exceptions import PermissionDenied
 from ..models import Category
 
 class CategoryListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -26,6 +27,12 @@ class CategoryCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
         context = super().get_context_data(**kwargs)
         context['title'] = "Create Category"
         return context
+
+    def dispatch(self, request, *args, **kwargs):
+        # Si no está autenticado o no tiene permisos, devolver JSON si es modal
+        if (request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('modal') == '1') and (not request.user.is_authenticated or not request.user.has_perm('inventory.add_category')):
+            return JsonResponse({'success': False, 'error': 'No tienes permisos para crear categorías.'}, status=403)
+        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -55,6 +62,11 @@ class CategoryUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView
         context = super().get_context_data(**kwargs)
         context['title'] = "Edit Category"
         return context
+
+    def dispatch(self, request, *args, **kwargs):
+        if (request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('modal') == '1') and (not request.user.is_authenticated or not request.user.has_perm('inventory.change_category')):
+            return JsonResponse({'success': False, 'error': 'No tienes permisos para editar categorías.'}, status=403)
+        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
         response = super().form_valid(form)
