@@ -187,7 +187,7 @@ CSRF_COOKIE_HTTPONLY = False
 
 CSRF_TRUSTED_ORIGINS = [
     "https://synap.administranet.com.ar"
-
+]
 AUTH_USER_MODEL = 'core.UsuarioExtendido'
 
 LOGGING = {
