@@ -59,8 +59,19 @@ MIDDLEWARE = [
     'core.middleware.IdiomaUsuarioMiddleware',  
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_project.settings.custom_ajax_login_required',
 ]
 
+# Middleware para AJAX login
+
+def custom_ajax_login_required(get_response):
+    def middleware(request):
+        response = get_response(request)
+        if response.status_code == 302 and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            from django.http import JsonResponse
+            return JsonResponse({'success': False, 'error': 'No autenticado'}, status=401)
+        return response
+    return middleware
 
 HANDLER403 = "core.views.error_403_view"
 
