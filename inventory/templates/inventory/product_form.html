@@ -36,30 +36,22 @@
                 </div>
                 <!-- Organization -->
                 <div>
-                    <label for="category" class="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-2">
-                        Category
-                        <button type="button" onclick="openEntityModal('{% url 'inventory:category_create' %}?modal=1', 'category')" title="Crear nueva categoría" class="ml-1 text-purple-600 hover:text-purple-800 transition" tabindex="-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                        </button>
-                        <button type="button" onclick="if(document.getElementById('category').value) openEntityModal('/inventory/categories/' + document.getElementById('category').value + '/edit/?modal=1', 'category')" title="Editar categoría seleccionada" class="ml-1 text-gray-500 hover:text-purple-700 transition" tabindex="-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536M9 11l6 6M3 21h6a2 2 0 002-2v-6a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                            </svg>
-                        </button>
-                    </label>
-                    <select id="category" name="category" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm" @change="loadSubcategories($event.target.value)">
-                        <option value="">Select a category...</option>
-                        {% for category in categories %}
-                            <option value="{{ category.id }}" {% if form.instance.subcategory.category.id == category.id %}selected{% endif %}>{{ category.name }}</option>
-                        {% endfor %}
-                    </select>
+                    <label for="category_combobox" class="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+                    <div class="relative">
+                        <input type="text" id="category_combobox" name="category_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a category..." oninput="onCategoryInput()" onfocus="onCategoryInput()" />
+                        <input type="hidden" id="category_id" name="category" value="{{ form.instance.subcategory.category.id|default:'' }}" />
+                        <div id="category_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                    </div>
+                    <p id="category_error" class="text-red-500 text-xs mt-1 hidden"></p>
                 </div>
                 <div>
-                    <label for="{{ form.subcategory.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">Subcategory</label>
-                    {{ form.subcategory|add_class:"mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm" }}
-                    {% if form.subcategory.errors %}<p class="text-red-500 text-xs mt-1">{{ form.subcategory.errors|first }}</p>{% endif %}
+                    <label for="subcategory_combobox" class="block text-xs font-semibold text-gray-700 mb-1">Subcategory</label>
+                    <div class="relative">
+                        <input type="text" id="subcategory_combobox" name="subcategory_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a subcategory..." oninput="onSubcategoryInput()" onfocus="onSubcategoryInput()" />
+                        <input type="hidden" id="subcategory_id" name="subcategory" value="{{ form.subcategory.value|default:'' }}" />
+                        <div id="subcategory_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                    </div>
+                    <p id="subcategory_error" class="text-red-500 text-xs mt-1 hidden"></p>
                 </div>
                 <div>
                     <label for="brand_combobox" class="block text-xs font-semibold text-gray-700 mb-1">Brand</label>
@@ -381,14 +373,41 @@ if (brandInput) {
     });
 }
 window.addEventListener('DOMContentLoaded', async function() {
+    // --- Marca ---
     const brandId = document.getElementById('brand_id')?.value;
     const brandInput = document.getElementById('brand_combobox');
     if (brandId && brandInput && !brandInput.value) {
         const res = await fetch('/inventory/api/brands/search/?q=');
         const data = await res.json();
-        const found = data.results.find(b => b.id == brandId);
+        const allBrands = (data.top || []).concat(data.others || []);
+        const found = allBrands.find(b => b.id == brandId);
         if (found) {
             brandInput.value = found.name;
+        }
+    }
+    // --- Categoría ---
+    const categoryId = document.getElementById('category_id')?.value;
+    const categoryInput = document.getElementById('category_combobox');
+    if (categoryId && categoryInput && !categoryInput.value) {
+        const res = await fetch('/inventory/api/categories/search/?q=');
+        const data = await res.json();
+        const allCats = (data.top || []).concat(data.others || []);
+        const found = allCats.find(c => c.id == categoryId);
+        if (found) {
+            categoryInput.value = found.name;
+        }
+    }
+    // --- Subcategoría ---
+    const subcategoryId = document.getElementById('subcategory_id')?.value;
+    const subcategoryInput = document.getElementById('subcategory_combobox');
+    const categoryIdForSub = document.getElementById('category_id')?.value;
+    if (subcategoryId && subcategoryInput && !subcategoryInput.value && categoryIdForSub) {
+        const res = await fetch(`/inventory/api/subcategories/search/?category_id=${categoryIdForSub}`);
+        const data = await res.json();
+        const allSubs = (data.top || []).concat(data.others || []);
+        const found = allSubs.find(s => s.id == subcategoryId);
+        if (found) {
+            subcategoryInput.value = found.name;
         }
     }
 });
@@ -436,5 +455,272 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// --- Category Combobox ---
+let categoryTimeout = null;
+let lastCategoryResults = [];
+let categoryDropdownIndex = -1;
+function onCategoryInput() {
+    clearTimeout(categoryTimeout);
+    categoryTimeout = setTimeout(async () => {
+        const input = document.getElementById('category_combobox');
+        const dropdown = document.getElementById('category_dropdown');
+        const hiddenId = document.getElementById('category_id');
+        const error = document.getElementById('category_error');
+        const q = input.value.trim();
+        let html = '';
+        let optionsCount = 0;
+        if (!q) {
+            const res = await fetch('/inventory/api/categories/search/?q=');
+            const data = await res.json();
+            lastCategoryResults = [];
+            if (data.top && data.top.length) {
+                data.top.forEach((c, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    lastCategoryResults.push(c);
+                    optionsCount++;
+                });
+            }
+            if (data.others && data.others.length) {
+                if (optionsCount > 0) {
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras categorías</div>`;
+                }
+                data.others.forEach((c, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+                    lastCategoryResults.push(c);
+                    optionsCount++;
+                });
+            }
+        } else {
+            const res = await fetch('/inventory/api/categories/search/?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            lastCategoryResults = data.results || [];
+            lastCategoryResults.forEach((c, idx) => {
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+            });
+            let foundExact = lastCategoryResults.some(c => c.name.toLowerCase() === q.toLowerCase());
+            if (!foundExact) {
+                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastCategoryResults.length}' onclick='createCategoryFromInput()'>Crear \"${q}\"</div>`;
+            }
+        }
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+        error.classList.add('hidden');
+        categoryDropdownIndex = -1;
+        updateCategoryDropdownHighlight();
+    }, 200);
+}
+function updateCategoryDropdownHighlight() {
+    const dropdown = document.getElementById('category_dropdown');
+    if (!dropdown) return;
+    const options = dropdown.querySelectorAll('div');
+    options.forEach((opt, idx) => {
+        if (idx === categoryDropdownIndex) {
+            opt.classList.add('bg-purple-100');
+        } else {
+            opt.classList.remove('bg-purple-100');
+        }
+    });
+}
+function selectCategory(id, name) {
+    document.getElementById('category_combobox').value = name;
+    document.getElementById('category_id').value = id;
+    document.getElementById('category_dropdown').classList.add('hidden');
+    categoryDropdownIndex = -1;
+    // Opcional: recargar subcategorías
+    if (typeof loadSubcategories === 'function') loadSubcategories(id);
+}
+async function createCategoryFromInput() {
+    const input = document.getElementById('category_combobox');
+    const hiddenId = document.getElementById('category_id');
+    const error = document.getElementById('category_error');
+    const name = input.value.trim();
+    if (!name) return;
+    const res = await fetch('/inventory/api/categories/create/', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken')},
+        body: new URLSearchParams({name})
+    });
+    const data = await res.json();
+    if (data.success) {
+        selectCategory(data.id, data.name);
+    } else {
+        error.textContent = data.error || 'Error al crear la categoría';
+        error.classList.remove('hidden');
+    }
+}
+window.addEventListener('click', function(e) {
+    const box = document.getElementById('category_combobox');
+    const drop = document.getElementById('category_dropdown');
+    if (!box.contains(e.target) && !drop.contains(e.target)) {
+        drop.classList.add('hidden');
+        categoryDropdownIndex = -1;
+    }
+});
+const categoryInput = document.getElementById('category_combobox');
+if (categoryInput) {
+    categoryInput.addEventListener('keydown', function(e) {
+        const dropdown = document.getElementById('category_dropdown');
+        const options = dropdown ? dropdown.querySelectorAll('div') : [];
+        if (dropdown && !dropdown.classList.contains('hidden')) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (categoryDropdownIndex < options.length - 1) {
+                    categoryDropdownIndex++;
+                    updateCategoryDropdownHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (categoryDropdownIndex > 0) {
+                    categoryDropdownIndex--;
+                    updateCategoryDropdownHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (categoryDropdownIndex >= 0 && options[categoryDropdownIndex]) {
+                    options[categoryDropdownIndex].click();
+                } else if (options.length > 0) {
+                    options[0].click();
+                }
+            }
+        }
+    });
+}
+
+// --- Subcategory Combobox ---
+let subcategoryTimeout = null;
+let lastSubcategoryResults = [];
+let subcategoryDropdownIndex = -1;
+function onSubcategoryInput() {
+    clearTimeout(subcategoryTimeout);
+    subcategoryTimeout = setTimeout(async () => {
+        const input = document.getElementById('subcategory_combobox');
+        const dropdown = document.getElementById('subcategory_dropdown');
+        const hiddenId = document.getElementById('subcategory_id');
+        const error = document.getElementById('subcategory_error');
+        const q = input.value.trim();
+        const categoryId = document.getElementById('category_id')?.value;
+        if (!categoryId) {
+            dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400">Selecciona una categoría primero...</div>';
+            dropdown.classList.remove('hidden');
+            return;
+        }
+        let html = '';
+        let optionsCount = 0;
+        if (!q) {
+            const res = await fetch(`/inventory/api/subcategories/search/?category_id=${categoryId}`);
+            const data = await res.json();
+            lastSubcategoryResults = [];
+            if (data.top && data.top.length) {
+                data.top.forEach((s, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    lastSubcategoryResults.push(s);
+                    optionsCount++;
+                });
+            }
+            if (data.others && data.others.length) {
+                if (optionsCount > 0) {
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras subcategorías</div>`;
+                }
+                data.others.forEach((s, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
+                    lastSubcategoryResults.push(s);
+                    optionsCount++;
+                });
+            }
+        } else {
+            const res = await fetch(`/inventory/api/subcategories/search/?category_id=${categoryId}&q=` + encodeURIComponent(q));
+            const data = await res.json();
+            lastSubcategoryResults = data.results || [];
+            lastSubcategoryResults.forEach((s, idx) => {
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectSubcategory(${s.id}, \"${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
+            });
+            let foundExact = lastSubcategoryResults.some(s => s.name.toLowerCase() === q.toLowerCase());
+            if (!foundExact) {
+                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastSubcategoryResults.length}' onclick='createSubcategoryFromInput()'>Crear \"${q}\"</div>`;
+            }
+        }
+        dropdown.innerHTML = html;
+        dropdown.classList.remove('hidden');
+        error.classList.add('hidden');
+        subcategoryDropdownIndex = -1;
+        updateSubcategoryDropdownHighlight();
+    }, 200);
+}
+function updateSubcategoryDropdownHighlight() {
+    const dropdown = document.getElementById('subcategory_dropdown');
+    if (!dropdown) return;
+    const options = dropdown.querySelectorAll('div');
+    options.forEach((opt, idx) => {
+        if (idx === subcategoryDropdownIndex) {
+            opt.classList.add('bg-purple-100');
+        } else {
+            opt.classList.remove('bg-purple-100');
+        }
+    });
+}
+function selectSubcategory(id, name) {
+    document.getElementById('subcategory_combobox').value = name;
+    document.getElementById('subcategory_id').value = id;
+    document.getElementById('subcategory_dropdown').classList.add('hidden');
+    subcategoryDropdownIndex = -1;
+}
+async function createSubcategoryFromInput() {
+    const input = document.getElementById('subcategory_combobox');
+    const hiddenId = document.getElementById('subcategory_id');
+    const error = document.getElementById('subcategory_error');
+    const name = input.value.trim();
+    const categoryId = document.getElementById('category_id')?.value;
+    if (!name || !categoryId) return;
+    const res = await fetch('/inventory/api/subcategories/create/', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken')},
+        body: new URLSearchParams({name, category_id: categoryId})
+    });
+    const data = await res.json();
+    if (data.success) {
+        selectSubcategory(data.id, data.name);
+    } else {
+        error.textContent = data.error || 'Error al crear la subcategoría';
+        error.classList.remove('hidden');
+    }
+}
+window.addEventListener('click', function(e) {
+    const box = document.getElementById('subcategory_combobox');
+    const drop = document.getElementById('subcategory_dropdown');
+    if (!box.contains(e.target) && !drop.contains(e.target)) {
+        drop.classList.add('hidden');
+        subcategoryDropdownIndex = -1;
+    }
+});
+const subcategoryInput = document.getElementById('subcategory_combobox');
+if (subcategoryInput) {
+    subcategoryInput.addEventListener('keydown', function(e) {
+        const dropdown = document.getElementById('subcategory_dropdown');
+        const options = dropdown ? dropdown.querySelectorAll('div') : [];
+        if (dropdown && !dropdown.classList.contains('hidden')) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (subcategoryDropdownIndex < options.length - 1) {
+                    subcategoryDropdownIndex++;
+                    updateSubcategoryDropdownHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (subcategoryDropdownIndex > 0) {
+                    subcategoryDropdownIndex--;
+                    updateSubcategoryDropdownHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (subcategoryDropdownIndex >= 0 && options[subcategoryDropdownIndex]) {
+                    options[subcategoryDropdownIndex].click();
+                } else if (options.length > 0) {
+                    options[0].click();
+                }
+            }
+        }
+    });
+}
 </script>
 {% endblock %} 

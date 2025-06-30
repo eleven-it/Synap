@@ -2,6 +2,7 @@ from django.urls import path, include
 from . import views
 from .views import stock_initial_wizard, stock_initial_drafts, stock_initial_edit, stock_initial_finish
 from .views.brands import BrandSearchApiView, BrandQuickCreateApiView
+from .views.categories import CategorySearchApiView, SubcategorySearchApiView
 
 app_name = 'inventory'
 
@@ -52,4 +53,6 @@ urlpatterns = [
     path('stock-initial/finish/<int:draft_id>/', stock_initial_finish, name='stock_initial_finish'),
     path('api/brands/search/', BrandSearchApiView.as_view(), name='brand_search_api'),
     path('api/brands/create/', BrandQuickCreateApiView.as_view(), name='brand_quick_create_api'),
+    path('api/categories/search/', CategorySearchApiView.as_view(), name='category_search_api'),
+    path('api/subcategories/search/', SubcategorySearchApiView.as_view(), name='subcategory_search_api'),
 ]
