@@ -8,6 +8,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.utils.translation import gettext as _
 from django.contrib.auth.decorators import login_required, permission_required
+from django.db.models import Count
 
 class BrandListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Brand
@@ -54,11 +55,20 @@ class BrandDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
 class BrandSearchApiView(LoginRequiredMixin, View):
     def get(self, request):
         q = request.GET.get('q', '').strip()
-        results = []
-        if q:
-            brands = Brand.objects.filter(name__icontains=q)[:10]
+        if not q:
+            # Top 3 más usadas
+            top_brands = Brand.objects.annotate(num_products=Count('product')).order_by('-num_products', 'name')[:3]
+            top_ids = [b.id for b in top_brands]
+            # Otras marcas (sin repetir)
+            other_brands = Brand.objects.exclude(id__in=top_ids).order_by('name')[:10]
+            return JsonResponse({
+                'top': [{'id': b.id, 'name': b.name} for b in top_brands],
+                'others': [{'id': b.id, 'name': b.name} for b in other_brands]
+            })
+        else:
+            brands = Brand.objects.filter(name__icontains=q).order_by('name')[:10]
             results = [{'id': b.id, 'name': b.name} for b in brands]
-        return JsonResponse({'results': results})
+            return JsonResponse({'results': results})
 
 @method_decorator(csrf_exempt, name='dispatch')
 class BrandQuickCreateApiView(LoginRequiredMixin, View):

@@ -255,6 +255,7 @@ function attachEntityFormHandler(selectId) {
 // --- Brand Combobox ---
 let brandTimeout = null;
 let lastBrandResults = [];
+let brandDropdownIndex = -1;
 function onBrandInput() {
     clearTimeout(brandTimeout);
     brandTimeout = setTimeout(async () => {
@@ -263,33 +264,65 @@ function onBrandInput() {
         const hiddenId = document.getElementById('brand_id');
         const error = document.getElementById('brand_error');
         const q = input.value.trim();
-        if (!q) {
-            dropdown.innerHTML = '';
-            dropdown.classList.add('hidden');
-            hiddenId.value = '';
-            return;
-        }
-        const res = await fetch('/inventory/api/brands/search/?q=' + encodeURIComponent(q));
-        const data = await res.json();
-        lastBrandResults = data.results || [];
         let html = '';
-        let foundExact = false;
-        lastBrandResults.forEach(b => {
-            if (b.name.toLowerCase() === q.toLowerCase()) foundExact = true;
-            html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
-        });
-        if (!foundExact) {
-            html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' onclick='createBrandFromInput()'>Crear \"${q}\"</div>`;
+        let optionsCount = 0;
+        if (!q) {
+            const res = await fetch('/inventory/api/brands/search/?q=');
+            const data = await res.json();
+            lastBrandResults = [];
+            if (data.top && data.top.length) {
+                data.top.forEach((b, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    lastBrandResults.push(b);
+                    optionsCount++;
+                });
+            }
+            if (data.others && data.others.length) {
+                if (optionsCount > 0) {
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras marcas</div>`;
+                }
+                data.others.forEach((b, idx) => {
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
+                    lastBrandResults.push(b);
+                    optionsCount++;
+                });
+            }
+        } else {
+            const res = await fetch('/inventory/api/brands/search/?q=' + encodeURIComponent(q));
+            const data = await res.json();
+            lastBrandResults = data.results || [];
+            lastBrandResults.forEach((b, idx) => {
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
+            });
+            let foundExact = lastBrandResults.some(b => b.name.toLowerCase() === q.toLowerCase());
+            if (!foundExact) {
+                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastBrandResults.length}' onclick='createBrandFromInput()'>Crear \"${q}\"</div>`;
+            }
         }
         dropdown.innerHTML = html;
         dropdown.classList.remove('hidden');
         error.classList.add('hidden');
+        brandDropdownIndex = -1;
+        updateBrandDropdownHighlight();
     }, 200);
+}
+function updateBrandDropdownHighlight() {
+    const dropdown = document.getElementById('brand_dropdown');
+    if (!dropdown) return;
+    const options = dropdown.querySelectorAll('div');
+    options.forEach((opt, idx) => {
+        if (idx === brandDropdownIndex) {
+            opt.classList.add('bg-purple-100');
+        } else {
+            opt.classList.remove('bg-purple-100');
+        }
+    });
 }
 function selectBrand(id, name) {
     document.getElementById('brand_combobox').value = name;
     document.getElementById('brand_id').value = id;
     document.getElementById('brand_dropdown').classList.add('hidden');
+    brandDropdownIndex = -1;
 }
 async function createBrandFromInput() {
     const input = document.getElementById('brand_combobox');
@@ -310,42 +343,52 @@ async function createBrandFromInput() {
         error.classList.remove('hidden');
     }
 }
-// Cierra el dropdown si se hace click fuera
 window.addEventListener('click', function(e) {
     const box = document.getElementById('brand_combobox');
     const drop = document.getElementById('brand_dropdown');
     if (!box.contains(e.target) && !drop.contains(e.target)) {
         drop.classList.add('hidden');
+        brandDropdownIndex = -1;
     }
 });
-// Prevenir que Enter en el input de marca envíe el form principal si el dropdown está abierto
 const brandInput = document.getElementById('brand_combobox');
 if (brandInput) {
     brandInput.addEventListener('keydown', function(e) {
         const dropdown = document.getElementById('brand_dropdown');
-        if (e.key === 'Enter' && dropdown && !dropdown.classList.contains('hidden')) {
-            e.preventDefault();
-            // Si hay sugerencias, selecciona la primera
-            const first = dropdown.querySelector('div');
-            if (first) {
-                first.click();
+        const options = dropdown ? dropdown.querySelectorAll('div') : [];
+        if (dropdown && !dropdown.classList.contains('hidden')) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (brandDropdownIndex < options.length - 1) {
+                    brandDropdownIndex++;
+                    updateBrandDropdownHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (brandDropdownIndex > 0) {
+                    brandDropdownIndex--;
+                    updateBrandDropdownHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (brandDropdownIndex >= 0 && options[brandDropdownIndex]) {
+                    options[brandDropdownIndex].click();
+                } else if (options.length > 0) {
+                    options[0].click();
+                }
             }
         }
     });
 }
-// Al cargar el formulario, si hay brand_id, buscar el nombre y mostrarlo
 window.addEventListener('DOMContentLoaded', async function() {
     const brandId = document.getElementById('brand_id')?.value;
     const brandInput = document.getElementById('brand_combobox');
     if (brandId && brandInput && !brandInput.value) {
-        // Buscar el nombre de la marca por id
         const res = await fetch('/inventory/api/brands/search/?q=');
         const data = await res.json();
         const found = data.results.find(b => b.id == brandId);
         if (found) {
             brandInput.value = found.name;
-        } else {
-            // Si no está en los primeros resultados, buscar por id específico (requiere endpoint extra si hay muchas marcas)
         }
     }
 });
