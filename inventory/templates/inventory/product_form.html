@@ -460,7 +460,7 @@ document.addEventListener('DOMContentLoaded', function() {
 let categoryTimeout = null;
 let lastCategoryResults = [];
 let categoryDropdownIndex = -1;
-function onCategoryInput() {
+function onCategoryInput(forceShow = false) {
     clearTimeout(categoryTimeout);
     categoryTimeout = setTimeout(async () => {
         const input = document.getElementById('category_combobox');
@@ -470,13 +470,13 @@ function onCategoryInput() {
         const q = input.value.trim();
         let html = '';
         let optionsCount = 0;
-        if (!q) {
+        if (!q || forceShow) {
             const res = await fetch('/inventory/api/categories/search/?q=');
             const data = await res.json();
             lastCategoryResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((c, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
                     lastCategoryResults.push(c);
                     optionsCount++;
                 });
@@ -486,7 +486,7 @@ function onCategoryInput() {
                     html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras categorías</div>`;
                 }
                 data.others.forEach((c, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
                     lastCategoryResults.push(c);
                     optionsCount++;
                 });
@@ -496,7 +496,7 @@ function onCategoryInput() {
             const data = await res.json();
             lastCategoryResults = data.results || [];
             lastCategoryResults.forEach((c, idx) => {
-                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectCategory(${c.id}, "${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
+                html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${idx}' onclick='selectCategory(${c.id}, \"${c.name.replace(/\"/g, '&quot;')}\")'>${c.name}</div>`;
             });
             let foundExact = lastCategoryResults.some(c => c.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
@@ -559,6 +559,7 @@ window.addEventListener('click', function(e) {
 });
 const categoryInput = document.getElementById('category_combobox');
 if (categoryInput) {
+    categoryInput.addEventListener('focus', function() { onCategoryInput(true); });
     categoryInput.addEventListener('keydown', function(e) {
         const dropdown = document.getElementById('category_dropdown');
         const options = dropdown ? dropdown.querySelectorAll('div') : [];
@@ -583,6 +584,8 @@ if (categoryInput) {
                     options[0].click();
                 }
             }
+        } else if (e.key === 'ArrowDown') {
+            onCategoryInput(true);
         }
     });
 }
@@ -591,7 +594,7 @@ if (categoryInput) {
 let subcategoryTimeout = null;
 let lastSubcategoryResults = [];
 let subcategoryDropdownIndex = -1;
-function onSubcategoryInput() {
+function onSubcategoryInput(forceShow = false) {
     clearTimeout(subcategoryTimeout);
     subcategoryTimeout = setTimeout(async () => {
         const input = document.getElementById('subcategory_combobox');
@@ -601,13 +604,13 @@ function onSubcategoryInput() {
         const q = input.value.trim();
         const categoryId = document.getElementById('category_id')?.value;
         if (!categoryId) {
-            dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400">Selecciona una categoría primero...</div>';
+            dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400">Selecciona un rubro primero...</div>';
             dropdown.classList.remove('hidden');
             return;
         }
         let html = '';
         let optionsCount = 0;
-        if (!q) {
+        if (!q || forceShow) {
             const res = await fetch(`/inventory/api/subcategories/search/?category_id=${categoryId}`);
             const data = await res.json();
             lastSubcategoryResults = [];
@@ -637,7 +640,11 @@ function onSubcategoryInput() {
             });
             let foundExact = lastSubcategoryResults.some(s => s.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
-                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastSubcategoryResults.length}' onclick='createSubcategoryFromInput()'>Crear \"${q}\"</div>`;
+                if (categoryId) {
+                    html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastSubcategoryResults.length}' onclick='createSubcategoryFromInput()'>Crear \"${q}\"</div>`;
+                } else {
+                    html += `<div class='px-3 py-2 text-gray-400 select-none'>Selecciona un rubro antes de crear una subcategoría</div>`;
+                }
             }
         }
         dropdown.innerHTML = html;
@@ -695,6 +702,7 @@ window.addEventListener('click', function(e) {
 });
 const subcategoryInput = document.getElementById('subcategory_combobox');
 if (subcategoryInput) {
+    subcategoryInput.addEventListener('focus', function() { onSubcategoryInput(true); });
     subcategoryInput.addEventListener('keydown', function(e) {
         const dropdown = document.getElementById('subcategory_dropdown');
         const options = dropdown ? dropdown.querySelectorAll('div') : [];
@@ -719,6 +727,8 @@ if (subcategoryInput) {
                     options[0].click();
                 }
             }
+        } else if (e.key === 'ArrowDown') {
+            onSubcategoryInput(true);
         }
     });
 }
