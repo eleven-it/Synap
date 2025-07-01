@@ -16,7 +16,7 @@ MODULOS_MENU = [
     {
         "nombre": _("Dashboard"),
         "permiso": "usuarios.dashboard",
-        "url": "/dashboard/",
+        "url": "core:dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
             <path stroke-linecap='round' stroke-linejoin='round' d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z'/>
             <path stroke-linecap='round' stroke-linejoin='round' d='M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z'/>

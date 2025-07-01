@@ -712,7 +712,7 @@ msgstr "Armazéns"
 msgid "Locations"
 msgstr "Localizações"
 
-#: core/views/views.py:87
+#: core/views/views.py:87 login/templates/login/perfil.html:112
 msgid "✅ Changes saved successfully."
 msgstr "✅ Alterações salvas com sucesso."
 
@@ -724,7 +724,7 @@ msgstr "Você não tem permissão para criar usuários."
 msgid "All fields are required."
 msgstr "Todos os campos são obrigatórios."
 
-#: core/views/views.py:133
+#: core/views/views.py:133 login/templates/login/perfil.html:109
 msgid "Passwords do not match."
 msgstr "As senhas não coincidem."
 
@@ -1776,3 +1776,32 @@ msgstr "Mapeamentos de Produto TiendaNube"
 #: login/templates/login/perfil.html:107
 msgid "Never"
 msgstr "Nunca"
+
+#: login/templates/login/perfil.html:108
+msgid "User not found."
+msgstr "Usuário não encontrado."
+
+#: login/templates/login/perfil.html:110
+msgid "Password updated successfully."
+msgstr "Senha atualizada com sucesso."
+
+#: login/templates/login/perfil.html:111
+msgid "Error updating password: %(error)s"
+msgstr "Erro ao atualizar a senha: %(error)s"
+
+#: login/templates/login/perfil.html:113
+msgid "Profile updated successfully!"
+msgstr "Perfil atualizado com sucesso!"
+
+#: Textos de base.html, navbar e floating_menu
+msgid "Synap"
+msgstr "Synap"
+
+msgid "No user"
+msgstr "Sem usuário"
+
+msgid "My profile"
+msgstr "Meu perfil"
+
+msgid "No modules enabled"
+msgstr "Nenhum módulo habilitado"

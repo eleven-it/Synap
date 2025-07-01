@@ -38,7 +38,7 @@ services:
       - ./firebase_credentials.json:/app/firebase_credentials.json  # Montar la clave en el contenedor
       - ./certs:/certs
     ports:
-      - "443:8000"
+      - "443:8002"  # Producción/staging: expone 8002 como 443
     depends_on:
       - db
       - redis

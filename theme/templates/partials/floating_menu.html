@@ -1,3 +1,4 @@
+{% load i18n %}
 <div x-show="openMenu" @click.outside="openMenu = false" class="absolute mt-2 ml-2 bg-white rounded-lg shadow-lg p-4 w-64 z-50">
     <div class="grid grid-cols-3 gap-4">
         {% for modulo in modulos_menu %}
@@ -7,7 +8,7 @@
         </a>
         {% endfor %}
         {% if not modulos_menu %}
-        <p class="text-gray-500 col-span-3 text-sm italic text-center">Sin módulos habilitados</p>
+        <p class="text-gray-500 col-span-3 text-sm italic text-center">{% trans "No modules enabled" %}</p>
         {% endif %}
     </div>
 </div> 

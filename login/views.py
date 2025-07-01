@@ -10,6 +10,8 @@ from firebase_admin import auth, firestore
 from core.utils import sincronizar_usuario_desde_firestore
 from core.models import UsuarioExtendido, Rol
 from urllib.parse import urlparse
+from django.utils import translation
+from django.utils.translation import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,9 @@ def login_view(request):
 
             decoded_token = auth.verify_id_token(id_token)
             usuario_extendido = sincronizar_usuario_desde_firestore(decoded_token)
+
+            # Actualizar último acceso
+            usuario_extendido.actualizar_ultimo_acceso()
 
             permisos_roles = set()
             if hasattr(usuario_extendido, "roles"):
@@ -121,7 +126,7 @@ def perfil_view(request):
     try:
         usuario = UsuarioExtendido.objects.get(uid=session_user["uid"])
     except UsuarioExtendido.DoesNotExist:
-        messages.error(request, "Usuario no encontrado.")
+        messages.error(request, _( "User not found." ))
         return redirect("login:login")
 
     if request.method == "POST":
@@ -135,11 +140,14 @@ def perfil_view(request):
 
         if nuevo_idioma in ["es", "en", "pt"]:
             usuario.idioma = nuevo_idioma
+            # Actualizar idioma en la sesión y en la request
+            request.session["django_language"] = nuevo_idioma
+            translation.activate(nuevo_idioma)
 
         # Validación y cambio de contraseña
         if nueva_password:
             if nueva_password != confirmar_password:
-                messages.error(request, "Las contraseñas no coinciden.")
+                messages.error(request, _( "Passwords do not match." ))
                 return render(request, "login/perfil.html", {
                     "usuario": usuario,
                     "user": request.session["user"]
@@ -147,9 +155,9 @@ def perfil_view(request):
             try:
                 from firebase_admin import auth
                 auth.update_user(uid=usuario.uid, password=nueva_password)
-                messages.success(request, "Contraseña actualizada correctamente.")
+                messages.success(request, _( "Password updated successfully." ))
             except Exception as e:
-                messages.error(request, f"Error al actualizar contraseña: {e}")
+                messages.error(request, _( "Error updating password: %(error)s" ) % {"error": e})
                 return render(request, "login/perfil.html", {
                     "usuario": usuario,
                     "user": request.session["user"]
@@ -161,7 +169,7 @@ def perfil_view(request):
         request.session["user"]["nombre"] = usuario.nombre
         request.session["user"]["idioma"] = usuario.idioma
 
-        messages.success(request, "✅ Cambios guardados correctamente.")
+        messages.success(request, _( "✅ Changes saved successfully." ))
         return redirect("login:perfil")
 
     # GET request - mostrar el formulario
@@ -178,7 +186,7 @@ def completar_perfil_view(request):
     try:
         usuario = UsuarioExtendido.objects.get(uid=user["uid"])
     except UsuarioExtendido.DoesNotExist:
-        messages.error(request, "El usuario no fue encontrado.")
+        messages.error(request, _( "User not found." ))
         return redirect("login:login")
 
     if request.method == "POST":
@@ -205,7 +213,7 @@ def completar_perfil_view(request):
             "idioma": usuario.idioma,
         }
 
-        messages.success(request, "¡Perfil actualizado correctamente!")
+        messages.success(request, _( "Profile updated successfully!" ))
         return redirect("login:completar_perfil")
 
     return render(request, "login/completar_perfil.html", {

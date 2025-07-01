@@ -12,7 +12,7 @@
 
         <!-- Mensajes de feedback -->
         {% if messages %}
-        <div class="mb-6 space-y-2">
+        <div class="mb-6 space-y-2 feedback-messages">
             {% for message in messages %}
             <div class="p-4 rounded-lg shadow-sm border-l-4 animate-slide-in-right
                         {% if message.tags == 'success' %}bg-green-50 border-green-400 text-green-700
@@ -20,8 +20,8 @@
                         {% else %}bg-blue-50 border-blue-400 text-blue-700{% endif %}">
                 <div class="flex items-center">
                     <span class="material-icons mr-2 text-lg">
-                        {% if message.tags == 'success' %}check_circle
-                        {% elif message.tags == 'error' %}error
+                        {% if message.tags == 'success' %}
+                        {% elif message.tags == 'error' %}
                         {% else %}info{% endif %}
                     </span>
                     {{ message }}
@@ -38,9 +38,8 @@
                 
                 <!-- Información básica -->
                 <div class="mb-8">
-                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                        <span class="material-icons mr-2 text-purple-600">person</span>
-                        {% trans "Basic Information" %}
+                    <h2 class="text-xl font-semibold mb-6 flex items-center text-purple-600">
+                        <span class="material-icons mr-2">{% trans "Basic Information" %}</span>
                     </h2>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -104,8 +103,8 @@
                             <label class="block text-sm font-medium text-gray-700">
                                 {% trans "Last Access" %}
                             </label>
-                            <input type="text" 
-                                                                       value="{{ usuario.ultimo_acceso|date:'d/m/Y H:i'|default:_('Never') }}" 
+                            <input type="text"
+                                   value="{% if usuario.ultimo_acceso %}{{ usuario.ultimo_acceso|date:'d/m/Y H:i' }}{% else %}{% trans 'Never' %}{% endif %}"
                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
                                    readonly>
                         </div>
@@ -134,9 +133,8 @@
 
                 <!-- Cambio de contraseña -->
                 <div class="mb-8">
-                    <h2 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                        <span class="material-icons mr-2 text-purple-600">lock</span>
-                        {% trans "Change Password" %}
+                    <h2 class="text-xl font-semibold mb-6 flex items-center text-purple-600">
+                        <span class="material-icons mr-2">{% trans "Change Password" %}</span>
                     </h2>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -145,16 +143,18 @@
                                 {% trans "New Password" %}
                             </label>
                             <div class="relative">
-                                <input type="password" 
+                                <input type="password"
                                        id="nueva_password"
                                        name="nueva_password"
-                                       class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                                       class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition pr-10"
                                        placeholder="{% trans 'Enter new password' %}">
-                                <button type="button" 
-                                        onclick="togglePassword('nueva_password')"
-                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
-                                    <span class="material-icons text-lg">visibility</span>
-                                </button>
+                                <button type="button"
+                                        tabindex="-1"
+                                        onclick="toggleSecretVisibility('nueva_password', 'eyeIcon_nueva')"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
+                                        aria-label="{% trans 'Show or hide password' %}">
+                                    <svg id="eyeIcon_nueva" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.58A9.953 9.953 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.965 9.965 0 01-4.293 5.411M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 3l18 18' />`;
                             </div>
                         </div>
 
@@ -163,15 +163,19 @@
                                 {% trans "Confirm New Password" %}
                             </label>
                             <div class="relative">
-                                <input type="password" 
+                                <input type="password"
                                        id="confirmar_password"
                                        name="confirmar_password"
-                                       class="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                                       class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition pr-10"
                                        placeholder="{% trans 'Confirm new password' %}">
-                                <button type="button" 
-                                        onclick="togglePassword('confirmar_password')"
-                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
-                                    <span class="material-icons text-lg">visibility</span>
+                                <button type="button"
+                                        tabindex="-1"
+                                        onclick="toggleSecretVisibility('confirmar_password', 'eyeIcon_confirmar')"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none"
+                                        aria-label="{% trans 'Show or hide password' %}">
+                                    <svg id="eyeIcon_confirmar" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.58A9.953 9.953 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.965 9.965 0 01-4.293 5.411M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 3l18 18' />`;
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -184,16 +188,13 @@
 
                 <!-- Botones de acción -->
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-200">
-                    <a href="{% url 'login:logout' %}" 
-                       class="inline-flex items-center px-6 py-3 border border-red-300 text-red-700 bg-white rounded-lg hover:bg-red-50 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
-                        <span class="material-icons mr-2">logout</span>
-                        {% trans "Sign Out" %}
+                    <a href="{% url 'login:logout' %}"
+                       class="order-2 sm:order-1 w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 border border-red-300 text-red-700 bg-white rounded-lg hover:bg-red-50 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
+                        <span class="material-icons mr-2">{% trans "Sign Out" %}</span>
                     </a>
-                    
-                    <button type="submit" 
-                            class="inline-flex items-center px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200">
-                        <span class="material-icons mr-2">save</span>
-                        {% trans "Save Changes" %}
+                    <button type="submit"
+                            class="order-1 sm:order-2 w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200">
+                        <span class="material-icons mr-2">{% trans "Save Changes" %}</span>
                     </button>
                 </div>
             </form>
@@ -203,23 +204,21 @@
 
 <!-- JavaScript para funcionalidades -->
 <script>
-function togglePassword(inputId) {
+function toggleSecretVisibility(inputId, iconId) {
     const input = document.getElementById(inputId);
-    const button = input.nextElementSibling;
-    const icon = button.querySelector('.material-icons');
-    
+    const icon = document.getElementById(iconId);
     if (input.type === 'password') {
         input.type = 'text';
-        icon.textContent = 'visibility_off';
+        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.58A9.953 9.953 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.965 9.965 0 01-4.293 5.411M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 3l18 18' />`;
     } else {
         input.type = 'password';
-        icon.textContent = 'visibility';
+        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />\n<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' />`;
     }
 }
 
 // Auto-hide messages after 5 seconds
 setTimeout(() => {
-    const messages = document.querySelectorAll('[class*="bg-green-50"], [class*="bg-red-50"], [class*="bg-blue-50"]');
+    const messages = document.querySelectorAll('.feedback-messages [class*="bg-green-50"], .feedback-messages [class*="bg-red-50"], .feedback-messages [class*="bg-blue-50"]');
     messages.forEach(msg => {
         msg.style.opacity = '0';
         setTimeout(() => msg.remove(), 300);

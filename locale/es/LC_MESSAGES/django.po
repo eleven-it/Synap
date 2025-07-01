@@ -713,9 +713,14 @@ msgstr "Almacenes"
 msgid "Locations"
 msgstr "Ubicaciones"
 
-#: core/views/views.py:87
+#: core/views/views.py:87 login/templates/login/perfil.html:112
+#, fuzzy
 msgid "✅ Changes saved successfully."
-msgstr "✅ Cambios guardados exitosamente."
+msgstr ""
+"#-#-#-#-#  django.po (PACKAGE VERSION)  #-#-#-#-#\n"
+"✅ Cambios guardados exitosamente.\n"
+"#-#-#-#-#  django.po (PACKAGE VERSION)  #-#-#-#-#\n"
+"✅ Cambios guardados correctamente."
 
 #: core/views/views.py:110
 msgid "You do not have permission to create users."
@@ -725,7 +730,7 @@ msgstr "No tienes permisos para crear usuarios."
 msgid "All fields are required."
 msgstr "Todos los campos son obligatorios."
 
-#: core/views/views.py:133
+#: core/views/views.py:133 login/templates/login/perfil.html:109
 msgid "Passwords do not match."
 msgstr "Las contraseñas no coinciden."
 
@@ -1640,11 +1645,17 @@ msgstr "Confirma la nueva contraseña"
 
 #: login/templates/login/perfil.html:181
 msgid "Leave password fields empty if you don't want to change your password"
-msgstr "Deja los campos de contraseña vacíos si no quieres cambiar tu contraseña"
+msgstr ""
+"Deja los campos de contraseña vacíos si no quieres cambiar tu contraseña"
 
 #: login/templates/login/perfil.html:190
+#, fuzzy
 msgid "Sign Out"
-msgstr "Cerrar Sesión"
+msgstr ""
+"#-#-#-#-#  django.po (PACKAGE VERSION)  #-#-#-#-#\n"
+"Cerrar Sesión\n"
+"#-#-#-#-#  django.po (PACKAGE VERSION)  #-#-#-#-#\n"
+"Cerrar sesión"
 
 #: login/templates/login/perfil.html:196
 msgid "Save Changes"
@@ -1773,3 +1784,32 @@ msgstr "Mapeos de Productos de TiendaNube"
 #: login/templates/login/perfil.html:107
 msgid "Never"
 msgstr "Nunca"
+
+#: login/templates/login/perfil.html:108
+msgid "User not found."
+msgstr "Usuario no encontrado."
+
+#: login/templates/login/perfil.html:110
+msgid "Password updated successfully."
+msgstr "Contraseña actualizada correctamente."
+
+#: login/templates/login/perfil.html:111
+msgid "Error updating password: %(error)s"
+msgstr "Error al actualizar contraseña: %(error)s"
+
+#: login/templates/login/perfil.html:113
+msgid "Profile updated successfully!"
+msgstr "¡Perfil actualizado correctamente!"
+
+# Textos de base.html, navbar y floating_menu
+msgid "Synap"
+msgstr "Synap"
+
+msgid "No user"
+msgstr "Sin usuario"
+
+msgid "My profile"
+msgstr "Mi perfil"
+
+msgid "No modules enabled"
+msgstr "Sin módulos habilitados"
