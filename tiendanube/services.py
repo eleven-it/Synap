@@ -48,11 +48,11 @@ class TiendaNubeService:
     # ----------------------
     def get_sync_status(self):
         """Get current sync status and statistics."""
-        # Obtener datos reales
+        from .models import TiendaNubeProductMapping
         total_products = Product.objects.count()
-        synced_products = Product.objects.filter(tiendanube_id__isnull=False).count()
-        pending_products = total_products - synced_products
-        error_products = 0  # Aquí podrías contar productos con errores de sync si tienes ese dato
+        synced_products = TiendaNubeProductMapping.objects.filter(sync_status='synced').count()
+        pending_products = TiendaNubeProductMapping.objects.filter(sync_status='pending').count()
+        error_products = TiendaNubeProductMapping.objects.filter(sync_status='error').count()
         sync_percentage = (synced_products / total_products * 100) if total_products > 0 else 0.0
         return {
             'configured': bool(self.config and self.config.is_configured),

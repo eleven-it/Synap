@@ -48,37 +48,42 @@ def tiendanube_sync_status(request):
 @permission_classes([IsAuthenticated])
 @tiene_permiso("inventory.")
 def tiendanube_sync_products(request):
-    """Sincroniza productos desde TiendaNube"""
+    """Sincroniza productos nuevos y pendientes con TiendaNube"""
     try:
         limit = request.data.get('limit', 100)
         offset = request.data.get('offset', 0)
-        
-        # Get the first available configuration
         config = TiendaNubeConfig.objects.first()
         if not config:
-            return Response(
-                {'error': 'No TiendaNube configuration found'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({'error': 'No TiendaNube configuration found'}, status=status.HTTP_400_BAD_REQUEST)
         service = TiendaNubeService(config)
-        success, failed = service.sync_products_from_tiendanube(limit=limit, offset=offset)
-        
+        # Sincronizar productos nuevos (sin tiendanube_id)
+        success_new, failed_new = service.sync_products_from_tiendanube(limit=limit, offset=offset)
+        # Sincronizar productos pendientes (mapping pending)
+        pendientes = TiendaNubeProductMapping.objects.filter(sync_status='pending', sync_enabled=True)
+        success_pending = 0
+        failed_pending = 0
+        for mapping in pendientes:
+            ok, msg = service.sync_product_update(mapping.product)
+            if ok:
+                success_pending += 1
+            else:
+                failed_pending += 1
+        total_success = success_new + success_pending
+        total_failed = failed_new + failed_pending
         return Response({
             'success': True,
-            'message': f'Sincronización completada: {success} exitosos, {failed} fallidos',
+            'message': f'Sincronización completada: {total_success} exitosos, {total_failed} fallidos (Nuevos: {success_new}/{failed_new}, Pendientes: {success_pending}/{failed_pending})',
             'data': {
-                'success_count': success,
-                'failed_count': failed,
-                'total_processed': success + failed
+                'success_new': success_new,
+                'failed_new': failed_new,
+                'success_pending': success_pending,
+                'failed_pending': failed_pending,
+                'total_success': total_success,
+                'total_failed': total_failed
             }
         })
-        
     except Exception as e:
-        return Response(
-            {'error': f'Error en sincronización: {e}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': f'Error en sincronización: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
