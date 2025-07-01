@@ -4,6 +4,7 @@ from .services import TiendaNubeService
 from django.utils import timezone
 import logging
 from tiendanube.models import TiendaNubeProductMapping
+from inventory.models import Product
 
 @shared_task
 def sync_tiendanube_periodic():
@@ -23,11 +24,26 @@ def sync_tiendanube_periodic():
     prod_update_ok = 0
     prod_update_fail = 0
     for mapping in pendientes:
+        # Si el mapping existe pero el producto no tiene tiendanube_id, saltar
+        if not mapping.product.tiendanube_id:
+            continue
         ok, msg = service.sync_product_update(mapping.product)
         if ok:
             prod_update_ok += 1
         else:
             prod_update_fail += 1
+    # Crear mappings faltantes para productos con tiendanube_id pero sin mapping
+    productos_sin_mapping = Product.objects.filter(tiendanube_id__isnull=False).exclude(id__in=pendientes.values_list('product_id', flat=True))
+    for producto in productos_sin_mapping:
+        TiendaNubeProductMapping.objects.get_or_create(
+            product=producto,
+            defaults={
+                'tiendanube_id': producto.tiendanube_id,
+                'tiendanube_handle': producto.handle,
+                'sync_status': 'pending',
+                'sync_enabled': True
+            }
+        )
     # Sincronizar productos nuevos (no mapeados)
     prod_ok, prod_fail = service.sync_products_from_tiendanube()
     stock_ok, stock_fail = service.sync_stock_to_tiendanube()

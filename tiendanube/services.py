@@ -186,7 +186,7 @@ class TiendaNubeService:
                 failed_count += 1
                 errors.append(msg)
         status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
-        self.log_sync('products_from_tiendanube', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+        self.log_sync('product', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
         return success_count, failed_count
 
     def sync_stock_to_tiendanube(self, product=None):
