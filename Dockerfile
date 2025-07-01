@@ -4,11 +4,15 @@ FROM python:3.10
 # Establecer directorio de trabajo en el contenedor
 WORKDIR /app
 
-# Instalar Node.js y npm
-RUN apt-get update && apt-get install -y curl \
+# Instalar Node.js y npm con actualización de claves GPG para evitar errores de firma
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gnupg2 ca-certificates \
+    && apt-get install -y curl \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g npm@latest
+    && npm install -g npm@latest \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Verificar la instalación de Node.js y npm
 RUN node -v && npm -v
