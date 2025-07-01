@@ -1,9 +1,9 @@
-import requests
 from .models import TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping
 from inventory.models import Product
 import logging
 from django.conf import settings
 from core.models import SystemConfiguration
+import requests
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -114,21 +114,45 @@ class TiendaNubeService:
         productos_pendientes = Product.objects.filter(tiendanube_id__isnull=True).all()[offset:offset+limit]
         for producto in productos_pendientes:
             try:
+                # Validar si el producto tiene variantes
+                tiene_variantes = hasattr(producto, 'variants') and producto.variants.exists()
                 product_data = {
                     "name": producto.name,
                     "description": producto.description,
-                    "price": float(producto.price),
                     "sku": producto.sku,
                     "handle": producto.handle,
                     "published": producto.is_published,
                 }
+                # Si tiene variantes, agregar el campo 'variants' al payload
+                if tiene_variantes:
+                    variants_list = []
+                    for variante in producto.variants.all():
+                        variants_list.append({
+                            "name": variante.name,
+                            "sku": variante.sku,
+                            "price": float(variante.price),
+                            # Puedes agregar stock si lo manejas: "stock": variante.quantity
+                        })
+                    product_data["variants"] = variants_list
+                else:
+                    # Solo enviar el precio si NO tiene variantes
+                    product_data["price"] = float(producto.price)
+                # Validar imagen accesible
                 if producto.image:
                     site_url = get_site_url()
                     if site_url:
                         image_url = site_url + producto.image.url
                     else:
                         image_url = producto.image.url
-                    product_data["images"] = [{"src": image_url}]
+                    # Validar accesibilidad de la imagen
+                    try:
+                        resp = requests.head(image_url, timeout=5)
+                        if resp.status_code == 200:
+                            product_data["images"] = [{"src": image_url}]
+                        else:
+                            logger.warning(f"Imagen no accesible (status {resp.status_code}): {image_url}")
+                    except Exception as e:
+                        logger.warning(f"Error accediendo a la imagen: {image_url} - {str(e)}")
                 response = self.create_product(product_data)
                 if response and response.get("id"):
                     tiendanube_id = response["id"]
