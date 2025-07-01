@@ -4,6 +4,7 @@ import logging
 from django.conf import settings
 from core.models import SystemConfiguration
 import requests
+import datetime
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -54,10 +55,17 @@ class TiendaNubeService:
         pending_products = TiendaNubeProductMapping.objects.filter(sync_status='pending').count()
         error_products = TiendaNubeProductMapping.objects.filter(sync_status='error').count()
         sync_percentage = (synced_products / total_products * 100) if total_products > 0 else 0.0
+        last_sync = self.config.last_sync if self.config else None
+        sync_interval = self.config.sync_interval if self.config else None
+        next_sync = None
+        if last_sync and sync_interval:
+            next_sync = last_sync + datetime.timedelta(minutes=sync_interval)
         return {
             'configured': bool(self.config and self.config.is_configured),
             'auto_sync': self.config.auto_sync if self.config else False,
-            'last_sync': self.config.last_sync if self.config else None,
+            'last_sync': last_sync,
+            'next_sync': next_sync,
+            'sync_interval': sync_interval,
             'total_products': total_products,
             'synced_products': synced_products,
             'pending_products': pending_products,
