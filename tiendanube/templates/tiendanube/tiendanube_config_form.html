@@ -170,4 +170,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700">Last Sync</label>
+    <div class="mt-1 text-gray-900">
+        {% if form.instance.last_sync %}{{ form.instance.last_sync|date:"SHORT_DATETIME_FORMAT" }}{% else %}Never{% endif %}
+    </div>
+</div>
 {% endblock %} 

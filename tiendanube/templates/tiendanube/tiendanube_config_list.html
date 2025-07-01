@@ -48,22 +48,18 @@
                                     {% endif %}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ config.last_sync|default:"Never"|date:"M d, Y H:i" }}
+                                    {% if config.last_sync %}{{ config.last_sync|date:"SHORT_DATETIME_FORMAT" }}{% else %}Never{% endif %}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {% with status=config_statuses %}
-                                        {% with status_item=status.config_pk %}
-                                            {% if status_item and status_item.active %}
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                    Active
-                                                </span>
-                                            {% else %}
-                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="{{ status_item.message }}">
-                                                    Inactive
-                                                </span>
-                                            {% endif %}
-                                        {% endwith %}
-                                    {% endwith %}
+                                    {% if config.auto_sync and config_statuses|get_item:config.pk and config_statuses|get_item:config.pk.active %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            Active
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title="{{ status_item.message }}">
+                                            Inactive
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="flex space-x-2">

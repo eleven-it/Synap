@@ -201,9 +201,9 @@
                 <div id="syncStatus" class="text-sm opacity-90">
                     <div class="loading-spinner"></div>Loading status...
                 </div>
-                <div class="mt-2 text-xs text-gray-200">
-                    <span id="lastSync"></span><br>
-                    <span id="nextSync"></span>
+                <div class="mt-2 text-xs">
+                    <span id="lastSync" class="font-semibold"></span><br>
+                    <span id="nextSync" class="font-semibold"></span>
                 </div>
             </div>
             <div class="text-right">
@@ -394,8 +394,20 @@ function updateSyncStatus(data) {
                 Configured - Last sync: ${data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Never'}
             </div>
         `;
-        lastSync.textContent = `Última sincronización: ${data.last_sync ? new Date(data.last_sync).toLocaleString() : 'Nunca'}`;
-        nextSync.textContent = `Próxima sincronización: ${data.next_sync ? new Date(data.next_sync).toLocaleString() : 'No programada'}`;
+        if (data.last_sync) {
+            lastSync.textContent = `Última sincronización: ${new Date(data.last_sync).toLocaleString()}`;
+            lastSync.className = 'font-semibold text-green-700';
+        } else {
+            lastSync.textContent = 'Última sincronización: Nunca';
+            lastSync.className = 'font-semibold text-gray-400';
+        }
+        if (data.next_sync) {
+            nextSync.textContent = `Próxima sincronización: ${new Date(data.next_sync).toLocaleString()}`;
+            nextSync.className = 'font-semibold text-blue-700';
+        } else {
+            nextSync.textContent = 'Próxima sincronización: No programada';
+            nextSync.className = 'font-semibold text-gray-400';
+        }
         const percentage = data.sync_percentage || 0;
         syncPercentage.textContent = `${Math.round(percentage)}%`;
         syncProgressBar.style.width = `${percentage}%`;
