@@ -350,7 +350,11 @@ document.addEventListener('DOMContentLoaded', function() {
 // Main functions
 async function loadSyncStatus() {
     try {
-        const response = await fetch('/inventory/api/tiendanube/status/');
+        const response = await fetch('/inventory/api/tiendanube/status/', {
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
         const data = await response.json();
         
         if (response.ok) {
@@ -397,20 +401,30 @@ function updateSyncStatus(data) {
     }
 }
 
+function updateConfigForm(data) {
+    if (data.configured) {
+        document.getElementById('storeId').value = data.store_id || '';
+        document.getElementById('accessToken').value = data.access_token || '';
+        document.getElementById('autoSync').value = data.auto_sync ? 'true' : 'false';
+        document.getElementById('syncInterval').value = data.sync_interval || 30;
+    }
+}
+
 async function loadConfig() {
     try {
-        const response = await fetch('/inventory/api/tiendanube/config/');
+        const response = await fetch('/inventory/api/tiendanube/config/', {
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
         const data = await response.json();
         
-        if (response.ok && data.configured) {
+        if (response.ok) {
             currentConfig = data;
-            document.getElementById('storeId').value = data.store_id || '';
-            document.getElementById('accessToken').value = data.access_token || '';
-            document.getElementById('autoSync').value = data.auto_sync ? 'true' : 'false';
-            document.getElementById('syncInterval').value = data.sync_interval || 30;
+            updateConfigForm(data);
         }
     } catch (error) {
-        console.error('Error loading configuration:', error);
+        console.error('Error loading config:', error);
     }
 }
 
@@ -487,10 +501,12 @@ async function createConfigFromEnv() {
 async function testConnection() {
     if (isProcessing) return;
     isProcessing = true;
+    
     const btn = document.getElementById('testConnectionBtn');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<div class="loading-spinner"></div>Testing...';
     btn.disabled = true;
+    
     try {
         const response = await fetch('/inventory/api/tiendanube/test-connection/', {
             method: 'POST',
@@ -522,7 +538,11 @@ async function testConnection() {
 
 async function loadSyncLogs() {
     try {
-        const response = await fetch('/inventory/api/tiendanube/logs/?limit=10');
+        const response = await fetch('/inventory/api/tiendanube/logs/?limit=10', {
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
         const data = await response.json();
         
         if (response.ok) {

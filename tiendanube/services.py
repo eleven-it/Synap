@@ -314,9 +314,92 @@ class TiendaNubeService:
             return {"error": "exception", "message": str(e)}
 
     def update_product(self, tiendanube_id, product_data):
-        """Update a product in TiendaNube."""
-        # TODO: Implement API call
-        pass
+        """Actualiza un producto en TiendaNube vía API REST."""
+        url = f"{self.BASE_URL}/products/{tiendanube_id}"
+        logger.info(f"=== ACTUALIZACIÓN A TIENDANUBE ===")
+        logger.info(f"URL: {url}")
+        logger.info(f"Headers: {self.headers}")
+        logger.info(f"Product Data: {product_data}")
+        try:
+            response = requests.put(url, json=product_data, headers=self.headers, timeout=15)
+            logger.info(f"=== RESPUESTA DE TIENDANUBE (UPDATE) ===")
+            logger.info(f"Status Code: {response.status_code}")
+            logger.info(f"Response Headers: {dict(response.headers)}")
+            logger.info(f"Response Text: {response.text}")
+            if response.status_code in (200, 201):
+                return response.json()
+            else:
+                return {"error": response.status_code, "message": response.text}
+        except Exception as e:
+            logger.error(f"=== ERROR EN PETICIÓN UPDATE ===")
+            logger.error(f"Exception: {str(e)}")
+            return {"error": "exception", "message": str(e)}
+
+    def sync_product_update(self, producto):
+        """Sincroniza los cambios de un producto local ya mapeado con Tiendanube."""
+        if not producto.tiendanube_id:
+            logger.warning(f"Producto {producto.sku} no tiene tiendanube_id, no se puede actualizar.")
+            return False, "No tiendanube_id"
+        # Preparar el payload igual que en la creación
+        tiene_variantes = hasattr(producto, 'variants') and producto.variants.exists()
+        product_data = {
+            "name": producto.name,
+            "description": producto.description,
+            "sku": producto.sku,
+            "handle": producto.handle,
+            "published": producto.is_published,
+        }
+        if tiene_variantes:
+            variants_list = []
+            for variante in producto.variants.all():
+                variants_list.append({
+                    "name": variante.name,
+                    "sku": variante.sku,
+                    "price": float(variante.price),
+                    "stock": variante.quantity
+                })
+            product_data["variants"] = variants_list
+        else:
+            product_data["price"] = float(producto.price)
+        # Validar imagen accesible
+        if producto.image:
+            site_url = get_site_url()
+            if site_url:
+                image_url = site_url + producto.image.url
+            else:
+                image_url = producto.image.url
+            try:
+                resp = requests.head(image_url, timeout=5)
+                if resp.status_code == 200:
+                    product_data["images"] = [{"src": image_url}]
+                else:
+                    logger.warning(f"Imagen no accesible (status {resp.status_code}): {image_url}")
+            except Exception as e:
+                logger.warning(f"Error accediendo a la imagen: {image_url} - {str(e)}")
+        # Llamar a update_product
+        response = self.update_product(producto.tiendanube_id, product_data)
+        if response and response.get("id"):
+            producto.tiendanube_url = response.get("permalink", "")
+            producto.save()
+            # Actualizar mapping si existe
+            try:
+                mapping = TiendaNubeProductMapping.objects.get(product=producto)
+                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED
+                mapping.error_message = ""
+                mapping.save()
+            except Exception:
+                pass
+            return True, "Actualizado correctamente"
+        else:
+            logger.error(f"Error actualizando producto {producto.sku}: {response}")
+            try:
+                mapping = TiendaNubeProductMapping.objects.get(product=producto)
+                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.ERROR
+                mapping.error_message = str(response)
+                mapping.save()
+            except Exception:
+                pass
+            return False, response
 
     def delete_product(self, tiendanube_id):
         """Delete a product from TiendaNube."""

@@ -168,6 +168,18 @@ class Product(models.Model):
             return convert_to_base(self.price, self.price_currency, date)
         return self.price
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Si el producto está mapeado con TiendaNube, marcar como pendiente de sincronización
+        from tiendanube.models import TiendaNubeProductMapping
+        try:
+            mapping = TiendaNubeProductMapping.objects.get(product=self)
+            if mapping.sync_status == TiendaNubeProductMapping.SyncStatus.SYNCED:
+                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.PENDING
+                mapping.save(update_fields=["sync_status"])
+        except TiendaNubeProductMapping.DoesNotExist:
+            pass
+
 # ─────────────────────────────────────────────
 # MODEL: Product Variant
 # ─────────────────────────────────────────────
