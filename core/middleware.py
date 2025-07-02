@@ -237,3 +237,32 @@ class SeguridadMiddleware:
         response['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
         
         return response
+
+
+class CDNCacheMiddleware:
+    """
+    Middleware para agregar headers de cache apropiados para CDN
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        # Solo aplicar a archivos estáticos y media
+        if request.path.startswith('/static/') or request.path.startswith('/media/'):
+            from django.conf import settings
+            # Determinar el tipo de archivo
+            if request.path.startswith('/static/'):
+                cache_headers = settings.CDN_CACHE_HEADERS.get('static', {})
+            elif request.path.startswith('/media/'):
+                # Para imágenes, usar headers específicos
+                if any(ext in request.path.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
+                    cache_headers = settings.CDN_CACHE_HEADERS.get('images', {})
+                else:
+                    cache_headers = settings.CDN_CACHE_HEADERS.get('media', {})
+            else:
+                cache_headers = {}
+            # Aplicar headers de cache
+            for header, value in cache_headers.items():
+                response[header] = value
+        return response

@@ -122,7 +122,6 @@ class TiendaNubeService:
         productos_pendientes = Product.objects.filter(tiendanube_id__isnull=True).all()[offset:offset+limit]
         for producto in productos_pendientes:
             try:
-                # Validar si el producto tiene variantes
                 tiene_variantes = hasattr(producto, 'variants') and producto.variants.exists()
                 product_data = {
                     "name": producto.name,
@@ -131,7 +130,6 @@ class TiendaNubeService:
                     "handle": producto.handle,
                     "published": producto.is_published,
                 }
-                # Si tiene variantes, agregar el campo 'variants' al payload
                 if tiene_variantes:
                     variants_list = []
                     for variante in producto.variants.all():
@@ -139,28 +137,29 @@ class TiendaNubeService:
                             "name": variante.name,
                             "sku": variante.sku,
                             "price": float(variante.price),
-                            # Puedes agregar stock si lo manejas: "stock": variante.quantity
                         })
                     product_data["variants"] = variants_list
                 else:
-                    # Solo enviar el precio si NO tiene variantes
                     product_data["price"] = float(producto.price)
-                # Validar imagen accesible
-                if producto.image:
-                    site_url = get_site_url()
+                # --- NUEVA LÓGICA DE IMÁGENES ---
+                images = []
+                site_url = get_site_url()
+                for img in producto.images.all():
                     if site_url:
-                        image_url = site_url + producto.image.url
+                        image_url = site_url + img.image.url
                     else:
-                        image_url = producto.image.url
-                    # Validar accesibilidad de la imagen
+                        image_url = img.image.url
                     try:
                         resp = requests.head(image_url, timeout=5)
                         if resp.status_code == 200:
-                            product_data["images"] = [{"src": image_url}]
+                            images.append({"src": image_url})
                         else:
                             logger.warning(f"Imagen no accesible (status {resp.status_code}): {image_url}")
                     except Exception as e:
                         logger.warning(f"Error accediendo a la imagen: {image_url} - {str(e)}")
+                if images:
+                    product_data["images"] = images
+                # --- FIN NUEVA LÓGICA DE IMÁGENES ---
                 response = self.create_product(product_data)
                 if response and response.get("id"):
                     tiendanube_id = response["id"]
@@ -181,12 +180,10 @@ class TiendaNubeService:
                         mapping.save()
                     success_count += 1
                 else:
-                    # Error en la creación: NO crear mapeo si no hay ID
                     msg = f"Error creando producto {producto.sku}: {response}"
                     producto.tiendanube_id = None
                     producto.tiendanube_url = ""
                     producto.save()
-                    # Opcional: guardar el error en un campo del producto si lo deseas
                     failed_count += 1
                     errors.append(msg)
             except Exception as e:
@@ -348,7 +345,6 @@ class TiendaNubeService:
         if not producto.tiendanube_id:
             logger.warning(f"Producto {producto.sku} no tiene tiendanube_id, no se puede actualizar.")
             return False, "No tiendanube_id"
-        # Preparar el payload igual que en la creación
         tiene_variantes = hasattr(producto, 'variants') and producto.variants.exists()
         product_data = {
             "name": producto.name,
@@ -369,27 +365,29 @@ class TiendaNubeService:
             product_data["variants"] = variants_list
         else:
             product_data["price"] = float(producto.price)
-        # Validar imagen accesible
-        if producto.image:
-            site_url = get_site_url()
+        # --- NUEVA LÓGICA DE IMÁGENES ---
+        images = []
+        site_url = get_site_url()
+        for img in producto.images.all():
             if site_url:
-                image_url = site_url + producto.image.url
+                image_url = site_url + img.image.url
             else:
-                image_url = producto.image.url
+                image_url = img.image.url
             try:
                 resp = requests.head(image_url, timeout=5)
                 if resp.status_code == 200:
-                    product_data["images"] = [{"src": image_url}]
+                    images.append({"src": image_url})
                 else:
                     logger.warning(f"Imagen no accesible (status {resp.status_code}): {image_url}")
             except Exception as e:
                 logger.warning(f"Error accediendo a la imagen: {image_url} - {str(e)}")
-        # Llamar a update_product
+        if images:
+            product_data["images"] = images
+        # --- FIN NUEVA LÓGICA DE IMÁGENES ---
         response = self.update_product(producto.tiendanube_id, product_data)
         if response and response.get("id"):
             producto.tiendanube_url = response.get("permalink", "")
             producto.save()
-            # Actualizar mapping si existe
             try:
                 mapping = TiendaNubeProductMapping.objects.get(product=producto)
                 mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED

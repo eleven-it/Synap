@@ -105,6 +105,22 @@ class Subcategory(models.Model):
         return f"{self.category.name} > {self.name}"
 
 # ─────────────────────────────────────────────
+# MODEL: Product Image
+# ─────────────────────────────────────────────
+class ProductImage(models.Model):
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='images', verbose_name=_('Product'))
+    image = models.ImageField(_('Image'), upload_to='products/')
+    order = models.PositiveIntegerField(_('Order'), default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = _('Product Image')
+        verbose_name_plural = _('Product Images')
+
+    def __str__(self):
+        return f"{self.product.sku} - {self.image.name}"
+
+# ─────────────────────────────────────────────
 # MODEL: Product
 # ─────────────────────────────────────────────
 class Product(models.Model):
@@ -120,15 +136,14 @@ class Product(models.Model):
     ]
     type = models.CharField(_('Product Type'), max_length=20, choices=TYPE_CHOICES, default='stockable')
     name = models.CharField(_("Name"), max_length=255)
-    sku = models.CharField(_("SKU"), max_length=100, unique=True)
+    sku = models.CharField(_('SKU'), max_length=100, unique=True, blank=True, null=True)
     description = models.TextField(_("Description"), blank=True)
 
     category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Category'))
     brand = models.ForeignKey('Brand', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Brand'))
     subcategory = models.ForeignKey('Subcategory', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Subcategory'))
-    image = models.ImageField(_("Image"), upload_to='products/', null=True, blank=True)
 
-    handle = models.SlugField(_("Handle (URL)"), max_length=255, unique=True)
+    handle = models.SlugField(_('Handle (URL)'), max_length=255, unique=True, blank=True, null=True)
 
     price = models.DecimalField(_("Price"), max_digits=10, decimal_places=2)
     price_currency = models.ForeignKey(Currency, on_delete=models.SET_NULL, null=True, verbose_name=_("Price Currency"))
@@ -149,6 +164,19 @@ class Product(models.Model):
     tiendanube_id = models.BigIntegerField(null=True, blank=True)
     tiendanube_url = models.URLField(blank=True)
     is_published = models.BooleanField(_("Is Published"), default=True)
+
+    width_cm = models.DecimalField(_('Width (cm)'), max_digits=6, decimal_places=2, null=True, blank=True)
+    height_cm = models.DecimalField(_('Height (cm)'), max_digits=6, decimal_places=2, null=True, blank=True)
+    depth_cm = models.DecimalField(_('Depth (cm)'), max_digits=6, decimal_places=2, null=True, blank=True)
+    video_url = models.URLField(_('Video URL (YouTube/Vimeo)'), blank=True)
+    sale_price = models.DecimalField(_('Sale Price'), max_digits=10, decimal_places=2, null=True, blank=True)
+    cost_price = models.DecimalField(_('Cost Price'), max_digits=10, decimal_places=2, null=True, blank=True)
+    profit_margin = models.DecimalField(_('Profit Margin (%)'), max_digits=5, decimal_places=2, null=True, blank=True)
+    PRODUCT_KIND_CHOICES = [
+        ('physical', _('Physical')),
+        ('digital', _('Digital/Service')),
+    ]
+    product_kind = models.CharField(_('Product Kind'), max_length=10, choices=PRODUCT_KIND_CHOICES, default='physical')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

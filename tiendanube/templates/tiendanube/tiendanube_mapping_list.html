@@ -71,8 +71,8 @@
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4">
                                     <div class="flex items-center">
-                                        {% if mapping.product.image %}
-                                            <img class="h-10 w-10 rounded-lg object-cover mr-3" src="{{ mapping.product.image.url }}" alt="{{ mapping.product.name }}">
+                                        {% if mapping.product.images.first %}
+                                            <img class="h-10 w-10 rounded-lg object-cover mr-3" src="{{ mapping.product.images.first.image.url }}" alt="{{ mapping.product.name }}">
                                         {% else %}
                                             <div class="h-10 w-10 rounded-lg bg-gray-200 flex items-center justify-center mr-3">
                                                 <i class="fas fa-box text-gray-400"></i>

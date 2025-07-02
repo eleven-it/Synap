@@ -60,6 +60,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_project.settings.custom_ajax_login_required',
+    'core.middleware.CDNCacheMiddleware',
 ]
 
 # Middleware para AJAX login
@@ -261,4 +262,50 @@ SITE_URL = os.getenv('SITE_URL', 'https://tudominio.com')
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "tailwind"
 CRISPY_TEMPLATE_PACK = "tailwind"
+
+# =============================================================================
+# CDN CONFIGURATION
+# =============================================================================
+
+# CDN Settings - Choose one option below
+
+# Option 1: Cloudflare CDN
+USE_CLOUDFLARE_CDN = os.getenv('USE_CLOUDFLARE_CDN', 'True').lower() == 'true'
+CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'cdn.synap.com')
+
+# Option 2: AWS CloudFront
+USE_AWS_CDN = os.getenv('USE_AWS_CDN', 'False').lower() == 'true'
+AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN', 'cdn.tudominio.com')
+
+# Option 3: Bunny CDN
+USE_BUNNY_CDN = os.getenv('USE_BUNNY_CDN', 'False').lower() == 'true'
+BUNNY_CDN_DOMAIN = os.getenv('BUNNY_CDN_DOMAIN', 'cdn.tudominio.com')
+
+# CDN URL Configuration
+if USE_CLOUDFLARE_CDN:
+    STATIC_URL = f'https://{CLOUDFLARE_DOMAIN}/static/'
+    MEDIA_URL = f'https://{CLOUDFLARE_DOMAIN}/media/'
+elif USE_AWS_CDN:
+    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
+elif USE_BUNNY_CDN:
+    STATIC_URL = f'https://{BUNNY_CDN_DOMAIN}/static/'
+    MEDIA_URL = f'https://{BUNNY_CDN_DOMAIN}/media/'
+else:
+    # Local development or no CDN
+    STATIC_URL = '/static/'
+    MEDIA_URL = '/media/'
+
+# CDN Cache Headers
+CDN_CACHE_HEADERS = {
+    'static': {
+        'Cache-Control': 'public, max-age=31536000, immutable',  # 1 year
+    },
+    'media': {
+        'Cache-Control': 'public, max-age=86400',  # 1 day
+    },
+    'images': {
+        'Cache-Control': 'public, max-age=604800',  # 1 week
+    }
+}
 

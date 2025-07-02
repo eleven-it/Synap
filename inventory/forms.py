@@ -1,14 +1,22 @@
 from django import forms
 from .models import Product, Brand, Category, Subcategory, InitialStockDraft, InitialStockDraftItem, Warehouse, Location
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
+import re
 
 class ProductForm(forms.ModelForm):
+    images = forms.FileField(
+        label=_('Product Images'),
+        widget=forms.ClearableFileInput(attrs={'multiple': True, 'class': 'form-input'}),
+        required=False
+    )
     class Meta:
         model = Product
         fields = [
-            'name', 'sku', 'description', 'category', 'brand', 'subcategory', 'image',
-            'handle', 'price', 'price_currency', 'uom', 'tracking',
-            'is_published'
+            'name', 'sku', 'description', 'category', 'brand', 'subcategory',
+            'handle', 'price', 'sale_price', 'cost_price', 'profit_margin', 'price_currency', 'uom', 'tracking',
+            'weight_kg', 'volume_m3', 'width_cm', 'height_cm', 'depth_cm', 'is_dangerous', 'barcode',
+            'video_url', 'product_kind', 'is_published'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
@@ -17,12 +25,23 @@ class ProductForm(forms.ModelForm):
             'category': forms.Select(attrs={'class': 'form-select'}),
             'brand': forms.Select(attrs={'class': 'form-select'}),
             'subcategory': forms.Select(attrs={'class': 'form-select'}),
-            'image': forms.ClearableFileInput(attrs={'class': 'form-input'}),
             'handle': forms.TextInput(attrs={'class': 'form-input'}),
             'price': forms.NumberInput(attrs={'class': 'form-input'}),
+            'sale_price': forms.NumberInput(attrs={'class': 'form-input'}),
+            'cost_price': forms.NumberInput(attrs={'class': 'form-input'}),
+            'profit_margin': forms.NumberInput(attrs={'class': 'form-input'}),
             'price_currency': forms.Select(attrs={'class': 'form-select'}),
             'uom': forms.Select(attrs={'class': 'form-select'}),
             'tracking': forms.Select(attrs={'class': 'form-select'}),
+            'weight_kg': forms.NumberInput(attrs={'class': 'form-input'}),
+            'volume_m3': forms.NumberInput(attrs={'class': 'form-input'}),
+            'width_cm': forms.NumberInput(attrs={'class': 'form-input'}),
+            'height_cm': forms.NumberInput(attrs={'class': 'form-input'}),
+            'depth_cm': forms.NumberInput(attrs={'class': 'form-input'}),
+            'is_dangerous': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'barcode': forms.TextInput(attrs={'class': 'form-input'}),
+            'video_url': forms.URLInput(attrs={'class': 'form-input'}),
+            'product_kind': forms.Select(attrs={'class': 'form-select'}),
             'is_published': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
@@ -40,12 +59,122 @@ class ProductForm(forms.ModelForm):
             self.fields['subcategory'].queryset = self.instance.subcategory.category.subcategories.order_by('name')
 
     def clean(self):
-        cleaned_data = super().clean()
-        category = cleaned_data.get('category')
-        subcategory = cleaned_data.get('subcategory')
-        if subcategory and category and subcategory.category != category:
-            self.add_error('subcategory', _('La subcategoría seleccionada no pertenece al rubro seleccionado.'))
-        return cleaned_data
+        cleaned = super().clean()
+        # Validar margen si hay precio y costo
+        price = cleaned.get('price')
+        cost = cleaned.get('cost_price')
+        margin = cleaned.get('profit_margin')
+        if price and cost is not None and margin is not None:
+            expected_margin = ((price - cost) / price) * 100 if price else 0
+            if abs(expected_margin - margin) > 1:
+                raise ValidationError({'profit_margin': _('Profit margin does not match price and cost price.')})
+        return cleaned
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip()
+        if not name:
+            raise ValidationError(_('Name is required.'))
+        if len(name) > 255:
+            raise ValidationError(_('Name must be at most 255 characters.'))
+        return name
+
+    def clean_description(self):
+        description = self.cleaned_data.get('description', '').strip()
+        if not description:
+            raise ValidationError(_('Description is required.'))
+        return description
+
+    def clean_price(self):
+        price = self.cleaned_data.get('price')
+        if price in [None, '']:
+            raise ValidationError(_('Price is required.'))
+        if isinstance(price, str) and ',' in price:
+            raise ValidationError(_('Solo se permite el punto (.) como separador decimal.'))
+        return price
+
+    def clean_sku(self):
+        sku = self.cleaned_data.get('sku')
+        if sku is None:
+            return None
+        sku = sku.strip()
+        if sku and not re.match(r'^[A-Za-z0-9\-_.]+$', sku):
+            raise ValidationError(_('SKU can only contain letters, numbers, hyphens, underscores and dots.'))
+        if sku and Product.objects.exclude(pk=self.instance.pk).filter(sku=sku).exists():
+            raise ValidationError(_('SKU must be unique.'))
+        return sku
+
+    def clean_handle(self):
+        handle = self.cleaned_data.get('handle')
+        if handle is None:
+            return None
+        handle = handle.strip()
+        if handle and not re.match(r'^[a-z0-9\-]+$', handle):
+            raise ValidationError(_('Handle can only contain lowercase letters, numbers and hyphens.'))
+        if handle and Product.objects.exclude(pk=self.instance.pk).filter(handle=handle).exists():
+            raise ValidationError(_('Handle must be unique.'))
+        return handle
+
+    def clean_sale_price(self):
+        sale_price = self.cleaned_data.get('sale_price')
+        if isinstance(sale_price, str) and ',' in sale_price:
+            raise ValidationError(_('Solo se permite el punto (.) como separador decimal.'))
+        return sale_price
+
+    def clean_cost_price(self):
+        cost_price = self.cleaned_data.get('cost_price')
+        if cost_price in [None, '']:
+            return None
+        if isinstance(cost_price, str) and ',' in cost_price:
+            raise ValidationError(_('Solo se permite el punto (.) como separador decimal.'))
+        return cost_price
+
+    def clean_profit_margin(self):
+        margin = self.cleaned_data.get('profit_margin')
+        if margin is not None:
+            if margin < 0 or margin > 100:
+                raise ValidationError(_('Profit margin must be between 0 and 100.'))
+        return margin
+
+    def clean_weight_kg(self):
+        weight = self.cleaned_data.get('weight_kg')
+        kind = self.cleaned_data.get('product_kind')
+        if kind == 'physical' and (weight is None or weight <= 0):
+            raise ValidationError(_('Weight is required and must be greater than 0 for physical products.'))
+        return weight
+
+    def clean_width_cm(self):
+        width = self.cleaned_data.get('width_cm')
+        kind = self.cleaned_data.get('product_kind')
+        if kind == 'physical' and (width is None or width <= 0):
+            raise ValidationError(_('Width is required and must be greater than 0 for physical products.'))
+        return width
+
+    def clean_height_cm(self):
+        height = self.cleaned_data.get('height_cm')
+        kind = self.cleaned_data.get('product_kind')
+        if kind == 'physical' and (height is None or height <= 0):
+            raise ValidationError(_('Height is required and must be greater than 0 for physical products.'))
+        return height
+
+    def clean_depth_cm(self):
+        depth = self.cleaned_data.get('depth_cm')
+        kind = self.cleaned_data.get('product_kind')
+        if kind == 'physical' and (depth is None or depth <= 0):
+            raise ValidationError(_('Depth is required and must be greater than 0 for physical products.'))
+        return depth
+
+    def clean_video_url(self):
+        url = self.cleaned_data.get('video_url', '').strip()
+        if url:
+            if not (url.startswith('https://www.youtube.com/') or url.startswith('https://youtu.be/') or url.startswith('https://vimeo.com/')):
+                raise ValidationError(_('Only YouTube or Vimeo links are allowed.'))
+        return url
+
+    def clean_product_kind(self):
+        kind = self.cleaned_data.get('product_kind')
+        if kind not in ['physical', 'digital']:
+            raise ValidationError(_('Invalid product kind.'))
+        return kind
 
 class InitialStockDraftForm(forms.ModelForm):
     almacen = forms.ModelChoiceField(
