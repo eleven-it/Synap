@@ -1,6 +1,7 @@
 from django.urls import path, include
 from . import views
 from .views import views_api
+from core.views.cdn_wizard import CDNWizardView
 
 app_name = 'core'
 
@@ -58,6 +59,9 @@ urlpatterns = [
 
     # URL de Errores
     path('403/', views.error_403_view, name='error_403'),
+
+    # CDN Wizard
+    path('cdn-wizard/', CDNWizardView.as_view(), name='cdn_wizard'),
 ]
 
 
