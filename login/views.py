@@ -6,7 +6,9 @@ from django.http import JsonResponse, HttpResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
-from firebase_admin import auth, firestore
+from django_project.firebase_config import get_firebase_app
+import firebase_admin
+from firebase_admin import firestore
 from core.utils import sincronizar_usuario_desde_firestore
 from core.models import UsuarioExtendido, Rol
 from urllib.parse import urlparse
@@ -63,7 +65,8 @@ def login_view(request):
             if not id_token or not isinstance(id_token, str):
                 return JsonResponse({"error": "ID Token inválido o ausente"}, status=400)
 
-            decoded_token = auth.verify_id_token(id_token)
+            get_firebase_app()
+            decoded_token = firebase_admin.auth.verify_id_token(id_token)
             usuario_extendido = sincronizar_usuario_desde_firestore(decoded_token)
 
             # Actualizar último acceso
@@ -105,7 +108,7 @@ def reset_password_view(request):
     if request.method == "POST":
         email = request.POST.get("email")
         try:
-            link = auth.generate_password_reset_link(email)
+            link = firebase_admin.auth.generate_password_reset_link(email)
             return JsonResponse({"message": "Correo enviado"}, status=200)
         except Exception as e:
             logger.error(f"Error al generar link de reseteo: {str(e)}")
@@ -153,8 +156,8 @@ def perfil_view(request):
                     "user": request.session["user"]
                 })
             try:
-                from firebase_admin import auth
-                auth.update_user(uid=usuario.uid, password=nueva_password)
+                # from firebase_admin import auth
+                firebase_admin.auth.update_user(uid=usuario.uid, password=nueva_password)
                 messages.success(request, _( "Password updated successfully." ))
             except Exception as e:
                 messages.error(request, _( "Error updating password: %(error)s" ) % {"error": e})

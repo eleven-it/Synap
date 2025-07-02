@@ -8,7 +8,8 @@ from core.models import UsuarioExtendido, Permiso, Rol
 from core.decorators import tiene_permiso
 from core.constantes_permisos import PERMISOS_POR_MODULO
 from core.utils import permisos_contextuales
-from firebase_admin import firestore, auth
+from django_project.firebase_config import get_firebase_app
+import firebase_admin
 from django.views.generic.edit import CreateView
 from django.contrib.auth.hashers import make_password
 from django.urls import reverse_lazy
@@ -16,8 +17,12 @@ from django.http import HttpResponseRedirect
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from ..forms import UsuarioCreateForm
 import logging
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
+
+# Antes de usar auth o firestore, asegúrate de inicializar Firebase:
+get_firebase_app()
 
 
 @tiene_permiso("administrar.usuarios")

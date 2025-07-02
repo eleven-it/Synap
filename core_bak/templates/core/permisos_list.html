@@ -1,0 +1,167 @@
+{% extends "core/admin_base.html" %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="bg-white p-6 rounded-lg shadow-md" x-data="syncComponent()">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-semibold text-gray-800">Administración de Permisos</h1>
+        <div class="flex items-center space-x-2">
+            <button @click="startSync" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center transition duration-150 ease-in-out">
+                <span class="material-icons mr-2">sync</span>
+                Sincronizar Sistema
+            </button>
+            <a href="{% url 'core:crear_permiso' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
+                <span class="material-icons mr-2">add</span>
+                Crear Permiso
+            </a>
+        </div>
+    </div>
+
+    <!-- Modal de Sincronización -->
+    <div x-show="modalOpen" class="fixed inset-0 bg-gray-800 bg-opacity-60 overflow-y-auto h-full w-full z-50 flex items-center justify-center" x-transition>
+        <div @click.away="closeModal" class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl transform transition-all" :class="modalOpen ? 'scale-100' : 'scale-95'">
+            <div class="flex justify-between items-start">
+                <h3 class="text-2xl font-bold text-gray-800 mb-4">Estado de la Sincronización</h3>
+                <button @click="closeModal" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <template x-if="loading && results.length === 0">
+                    <div class="flex items-center p-4 bg-gray-100 rounded-lg">
+                        <svg class="animate-spin h-6 w-6 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="ml-3 font-medium text-gray-700">Iniciando sincronización...</p>
+                    </div>
+                </template>
+
+                <template x-for="(result, index) in results" :key="index">
+                    <div class="p-4 rounded-lg" :class="{ 'bg-green-50 border-green-200': result.status === 'success', 'bg-red-50 border-red-200': result.status === 'error' }">
+                        <div class="flex items-center">
+                            <!-- Icono de estado -->
+                            <template x-if="result.status === 'success'">
+                                <div class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
+                                    <span class="material-icons text-lg">check</span>
+                                </div>
+                            </template>
+                            <template x-if="result.status === 'error'">
+                                <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
+                                    <span class="material-icons text-lg">close</span>
+                                </div>
+                            </template>
+
+                            <div class="ml-4">
+                                <p class="font-bold text-gray-800" x-text="result.step"></p>
+                                <p class="text-sm text-gray-600" x-text="result.summary"></p>
+                            </div>
+                            <button @click="result.showLog = !result.showLog" class="ml-auto text-xs text-blue-500 hover:underline">Ver detalles</button>
+                        </div>
+                        <template x-if="result.showLog">
+                            <pre class="mt-4 bg-gray-900 text-white text-xs rounded-md p-3 overflow-x-auto max-h-48" x-text="result.log"></pre>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            
+            <template x-if="globalError">
+                <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+                    <p class="font-bold">Error General</p>
+                    <p x-text="globalError"></p>
+                </div>
+            </template>
+            
+            <div class="mt-6 text-right">
+                <button @click="closeModal" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition" :disabled="loading">
+                    {% trans "Close" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de búsqueda -->
+    <div class="mb-4">
+  <div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-md">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Permission Name" %}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Identifier (Codename)" %}</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for permiso in permisos %}
+          <tr>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ permiso.nombre }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{{ permiso.codigo }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="2" class="text-center py-4">{% trans "No permissions available." %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock admin_content %}
+
+{% block extra_js %}
+<script>
+    function syncComponent() {
+        return {
+            modalOpen: false,
+            loading: false,
+            results: [],
+            globalError: '',
+
+            startSync() {
+                this.modalOpen = true;
+                this.loading = true;
+                this.results = [];
+                this.globalError = '';
+
+                fetch("{% url 'core:sincronizar_sistema' %}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error del servidor: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    this.loading = false;
+                    if (data.status === 'success') {
+                        this.results = data.results.map(r => ({ ...r, showLog: false }));
+                    } else {
+                        this.globalError = data.message || 'Ocurrió un error desconocido durante el proceso.';
+                        if (data.results) {
+                            this.results = data.results.map(r => ({ ...r, showLog: r.status === 'error' }));
+                        }
+                    }
+                })
+                .catch(err => {
+                    this.loading = false;
+                    this.globalError = `Error de conexión: ${err.message}. Revisa la consola para más detalles.`;
+                    console.error(err);
+                });
+            },
+            closeModal() {
+                this.modalOpen = false;
+                // Si la sincronización fue exitosa, recargamos la página para ver los cambios
+                if (!this.globalError && this.results.length > 0) {
+                    setTimeout(() => window.location.reload(), 300);
+                }
+            }
+        }
+    }
+</script>
+{% endblock extra_js %}

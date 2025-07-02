@@ -6,9 +6,11 @@ from django.contrib import messages
 from core.utils import permisos_contextuales
 from django.core.paginator import Paginator
 from core.constantes_permisos import PERMISOS_POR_MODULO
-from firebase_admin import auth, firestore
+from django_project.firebase_config import get_firebase_app
 import logging
 from django.utils.translation import gettext_lazy as _
+import firebase_admin
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ def usuarios_admin_view(request):
 
     # 🔄 Actualización (roles + permisos + Firestore)
     if request.method == "POST":
-        db = firestore.client()
+        db = firebase_admin.firestore.client()
 
         for usuario in usuarios:
             # ✅ Asignar múltiples roles
@@ -140,9 +142,9 @@ def crear_usuario_view(request):
 
         # 1. Crear en Firebase Auth
         try:
-            firebase_user = auth.create_user(email=email, password=password, display_name=nombre)
+            firebase_user = firebase_admin.auth.create_user(email=email, password=password, display_name=nombre)
             uid = firebase_user.uid
-        except auth.EmailAlreadyExistsError:
+        except firebase_admin.auth.EmailAlreadyExistsError:
             messages.error(request, _("That email is already registered in Firebase."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
         except Exception as e:
@@ -161,7 +163,7 @@ def crear_usuario_view(request):
 
         # 3. Crear en Firestore
         try:
-            firestore.client().collection("usuarios").document(uid).set({
+            firebase_admin.firestore.client().collection("usuarios").document(uid).set({
                 "email": email,
                 "nombre": nombre,
                 "idioma": idioma,
@@ -229,8 +231,8 @@ def perfil_view(request):
         if nueva:
             if nueva == confirmar:
                 try:
-                    from firebase_admin import auth
-                    auth.update_user(uid=usuario.uid, password=nueva)
+                    # from firebase_admin import auth
+                    firebase_admin.auth.update_user(uid=usuario.uid, password=nueva)
                     messages.success(request, "Contraseña actualizada correctamente.")
                 except Exception as e:
                     messages.error(request, f"Error al cambiar la contraseña: {e}")
@@ -249,3 +251,6 @@ def perfil_view(request):
 @tiene_permiso("usuarios.historial")
 def historial_view(request):
     return render(request, "core/historial.html", {"user": request.session["user"]})
+
+# Antes de usar auth o firestore, asegúrate de inicializar Firebase:
+get_firebase_app()

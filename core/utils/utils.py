@@ -1,5 +1,5 @@
 from core.models import UsuarioExtendido, Rol
-from firebase_admin import firestore
+from django_project.firebase_config import get_firebase_app
 import fnmatch
 import logging
 from django.core.cache import cache
@@ -7,6 +7,8 @@ from django.conf import settings
 from typing import Dict, List, Set, Optional, Any
 import json
 from django.utils.translation import gettext_lazy as _
+import firebase_admin
+from firebase_admin import firestore
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +164,12 @@ ADMIN_SIDEBAR_MENU = {
             "url_name": "core:system_config_list",
             "icon": "settings",
             "permission": "configuracion.sistema"
+        },
+        {
+            "label": _( "CDN Wizard" ),
+            "url_name": "core:cdn_wizard",
+            "icon": "cloud",
+            "permission": "configuracion.sistema"
         }
     ]
 }
@@ -197,6 +205,8 @@ INVENTORY_SIDEBAR_MENU = {
     ]
 }
 
+# Antes de usar firestore, asegúrate de inicializar Firebase:
+get_firebase_app()
 
 def sincronizar_usuario_desde_firestore(decoded_token: Dict[str, Any]) -> UsuarioExtendido:
     """
@@ -211,7 +221,7 @@ def sincronizar_usuario_desde_firestore(decoded_token: Dict[str, Any]) -> Usuari
         raise ValueError("UID y email son requeridos para sincronizar usuario")
 
     try:
-        firestore_db = firestore.client()
+        firestore_db = firebase_admin.firestore.client()
         doc_ref = firestore_db.collection("usuarios").document(uid)
         doc = doc_ref.get()
 

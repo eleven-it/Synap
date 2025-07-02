@@ -1,0 +1,227 @@
+# core/constantes_permisos.py
+
+PERMISOS_POR_MODULO = {
+    "Clientes": [
+        ("clientes.ver", "Ver clientes"),
+        ("clientes.crear", "Crear clientes"),
+        ("clientes.editar", "Editar clientes"),
+        ("clientes.eliminar", "Eliminar clientes"),
+        ("clientes.exportar", "Exportar clientes"),
+        ("clientes.importar", "Importar clientes"),
+        ("clientes.historial", "Ver historial de clientes"),
+    ],
+    "Proveedores": [
+        ("proveedores.ver", "Ver proveedores"),
+        ("proveedores.crear", "Crear proveedores"),
+        ("proveedores.editar", "Editar proveedores"),
+        ("proveedores.eliminar", "Eliminar proveedores"),
+        ("proveedores.exportar", "Exportar proveedores"),
+        ("proveedores.importar", "Importar proveedores"),
+        ("proveedores.historial", "Ver historial de proveedores"),
+    ],
+    "Inventario": [
+        ("inventory.ver_dashboard", "Ver dashboard de inventario"),
+        ("inventory.ver_stock", "Ver stock actual"),
+        
+        ("inventory.ver_product", "Ver productos"),
+        ("inventory.create_product", "Crear productos"),
+        ("inventory.edit_product", "Editar productos"),
+        ("inventory.delete_product", "Eliminar productos"),
+
+        ("inventory.ver_warehouse", "Ver almacenes"),
+        ("inventory.create_warehouse", "Crear almacenes"),
+        ("inventory.edit_warehouse", "Editar almacenes"),
+        
+        ("inventory.ver_location", "Ver ubicaciones"),
+        ("inventory.create_location", "Crear ubicaciones"),
+        ("inventory.edit_location", "Editar ubicaciones"),
+
+        ("inventory.view_brand", "Ver marcas"),
+        ("inventory.add_brand", "Añadir marcas"),
+        ("inventory.change_brand", "Cambiar marcas"),
+        ("inventory.delete_brand", "Eliminar marcas"),
+
+        ("inventory.view_category", "Ver rubros"),
+        ("inventory.add_category", "Añadir rubros"),
+        ("inventory.change_category", "Cambiar rubros"),
+        ("inventory.delete_category", "Eliminar rubros"),
+
+        ("inventory.view_subcategory", "Ver subrubros"),
+        ("inventory.add_subcategory", "Añadir subrubros"),
+        ("inventory.change_subcategory", "Cambiar subrubros"),
+        ("inventory.delete_subcategory", "Eliminar subrubros"),
+
+        ("inventory.realizar_ajuste", "Realizar ajustes de inventario"),
+        ("inventory.ver_movements", "Ver historial de movimientos"),
+
+        ("inventory.config_tiendanube", "Configurar TiendaNube"),
+    ],
+    "Ventas": [
+        ("ventas.ver", "Ver ventas"),
+        ("ventas.crear", "Crear ventas"),
+        ("ventas.editar", "Editar ventas"),
+        ("ventas.eliminar", "Eliminar ventas"),
+        ("ventas.anular", "Anular ventas"),
+        ("ventas.facturar", "Generar facturas"),
+        ("ventas.devoluciones", "Gestionar devoluciones"),
+        ("ventas.reportes", "Ver reportes de ventas"),
+        ("ventas.exportar", "Exportar ventas"),
+    ],
+    "Compras": [
+        ("compras.ver", "Ver compras"),
+        ("compras.crear", "Registrar compras"),
+        ("compras.editar", "Editar compras"),
+        ("compras.eliminar", "Eliminar compras"),
+        ("compras.anular", "Anular compras"),
+        ("compras.ordenes", "Gestionar órdenes de compra"),
+        ("compras.reportes", "Ver reportes de compras"),
+        ("compras.exportar", "Exportar compras"),
+    ],
+    "Finance": [
+        ("finance.ver", "Ver finanzas"),
+        ("finance.facturas", "Gestionar facturas"),
+        ("finance.pagos", "Gestionar pagos"),
+        ("finance.cobros", "Gestionar cobros"),
+        ("finance.bancos", "Gestionar bancos"),
+        ("finance.contabilidad", "Acceso a contabilidad"),
+        ("finance.reportes", "Ver reportes financieros"),
+        ("finance.exportar", "Exportar datos financieros"),
+    ],
+    "Reportes": [
+        ("reportes.ver", "Ver reportes"),
+        ("reportes.crear", "Crear reportes personalizados"),
+        ("reportes.exportar", "Exportar reportes"),
+        ("reportes.programar", "Programar reportes automáticos"),
+        ("reportes.dashboard", "Acceso a dashboards"),
+        ("reportes.bi", "Acceso a Business Intelligence"),
+    ],
+    "Usuarios": [
+        ("usuarios.ver", "Ver usuarios"),
+        ("usuarios.crear", "Crear usuarios"),
+        ("usuarios.editar", "Editar usuarios"),
+        ("usuarios.eliminar", "Eliminar usuarios"),
+        ("usuarios.perfil", "Ver y editar perfil"),
+        ("usuarios.dashboard", "Acceder al panel principal"),
+        ("usuarios.historial", "Ver historial de actividad"),
+        ("usuarios.roles.ver", "Ver roles"),
+        ("usuarios.roles.crear", "Crear roles"),
+        ("usuarios.roles.editar", "Editar roles"),
+        ("usuarios.roles.eliminar", "Eliminar roles"),
+        ("usuarios.permisos.ver", "Ver permisos"),
+        ("usuarios.permisos.crear", "Crear permisos"),
+        ("usuarios.permisos.editar", "Editar permisos"),
+        ("usuarios.permisos.eliminar", "Eliminar permisos"),
+    ],
+    "Sistema": [
+        ("configuracion.general", "Acceso a configuración general"),
+        ("configuracion.empresa", "Configurar datos de empresa"),
+        ("configuracion.moneda", "Configurar monedas"),
+        ("configuracion.uom", "Configurar unidades de medida"),
+        ("administrar.usuarios", "Administrar usuarios"),
+        ("administrar.roles", "Administrar roles"),
+        ("administrar.permisos", "Administrar permisos"),
+        ("administrar.backup", "Realizar backups"),
+        ("administrar.logs", "Ver logs del sistema"),
+        ("administrar.sync", "Sincronización con sistemas externos"),
+    ],
+    "IA": [
+        ("ia.reportes", "Generar reportes con IA"),
+        ("ia.recomendaciones", "Recibir recomendaciones de IA"),
+        ("ia.predicciones", "Acceso a predicciones"),
+        ("ia.automatizacion", "Configurar automatizaciones"),
+    ],
+    "TiendaNube": [
+        ("tiendanube.access", "Access TiendaNube integration")
+    ]
+}
+
+# Roles predefinidos con sus permisos
+ROLES_PREDEFINIDOS = {
+    "Administrador": {
+        "descripcion": "Acceso total al sistema",
+        "permisos": ["*"]  # Todos los permisos
+    },
+    "Gerente": {
+        "descripcion": "Gestión completa de operaciones",
+        "permisos": [
+            "clientes.*", "proveedores.*", "inventario.*", 
+            "ventas.*", "compras.*", "reportes.*",
+            "usuarios.ver", "usuarios.editar", "usuarios.perfil",
+            "configuracion.general", "configuracion.empresa"
+        ]
+    },
+    "Vendedor": {
+        "descripcion": "Gestión de ventas y clientes",
+        "permisos": [
+            "clientes.ver", "clientes.crear", "clientes.editar",
+            "ventas.ver", "ventas.crear", "ventas.editar",
+            "inventario.ver", "inventario.ver_stock",
+            "reportes.ver", "usuarios.perfil"
+        ]
+    },
+    "Comprador": {
+        "descripcion": "Gestión de compras y proveedores",
+        "permisos": [
+            "proveedores.ver", "proveedores.crear", "proveedores.editar",
+            "compras.ver", "compras.crear", "compras.editar",
+            "inventario.ver", "inventario.ver_stock",
+            "reportes.ver", "usuarios.perfil"
+        ]
+    },
+    "Almacén": {
+        "descripcion": "Gestión de inventario",
+        "permisos": [
+            "inventory.ver_dashboard",
+            "inventory.ver_stock",
+            "inventory.ver_product", "inventory.create_product", "inventory.edit_product", "inventory.delete_product",
+            "inventory.ver_warehouse", "inventory.create_warehouse", "inventory.edit_warehouse",
+            "inventory.ver_location", "inventory.create_location", "inventory.edit_location",
+            "inventory.view_brand", "inventory.add_brand", "inventory.change_brand", "inventory.delete_brand",
+            "inventory.view_category", "inventory.add_category", "inventory.change_category", "inventory.delete_category",
+            "inventory.view_subcategory", "inventory.add_subcategory", "inventory.change_subcategory", "inventory.delete_subcategory",
+            "inventory.realizar_ajuste",
+            "inventory.ver_movements",
+            "proveedores.ver",
+            "compras.ver", 
+            "reportes.ver", 
+            "usuarios.perfil"
+        ]
+    },
+    "Contador": {
+        "descripcion": "Gestión financiera y contable",
+        "permisos": [
+            "finance.*", "reportes.ver", "reportes.exportar",
+            "usuarios.perfil"
+        ]
+    },
+    "Consultor": {
+        "descripcion": "Solo lectura y reportes",
+        "permisos": [
+            "clientes.ver", "proveedores.ver", "inventario.ver",
+            "ventas.ver", "compras.ver", "reportes.ver",
+            "usuarios.perfil"
+        ]
+    }
+}
+
+# Permisos críticos que requieren confirmación especial
+PERMISOS_CRITICOS = [
+    "usuarios.eliminar",
+    "administrar.backup",
+    "administrar.logs",
+    "configuracion.general",
+    "finance.contabilidad"
+]
+
+# Permisos que requieren auditoría
+PERMISOS_AUDITABLES = [
+    "usuarios.eliminar",
+    "clientes.eliminar",
+    "proveedores.eliminar",
+    "inventory.ajustar_stock",
+    "ventas.anular",
+    "compras.anular",
+    "finance.pagos",
+    "administrar.backup"
+]
+

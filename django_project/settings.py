@@ -1,8 +1,8 @@
 import os
 
 # firebase_config.py
-import firebase_admin
-from firebase_admin import credentials, auth
+# import firebase_admin
+# from firebase_admin import credentials, auth
 
 from decouple import config, Csv
 from pathlib import Path
@@ -180,8 +180,6 @@ FIREBASE_CONFIG = {
     "clientId": os.getenv("FIREBASE_CLIENT_ID"),  
 }
 FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")
-cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-firebase_admin.initialize_app(cred)
 
 # Django REST Framework
 REST_FRAMEWORK = {
@@ -271,7 +269,7 @@ CRISPY_TEMPLATE_PACK = "tailwind"
 
 # Option 1: Cloudflare CDN
 USE_CLOUDFLARE_CDN = os.getenv('USE_CLOUDFLARE_CDN', 'True').lower() == 'true'
-CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'cdn.synap.com')
+CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'synap.administranet.com.ar')
 
 # Option 2: AWS CloudFront
 USE_AWS_CDN = os.getenv('USE_AWS_CDN', 'False').lower() == 'true'
