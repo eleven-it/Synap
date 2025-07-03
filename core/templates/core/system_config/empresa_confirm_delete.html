@@ -1,0 +1,35 @@
+{% extends 'core/admin_base.html' %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-lg mx-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mt-16 animate-fade-in">
+    <h1 class="text-2xl font-bold text-red-600 mb-6">
+        {% if empresa.activa or tiene_dependencias %}
+            {% trans 'Desactivar Empresa' %}
+        {% else %}
+            {% trans 'Eliminar Empresa' %}
+        {% endif %}
+    </h1>
+    <p class="mb-4 text-gray-700 dark:text-gray-200">
+        {% if empresa.activa or tiene_dependencias %}
+            {% trans '¿Estás seguro de que deseas desactivar la empresa:' %} <span class="font-semibold">{{ empresa.nombre }}</span>?
+        {% else %}
+            {% trans '¿Estás seguro de que deseas eliminar la empresa:' %} <span class="font-semibold">{{ empresa.nombre }}</span>?
+        {% endif %}
+    </p>
+    <p class="mb-6 text-sm text-gray-500 dark:text-gray-400">
+        {% if empresa.activa or tiene_dependencias %}
+            {% trans 'La empresa será desactivada y no podrá ser utilizada, pero sus datos permanecerán en el sistema.' %}
+        {% else %}
+            {% trans 'Esta acción no se puede deshacer. Solo puedes eliminar empresas inactivas y sin datos relacionados.' %}
+        {% endif %}
+    </p>
+    <form method="post" class="flex justify-end gap-4">
+        {% csrf_token %}
+        <a href="{% url 'core:empresa_listar' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-lg transition">{% trans 'Cancelar' %}</a>
+        <button type="submit" class="{% if empresa.activa or tiene_dependencias %}bg-yellow-500 hover:bg-yellow-600{% else %}bg-red-600 hover:bg-red-700{% endif %} text-white font-bold py-2 px-6 rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500">
+            {% if empresa.activa or tiene_dependencias %}{% trans 'Desactivar' %}{% else %}{% trans 'Eliminar' %}{% endif %}
+        </button>
+    </form>
+</div>
+{% endblock %} 

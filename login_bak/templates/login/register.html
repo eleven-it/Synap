@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Synap - Registro</title>
+  {% load static %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="/static/login/firebase-init.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4">
+  <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 w-full max-w-md">
+    <h2 class="text-2xl font-bold mb-4 text-center">Crear cuenta</h2>
+    <form onsubmit="registerUser(event)">
+      <div class="mb-4">
+        <label for="nombre" class="block text-gray-700 text-sm font-bold mb-2">Nombre completo</label>
+        <input id="nombre" type="text" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <div class="mb-4">
+        <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Correo electrónico</label>
+        <input id="email" type="email" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <div class="mb-4">
+        <label for="password" class="block text-gray-700 text-sm font-bold mb-2">Contraseña</label>
+        <input id="password" type="password" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" required>
+      </div>
+      <p id="error-message" class="text-red-500 text-sm hidden mb-4"></p>
+      <div class="flex items-center justify-between">
+        <button type="submit" class="bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+          Registrarse
+        </button>
+      </div>
+    </form>
+    <p class="mt-4 text-sm text-center">¿Ya tenés cuenta? <a href="{% url 'login:login' %}" class="text-blue-500 hover:underline">Iniciar sesión</a></p>
+  </div>
+</body>
+</html>

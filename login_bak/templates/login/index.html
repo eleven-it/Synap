@@ -1,0 +1,66 @@
+{% load static %}
+{% load i18n %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>Synap - Gestión Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Barra de Navegación -->
+    <nav class="bg-blue-600 p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="/" class="text-white text-2xl font-bold">Synap</a>
+
+            <div>
+                {% if user.is_authenticated %}
+                    <a href="#" class="text-white px-4">Hola, {{ user.username }}</a>
+                    <a href="{% url 'account_logout' %}" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Cerrar Sesión</a>
+                {% else %}
+                    <a href="{% url 'account_login' %}" class="bg-white text-blue-600 px-4 py-2 rounded mr-2">Iniciar Sesión</a>
+                    <a href="{% url 'account_signup' %}" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Registrarse</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sección Principal -->
+    <header class="text-center py-16 bg-blue-500 text-white">
+        <h1 class="text-4xl font-bold">Automatiza y Optimiza tu Trabajo con Synap</h1>
+        <p class="mt-4 text-lg">La mejor plataforma para conectar profesionales y clientes.</p>
+        <a href="{% url 'account_signup' %}" class="mt-6 inline-block bg-white text-blue-600 px-6 py-3 rounded-lg font-semibold">
+            Comienza Ahora
+        </a>
+    </header>
+
+    <!-- Sección de Características -->
+    <section class="container mx-auto px-4 py-16 text-center">
+        <h2 class="text-3xl font-bold text-blue-600">¿Por qué Synap?</h2>
+
+        <div class="grid md:grid-cols-3 gap-8 mt-8">
+            <div class="p-6 bg-white shadow rounded-lg">
+                <h3 class="text-xl font-bold">Gestión Inteligente</h3>
+                <p class="mt-2 text-gray-600">Organiza tareas y proyectos de forma eficiente.</p>
+            </div>
+
+            <div class="p-6 bg-white shadow rounded-lg">
+                <h3 class="text-xl font-bold">Conexión Segura</h3>
+                <p class="mt-2 text-gray-600">Encuentra clientes y profesionales con total confianza.</p>
+            </div>
+
+            <div class="p-6 bg-white shadow rounded-lg">
+                <h3 class="text-xl font-bold">Soporte 24/7</h3>
+                <p class="mt-2 text-gray-600">Estamos aquí para ayudarte en todo momento.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pie de Página -->
+    <footer class="bg-blue-600 text-white text-center py-6">
+        <p>© 2025 Synap - Todos los derechos reservados</p>
+    </footer>
+
+</body>
+</html>

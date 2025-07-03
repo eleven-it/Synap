@@ -1,35 +1,90 @@
 {% load i18n %}
-<div class="flex justify-between items-center py-4 px-2 sm:px-4">
-  <!-- Izquierda: Botón de menú + Logo -->
-  <div class="flex items-center space-x-2">
-    <button @click="openMenu = !openMenu" class="text-white hover:text-gray-200 focus:outline-none">
-        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="url(#gridGradient)" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="gridGradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#EC4899"/>
-                <stop offset="100%" stop-color="#3B82F6"/>
-              </linearGradient>
-            </defs>
-            <rect x="3" y="3" width="8" height="8" rx="1.5" />
-            <rect x="13" y="3" width="8" height="8" rx="1.5" />
-            <rect x="3" y="13" width="8" height="8" rx="1.5" />
-            <rect x="13" y="13" width="8" height="8" rx="1.5" />
-        </svg>
+<style>
+@keyframes gradient-move {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+.synap-animated {
+  background: linear-gradient(90deg, #a855f7, #3b82f6, #f472b6, #a855f7);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-move 2.5s linear infinite alternate;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  filter: drop-shadow(0 1px 6px #a855f7cc);
+}
+</style>
+<div class="flex w-full items-center justify-between px-2 sm:px-6">
+  <!-- Logo y menú a la izquierda -->
+  <div class="flex flex-1 items-center min-w-0">
+    <button @click="openMenu = !openMenu" class="text-white hover:text-purple-300 focus:outline-none mr-2 transition-transform duration-200 hover:scale-110">
+      <span class="material-icons" style="font-size: 1.5rem;">grid_view</span>
     </button>
-    <span class="text-lg font-semibold">Synap</span>
+    <span class="text-lg synap-animated flex items-center select-none cursor-pointer" style="font-size: 22px;">Synap</span>
   </div>
-
-  <!-- Derecha: Usuario -->
-  <div class="relative pr-2">
-    <button @click="openUserMenu = !openUserMenu" class="flex items-center space-x-2 hover:text-gray-200">
-      {% if user.email %}
-        <span class="hidden sm:inline">{{ user.nombre|default:user.email }}</span>
-        <img src="https://ui-avatars.com/api/?name={{ user.nombre|default:user.email }}" class="w-8 h-8 rounded-full" alt="avatar">
-      {% else %}
-        <span class="text-sm text-red-300 italic">{% trans "No user" %}</span>
+  <!-- Empresa/Sucursal centrado -->
+  <div class="flex flex-1 items-center justify-center min-w-0">
+    <div class="flex items-center gap-1 bg-white/10 dark:bg-gray-900/30 rounded-xl px-2 py-0.5 shadow-lg border border-white/20 dark:border-gray-800 transition-all duration-300 h-7 hover:shadow-purple-400/40 hover:bg-purple-400/10 hover:scale-105">
+      <span class="inline-flex items-center gap-0.5 text-xs font-bold text-white dark:text-gray-100 transition-colors duration-200">
+        <span class="material-icons text-purple-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">business</span>
+        <span class="transition-colors duration-200">{{ empresa_activa.nombre }}</span>
+      </span>
+      <span class="mx-0.5 text-gray-300 dark:text-gray-500">/</span>
+      <span class="inline-flex items-center gap-0.5 text-xs font-bold text-blue-100 dark:text-blue-300 transition-colors duration-200">
+        <span class="material-icons text-blue-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">store</span>
+        <span class="transition-colors duration-200">{{ branch_activa.name }}</span>
+      </span>
+      {% if empresas_disponibles|length > 1 or sucursales_disponibles|length > 1 %}
+        <button id="openSelector" type="button" class="ml-1 p-0.5 rounded-full bg-purple-500/80 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 shadow-md flex items-center justify-center" title="Cambiar empresa o sucursal" style="width: 1.3rem; height: 1.3rem;">
+          <span class="material-icons text-white align-middle transition-transform duration-200" style="font-size: 0.9rem;">swap_horiz</span>
+        </button>
       {% endif %}
-    </button>
-    <div x-show="openUserMenu" class="absolute right-0 mt-2 w-48 bg-white text-black rounded shadow-md py-2 z-50">
+    </div>
+    <!-- Modal selector -->
+    <dialog id="empresaBranchModal" class="rounded-xl shadow-2xl p-0 bg-white dark:bg-gray-900 w-full max-w-xs transition-all duration-300">
+      <form method="post" action="{% url 'core:cambiar_empresa_branch' %}" class="p-6 flex flex-col gap-4">
+        {% csrf_token %}
+        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Seleccionar empresa y sucursal</h3>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Empresa</label>
+        <select name="empresa_id" class="w-full rounded px-2 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 transition-all duration-200 mb-2" onchange="this.form.submit()">
+          {% for empresa in empresas_disponibles %}
+            <option value="{{ empresa.id }}" {% if empresa.id == empresa_activa.id %}selected{% endif %}>{{ empresa.nombre }}</option>
+          {% endfor %}
+        </select>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sucursal</label>
+        <select name="branch_id" class="w-full rounded px-2 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 transition-all duration-200" onchange="this.form.submit()">
+          {% for branch in sucursales_disponibles %}
+            <option value="{{ branch.id }}" {% if branch.id == branch_activa.id %}selected{% endif %}>{{ branch.nombre }}</option>
+          {% endfor %}
+        </select>
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button" onclick="document.getElementById('empresaBranchModal').close()" class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">Cancelar</button>
+          <button type="submit" class="px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 transition shadow">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+    <script>
+      // Cerrar modal con Escape
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          document.getElementById('empresaBranchModal').close();
+        }
+      });
+    </script>
+  </div>
+  <!-- Usuario a la derecha -->
+  <div class="flex flex-1 items-center justify-end min-w-0">
+    <div class="flex items-center gap-1 bg-white/10 dark:bg-gray-900/30 rounded-xl px-2 py-0.5 shadow-lg border border-white/20 dark:border-gray-800 transition-all duration-300 h-7 hover:shadow-pink-400/40 hover:bg-pink-400/10 hover:scale-105" style="min-width: 0;">
+      <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-white dark:text-gray-100 transition-colors duration-200">
+        <span class="material-icons text-purple-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">person</span>
+        <span class="transition-colors duration-200 font-bold text-xs truncate">{{ user.email }}</span>
+      </span>
+      <button @click="openUserMenu = !openUserMenu" class="ml-1 p-0.5 rounded-full bg-purple-500/80 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 shadow-md flex items-center justify-center" style="width: 1.3rem; height: 1.3rem;">
+        <span class="material-icons text-white align-middle transition-transform duration-200" style="font-size: 0.9rem;">expand_more</span>
+      </button>
+    </div>
+    <div x-show="openUserMenu" class="absolute right-2 mt-2 w-48 bg-white text-black rounded shadow-md py-2 z-50">
       <a href="/login/perfil/" class="block px-4 py-2 hover:bg-gray-100">🔐 {% trans "My profile" %}</a>
       <a href="{% url 'login:logout' %}" class="block px-4 py-2 hover:bg-gray-100">🚪 {% trans "Sign Out" %}</a>
     </div>

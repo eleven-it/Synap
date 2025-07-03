@@ -10,7 +10,12 @@ from django_project.firebase_config import get_firebase_app
 import logging
 from django.utils.translation import gettext_lazy as _
 import firebase_admin
-from firebase_admin import firestore
+from firebase_admin import firestore, auth
+from core.models.models import Empresa
+from django import forms
+from core.models import Branch
+from core.utils.utils import require_empresa_activa
+from django.views.decorators.http import require_POST
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +59,7 @@ def usuarios_admin_view(request):
 
     # 🔄 Actualización (roles + permisos + Firestore)
     if request.method == "POST":
-        db = firebase_admin.firestore.client()
+        db = firestore.client()
 
         for usuario in usuarios:
             # ✅ Asignar múltiples roles
@@ -142,9 +147,9 @@ def crear_usuario_view(request):
 
         # 1. Crear en Firebase Auth
         try:
-            firebase_user = firebase_admin.auth.create_user(email=email, password=password, display_name=nombre)
+            firebase_user = auth.create_user(email=email, password=password, display_name=nombre)
             uid = firebase_user.uid
-        except firebase_admin.auth.EmailAlreadyExistsError:
+        except auth.EmailAlreadyExistsError:
             messages.error(request, _("That email is already registered in Firebase."))
             return render(request, "core/usuarios_form.html", {"roles": roles})
         except Exception as e:
@@ -163,7 +168,7 @@ def crear_usuario_view(request):
 
         # 3. Crear en Firestore
         try:
-            firebase_admin.firestore.client().collection("usuarios").document(uid).set({
+            firestore.client().collection("usuarios").document(uid).set({
                 "email": email,
                 "nombre": nombre,
                 "idioma": idioma,
@@ -231,8 +236,7 @@ def perfil_view(request):
         if nueva:
             if nueva == confirmar:
                 try:
-                    # from firebase_admin import auth
-                    firebase_admin.auth.update_user(uid=usuario.uid, password=nueva)
+                    auth.update_user(uid=usuario.uid, password=nueva)
                     messages.success(request, "Contraseña actualizada correctamente.")
                 except Exception as e:
                     messages.error(request, f"Error al cambiar la contraseña: {e}")
@@ -254,3 +258,154 @@ def historial_view(request):
 
 # Antes de usar auth o firestore, asegúrate de inicializar Firebase:
 get_firebase_app()
+
+class EmpresaForm(forms.ModelForm):
+    class Meta:
+        model = Empresa
+        fields = [
+            'nombre', 'identificador_fiscal', 'email', 'telefono', 'direccion',
+            'pais', 'ciudad', 'logo', 'activa'
+        ]
+        widgets = {
+            'activa': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+# Vista para crear una nueva empresa
+def empresa_crear_view(request):
+    if request.method == 'POST':
+        form = EmpresaForm(request.POST, request.FILES)
+        if form.is_valid():
+            empresa = form.save()
+            return redirect('core:empresa_listar')
+    else:
+        form = EmpresaForm()
+    return render(request, 'core/system_config/empresa_form.html', {'form': form, 'empresa': None})
+
+@require_empresa_activa(lambda request, empresa_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
+def empresa_editar_view(request, empresa_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    if request.method == 'POST':
+        form = EmpresaForm(request.POST, request.FILES, instance=empresa)
+        if form.is_valid():
+            form.save()
+            return redirect('core:empresa_listar')
+    else:
+        form = EmpresaForm(instance=empresa)
+    return render(request, 'core/system_config/empresa_form.html', {'form': form, 'empresa': empresa})
+
+def empresa_listar_view(request):
+    empresas = Empresa.objects.all().order_by('nombre')
+    return render(request, 'core/system_config/empresa_list.html', {'empresas': empresas})
+
+def empresa_eliminar_view(request, empresa_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    # Aquí se agregarán chequeos de dependencias en el futuro
+    tiene_dependencias = False  # Por ahora, siempre False
+    if request.method == 'POST':
+        if tiene_dependencias or empresa.activa:
+            empresa.activa = False
+            empresa.save()
+            messages.success(request, _('Company deactivated successfully.'))
+        else:
+            empresa.delete()
+            messages.success(request, _('Company deleted successfully.'))
+        return redirect('core:empresa_listar')
+    return render(request, 'core/system_config/empresa_confirm_delete.html', {'empresa': empresa, 'tiene_dependencias': tiene_dependencias})
+
+class BranchForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = [
+            'empresa', 'name', 'code', 'address', 'city', 'state', 'country', 'phone', 'email', 'active'
+        ]
+        widgets = {
+            'active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+@require_empresa_activa(lambda request, empresa_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
+def branch_list_view(request, empresa_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    branches = empresa.branches.all().order_by('name')
+    return render(request, 'core/system_config/branch_list.html', {'empresa': empresa, 'branches': branches})
+
+@require_empresa_activa(lambda request, empresa_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
+def branch_create_view(request, empresa_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    if request.method == 'POST':
+        form = BranchForm(request.POST)
+        if form.is_valid():
+            branch = form.save(commit=False)
+            branch.empresa = empresa
+            branch.save()
+            return redirect('core:branch_list', empresa_id=empresa.id)
+    else:
+        form = BranchForm(initial={'empresa': empresa})
+    return render(request, 'core/system_config/branch_form.html', {'form': form, 'empresa': empresa, 'branch': None})
+
+@require_empresa_activa(lambda request, empresa_id, branch_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
+def branch_edit_view(request, empresa_id, branch_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    branch = get_object_or_404(Branch, id=branch_id, empresa=empresa)
+    if request.method == 'POST':
+        form = BranchForm(request.POST, instance=branch)
+        if form.is_valid():
+            form.save()
+            return redirect('core:branch_list', empresa_id=empresa.id)
+    else:
+        form = BranchForm(instance=branch)
+    return render(request, 'core/system_config/branch_form.html', {'form': form, 'empresa': empresa, 'branch': branch})
+
+@require_empresa_activa(lambda request, empresa_id, branch_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
+def branch_delete_view(request, empresa_id, branch_id):
+    empresa = get_object_or_404(Empresa, id=empresa_id)
+    branch = get_object_or_404(Branch, id=branch_id, empresa=empresa)
+    if request.method == 'POST':
+        if branch.active:
+            branch.active = False
+            branch.save()
+            messages.success(request, _('Branch deactivated successfully.'))
+        else:
+            branch.delete()
+            messages.success(request, _('Branch deleted successfully.'))
+        return redirect('core:branch_list', empresa_id=empresa.id)
+    return render(request, 'core/system_config/branch_confirm_delete.html', {'empresa': empresa, 'branch': branch})
+
+@require_POST
+def cambiar_empresa_branch(request):
+    user = request.user
+    empresa_id = request.POST.get('empresa_id')
+    branch_id = request.POST.get('branch_id')
+    next_url = request.META.get('HTTP_REFERER', '/')
+
+    # Validar empresa
+    try:
+        empresa = Empresa.objects.get(id=empresa_id, activa=True)
+    except Empresa.DoesNotExist:
+        messages.error(request, _(u"Empresa inválida."))
+        return redirect(next_url)
+
+    # Validar sucursal
+    try:
+        branch = Branch.objects.get(id=branch_id, empresa=empresa, active=True)
+    except Branch.DoesNotExist:
+        messages.error(request, _(u"Sucursal inválida."))
+        return redirect(next_url)
+
+    # Validar permisos (solo admin puede cambiar a cualquier empresa/sucursal)
+    if not user.is_admin():
+        if empresa != getattr(user, 'empresa_activa', None) or branch != getattr(user, 'branch_activa', None):
+            messages.error(request, _(u"No tienes permiso para cambiar de empresa o sucursal."))
+            return redirect(next_url)
+
+    # Actualizar sesión
+    request.session['empresa_activa_id'] = empresa.id
+    request.session['branch_activa_id'] = branch.id
+    # Si el modelo de usuario tiene campos, actualizarlos también
+    if hasattr(user, 'empresa_activa'):
+        user.empresa_activa = empresa
+        user.save(update_fields=['empresa_activa'])
+    if hasattr(user, 'branch_activa'):
+        user.branch_activa = branch
+        user.save(update_fields=['branch_activa'])
+    messages.success(request, _(u"Empresa y sucursal cambiadas correctamente."))
+    return redirect(next_url)

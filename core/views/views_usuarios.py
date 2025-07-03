@@ -18,6 +18,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMix
 from ..forms import UsuarioCreateForm
 import logging
 from firebase_admin import firestore
+from firebase_admin import auth
 
 logger = logging.getLogger(__name__)
 

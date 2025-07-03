@@ -2,6 +2,7 @@ from django.urls import path, include
 from . import views
 from .views import views_api
 from core.views.cdn_wizard import CDNWizardView
+from core.views.views import empresa_crear_view, empresa_editar_view, empresa_listar_view, empresa_eliminar_view, branch_list_view, branch_create_view, branch_edit_view, branch_delete_view, cambiar_empresa_branch
 
 app_name = 'core'
 
@@ -62,6 +63,17 @@ urlpatterns = [
 
     # CDN Wizard
     path('cdn-wizard/', CDNWizardView.as_view(), name='cdn_wizard'),
+
+    # Empresas
+    path('empresas/', empresa_listar_view, name='empresa_listar'),
+    path('empresas/nueva/', empresa_crear_view, name='empresa_crear'),
+    path('empresas/<int:empresa_id>/editar/', empresa_editar_view, name='empresa_editar'),
+    path('empresas/<int:empresa_id>/eliminar/', empresa_eliminar_view, name='empresa_eliminar'),
+    path('empresas/<int:empresa_id>/sucursales/', branch_list_view, name='branch_list'),
+    path('empresas/<int:empresa_id>/sucursales/nueva/', branch_create_view, name='branch_create'),
+    path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/editar/', branch_edit_view, name='branch_edit'),
+    path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/eliminar/', branch_delete_view, name='branch_delete'),
+    path('cambiar-empresa-branch/', cambiar_empresa_branch, name='cambiar_empresa_branch'),
 ]
 
 

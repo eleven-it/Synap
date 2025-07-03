@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
-from core.models import Currency, UnitOfMeasure
+from core.models import Currency, UnitOfMeasure, Empresa, Branch
 from core.utils.currency import convert_to_base  # Conversion helper
 from django.contrib.auth import get_user_model
 
@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 # MODEL: Main Warehouse
 # ─────────────────────────────────────────────
 class Warehouse(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='warehouses', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='warehouses', verbose_name=_('Branch'))
     name = models.CharField(_("Name"), max_length=255)
     code = models.CharField(_("Code"), max_length=20, unique=True)
     address = models.CharField(_("Address"), max_length=255, blank=True)
@@ -18,7 +20,7 @@ class Warehouse(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.code} - {self.name}"
+        return f"{self.code} - {self.name} ({self.empresa} / {self.branch})"
 
     class Meta:
         verbose_name = _("Warehouse")
@@ -28,6 +30,8 @@ class Warehouse(models.Model):
 # MODEL: Physical Location
 # ─────────────────────────────────────────────
 class Location(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='locations', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='locations', verbose_name=_('Branch'))
     class LocationType(models.TextChoices):
         INTERNAL = 'internal', _('Internal')
         SUPPLIER = 'supplier', _('Supplier')
@@ -48,7 +52,7 @@ class Location(models.Model):
     allow_operations = models.BooleanField(_("Allow Operations"), default=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.empresa} / {self.branch})"
 
     def can_receive_stock(self):
         return self.is_active and self.allow_operations
@@ -124,6 +128,8 @@ class ProductImage(models.Model):
 # MODEL: Product
 # ─────────────────────────────────────────────
 class Product(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='products', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='products', verbose_name=_('Branch'))
     class TrackingMethod(models.TextChoices):
         NONE = 'none', _('None')
         LOT = 'lot', _('By Lot')
@@ -186,7 +192,7 @@ class Product(models.Model):
         verbose_name_plural = _("Products")
 
     def __str__(self):
-        return f"{self.sku} - {self.name}"
+        return f"{self.sku} - {self.name} ({self.empresa} / {self.branch})"
 
     def requires_tracking(self):
         return self.tracking in [self.TrackingMethod.LOT, self.TrackingMethod.SERIAL]
@@ -238,6 +244,8 @@ class ProductVariant(models.Model):
 # MODEL: Stock Lot or Serial Number
 # ─────────────────────────────────────────────
 class StockLot(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='stocklots', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stocklots', verbose_name=_('Branch'))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
     lot_number = models.CharField(_("Lot/Serial Number"), max_length=100)
     expiration_date = models.DateField(_("Expiration Date"), null=True, blank=True)
@@ -247,13 +255,15 @@ class StockLot(models.Model):
         verbose_name_plural = _("Stock Lots")
 
     def __str__(self):
-        return f"{self.product.sku} - Lote {self.lot_number}"
+        return f"{self.product.sku} - Lote {self.lot_number} ({self.empresa} / {self.branch})"
 
 
 # ─────────────────────────────────────────────
 # MODEL: Stock Quantity per Location
 # ─────────────────────────────────────────────
 class StockQuant(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='stockquants', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stockquants', verbose_name=_('Branch'))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
     location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
     lot = models.ForeignKey(StockLot, null=True, blank=True, on_delete=models.SET_NULL, verbose_name=_("Lot"))
@@ -267,7 +277,7 @@ class StockQuant(models.Model):
         verbose_name_plural = _("Stock Quants")
 
     def __str__(self):
-        return f"{self.product.sku} @ {self.location.name} = {self.quantity}"
+        return f"{self.product.sku} @ {self.location.name} = {self.quantity} ({self.empresa} / {self.branch})"
 
     @property
     def available_quantity(self):
@@ -287,6 +297,8 @@ class StockQuant(models.Model):
 # MODEL: Stock Move
 # ─────────────────────────────────────────────
 class StockMove(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='stockmoves', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stockmoves', verbose_name=_('Branch'))
     class MoveType(models.TextChoices):
         INCOMING = 'incoming', _('Incoming')
         OUTGOING = 'outgoing', _('Outgoing')
@@ -321,7 +333,7 @@ class StockMove(models.Model):
         verbose_name_plural = _("Stock Moves")
 
     def __str__(self):
-        return f"{self.product.sku} - {self.quantity} ({self.get_state_display()})"
+        return f"{self.product.sku} - {self.quantity} ({self.get_state_display()}) ({self.empresa} / {self.branch})"
 
     def affects_stock(self):
         return self.state == self.State.DONE
@@ -334,6 +346,8 @@ class StockMove(models.Model):
 # MODEL: Inventory Adjustment
 # ─────────────────────────────────────────────
 class InventoryAdjustment(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='inventoryadjustments', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='inventoryadjustments', verbose_name=_('Branch'))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
     location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
     expected_quantity = models.DecimalField(_("Expected Quantity"), max_digits=10, decimal_places=2)
@@ -355,10 +369,15 @@ class InventoryAdjustment(models.Model):
         unit_price = self.product.price_in_base_currency(date)
         return unit_price * self.difference
 
+    def __str__(self):
+        return f"{self.product.sku} - {self.location} ({self.empresa} / {self.branch})"
+
 # ─────────────────────────────────────────────
 # MODEL: Stock Reservation
 # ─────────────────────────────────────────────
 class StockReservation(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='stockreservations', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='stockreservations', verbose_name=_('Branch'))
     class Status(models.TextChoices):
         ACTIVE = 'active', _('Active')
         USED = 'used', _('Used')
@@ -378,10 +397,15 @@ class StockReservation(models.Model):
     def is_active(self):
         return self.status == self.Status.ACTIVE
 
+    def __str__(self):
+        return f"{self.product.sku} - {self.location} ({self.empresa} / {self.branch})"
+
 # ─────────────────────────────────────────────
 # MODEL: Replenishment Rule
 # ─────────────────────────────────────────────
 class ReplenishmentRule(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='replenishmentrules', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='replenishmentrules', verbose_name=_('Branch'))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name=_("Product"))
     location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Location"))
     min_quantity = models.DecimalField(_("Min Quantity"), max_digits=10, decimal_places=2)
@@ -396,9 +420,11 @@ class ReplenishmentRule(models.Model):
         return current_quantity < self.min_quantity
 
     def __str__(self):
-        return f"Rule for {self.product.sku} @ {self.location.name}"
+        return f"Rule for {self.product.sku} @ {self.location.name} ({self.empresa} / {self.branch})"
 
 class InitialStockDraft(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='initialstockdrafts', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='initialstockdrafts', verbose_name=_('Branch'))
     ESTADO_CHOICES = [
         ('borrador', 'Borrador'),
         ('finalizado', 'Finalizado'),
@@ -423,7 +449,12 @@ class InitialStockDraft(models.Model):
         verbose_name = 'Borrador de Stock Inicial'
         verbose_name_plural = 'Borradores de Stock Inicial'
 
+    def __str__(self):
+        return f"Draft {self.id} ({self.empresa} / {self.branch})"
+
 class InitialStockDraftItem(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='initialstockdraftitems', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='initialstockdraftitems', verbose_name=_('Branch'))
     borrador = models.ForeignKey(InitialStockDraft, on_delete=models.CASCADE, related_name='items')
     producto = models.ForeignKey('Product', on_delete=models.CASCADE)
     sku = models.CharField(max_length=100)
@@ -438,6 +469,9 @@ class InitialStockDraftItem(models.Model):
     class Meta:
         verbose_name = 'Detalle de Borrador de Stock Inicial'
         verbose_name_plural = 'Detalles de Borrador de Stock Inicial'
+
+    def __str__(self):
+        return f"DraftItem {self.id} ({self.empresa} / {self.branch})"
 
 class InitialStockDraftDocument(models.Model):
     borrador = models.ForeignKey(InitialStockDraft, on_delete=models.CASCADE, related_name='documentos_respaldo')

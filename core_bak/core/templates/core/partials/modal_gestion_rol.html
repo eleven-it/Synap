@@ -1,0 +1,58 @@
+{% load i18n %}
+<!-- Modal de Gestión de Roles -->
+<div x-show="isModalOpen" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" @click.away="isModalOpen = false">
+  <div class="relative top-20 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-md bg-white" @click.stop>
+    
+    <!-- Encabezado del Modal -->
+    <div class="flex justify-between items-center pb-3 border-b">
+      <h3 class="text-2xl font-bold text-gray-800" x-text="isCreateMode ? 'Crear Nuevo Rol' : 'Editar Rol: ' + currentRole.nombre"></h3>
+      <div class="cursor-pointer z-50" @click="isModalOpen = false">
+        <svg class="fill-current text-black" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M14.53 4.53l-1.06-1.06L9 7.94 4.53 3.47 3.47 4.53 7.94 9l-4.47 4.47 1.06 1.06L9 10.06l4.47 4.47 1.06-1.06L10.06 9z"></path></svg>
+      </div>
+    </div>
+
+    <!-- Cuerpo del Modal -->
+    <div class="mt-5">
+      <!-- Campo Nombre del Rol -->
+      <div class="mb-6">
+        <label for="rol_nombre" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Role Name" %}</label>
+        <input type="text" id="rol_nombre" x-model="currentRole.nombre" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+      </div>
+
+      <!-- Selector de Permisos -->
+      <h4 class="text-lg font-semibold mb-3">{% trans "Permissions" %}</h4>
+      <div class="grid grid-cols-2 gap-4">
+        <!-- Panel Izquierdo: Permisos Disponibles -->
+        <div>
+          <h5 class="font-bold mb-2">{% trans "Available" %}</h5>
+          <input type="text" x-model="searchTerm" placeholder="{% trans 'Search permission...' %}" class="w-full border p-2 rounded mb-2">
+          <div class="border rounded-lg h-64 overflow-y-auto p-2">
+            <template x-for="permiso in availablePermissions" :key="permiso.id">
+              <div @click="assignPermission(permiso)" class="cursor-pointer p-2 hover:bg-gray-100 rounded">
+                <span x-text="permiso.nombre"></span>
+                <em class="text-xs text-gray-500" x-text="permiso.codigo"></em>
+              </div>
+            </template>
+          </div>
+        </div>
+        <!-- Panel Derecho: Permisos Asignados -->
+        <div>
+          <h5 class="font-bold mb-2">{% trans "Assigned" %}</h5>
+          <div class="border rounded-lg h-64 overflow-y-auto p-2 bg-gray-50">
+            <template x-for="permiso in assignedPermissions" :key="permiso.id">
+              <div @click="unassignPermission(permiso)" class="cursor-pointer p-2 hover:bg-red-100 rounded">
+                <span x-text="permiso.nombre"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie del Modal -->
+    <div class="flex justify-end pt-5 border-t mt-5">
+      <button @click="isModalOpen = false" class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 mr-2">Cancelar</button>
+      <button @click="saveRole()" class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">Guardar Cambios</button>
+    </div>
+  </div>
+</div> 

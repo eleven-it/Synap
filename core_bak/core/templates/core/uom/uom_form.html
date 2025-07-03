@@ -1,0 +1,56 @@
+{% extends "core/admin_base.html" %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md">
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">{{ titulo }}</h1>
+    
+    <form method="post">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Columna 1 -->
+            <div class="space-y-4">
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700">{% trans "Name (e.g. Kilogram)" %}</label>
+                    {{ form.name }}
+                </div>
+                <div>
+                    <label for="id_code" class="block text-sm font-medium text-gray-700">{% trans "Code (e.g. KG, L)" %}</label>
+                    {{ form.code }}
+                </div>
+                <div>
+                    <label for="id_category" class="block text-sm font-medium text-gray-700">Categoría</label>
+                    {{ form.category }}
+                </div>
+            </div>
+            <!-- Columna 2 -->
+            <div class="space-y-4">
+                <div>
+                    <label for="id_ratio" class="block text-sm font-medium text-gray-700">Ratio</label>
+                    {{ form.ratio }}
+                    <p class="text-xs text-gray-500 mt-1">Factor respecto a la unidad de referencia de la categoría.</p>
+                </div>
+                <div class="pt-6 space-y-4">
+                    <div class="flex items-center">
+                        {{ form.is_reference }}
+                        <label for="id_is_reference" class="ml-2 block text-sm text-gray-900">Unidad de Referencia</label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.is_active }}
+                        <label for="id_is_active" class="ml-2 block text-sm text-gray-900">{% trans "Active" %}</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end space-x-4 mt-8">
+            <a href="{% url 'core:uom_list' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg">
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg">
+                {% trans "Save" %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock admin_content %} 

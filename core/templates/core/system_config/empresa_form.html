@@ -1,0 +1,93 @@
+{% extends 'core/admin_base.html' %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mt-8 animate-fade-in">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">
+        {% if empresa %}{% trans 'Editar Empresa' %}{% else %}{% trans 'Nueva Empresa' %}{% endif %}
+    </h1>
+    {% if form.non_field_errors %}
+        <div class="mb-4 p-3 bg-red-100 text-red-700 rounded">
+            {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <form method="post" enctype="multipart/form-data" class="space-y-6 animate-slide-up" autocomplete="off">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Nombre de la empresa' %}</label>
+            <input type="text" name="nombre" value="{{ form.nombre.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.nombre.errors %}border-red-500{% endif %}" required>
+            {% if form.nombre.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.nombre.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'CUIT/RFC/NIF' %}</label>
+            <input type="text" name="identificador_fiscal" value="{{ form.identificador_fiscal.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.identificador_fiscal.errors %}border-red-500{% endif %}" required>
+            {% if form.identificador_fiscal.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.identificador_fiscal.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Email de contacto' %}</label>
+            <input type="email" name="email" value="{{ form.email.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.email.errors %}border-red-500{% endif %}">
+            {% if form.email.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.email.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Teléfono' %}</label>
+            <input type="text" name="telefono" value="{{ form.telefono.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.telefono.errors %}border-red-500{% endif %}">
+            {% if form.telefono.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.telefono.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Dirección' %}</label>
+            <input type="text" name="direccion" value="{{ form.direccion.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.direccion.errors %}border-red-500{% endif %}">
+            {% if form.direccion.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.direccion.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'País' %}</label>
+                <input type="text" name="pais" value="{{ form.pais.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.pais.errors %}border-red-500{% endif %}">
+                {% if form.pais.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.pais.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Ciudad' %}</label>
+                <input type="text" name="ciudad" value="{{ form.ciudad.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.ciudad.errors %}border-red-500{% endif %}">
+                {% if form.ciudad.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.ciudad.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Logo' %}</label>
+            <input type="file" name="logo" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.logo.errors %}border-red-500{% endif %}">
+            {% if empresa and empresa.logo %}
+                <img src="{{ empresa.logo.url }}" alt="Logo" class="h-16 mt-2 rounded shadow">
+            {% endif %}
+            {% if form.logo.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.logo.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center">
+            <input type="checkbox" name="activa" id="activa" class="form-checkbox h-5 w-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500 transition" {% if form.activa.value or not empresa %}checked{% endif %}>
+            <label for="activa" class="ml-2 text-gray-700 dark:text-gray-200">{% trans 'Empresa activa' %}</label>
+            {% if form.activa.errors %}
+                <p class="text-xs text-red-600 ml-4">{{ form.activa.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="flex justify-end mt-8">
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                {% if empresa %}{% trans 'Guardar cambios' %}{% else %}{% trans 'Crear empresa' %}{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %} 

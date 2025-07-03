@@ -8,6 +8,10 @@ def usuario_y_permisos(request):
             "user": None,
             "permisos_usuario": [],
             "modulos_menu": [],
+            "empresa_activa": None,
+            "branch_activa": None,
+            "empresas_disponibles": [],
+            "sucursales_disponibles": [],
         }
 
     permisos_roles = set()
@@ -56,11 +60,28 @@ def usuario_y_permisos(request):
             debug=False
         )
 
+    # Empresa y sucursal activa
+    empresa_activa = getattr(user, 'empresa_activa', None)
+    branch_activa = getattr(user, 'branch_activa', None)
+
+    # Empresas y sucursales disponibles (por ahora, todas si es admin, si no solo la activa)
+    from core.models import Empresa, Branch
+    if user.is_admin():
+        empresas_disponibles = list(Empresa.objects.filter(activa=True))
+        sucursales_disponibles = list(Branch.objects.filter(active=True, empresa=empresa_activa)) if empresa_activa else []
+    else:
+        empresas_disponibles = [empresa_activa] if empresa_activa else []
+        sucursales_disponibles = [branch_activa] if branch_activa else []
+
     return {
         "user": user,
         "permisos_usuario": sorted(permisos_totales),
         "modulos_menu": modulos_visibles_para_usuario(user),  
-        **permisos_contextuales_resultado
+        **permisos_contextuales_resultado,
+        "empresa_activa": empresa_activa,
+        "branch_activa": branch_activa,
+        "empresas_disponibles": empresas_disponibles,
+        "sucursales_disponibles": sucursales_disponibles,
     }
 
 def menu_context(request):

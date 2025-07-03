@@ -7,7 +7,8 @@ import os
 from decouple import config, Csv
 from pathlib import Path
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
 
 # Base Directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,6 +56,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.RequestUserMiddleware',
     'core.middleware.AdminAccessMiddleware',
     'core.middleware.IdiomaUsuarioMiddleware',  
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -265,34 +267,14 @@ CRISPY_TEMPLATE_PACK = "tailwind"
 # CDN CONFIGURATION
 # =============================================================================
 
-# CDN Settings - Choose one option below
-
-# Option 1: Cloudflare CDN
-USE_CLOUDFLARE_CDN = os.getenv('USE_CLOUDFLARE_CDN', 'True').lower() == 'true'
-CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'synap.administranet.com.ar')
-
-# Option 2: AWS CloudFront
-USE_AWS_CDN = os.getenv('USE_AWS_CDN', 'False').lower() == 'true'
-AWS_S3_CUSTOM_DOMAIN = os.getenv('AWS_S3_CUSTOM_DOMAIN', 'cdn.tudominio.com')
-
-# Option 3: Bunny CDN
-USE_BUNNY_CDN = os.getenv('USE_BUNNY_CDN', 'False').lower() == 'true'
-BUNNY_CDN_DOMAIN = os.getenv('BUNNY_CDN_DOMAIN', 'cdn.tudominio.com')
-
-# CDN URL Configuration
-if USE_CLOUDFLARE_CDN:
-    STATIC_URL = f'https://{CLOUDFLARE_DOMAIN}/static/'
-    MEDIA_URL = f'https://{CLOUDFLARE_DOMAIN}/media/'
-elif USE_AWS_CDN:
-    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/static/'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/media/'
-elif USE_BUNNY_CDN:
-    STATIC_URL = f'https://{BUNNY_CDN_DOMAIN}/static/'
-    MEDIA_URL = f'https://{BUNNY_CDN_DOMAIN}/media/'
-else:
-    # Local development or no CDN
+# CDN URL Configuration dinámica
+if DEBUG or ENVIRONMENT == 'development':
     STATIC_URL = '/static/'
     MEDIA_URL = '/media/'
+else:
+    CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'synap.administranet.com.ar')
+    STATIC_URL = f'https://{CLOUDFLARE_DOMAIN}/static/'
+    MEDIA_URL = f'https://{CLOUDFLARE_DOMAIN}/media/'
 
 # CDN Cache Headers
 CDN_CACHE_HEADERS = {

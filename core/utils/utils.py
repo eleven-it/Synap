@@ -9,6 +9,8 @@ import json
 from django.utils.translation import gettext_lazy as _
 import firebase_admin
 from firebase_admin import firestore
+from django.http import HttpResponseForbidden
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +168,12 @@ ADMIN_SIDEBAR_MENU = {
             "permission": "configuracion.sistema"
         },
         {
+            "label": _( "Empresas" ),
+            "url_name": "core:empresa_listar",
+            "icon": "business",
+            "permission": "configuracion.sistema"
+        },
+        {
             "label": _( "CDN Wizard" ),
             "url_name": "core:cdn_wizard",
             "icon": "cloud",
@@ -221,7 +229,7 @@ def sincronizar_usuario_desde_firestore(decoded_token: Dict[str, Any]) -> Usuari
         raise ValueError("UID y email son requeridos para sincronizar usuario")
 
     try:
-        firestore_db = firebase_admin.firestore.client()
+        firestore_db = firestore.client()
         doc_ref = firestore_db.collection("usuarios").document(uid)
         doc = doc_ref.get()
 
@@ -473,3 +481,18 @@ def limpiar_cache_usuario(usuario: UsuarioExtendido) -> None:
     
     for key in cache_keys:
         cache.delete(key)
+
+def require_empresa_activa(get_empresa):
+    """
+    Decorador para bloquear acceso a vistas si la empresa está inactiva.
+    get_empresa: función que recibe (request, *args, **kwargs) y retorna la instancia de Empresa.
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            empresa = get_empresa(request, *args, **kwargs)
+            if not empresa.activa:
+                return HttpResponseForbidden('Access denied: company is inactive.')
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator

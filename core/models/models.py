@@ -5,6 +5,28 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
+class Empresa(models.Model):
+    nombre = models.CharField(max_length=255, unique=True, verbose_name=_('Nombre de la empresa'))
+    identificador_fiscal = models.CharField(max_length=32, unique=True, verbose_name=_('CUIT/RFC/NIF'))
+    email = models.EmailField(blank=True, null=True, verbose_name=_('Email de contacto'))
+    telefono = models.CharField(max_length=32, blank=True, null=True, verbose_name=_('Teléfono'))
+    direccion = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Dirección'))
+    pais = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('País'))
+    ciudad = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('Ciudad'))
+    logo = models.ImageField(upload_to='empresas/logos/', blank=True, null=True, verbose_name=_('Logo'))
+    activa = models.BooleanField(default=True, verbose_name=_('Empresa activa'))
+    fecha_creacion = models.DateTimeField(default=timezone.now, verbose_name=_('Fecha de creación'))
+    fecha_modificacion = models.DateTimeField(auto_now=True, verbose_name=_('Fecha de modificación'))
+
+    class Meta:
+        verbose_name = _('Empresa')
+        verbose_name_plural = _('Empresas')
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
 class Permiso(models.Model):
     codigo = models.CharField(max_length=50, unique=True, db_index=True)
     nombre = models.CharField(max_length=100)
@@ -183,4 +205,52 @@ class UsuarioExtendido(AbstractBaseUser, PermissionsMixin):
     @property
     def nombre_completo(self):
         return self.nombre or self.email.split('@')[0]
+
+    @property
+    def empresa_activa(self):
+        from core.models import Empresa
+        request = getattr(self, '_request', None)
+        if request and 'empresa_id' in request.session:
+            try:
+                return Empresa.objects.get(id=request.session['empresa_id'])
+            except Empresa.DoesNotExist:
+                return None
+        # Fallback: primera empresa a la que tiene acceso (ajustar según lógica de permisos)
+        return Empresa.objects.first()
+
+    @property
+    def branch_activa(self):
+        from core.models import Branch
+        request = getattr(self, '_request', None)
+        if request and 'branch_id' in request.session:
+            try:
+                return Branch.objects.get(id=request.session['branch_id'])
+            except Branch.DoesNotExist:
+                return None
+        # Fallback: primera sucursal de la empresa activa
+        empresa = self.empresa_activa
+        return empresa.branches.first() if empresa else None
+
+
+class Branch(models.Model):
+    empresa = models.ForeignKey('Empresa', on_delete=models.CASCADE, related_name='branches', verbose_name=_('Company'))
+    name = models.CharField(max_length=128, verbose_name=_('Branch Name'))
+    code = models.CharField(max_length=32, blank=True, null=True, verbose_name=_('Internal Code'))
+    address = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Address'))
+    city = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('City'))
+    state = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('State/Province'))
+    country = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('Country'))
+    phone = models.CharField(max_length=32, blank=True, null=True, verbose_name=_('Phone'))
+    email = models.EmailField(blank=True, null=True, verbose_name=_('Email'))
+    active = models.BooleanField(default=True, verbose_name=_('Active'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created at'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated at'))
+
+    class Meta:
+        verbose_name = _('Branch')
+        verbose_name_plural = _('Branches')
+        ordering = ['empresa', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.empresa.nombre})"
 

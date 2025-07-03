@@ -1,0 +1,88 @@
+{% extends 'core/admin_base.html' %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mt-8 animate-fade-in">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">
+        {% if branch %}{% trans 'Edit Branch' %}{% else %}{% trans 'New Branch' %}{% endif %}
+    </h1>
+    <form method="post" class="space-y-6 animate-slide-up" autocomplete="off">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Branch Name' %}</label>
+            <input type="text" name="name" value="{{ form.name.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.name.errors %}border-red-500{% endif %}" required>
+            {% if form.name.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.name.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Internal Code' %}</label>
+            <input type="text" name="code" value="{{ form.code.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.code.errors %}border-red-500{% endif %}">
+            {% if form.code.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.code.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Address' %}</label>
+            <input type="text" name="address" value="{{ form.address.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.address.errors %}border-red-500{% endif %}">
+            {% if form.address.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.address.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'City' %}</label>
+                <input type="text" name="city" value="{{ form.city.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.city.errors %}border-red-500{% endif %}">
+                {% if form.city.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.city.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'State/Province' %}</label>
+                <input type="text" name="state" value="{{ form.state.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.state.errors %}border-red-500{% endif %}">
+                {% if form.state.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.state.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Country' %}</label>
+                <input type="text" name="country" value="{{ form.country.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.country.errors %}border-red-500{% endif %}">
+                {% if form.country.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.country.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Phone' %}</label>
+                <input type="text" name="phone" value="{{ form.phone.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.phone.errors %}border-red-500{% endif %}">
+                {% if form.phone.errors %}
+                    <p class="text-xs text-red-600 mt-1">{{ form.phone.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-semibold mb-2">{% trans 'Email' %}</label>
+            <input type="email" name="email" value="{{ form.email.value|default_if_none:'' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition {% if form.email.errors %}border-red-500{% endif %}">
+            {% if form.email.errors %}
+                <p class="text-xs text-red-600 mt-1">{{ form.email.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="flex items-center">
+            <input type="checkbox" name="active" id="active" class="form-checkbox h-5 w-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500 transition" {% if form.active.value or not branch %}checked{% endif %}>
+            <label for="active" class="ml-2 text-gray-700 dark:text-gray-200">{% trans 'Active' %}</label>
+            {% if form.active.errors %}
+                <p class="text-xs text-red-600 ml-4">{{ form.active.errors.0 }}</p>
+            {% endif %}
+        </div>
+        <div class="flex justify-end mt-8">
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                {% if branch %}{% trans 'Save changes' %}{% else %}{% trans 'Create branch' %}{% endif %}
+            </button>
+        </div>
+    </form>
+    <div class="mt-8">
+        <a href="{% url 'core:branch_list' empresa_id=empresa.id %}" class="text-sm text-gray-500 hover:text-purple-600 transition">&larr; {% trans 'Back to Branches' %}</a>
+    </div>
+</div>
+{% endblock %} 

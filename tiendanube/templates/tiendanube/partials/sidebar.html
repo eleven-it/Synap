@@ -9,21 +9,21 @@
       </button>
     </div>
     <nav class="flex-1 py-4 space-y-2">
-      <a href="{% url 'tiendanube:dashboard' %}" class="flex items-center px-4 py-2 rounded-lg transition hover:bg-purple-50 group font-medium text-gray-900" title="Dashboard">
-        <span class="material-icons text-purple-600 mr-3">dashboard</span>
-        <span x-show="sidebarOpen" class="text-gray-800 font-medium">Dashboard</span>
+      <a href="{% url 'tiendanube:dashboard' %}" class="flex items-center gap-2 bg-white/10 dark:bg-gray-900/30 rounded-xl px-3 py-2 mb-2 shadow-sm border border-white/20 dark:border-gray-800 transition-all duration-200 hover:bg-purple-100/30 hover:scale-[1.03] group" title="Dashboard">
+        <span class="material-icons text-purple-600">dashboard</span>
+        <span x-show="sidebarOpen" class="text-gray-800 dark:text-gray-100 font-bold">Dashboard</span>
       </a>
-      <a href="{% url 'tiendanube:config_list' %}" class="flex items-center px-4 py-2 rounded-lg transition hover:bg-purple-50 group font-medium text-gray-900" title="Configuration">
-        <span class="material-icons text-purple-600 mr-3">settings</span>
-        <span x-show="sidebarOpen" class="text-gray-800 font-medium">Configuration</span>
+      <a href="{% url 'tiendanube:config_list' %}" class="flex items-center gap-2 bg-white/10 dark:bg-gray-900/30 rounded-xl px-3 py-2 mb-2 shadow-sm border border-white/20 dark:border-gray-800 transition-all duration-200 hover:bg-purple-100/30 hover:scale-[1.03] group" title="Configuration">
+        <span class="material-icons text-purple-600">settings</span>
+        <span x-show="sidebarOpen" class="text-gray-800 dark:text-gray-100 font-bold">Configuration</span>
       </a>
-      <a href="{% url 'tiendanube:logs_list' %}" class="flex items-center px-4 py-2 rounded-lg transition hover:bg-purple-50 group font-medium text-gray-900" title="Sync Logs">
-        <span class="material-icons text-purple-600 mr-3">history</span>
-        <span x-show="sidebarOpen" class="text-gray-800 font-medium">Sync Logs</span>
+      <a href="{% url 'tiendanube:logs_list' %}" class="flex items-center gap-2 bg-white/10 dark:bg-gray-900/30 rounded-xl px-3 py-2 mb-2 shadow-sm border border-white/20 dark:border-gray-800 transition-all duration-200 hover:bg-purple-100/30 hover:scale-[1.03] group" title="Sync Logs">
+        <span class="material-icons text-purple-600">history</span>
+        <span x-show="sidebarOpen" class="text-gray-800 dark:text-gray-100 font-bold">Sync Logs</span>
       </a>
-      <a href="{% url 'tiendanube:mapping_list' %}" class="flex items-center px-4 py-2 rounded-lg transition hover:bg-purple-50 group font-medium text-gray-900" title="Product Mapping">
-        <span class="material-icons text-purple-600 mr-3">link</span>
-        <span x-show="sidebarOpen" class="text-gray-800 font-medium">Product Mapping</span>
+      <a href="{% url 'tiendanube:mapping_list' %}" class="flex items-center gap-2 bg-white/10 dark:bg-gray-900/30 rounded-xl px-3 py-2 mb-2 shadow-sm border border-white/20 dark:border-gray-800 transition-all duration-200 hover:bg-purple-100/30 hover:scale-[1.03] group" title="Product Mapping">
+        <span class="material-icons text-purple-600">link</span>
+        <span x-show="sidebarOpen" class="text-gray-800 dark:text-gray-100 font-bold">Product Mapping</span>
       </a>
     </nav>
     <div class="p-4 border-t text-xs text-gray-400" x-show="sidebarOpen">

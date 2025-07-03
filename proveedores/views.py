@@ -6,12 +6,13 @@ from core.decorators import tiene_permiso
 from django.contrib import messages
 from core.models import UsuarioExtendido
 from firebase_admin import firestore
+from firebase_admin import auth
 
 # Antes de usar auth o firestore, asegúrate de inicializar Firebase:
 get_firebase_app()
 
 # Inicializa cliente Firestore
-db = firebase_admin.firestore.client()
+db = firestore.client()
 
 @csrf_exempt
 @tiene_permiso("administrar_usuarios")
@@ -63,7 +64,7 @@ def perfil_view(request):
         if nueva:
             if nueva == confirmar:
                 try:
-                    firebase_admin.auth.update_user(uid=usuario.uid, password=nueva)
+                    auth.update_user(uid=usuario.uid, password=nueva)
                     messages.success(request, "Contraseña actualizada correctamente.")
                 except Exception as e:
                     messages.error(request, f"Error al cambiar la contraseña: {e}")
