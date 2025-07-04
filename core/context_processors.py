@@ -1,4 +1,5 @@
-from core.utils import permisos_contextuales, modulos_visibles_para_usuario, ADMIN_SIDEBAR_MENU, INVENTORY_SIDEBAR_MENU
+from core.utils import permisos_contextuales, apps_visibles_para_usuario, obtener_app_por_id, obtener_submenus_por_app
+from core.models import UsuarioExtendido
 
 def usuario_y_permisos(request):
     user = getattr(request, "user", None)
@@ -7,7 +8,7 @@ def usuario_y_permisos(request):
         return {
             "user": None,
             "permisos_usuario": [],
-            "modulos_menu": [],
+            "apps_menu": [],
             "empresa_activa": None,
             "branch_activa": None,
             "empresas_disponibles": [],
@@ -76,7 +77,8 @@ def usuario_y_permisos(request):
     return {
         "user": user,
         "permisos_usuario": sorted(permisos_totales),
-        "modulos_menu": modulos_visibles_para_usuario(user),  
+        "apps_menu": apps_visibles_para_usuario(user),
+        "modulos_menu": apps_visibles_para_usuario(user),
         **permisos_contextuales_resultado,
         "empresa_activa": empresa_activa,
         "branch_activa": branch_activa,
@@ -87,59 +89,76 @@ def usuario_y_permisos(request):
 def menu_context(request):
     """
     Procesa el contexto para añadir menús dinámicos basados en permisos.
+    Usa la nueva estructura centralizada de apps.
     """
     user = getattr(request, "user", None)
     
-    # Menú principal de módulos (el que ya existía)
-    modulos_menu = modulos_visibles_para_usuario(user)
-
-    # Menú lateral de administración (el nuevo)
-    admin_sidebar_items = []
-    show_admin_sidebar = False
+    # Obtener apps visibles para el usuario
+    apps_menu = apps_visibles_para_usuario(user)
     
-    if user and getattr(user, "is_authenticated", False):
-        if request.resolver_match and request.resolver_match.app_name == 'core':
-            show_admin_sidebar = True
-            
-            for section, items in ADMIN_SIDEBAR_MENU.items():
-                visible_items = []
-                for item in items:
-                    if user.tiene_permiso(item['permission']):
-                        visible_items.append(item)
-                
-                if visible_items:
-                    admin_sidebar_items.append({
-                        "section": section,
-                        "items": visible_items
-                    })
+    # Determinar qué sidebar mostrar según la app actual
+    current_app_id = None
+    if request.resolver_match:
+        app_name = request.resolver_match.app_name
+        if app_name == 'core':
+            current_app_id = 'settings'
+        elif app_name == 'inventory':
+            current_app_id = 'inventory'
+        elif app_name == 'tiendanube':
+            current_app_id = 'tiendanube'
+    
+    # Obtener submenús de la app actual con permisos procesados
+    current_sidebar_items = []
+    if current_app_id and user and getattr(user, "is_authenticated", False):
+        # Obtener permisos del usuario
+        if isinstance(user, UsuarioExtendido):
+            permisos_usuario = user.get_permisos_totales()
+        else:
+            permisos_usuario = set()
+        
+        # Obtener submenús filtrados por permisos
+        current_sidebar_items = obtener_submenus_por_app(current_app_id, permisos_usuario)
 
     return {
-        "modulos_menu": modulos_menu,
-        "admin_sidebar_items": admin_sidebar_items,
-        "show_admin_sidebar": show_admin_sidebar,
+        "apps_menu": apps_menu,
+        "modulos_menu": apps_menu,
+        "current_app_id": current_app_id,
+        "current_sidebar_items": current_sidebar_items,
+        "show_sidebar": bool(current_sidebar_items),
     }
 
 def inventory_menu_context(request):
     """
     Procesa el contexto para el menú lateral del módulo de inventario.
+    Mantenido para compatibilidad.
     """
     user = getattr(request, "user", None)
     inventory_sidebar_items = []
     
     if user and getattr(user, "is_authenticated", False):
         if request.resolver_match and request.resolver_match.app_name == 'inventory':
-            for section, items in INVENTORY_SIDEBAR_MENU.items():
-                visible_items = []
-                for item in items:
-                    if user.tiene_permiso(item['permission']):
-                        visible_items.append(item)
-                
-                if visible_items:
-                    inventory_sidebar_items.append({
-                        "section": section,
-                        "items": visible_items
-                    })
+            app = obtener_app_por_id("inventory")
+            if app and app.get("submenus"):
+                inventory_sidebar_items = app["submenus"]
 
     return {
         "inventory_sidebar_items": inventory_sidebar_items
+    }
+
+def tiendanube_menu_context(request):
+    """
+    Procesa el contexto para el menú lateral del módulo de TiendaNube.
+    Mantenido para compatibilidad.
+    """
+    user = getattr(request, "user", None)
+    tiendanube_sidebar_items = []
+    
+    if user and getattr(user, "is_authenticated", False):
+        if request.resolver_match and request.resolver_match.app_name == 'tiendanube':
+            app = obtener_app_por_id("tiendanube")
+            if app and app.get("submenus"):
+                tiendanube_sidebar_items = app["submenus"]
+
+    return {
+        "tiendanube_sidebar_items": tiendanube_sidebar_items
     }

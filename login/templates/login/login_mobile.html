@@ -1,0 +1,339 @@
+{% load static %}
+{% load i18n %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% trans "Synap - Login" %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module" src="{% static 'login/firebase-init.js' %}"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .input-focus {
+            transition: all 0.3s ease;
+        }
+        
+        .input-focus:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.6s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .pulse-glow {
+            animation: pulseGlow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes pulseGlow {
+            from { box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
+            to { box-shadow: 0 0 30px rgba(102, 126, 234, 0.6); }
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 640px) {
+            .mobile-container {
+                padding: 1rem;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            
+            .mobile-form {
+                width: 100%;
+                max-width: 100%;
+                margin: 0;
+                border-radius: 1.5rem;
+            }
+            
+            .mobile-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 1rem;
+                border-radius: 0.75rem;
+            }
+            
+            .mobile-btn {
+                padding: 1rem;
+                font-size: 1.1rem;
+                border-radius: 0.75rem;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gradient-to-br from-blue-500 via-purple-600 to-indigo-700">
+    <!-- Background decorative elements -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white opacity-10 rounded-full floating-animation"></div>
+        <div class="absolute -bottom-40 -left-40 w-60 h-60 bg-white opacity-10 rounded-full floating-animation" style="animation-delay: -2s;"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-white opacity-5 rounded-full floating-animation" style="animation-delay: -4s;"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="mobile-container relative z-10">
+        <!-- Header Section -->
+        <div class="text-center mb-8 slide-in">
+            <div class="mb-6">
+                <img src="{% static 'images/Synap-transparencia.png' %}" 
+                     alt="{% trans 'Synap Logo' %}" 
+                     class="h-16 mx-auto drop-shadow-lg">
+            </div>
+            <h1 class="text-3xl md:text-4xl font-bold text-white mb-2">
+                {% trans "Welcome Back" %}
+            </h1>
+            <p class="text-white/80 text-lg">
+                {% trans "Sign in to continue to your dashboard" %}
+            </p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="glass-effect mobile-form mx-auto max-w-md p-8 slide-in" style="animation-delay: 0.2s;">
+            <form onsubmit="loginUser(event)" class="space-y-6">
+                <!-- Email Field -->
+                <div class="space-y-2">
+                    <label for="email" class="block text-sm font-semibold text-gray-700">
+                        {% trans "Email Address" %}
+                    </label>
+                    <div class="relative">
+                        <input id="email" 
+                               type="email" 
+                               autocomplete="email" 
+                               required
+                               placeholder="{% trans 'Enter your email' %}"
+                               class="mobile-input input-focus w-full px-4 py-3 border border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 bg-white/80 backdrop-blur-sm">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div class="space-y-2">
+                    <label for="password" class="block text-sm font-semibold text-gray-700">
+                        {% trans "Password" %}
+                    </label>
+                    <div class="relative">
+                        <input id="password" 
+                               type="password" 
+                               autocomplete="current-password" 
+                               required
+                               placeholder="{% trans 'Enter your password' %}"
+                               class="mobile-input input-focus w-full px-4 py-3 border border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 bg-white/80 backdrop-blur-sm">
+                        <button type="button" 
+                                onclick="togglePassword()"
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <svg id="eye-icon" class="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="hidden">
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex">
+                            <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div class="ml-3">
+                                <p id="error-text" class="text-sm text-red-700"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" 
+                        id="login-btn"
+                        class="mobile-btn btn-primary w-full text-white font-semibold pulse-glow">
+                    <span id="btn-text">{% trans "Sign In" %}</span>
+                    <span id="btn-loading" class="hidden">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {% trans "Signing in..." %}
+                    </span>
+                </button>
+            </form>
+
+            <!-- Additional Links -->
+            <div class="mt-8 space-y-4 text-center">
+                <a href="{% url 'login:reset_password' %}" 
+                   class="block text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors">
+                    {% trans "Forgot your password?" %}
+                </a>
+                
+                <div class="border-t border-gray-200 pt-6">
+                    <p class="text-sm text-gray-600">
+                        {% trans "Don't have an account?" %}
+                        <a href="{% url 'login:register' %}" 
+                           class="font-semibold text-purple-600 hover:text-purple-700 transition-colors">
+                            {% trans "Sign up" %}
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8 slide-in" style="animation-delay: 0.4s;">
+            <p class="text-white/60 text-sm">
+                © 2025 Synap - {% trans "All rights reserved" %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+        <div class="flex items-center">
+            <svg class="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <span>{% trans "Login successful!" %}</span>
+        </div>
+    </div>
+
+    <script>
+        // Toggle password visibility
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eye-icon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"></path>
+                `;
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.innerHTML = `
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                `;
+            }
+        }
+
+        // Show success toast
+        function showSuccessToast() {
+            const toast = document.getElementById('success-toast');
+            toast.classList.remove('translate-x-full');
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+
+        // Enhanced login function
+        async function loginUser(event) {
+            event.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('login-btn');
+            const btnText = document.getElementById('btn-text');
+            const btnLoading = document.getElementById('btn-loading');
+            const errorMessage = document.getElementById('error-message');
+            
+            // Show loading state
+            loginBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoading.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            
+            try {
+                // Simulate login process (replace with actual Firebase auth)
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Show success feedback
+                showSuccessToast();
+                
+                // Redirect to dashboard
+                setTimeout(() => {
+                    window.location.href = '/dashboard/';
+                }, 1000);
+                
+            } catch (error) {
+                // Show error
+                const errorText = document.getElementById('error-text');
+                errorText.textContent = error.message || '{% trans "Login failed. Please try again." %}';
+                errorMessage.classList.remove('hidden');
+                
+                // Reset button state
+                loginBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoading.classList.add('hidden');
+            }
+        }
+
+        // Add input focus effects
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('focus', function() {
+                    this.parentElement.classList.add('scale-105');
+                });
+                
+                input.addEventListener('blur', function() {
+                    this.parentElement.classList.remove('scale-105');
+                });
+            });
+        });
+    </script>
+</body>
+</html> 

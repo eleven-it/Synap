@@ -3,6 +3,8 @@ from . import views
 from .views import views_api
 from core.views.cdn_wizard import CDNWizardView
 from core.views.views import empresa_crear_view, empresa_editar_view, empresa_listar_view, empresa_eliminar_view, branch_list_view, branch_create_view, branch_edit_view, branch_delete_view, cambiar_empresa_branch
+from core.views.views_general import MenuExampleView
+from django.views.generic import TemplateView
 
 app_name = 'core'
 
@@ -74,6 +76,12 @@ urlpatterns = [
     path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/editar/', branch_edit_view, name='branch_edit'),
     path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/eliminar/', branch_delete_view, name='branch_delete'),
     path('cambiar-empresa-branch/', cambiar_empresa_branch, name='cambiar_empresa_branch'),
+    
+    # Ejemplo de Nueva Arquitectura de Menús
+    path('menu-example/', MenuExampleView.as_view(), name='menu_example'),
+    
+    # Nuevo Dashboard con Arquitectura de Apps
+    path('dashboard-apps/', TemplateView.as_view(template_name='dashboard_apps.html'), name='dashboard_apps'),
 ]
 
 

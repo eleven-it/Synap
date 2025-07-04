@@ -1,0 +1,13 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Configuration" %} - Synap{% endblock %}
+
+{% block content %}
+    {% block admin_content %}{% endblock admin_content %}
+{% endblock %}
+
+{% block extra_js %}
+    {% block admin_extra_js %}{% endblock admin_extra_js %}
+{% endblock %} 

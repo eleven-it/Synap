@@ -1,5 +1,7 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "proveedores/proveedores_app_base.html" %}
+{% load i18n %}
+
+{% block proveedores_content %}
 <div class="bg-white shadow rounded p-6 max-w-3xl mx-auto">
   <h2 class="text-2xl font-bold mb-4">Perfil de Proveedor</h2>
 
@@ -56,4 +58,4 @@
     </div>
   </form>
 </div>
-{% endblock %}
+{% endblock proveedores_content %}

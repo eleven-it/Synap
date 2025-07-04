@@ -1,7 +1,9 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "clientes/clientes_app_base.html" %}
+{% load i18n %}
+
+{% block clientes_content %}
 <div class="text-center py-12">
-  <h1 class="text-3xl font-bold mb-4">¡Bienvenido, {{ user.name|default:user.email }}!</h1>
-  <p class="text-gray-600">Este es tu panel como <strong>cliente</strong>.</p>
+  <h1 class="text-3xl font-bold mb-4">{% blocktrans with name=user.name|default:user.email %}Welcome, {{ name }}!{% endblocktrans %}</h1>
+  <p class="text-gray-600">{% trans "This is your panel as a" %} <strong>{% trans "customer" %}</strong>.</p>
 </div>
-{% endblock %}
+{% endblock clientes_content %}

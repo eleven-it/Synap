@@ -18,6 +18,24 @@ def stock_dashboard(request):
     context["total_locations"] = total_locations
     return render(request, "inventory/stock_dashboard.html", context)
 
+@tiene_permiso("inventory.ver_dashboard")
+def test_app_architecture(request):
+    """Vista de prueba para verificar la nueva arquitectura de apps"""
+    context = permisos_contextuales(request, "inventory.ver_dashboard")
+    if not context.get("puede_inventory_ver_dashboard"):
+        return render(request, "core/403.html", context, status=403)
+    
+    return render(request, "inventory/test_app.html", context)
+
+@tiene_permiso("inventory.ver_dashboard")
+def simple_test(request):
+    """Vista de prueba simple para verificar el template base"""
+    context = permisos_contextuales(request, "inventory.ver_dashboard")
+    if not context.get("puede_inventory_ver_dashboard"):
+        return render(request, "core/403.html", context, status=403)
+    
+    return render(request, "inventory/simple_test.html", context)
+
 @tiene_permiso("inventory.config_tiendanube")
 def tiendanube_dashboard(request):
     """TiendaNube integration dashboard"""

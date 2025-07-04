@@ -62,47 +62,117 @@
     box-shadow: 0 8px 32px 0 rgba(60,60,60,0.10), 0 1.5px 0 0 #eee;
     border-radius: 0 0 24px 24px;
   }
+  /* Nuevos estilos para la arquitectura de apps */
+  .app-dropdown {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  .app-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s ease;
+    border: 1px solid #f1f5f9;
+  }
+  .app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-color: #e2e8f0;
+  }
+  .app-icon-container {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+  .app-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+  .app-menu-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #475569;
+    font-size: 14px;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+  .app-menu-item:hover {
+    background: #f8fafc;
+    color: #1e293b;
+    transform: translateX(2px);
+  }
+  .app-menu-item .material-icons {
+    font-size: 18px;
+    margin-right: 8px;
+    opacity: 0.7;
+  }
 </style>
 <div class="flex w-full items-center justify-between px-4 sm:px-8 h-16 bg-white font-inter relative border-b border-gray-200">
   <!-- Logo imagen a la izquierda -->
   <a href="/" class="flex items-center">
     <img src="/media/empresas/logos/Synap-transparencia.png" alt="Logo Synap" class="h-12 w-auto mr-2"/>
   </a>
+  
   <!-- Menú horizontal minimalista tipo Figma (desktop) -->
   <nav class="hidden md:flex gap-4 items-center font-inter text-base font-normal tracking-wide relative">
-    {% for modulo in modulos_menu %}
+    {% for app in apps_menu %}
       <div class="relative" x-data="{ open: false }">
-        <a href="{{ modulo.url }}" class="group text-[#222] hover:underline underline-offset-4 transition py-1.5 focus:outline-none flex items-center gap-1" @click.prevent="open = !open" @keydown.escape.window="open = false">
-          <span class="group-hover:underline group-focus:underline underline-offset-4">{{ modulo.nombre }}</span>
-          {% if modulo.items or modulo.sections %}
+        <a href="{{ app.url }}" class="group text-[#222] hover:underline underline-offset-4 transition py-1.5 focus:outline-none flex items-center gap-1" @click.prevent="open = !open" @keydown.escape.window="open = false">
+          <span class="group-hover:underline group-focus:underline underline-offset-4">{{ app.nombre }}</span>
+          {% if app.submenus %}
             <span class="material-icons text-xs align-middle transition-transform duration-200 ml-1 group-hover:no-underline group-focus:no-underline" :class="open ? 'rotate-180' : ''">expand_more</span>
           {% endif %}
         </a>
-        {% if modulo.items %}
-        <div x-show="open" @click.outside="open = false" x-transition class="dropdown-bg fixed left-0 top-16 w-screen bg-white shadow-xl z-50 border-b border-gray-100 animate-fade-slide-down">
-          <div class="max-w-5xl mx-auto px-8 py-8">
-            <div class="grid grid-cols-2 gap-8">
-              {% for item in modulo.items %}
-                <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
-              {% endfor %}
+        
+        {% if app.submenus %}
+        <div x-show="open" @click.outside="open = false" x-transition class="app-dropdown fixed left-0 top-16 w-screen z-50 animate-fade-slide-down">
+          <div class="max-w-6xl mx-auto px-8 py-8">
+            <!-- Header de la app -->
+            <div class="flex items-center mb-6">
+              <div class="app-icon-container" style="background: linear-gradient(135deg, {{ app.color }}50 0%, {{ app.color }}20 100%);">
+                {{ app.icono_svg|safe }}
+              </div>
+              <div class="ml-4">
+                <h2 class="text-xl font-semibold text-gray-900">{{ app.nombre }}</h2>
+                <p class="text-sm text-gray-500">{% trans "Manage" %} {{ app.nombre|lower }} {% trans "and related settings" %}</p>
+              </div>
             </div>
-          </div>
-        </div>
-        {% endif %}
-        {% if modulo.sections %}
-        <div x-show="open" @click.outside="open = false" x-transition class="dropdown-bg fixed left-0 top-16 w-screen bg-white shadow-xl z-50 border-b border-gray-100 animate-fade-slide-down">
-          <div class="max-w-5xl mx-auto px-8 py-8">
-            <div class="grid grid-cols-4 gap-12">
-              {% for section in modulo.sections %}
-                <div class="space-y-3">
-                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ section.title }}</h3>
+            
+            <!-- Grid de submenús -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {% for submenu in app.submenus %}
+                <div class="app-card">
+                  <h3 class="app-section-title">{{ submenu.seccion }}</h3>
                   <div class="space-y-1">
-                    {% for item in section.items %}
-                      <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+                    {% for item in submenu.items %}
+                      <a href="{{ item.url }}" class="app-menu-item">
+                        <span class="material-icons">{{ item.icon }}</span>
+                        {{ item.label }}
+                      </a>
                     {% endfor %}
                   </div>
                 </div>
               {% endfor %}
+            </div>
+            
+            <!-- Footer con acción principal -->
+            <div class="mt-6 pt-6 border-t border-gray-100">
+              <a href="{{ app.url }}" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-{{ app.color }}-500 to-{{ app.color }}-600 text-white rounded-lg hover:from-{{ app.color }}-600 hover:to-{{ app.color }}-700 transition-all duration-200 font-medium">
+                <span class="material-icons mr-2">dashboard</span>
+                {% trans "Go to" %} {{ app.nombre }} {% trans "Dashboard" %}
+              </a>
             </div>
           </div>
         </div>
@@ -110,10 +180,12 @@
       </div>
     {% endfor %}
   </nav>
+  
   <!-- Botón hamburguesa para mobile -->
   <button id="hamburger-btn" class="md:hidden flex items-center p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 ml-2" aria-label="Abrir menú">
     <svg class="w-7 h-7 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
   </button>
+  
   <!-- Controles a la derecha: badges y secundarios -->
   <div class="ml-auto flex items-center gap-4">
     <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
@@ -131,36 +203,37 @@
       <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
         <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
       </span>
-      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">Dark</span>
+      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">{% trans "Dark" %}</span>
     </label>
   </div>
 </div>
-<!-- Menú mobile -->
+
+<!-- Menú mobile actualizado -->
 <div id="mobile-menu" class="mobile-menu md:hidden absolute left-0 top-16 w-full bg-white shadow-xl z-50 rounded-b-xl border-t border-gray-200 hidden">
   <nav class="flex flex-col py-4 px-6 font-inter text-base font-normal tracking-wide">
-    {% for modulo in modulos_menu %}
-      <div class="mb-2">
-        <a href="{{ modulo.url }}" class="block text-[#222] hover:underline underline-offset-4 transition py-1.5 focus:outline-none flex items-center gap-1" onclick="this.nextElementSibling?.classList.toggle('hidden')">
-          {{ modulo.nombre }}
-          {% if modulo.items %}
-            <span class="material-icons text-xs align-middle">expand_more</span>
+    {% for app in apps_menu %}
+      <div class="mb-4">
+        <a href="{{ app.url }}" class="block text-[#222] hover:underline underline-offset-4 transition py-2 focus:outline-none flex items-center gap-2" onclick="this.nextElementSibling?.classList.toggle('hidden')">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, {{ app.color }}50 0%, {{ app.color }}20 100%);">
+            {{ app.icono_svg|safe }}
+          </div>
+          <span class="font-medium">{{ app.nombre }}</span>
+          {% if app.submenus %}
+            <span class="material-icons text-xs align-middle ml-auto">expand_more</span>
           {% endif %}
         </a>
-        {% if modulo.items %}
-        <div class="hidden pl-4 mt-1">
-          {% for item in modulo.items %}
-            <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
-          {% endfor %}
-        </div>
-        {% endif %}
-        {% if modulo.sections %}
-        <div class="hidden pl-4 mt-1">
-          {% for section in modulo.sections %}
-            <div class="space-y-3">
-              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ section.title }}</h3>
+        
+        {% if app.submenus %}
+        <div class="hidden pl-10 mt-2 space-y-4">
+          {% for submenu in app.submenus %}
+            <div class="space-y-2">
+              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ submenu.seccion }}</h4>
               <div class="space-y-1">
-                {% for item in section.items %}
-                  <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+                {% for item in submenu.items %}
+                  <a href="{{ item.url }}" class="flex items-center text-sm text-gray-600 hover:text-gray-900 transition py-1 px-2 rounded">
+                    <span class="material-icons text-base mr-2">{{ item.icon }}</span>
+                    {{ item.label }}
+                  </a>
                 {% endfor %}
               </div>
             </div>
@@ -170,6 +243,7 @@
       </div>
     {% endfor %}
   </nav>
+  
   <div class="flex items-center gap-3 mt-4 px-6 pb-4">
     <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
       <span class="material-icons text-base mr-1">business</span>
@@ -186,10 +260,11 @@
       <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
         <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
       </span>
-      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">Dark</span>
+      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">{% trans "Dark" %}</span>
     </label>
   </div>
 </div>
+
 <script>
 // Lógica para dropdowns accesibles y animados (desktop y mobile)
 document.addEventListener('DOMContentLoaded', function() {
@@ -206,66 +281,35 @@ document.addEventListener('DOMContentLoaded', function() {
       mobileMenu.classList.remove('open');
     }
   });
-  // --- Dropdowns desktop ---
-  const appMenus = document.querySelectorAll('.md\:flex .menu-app');
-  appMenus.forEach(function(menu) {
-    const button = menu.querySelector('button');
-    const dropdown = menu.querySelector('.dropdown-menu');
-    button.addEventListener('click', function(e) {
-      e.stopPropagation();
-      appMenus.forEach(function(other) {
-        if (other !== menu) {
-          other.querySelector('.dropdown-menu').style.display = 'none';
-        }
-      });
-      dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
-      if (dropdown.style.display === 'block') {
-        dropdown.focus();
-      }
+  
+  // --- Dark mode sync entre switches ---
+  const darkSwitch = document.getElementById('dark-mode-switch');
+  const darkSwitchMobile = document.getElementById('dark-mode-switch-mobile');
+  
+  function syncDarkMode(checked) {
+    const html = document.documentElement;
+    if (checked) {
+      html.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      html.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }
+  
+  if (darkSwitch) {
+    darkSwitch.addEventListener('change', function() {
+      syncDarkMode(this.checked);
+      if (darkSwitchMobile) darkSwitchMobile.checked = this.checked;
     });
-    button.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
-        button.blur();
-      }
+  }
+  
+  if (darkSwitchMobile) {
+    darkSwitchMobile.addEventListener('change', function() {
+      syncDarkMode(this.checked);
+      if (darkSwitch) darkSwitch.checked = this.checked;
     });
-    dropdown.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
-        button.blur();
-      }
-    });
-  });
-  // --- Dropdowns mobile ---
-  const mobileAppMenus = mobileMenu.querySelectorAll('.menu-app');
-  mobileAppMenus.forEach(function(menu) {
-    const button = menu.querySelector('button');
-    const dropdown = menu.querySelector('.dropdown-menu');
-    button.addEventListener('click', function(e) {
-      e.stopPropagation();
-      mobileAppMenus.forEach(function(other) {
-        if (other !== menu) {
-          other.querySelector('.dropdown-menu').style.display = 'none';
-        }
-      });
-      dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
-      if (dropdown.style.display === 'block') {
-        dropdown.focus();
-      }
-    });
-    button.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
-        button.blur();
-      }
-    });
-    dropdown.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
-        button.blur();
-      }
-    });
-  });
+  }
 });
 </script>
 <!-- Alpine.js para dropdowns -->

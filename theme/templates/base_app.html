@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es" x-data="{ openMenu: false, openUserMenu: false, sidebarOpen: true }" @click.away="openMenu = false; openUserMenu = false" class="bg-gray-100 dark:bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Synap{% endblock %}</title>
+    {% load static %}
+    {% load i18n %}
+    <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        .gradient-icon {
+            background: linear-gradient(90deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Estilos para la nueva arquitectura de apps */
+        .app-sidebar {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border-right: 1px solid #e2e8f0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .app-sidebar.collapsed {
+            width: 64px;
+        }
+        
+        .app-sidebar.expanded {
+            width: 280px;
+        }
+        
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin: 4px 8px;
+            border-radius: 12px;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            position: relative;
+        }
+        
+        .sidebar-item:hover {
+            background: white;
+            color: #1e293b;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .sidebar-item.active {
+            background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+        }
+        
+        .sidebar-item .material-icons {
+            font-size: 20px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-section {
+            margin: 24px 0 16px 0;
+            padding: 0 16px;
+        }
+        
+        .sidebar-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+        
+        .app-content {
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .app-content.with-sidebar {
+            margin-left: 280px;
+        }
+        
+        .app-content.without-sidebar {
+            margin-left: 64px;
+        }
+        
+        .app-content.no-sidebar {
+            margin-left: 0;
+        }
+        
+        /* Animaciones y microinteracciones */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        /* Breadcrumb styles */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 24px;
+        }
+        
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .breadcrumb-item:not(:last-child)::after {
+            content: '/';
+            color: #cbd5e1;
+            margin-left: 8px;
+        }
+        
+        .breadcrumb-item.active {
+            color: #1e293b;
+            font-weight: 500;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
+    <!-- Header fijo -->
+    <header class="w-full fixed top-0 left-0 z-40 h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
+        {% include 'partials/navbar.html' %}
+    </header>
+    
+    <div class="pt-16 min-h-screen w-full flex">
+        <!-- Sidebar dinámico eliminado -->
+        <!-- Contenido principal -->
+        <main class="app-content flex-1 transition-all duration-300 no-sidebar">
+            <div class="p-8">
+                <!-- Breadcrumb dinámico -->
+                {% if current_app_id %}
+                <nav class="breadcrumb">
+                    <div class="breadcrumb-item">
+                        <a href="/" class="hover:text-gray-900 transition-colors">{% trans "Home" %}</a>
+                    </div>
+                    {% for app in apps_menu %}
+                        {% if app.id == current_app_id %}
+                            <div class="breadcrumb-item active">
+                                <span class="material-icons text-sm">{{ app.icono_svg|safe }}</span>
+                                {{ app.nombre }}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </nav>
+                {% endif %}
+                <!-- Logo de empresa eliminado -->
+                <!-- Contenido de la página -->
+                {% block content %}{% endblock content %}
+            </div>
+        </main>
+    </div>
+    
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+    // Soporte para dark mode
+    document.addEventListener('DOMContentLoaded', function() {
+        const html = document.documentElement;
+        const darkSwitch = document.getElementById('dark-mode-switch');
+        
+        // Cargar preferencia previa
+        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+            if (darkSwitch) darkSwitch.checked = true;
+        } else {
+            html.classList.remove('dark');
+            if (darkSwitch) darkSwitch.checked = false;
+        }
+        
+        // Alternar al cambiar el switch
+        if (darkSwitch) {
+            darkSwitch.addEventListener('change', function() {
+                if (darkSwitch.checked) {
+                    html.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    html.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+        }
+        
+        // Animación de entrada para elementos
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('slide-in');
+                }
+            });
+        }, observerOptions);
+        
+        // Observar elementos para animación
+        document.querySelectorAll('.sidebar-item, .app-card, .stat-card').forEach(el => {
+            observer.observe(el);
+        });
+    });
+    </script>
+</body>
+</html> 

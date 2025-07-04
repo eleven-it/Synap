@@ -1,5 +1,7 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "clientes/clientes_app_base.html" %}
+{% load i18n %}
+
+{% block clientes_content %}
 <div class="bg-white shadow rounded p-6 max-w-3xl mx-auto">
   <h2 class="text-2xl font-bold mb-4">Perfil de Usuario</h2>
 
@@ -56,4 +58,4 @@
     </div>
   </form>
 </div>
-{% endblock %}
+{% endblock clientes_content %}

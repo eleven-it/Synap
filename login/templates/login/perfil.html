@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "login/login_app_base.html" %}
 {% load i18n %}
 
-{% block content %}
+{% block login_content %}
 <div class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 py-8">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header con animación -->
@@ -266,4 +266,4 @@ setTimeout(() => {
     animation: slide-in-right 0.4s ease-out;
 }
 </style>
-{% endblock %}
+{% endblock login_content %}

@@ -11,235 +11,419 @@ import firebase_admin
 from firebase_admin import firestore
 from django.http import HttpResponseForbidden
 from functools import wraps
+from django.urls import reverse
+from django.urls.exceptions import NoReverseMatch
 
 logger = logging.getLogger(__name__)
 
 # core/utils.py
 
-MODULOS_MENU = [
+# ─────────────────────────────────────────────
+# CONFIGURACIÓN CENTRAL DE MENÚS Y APPS
+# ─────────────────────────────────────────────
+
+# Configuración principal de apps/modulos
+APPS_MENU = [
     {
-        "nombre": _("Dashboard"),
-        "permiso": "usuarios.dashboard",
-        "url": "core:dashboard",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z'/>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z'/>
-        </svg>""",
-        "orden": 1
-    },
-    # {
-    #     "nombre": "CRM",
-    #     "permiso": "crm.ver",
-    #     "url": "/crm/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M9.75 3.75h4.5m-9 3h13.5m-13.5 3h13.5M4.5 9.75v10.5a.75.75 0 00.75.75h13.5a.75.75 0 00.75-.75V9.75'/>
-    #     </svg>""",
-    #     "orden": 2
-    # },
-    # {
-    #     "nombre": "Ventas",
-    #     "permiso": "ventas.ver",
-    #     "url": "/ventas/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z'/>
-    #     </svg>""",
-    #     "orden": 3
-    # },
-    {
+        "id": "inventory",
         "nombre": _("Inventory"),
         "permiso": "inventory.ver",
-        "url": "/inventory/dashboard/",
+        "url": "inventory:stock_dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
             <path stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/>
         </svg>""",
-        "orden": 4
+        "orden": 1,
+        "color": "green",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "inventory:stock_dashboard",
+                        "icon": "dashboard",
+                        "permission": "inventory.ver"
+                    },
+                    {
+                        "label": _("Products"),
+                        "url": "inventory:product_list",
+                        "icon": "inventory",
+                        "permission": "inventory.ver_product"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Stock Management"),
+                "items": [
+                    {
+                        "label": _("Warehouses"),
+                        "url": "inventory:warehouse_list",
+                        "icon": "warehouse",
+                        "permission": "inventory.ver_warehouse"
+                    },
+                    {
+                        "label": _("Locations"),
+                        "url": "inventory:location_list",
+                        "icon": "location_on",
+                        "permission": "inventory.ver_location"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Catalog"),
+                "items": [
+                    {
+                        "label": _("Brands"),
+                        "url": "inventory:brand_list",
+                        "icon": "label",
+                        "permission": "inventory.view_brand"
+                    },
+                    {
+                        "label": _("Categories"),
+                        "url": "inventory:category_list",
+                        "icon": "category",
+                        "permission": "inventory.view_category"
+                    },
+                    {
+                        "label": _("Subcategories"),
+                        "url": "inventory:subcategory_list",
+                        "icon": "subdirectory_arrow_right",
+                        "permission": "inventory.view_subcategory"
+                    }
+                ]
+            },
+            {
+                "seccion": _("TiendaNube"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "inventory:tiendanube_dashboard",
+                        "icon": "cloud",
+                        "permission": "inventory.ver_dashboard_tiendanube"
+                    }
+                ]
+            }
+        ]
     },
-    # {
-    #     "nombre": "Compras",
-    #     "permiso": "compras.ver",
-    #     "url": "/compras/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/>
-    #     </svg>""",
-    #     "orden": 5
-    # },
-    # {
-    #     "nombre": "Finance",
-    #     "permiso": "finance.ver",
-    #     "url": "/finance/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1'/>
-    #     </svg>""",
-    #     "orden": 6
-    # },
-    # {
-    #     "nombre": "Reportes",
-    #     "permiso": "reportes.ver",
-    #     "url": "/reportes/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M3 6h18M3 14h18M3 18h18'/>
-    #     </svg>""",
-    #     "orden": 7
-    # },
-    # {
-    #     "nombre": "IA",
-    #     "permiso": "ia.reportes",
-    #     "url": "/ia/",
-    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-    #         <path stroke-linecap='round' stroke-linejoin='round' d='M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423L16.5 15.75l.394 1.183a2.25 2.25 0 001.423 1.423L19.5 18.75l-1.183.394a2.25 2.25 0 00-1.423 1.423z'/>
-    #     </svg>""",
-    #     "orden": 8
-    # },
     {
+        "id": "tiendanube",
+        "nombre": _("TiendaNube"),
+        "permiso": "tiendanube.access",
+        "url": "tiendanube:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M17.5 19a4.5 4.5 0 100-9 5.5 5.5 0 00-10.9 1.5A4.5 4.5 0 006.5 19h11z'/></svg>""",
+        "orden": 2,
+        "color": "purple",
+        "submenus": [
+            {
+                "seccion": _("Integration"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "tiendanube:dashboard",
+                        "icon": "dashboard",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Configuration"),
+                        "url": "tiendanube:config_list",
+                        "icon": "settings",
+                        "permission": "tiendanube.access"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Sync Management"),
+                "items": [
+                    {
+                        "label": _("Sync Logs"),
+                        "url": "tiendanube:logs_list",
+                        "icon": "history",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Product Mapping"),
+                        "url": "tiendanube:mapping_list",
+                        "icon": "link",
+                        "permission": "tiendanube.access"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "settings",
         "nombre": _("Settings"),
         "permiso": "usuarios.dashboard",
-        "url": "/core/dashboard/",
+        "url": "core:dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
             <path stroke-linecap='round' stroke-linejoin='round' d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
             <path stroke-linecap='round' stroke-linejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />
         </svg>""",
-        "orden": 9
-    },
-    {
-        "nombre": _("TiendaNube"),
-        "permiso": "tiendanube.access",
-        "url": "/tiendanube/",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M17.5 19a4.5 4.5 0 100-9 5.5 5.5 0 00-10.9 1.5A4.5 4.5 0 006.5 19h11z'/></svg>""",
-        "orden": 10
+        "orden": 3,
+        "color": "gray",
+        "submenus": [
+            {
+                "seccion": _("Quick Access"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "core:dashboard",
+                        "icon": "dashboard",
+                        "permission": "usuarios.dashboard"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Access Management"),
+                "items": [
+                    {
+                        "label": _("Users"),
+                        "url": "core:usuarios",
+                        "icon": "group",
+                        "permission": "usuarios.ver"
+                    },
+                    {
+                        "label": _("Roles"),
+                        "url": "core:listar_roles",
+                        "icon": "admin_panel_settings",
+                        "permission": "usuarios.roles.ver"
+                    },
+                    {
+                        "label": _("Permissions"),
+                        "url": "core:listar_permisos",
+                        "icon": "vpn_key",
+                        "permission": "usuarios.permisos.ver"
+                    }
+                ]
+            },
+            {
+                "seccion": _("General Configuration"),
+                "items": [
+                    {
+                        "label": _("Units of Measure"),
+                        "url": "core:uom_list",
+                        "icon": "straighten",
+                        "permission": "configuracion.uom"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Financial Configuration"),
+                "items": [
+                    {
+                        "label": _("Currencies"),
+                        "url": "core:currency_list",
+                        "icon": "payments",
+                        "permission": "configuracion.moneda"
+                    },
+                    {
+                        "label": _("Exchange Rates"),
+                        "url": "core:exchange_rate_list",
+                        "icon": "currency_exchange",
+                        "permission": "configuracion.moneda"
+                    }
+                ]
+            },
+            {
+                "seccion": _("System Configuration"),
+                "items": [
+                    {
+                        "label": _("Configuration"),
+                        "url": "core:system_config_list",
+                        "icon": "settings",
+                        "permission": "configuracion.sistema"
+                    },
+                    {
+                        "label": _("Empresas"),
+                        "url": "core:empresa_listar",
+                        "icon": "business",
+                        "permission": "configuracion.sistema"
+                    },
+                    {
+                        "label": _("CDN Wizard"),
+                        "url": "core:cdn_wizard",
+                        "icon": "cloud",
+                        "permission": "configuracion.sistema"
+                    }
+                ]
+            }
+        ]
     }
 ]
 
-ADMIN_SIDEBAR_MENU = {
-    _( "Quick Access" ): [
-        {
-            "label": _( "Dashboard" ),
-            "url_name": "core:dashboard",
-            "icon": "dashboard",
-            "permission": "usuarios.dashboard"
-        }
-    ],
-    _( "Access Management" ): [
-        {
-            "label": _( "Users" ),
-            "url_name": "core:usuarios",
-            "icon": "group",
-            "permission": "usuarios.ver"
-        },
-        {
-            "label": _( "Roles" ),
-            "url_name": "core:listar_roles",
-            "icon": "admin_panel_settings",
-            "permission": "usuarios.roles.ver"
-        },
-        {
-            "label": _( "Permissions" ),
-            "url_name": "core:listar_permisos",
-            "icon": "vpn_key",
-            "permission": "usuarios.permisos.ver"
-        }
-    ],
-    _( "General Configuration" ): [
-        {
-            "label": _( "Units of Measure" ),
-            "url_name": "core:uom_list",
-            "icon": "straighten",
-            "permission": "configuracion.uom"
-        }
-    ],
-    _( "Financial Configuration" ): [
-        {
-            "label": _( "Currencies" ),
-            "url_name": "core:currency_list",
-            "icon": "payments",
-            "permission": "configuracion.moneda"
-        },
-        {
-            "label": _( "Exchange Rates" ),
-            "url_name": "core:exchange_rate_list",
-            "icon": "currency_exchange",
-            "permission": "configuracion.moneda"
-        }
-    ],
-    _( "System Configuration" ): [
-        {
-            "label": _( "Configuration" ),
-            "url_name": "core:system_config_list",
-            "icon": "settings",
-            "permission": "configuracion.sistema"
-        },
-        {
-            "label": _( "Empresas" ),
-            "url_name": "core:empresa_listar",
-            "icon": "business",
-            "permission": "configuracion.sistema"
-        },
-        {
-            "label": _( "CDN Wizard" ),
-            "url_name": "core:cdn_wizard",
-            "icon": "cloud",
-            "permission": "configuracion.sistema"
-        }
-    ]
-}
+# Apps comentadas para futuras implementaciones
+# {
+#     "id": "crm",
+#     "nombre": _("CRM"),
+#     "permiso": "crm.ver",
+#     "url": "/crm/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M9.75 3.75h4.5m-9 3h13.5m-13.5 3h13.5M4.5 9.75v10.5a.75.75 0 00.75.75h13.5a.75.75 0 00.75-.75V9.75'/>
+#     </svg>""",
+#     "orden": 5,
+#     "color": "indigo",
+#     "submenus": []
+# },
+# {
+#     "id": "ventas",
+#     "nombre": _("Sales"),
+#     "permiso": "ventas.ver",
+#     "url": "/ventas/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z'/>
+#     </svg>""",
+#     "orden": 6,
+#     "color": "orange",
+#     "submenus": []
+# },
+# {
+#     "id": "compras",
+#     "nombre": _("Purchases"),
+#     "permiso": "compras.ver",
+#     "url": "/compras/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/>
+#     </svg>""",
+#     "orden": 7,
+#     "color": "red",
+#     "submenus": []
+# },
+# {
+#     "id": "finance",
+#     "nombre": _("Finance"),
+#     "permiso": "finance.ver",
+#     "url": "/finance/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1'/>
+#     </svg>""",
+#     "orden": 8,
+#     "color": "emerald",
+#     "submenus": []
+# },
+# {
+#     "id": "reportes",
+#     "nombre": _("Reports"),
+#     "permiso": "reportes.ver",
+#     "url": "/reportes/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M3 6h18M3 14h18M3 18h18'/>
+#     </svg>""",
+#     "orden": 9,
+#     "color": "teal",
+#     "submenus": []
+# },
+# {
+#     "id": "ia",
+#     "nombre": _("AI"),
+#     "permiso": "ia.reportes",
+#     "url": "/ia/",
+#     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+#         <path stroke-linecap='round' stroke-linejoin='round' d='M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423L16.5 15.75l.394 1.183a2.25 2.25 0 001.423 1.423L19.5 18.75l-1.183.394a2.25 2.25 0 00-1.423 1.423z'/>
+#     </svg>""",
+#     "orden": 10,
+#     "color": "pink",
+#     "submenus": []
+# }
 
-INVENTORY_SIDEBAR_MENU = {
-    _( "Main" ): [
-        {
-            "label": _( "Dashboard" ),
-            "url_name": "inventory:stock_dashboard",
-            "icon": "dashboard",
-            "permission": "inventory.ver"
-        },
-        {
-            "label": _( "Products" ),
-            "url_name": "inventory:product_list",
-            "icon": "inventory",
-            "permission": "inventory.ver_product"
-        }
-    ],
-    _( "Stock Management" ): [
-        {
-            "label": _( "Warehouses" ),
-            "url_name": "inventory:warehouse_list",
-            "icon": "warehouse",
-            "permission": "inventory.ver_warehouse"
-        },
-        {
-            "label": _( "Locations" ),
-            "url_name": "inventory:location_list",
-            "icon": "location_on",
-            "permission": "inventory.ver_location"
-        }
-    ],
-    _( "Catalog" ): [
-        {
-            "label": _( "Brands" ),
-            "url_name": "inventory:brand_list",
-            "icon": "label",
-            "permission": "inventory.view_brand"
-        },
-        {
-            "label": _( "Categories" ),
-            "url_name": "inventory:category_list",
-            "icon": "category",
-            "permission": "inventory.view_category"
-        },
-        {
-            "label": _( "Subcategories" ),
-            "url_name": "inventory:subcategory_list",
-            "icon": "subdirectory_arrow_right",
-            "permission": "inventory.view_subcategory"
-        }
-    ],
-    _( "TiendaNube" ): [
-        {
-            "label": _( "Dashboard" ),
-            "url_name": "inventory:tiendanube_dashboard",
-            "icon": "cloud",
-            "permission": "inventory.ver_dashboard_tiendanube"
-        }
-    ]
-}
+# ─────────────────────────────────────────────
+# FUNCIONES DE UTILIDAD PARA MENÚS
+# ─────────────────────────────────────────────
+
+def obtener_app_por_id(app_id: str) -> Optional[Dict[str, Any]]:
+    """Obtiene una app específica por su ID"""
+    for app in APPS_MENU:
+        if app["id"] == app_id:
+            return app
+    return None
+
+def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Dict[str, Any]]:
+    """Obtiene los submenús visibles para una app específica según los permisos del usuario"""
+    app = obtener_app_por_id(app_id)
+    if not app or not app.get("submenus"):
+        return []
+    
+    submenus_visibles = []
+    for submenu in app["submenus"]:
+        items_visibles = []
+        for item in submenu["items"]:
+            if "*" in permisos_usuario or item["permission"] in permisos_usuario:
+                try:
+                    # Usar reverse para generar la URL correcta
+                    url = reverse(item["url"])
+                except NoReverseMatch:
+                    # Si no se puede resolver la URL, usar una URL por defecto
+                    url = "#"
+                
+                items_visibles.append({
+                    "label": str(item["label"]),
+                    "url": url,
+                    "icon": item["icon"],
+                    "permission": item["permission"]
+                })
+        
+        if items_visibles:
+            submenus_visibles.append({
+                "seccion": str(submenu["seccion"]),
+                "items": items_visibles
+            })
+    
+    return submenus_visibles
+
+def apps_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[str, Any]]:
+    """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús"""
+    from django.urls import reverse
+    from django.urls.exceptions import NoReverseMatch
+    
+    if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
+        return []
+
+    permisos_usuario = set()
+    if isinstance(user, UsuarioExtendido):
+        permisos_usuario = user.get_permisos_totales()
+
+    apps_filtradas = []
+    for app in APPS_MENU:
+        if "*" in permisos_usuario or app["permiso"] in permisos_usuario:
+            app_copy = app.copy()
+            
+            # Resolver la URL principal de la app
+            try:
+                app_copy["url"] = reverse(app["url"])
+            except NoReverseMatch:
+                app_copy["url"] = "#"
+            
+            # Agregar submenús si existen
+            if app.get("submenus"):
+                submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario)
+                if submenus_visibles:
+                    app_copy["submenus"] = submenus_visibles
+                else:
+                    # Si no hay submenús visibles, no mostrar la app
+                    continue
+            
+            apps_filtradas.append(app_copy)
+    
+    # Ordenar por el campo 'orden'
+    return sorted(apps_filtradas, key=lambda x: x.get('orden', 999))
+
+# ─────────────────────────────────────────────
+# COMPATIBILIDAD CON CÓDIGO EXISTENTE
+# ─────────────────────────────────────────────
+
+# Mantener las constantes antiguas para compatibilidad
+MODULOS_MENU = APPS_MENU
+
+# Obtener submenús para compatibilidad
+settings_app = obtener_app_por_id("settings")
+ADMIN_SIDEBAR_MENU = settings_app["submenus"] if settings_app and settings_app.get("submenus") else {}
+
+inventory_app = obtener_app_por_id("inventory")
+INVENTORY_SIDEBAR_MENU = inventory_app["submenus"] if inventory_app and inventory_app.get("submenus") else {}
+
+# Función de compatibilidad
+def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[str, Any]]:
+    """Función de compatibilidad que usa la nueva estructura"""
+    return apps_visibles_para_usuario(user)
 
 # Antes de usar firestore, asegúrate de inicializar Firebase:
 get_firebase_app()
@@ -350,51 +534,6 @@ def permisos_contextuales(
     permisos["permisos_usuario"] = sorted(permisos_usuario)
 
     return permisos
-
-
-def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[str, Any]]:
-    """Obtiene módulos visibles para un usuario, ordenados por prioridad, y agrega submenús (items) si corresponde"""
-    if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
-        return []
-
-    permisos_usuario = set()
-    if isinstance(user, UsuarioExtendido):
-        permisos_usuario = user.get_permisos_totales()
-
-    modulos_filtrados = []
-    for m in MODULOS_MENU:
-        if "*" in permisos_usuario or m["permiso"] in permisos_usuario:
-            modulo = m.copy()
-            # Submenús para Inventory
-            if modulo["nombre"].lower() == "inventory":
-                sections = []
-                for section_name, section_items in INVENTORY_SIDEBAR_MENU.items():
-                    visible_items = []
-                    for item in section_items:
-                        if "*" in permisos_usuario or item["permission"] in permisos_usuario:
-                            visible_items.append({
-                                "label": str(item["label"]),
-                                "url": f"/{item['url_name'].replace(':', '/')}",
-                            })
-                    if visible_items:
-                        sections.append({
-                            "title": str(section_name),
-                            "items": visible_items
-                        })
-                if sections:
-                    modulo["sections"] = sections
-            # Submenús para TiendaNube
-            elif modulo["nombre"].lower() == "tiendanube":
-                items = [
-                    {"label": "Dashboard", "url": "/tiendanube/"},
-                    {"label": "Configuration", "url": "/tiendanube/config/"},
-                    {"label": "Sync Logs", "url": "/tiendanube/logs/"},
-                    {"label": "Product Mapping", "url": "/tiendanube/mappings/"},
-                ]
-                modulo["items"] = items
-            modulos_filtrados.append(modulo)
-    # Ordenar por el campo 'orden'
-    return sorted(modulos_filtrados, key=lambda x: x.get('orden', 999))
 
 
 def crear_roles_predeterminados() -> Dict[str, Rol]:

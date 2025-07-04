@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from core.models import UsuarioExtendido
 from core.utils import permisos_contextuales
 from core.decorators import tiene_permiso
+from django.views.generic import TemplateView
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 @login_required
 def dashboard_view(request):
@@ -26,3 +28,12 @@ def perfil_view(request):
 def historial_view(request):
     """Vista para ver el historial de actividad."""
     return render(request, "core/historial.html")
+
+class MenuExampleView(LoginRequiredMixin, TemplateView):
+    """Vista de ejemplo para mostrar la nueva arquitectura de menús."""
+    template_name = 'core/menu_example.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # El context processor ya proporciona apps_menu y demás variables
+        return context

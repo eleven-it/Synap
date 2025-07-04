@@ -1,4 +1,4 @@
-{% extends "inventory/inventory_base.html" %}
+{% extends "inventory/inventory_app_base.html" %}
 {% load i18n %}
 
 {% block inventory_content %}
@@ -8,7 +8,7 @@
         {% if perms.inventory.add_product %}
         <a href="{% url 'inventory:product_create' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
             <span class="material-icons mr-2">add</span>
-            Create Product
+            {% trans "Create Product" %}
         </a>
         {% endif %}
     </div>
@@ -17,12 +17,12 @@
         <table class="min-w-full text-sm text-gray-900">
             <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b">
                 <tr>
-                    <th class="px-4 py-3">Image</th>
+                    <th class="px-4 py-3">{% trans "Image" %}</th>
                     <th class="px-4 py-3">{% trans "SKU" %}</th>
                     <th class="px-4 py-3">{% trans "Name" %}</th>
                     <th class="px-4 py-3">{% trans "Brand" %}</th>
-                    <th class="px-4 py-3 text-right">Price</th>
-                    <th class="px-4 py-3">Unit</th>
+                    <th class="px-4 py-3 text-right">{% trans "Price" %}</th>
+                    <th class="px-4 py-3">{% trans "Unit" %}</th>
                     <th class="px-4 py-3 text-center">{% trans "Actions" %}</th>
                 </tr>
             </thead>
@@ -46,12 +46,12 @@
                     <td class="px-4 py-2 text-center">
                         <div class="flex justify-center space-x-2">
                             {% if perms.inventory.change_product %}
-                            <a href="{% url 'inventory:product_update' product.pk %}" class="text-blue-500 hover:text-blue-700" title="Edit">
+                            <a href="{% url 'inventory:product_update' product.pk %}" class="text-blue-500 hover:text-blue-700" title="{% trans 'Edit' %}">
                                 <span class="material-icons">edit</span>
                             </a>
                             {% endif %}
                             {% if perms.inventory.delete_product %}
-                            <a href="{% url 'inventory:product_delete' product.pk %}" class="text-red-500 hover:text-red-700" title="Delete">
+                            <a href="{% url 'inventory:product_delete' product.pk %}" class="text-red-500 hover:text-red-700" title="{% trans 'Delete' %}">
                                 <span class="material-icons">delete</span>
                             </a>
                             {% endif %}
@@ -60,7 +60,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center p-6 text-gray-500">No products registered.</td>
+                    <td colspan="7" class="text-center p-6 text-gray-500">{% trans "No products registered." %}</td>
                 </tr>
                 {% endfor %}
             </tbody>

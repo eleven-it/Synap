@@ -8,6 +8,8 @@ app_name = 'inventory'
 
 urlpatterns = [
     path('dashboard/', views.stock_dashboard, name='stock_dashboard'),
+    path('test/', views.test_app_architecture, name='test_app_architecture'),
+    path('simple/', views.simple_test, name='simple_test'),
     path('tiendanube/', views.tiendanube_dashboard, name='tiendanube_dashboard'),
     
     # Product URLs

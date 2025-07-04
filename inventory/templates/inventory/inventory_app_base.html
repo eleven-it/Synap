@@ -1,0 +1,13 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Inventory" %} - Synap{% endblock %}
+
+{% block content %}
+    {% block inventory_content %}{% endblock inventory_content %}
+{% endblock %}
+
+{% block extra_js %}
+    {% block inventory_extra_js %}{% endblock inventory_extra_js %}
+{% endblock %} 

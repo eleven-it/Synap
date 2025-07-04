@@ -1,0 +1,13 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Dashboard" %} - Synap{% endblock %}
+
+{% block content %}
+    {% block dashboard_content %}{% endblock dashboard_content %}
+{% endblock %}
+
+{% block extra_js %}
+    {% block dashboard_extra_js %}{% endblock dashboard_extra_js %}
+{% endblock %} 

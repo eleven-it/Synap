@@ -1,0 +1,35 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}Test Simple - Synap{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-xl shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-6">🧪 Test Simple</h1>
+        
+        <div class="space-y-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-green-800 mb-2">✅ Funcionando</h2>
+                <p class="text-green-700">El template base_app.html está funcionando correctamente.</p>
+            </div>
+            
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-blue-800 mb-2">📊 Variables del Contexto</h2>
+                <ul class="text-blue-700 space-y-1">
+                    <li><strong>current_app_id:</strong> {{ current_app_id|default:"No definido" }}</li>
+                    <li><strong>show_sidebar:</strong> {{ show_sidebar|yesno:"Sí,No" }}</li>
+                    <li><strong>apps_menu:</strong> {{ apps_menu|length }} apps</li>
+                </ul>
+            </div>
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-yellow-800 mb-2">🔗 Navegación</h2>
+                <a href="{% url 'inventory:stock_dashboard' %}" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors">
+                    Ir al Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

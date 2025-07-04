@@ -1,4 +1,4 @@
-{% extends "inventory/inventory_base.html" %}
+{% extends "inventory/inventory_app_base.html" %}
 {% load widget_tweaks %}
 {% load i18n %}
 
@@ -21,43 +21,43 @@
             <div class="space-y-8">
                 <!-- Sección: Identificación -->
                 <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Identificación" %}</h3>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Identification" %}</h3>
                     <div class="space-y-3">
                         <div>
                             <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Product Name" %}<span class="text-red-500">*</span></label>
-                            {{ form.name|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Nombre del producto' }}
+                            {{ form.name|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Product name') }}
                             {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors|first }}</p>{% endif %}
                         </div>
                         <div>
                             <label for="id_sku" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "SKU" %}</label>
-                            <input type="text" id="id_sku" name="sku" x-ref="skuInput" x-model="sku" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="SKU único">
+                            <input type="text" id="id_sku" name="sku" x-ref="skuInput" x-model="sku" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Unique SKU' %}">
                             {% if form.sku.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sku.errors|first }}</p>{% endif %}
                         </div>
                         <div>
                             <label for="{{ form.handle.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Handle (URL)" %}</label>
-                            {{ form.handle|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:ejemplo-producto' }}
-                            <p class="text-xs text-gray-500">{% trans "URL amigable sugerida automáticamente a partir del nombre, puedes modificarla si lo deseas." %}</p>
+                            {{ form.handle|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:example-product' }}
+                            <p class="text-xs text-gray-500">{% trans "Friendly URL automatically suggested from the name, you can modify it if you wish." %}</p>
                             {% if form.handle.errors %}<p class="text-red-500 text-xs mt-1">{{ form.handle.errors|first }}</p>{% endif %}
                         </div>
                         <div>
-                            <label for="{{ form.barcode.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Código de Barras" %}</label>
-                            {{ form.barcode|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Opcional' }}
+                            <label for="{{ form.barcode.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Barcode" %}</label>
+                            {{ form.barcode|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Optional') }}
                         </div>
                         <div>
-                            <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Descripción" %}<span class="text-red-500">*</span></label>
-                            {{ form.description|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Describe el producto' }}
+                            <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Description" %}<span class="text-red-500">*</span></label>
+                            {{ form.description|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Describe the product') }}
                             {% if form.description.errors %}<p class="text-red-500 text-xs mt-1">{{ form.description.errors|first }}</p>{% endif %}
                         </div>
                     </div>
                 </div>
                 <!-- Sección: Organización -->
                 <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Organización" %}</h3>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Organization" %}</h3>
                     <div class="space-y-3">
                         <div>
                             <label for="category_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Category" %}<span class="text-red-500"></span></label>
                             <div class="relative">
-                                <input type="text" id="category_combobox" name="category_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a category..." oninput="onCategoryInput()" onfocus="onCategoryInput()">
+                                <input type="text" id="category_combobox" name="category_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a category...' %}" oninput="onCategoryInput()" onfocus="onCategoryInput()">
                                 <input type="hidden" id="category_id" name="category" value="{{ form.category.value|default:'' }}" />
                                 <div id="category_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
                             </div>
@@ -66,7 +66,7 @@
                         <div>
                             <label for="subcategory_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Subcategory" %}</label>
                             <div class="relative">
-                                <input type="text" id="subcategory_combobox" name="subcategory_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a subcategory..." oninput="onSubcategoryInput()" onfocus="onSubcategoryInput()" />
+                                <input type="text" id="subcategory_combobox" name="subcategory_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a subcategory...' %}" oninput="onSubcategoryInput()" onfocus="onSubcategoryInput()" />
                                 <input type="hidden" id="subcategory_id" name="subcategory" value="{{ form.subcategory.value|default:'' }}" />
                                 <div id="subcategory_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
                             </div>
@@ -75,7 +75,7 @@
                         <div>
                             <label for="brand_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Brand" %}</label>
                             <div class="relative">
-                                <input type="text" id="brand_combobox" name="brand_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="Type or select a brand..." oninput="onBrandInput()" onfocus="onBrandInput()" />
+                                <input type="text" id="brand_combobox" name="brand_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a brand...' %}" oninput="onBrandInput()" onfocus="onBrandInput()" />
                                 <input type="hidden" id="brand_id" name="brand" value="{% if form.brand.value %}{{ form.brand.value }}{% elif form.instance.brand %}{{ form.instance.brand.id }}{% else %}{% endif %}" />
                                 <div id="brand_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
                             </div>
@@ -85,60 +85,60 @@
                 </div>
                 <!-- Sección: Precios y márgenes -->
                 <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Precios y márgenes" %}</h3>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Prices and Margins" %}</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label for="id_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Precio" %}<span class="text-red-500">*</span></label>
-                            <input type="text" id="id_price" name="price" x-ref="priceInput" x-model="price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Precio de venta" required autocomplete="off">
+                            <label for="id_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Price" %}<span class="text-red-500">*</span></label>
+                            <input type="text" id="id_price" name="price" x-ref="priceInput" x-model="price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Sale price' %}" required autocomplete="off">
                             {% if form.price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.price.errors|first }}</p>{% endif %}
                         </div>
                         <div>
-                            <label for="id_sale_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Precio Promocional" %}</label>
-                            <input type="text" id="id_sale_price" name="sale_price" x-ref="salePriceInput" x-model="sale_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Precio en oferta">
+                            <label for="id_sale_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Promotional Price" %}</label>
+                            <input type="text" id="id_sale_price" name="sale_price" x-ref="salePriceInput" x-model="sale_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Offer price' %}">
                             {% if form.sale_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sale_price.errors|first }}</p>{% endif %}
                         </div>
                         <div>
-                            <label for="id_cost_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Precio de Costo" %}</label>
-                            <input type="text" id="id_cost_price" name="cost_price" x-ref="costPriceInput" x-model="cost_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="Costo">
+                            <label for="id_cost_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Cost Price" %}</label>
+                            <input type="text" id="id_cost_price" name="cost_price" x-ref="costPriceInput" x-model="cost_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Cost' %}">
                             {% if form.cost_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.cost_price.errors|first }}</p>{% endif %}
                         </div>
                         <div>
-                            <label for="id_profit_margin" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Margen de Ganancia (%)" %}</label>
-                            <input type="text" id="id_profit_margin" name="profit_margin" x-model="profit_margin" readonly class="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition cursor-not-allowed" placeholder="Margen %" tabindex="-1">
+                            <label for="id_profit_margin" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Profit Margin (%)" %}</label>
+                            <input type="text" id="id_profit_margin" name="profit_margin" x-model="profit_margin" readonly class="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition cursor-not-allowed" placeholder="{% trans 'Margin %' %}" tabindex="-1">
                         </div>
                         <div>
-                            <label for="id_price_currency" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Moneda" %}</label>
+                            <label for="id_price_currency" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Currency" %}</label>
                             {{ form.price_currency|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
                         </div>
                     </div>
                 </div>
                 <!-- Sección: Peso y dimensiones -->
                 <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Peso y dimensiones" %}</h3>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Weight and Dimensions" %}</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label for="id_weight_kg" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Peso (kg)" %}<span class="text-red-500"></span></label>
-                            {{ form.weight_kg|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ej: 1.5' }}
+                            <label for="id_weight_kg" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Weight (kg)" %}<span class="text-red-500"></span></label>
+                            {{ form.weight_kg|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 1.5' }}
                         </div>
                         <div>
-                            <label for="id_volume_m3" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Volumen (m³)" %}</label>
-                            {{ form.volume_m3|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ej: 0.01' }}
+                            <label for="id_volume_m3" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Volume (m³)" %}</label>
+                            {{ form.volume_m3|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 0.01' }}
                         </div>
                         <div>
-                            <label for="id_width_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Ancho (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.width_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ej: 10' }}
+                            <label for="id_width_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Width (cm)" %}<span class="text-red-500"></span></label>
+                            {{ form.width_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 10' }}
                         </div>
                         <div>
-                            <label for="id_height_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Alto (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.height_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ej: 20' }}
+                            <label for="id_height_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Height (cm)" %}<span class="text-red-500"></span></label>
+                            {{ form.height_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 20' }}
                         </div>
                         <div>
-                            <label for="id_depth_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Profundidad (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.depth_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ej: 5' }}
+                            <label for="id_depth_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Depth (cm)" %}<span class="text-red-500"></span></label>
+                            {{ form.depth_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 5' }}
                         </div>
                         <div class="flex items-center mt-6">
                             {{ form.is_dangerous|add_class:'form-checkbox h-4 w-4 text-purple-600 border-gray-300 rounded' }}
-                            <label for="id_is_dangerous" class="ml-2 text-xs font-semibold text-gray-700">{% trans "Es Mercancía Peligrosa" %}</label>
+                            <label for="id_is_dangerous" class="ml-2 text-xs font-semibold text-gray-700">{% trans "Is Dangerous Goods" %}</label>
                         </div>
                     </div>
                 </div>
@@ -148,30 +148,30 @@
                     <div class="space-y-3">
                         <div class="md:col-span-2">
                             <label for="id_video_url" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Video (YouTube/Vimeo)" %}</label>
-                            {{ form.video_url|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Enlace de video' }}
-                            <p class="text-xs text-gray-400 mt-1">{% trans "Pega un enlace de YouTube o Vimeo para mostrar un video en la galería del producto." %}</p>
+                            {{ form.video_url|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Video link') }}
+                            <p class="text-xs text-gray-400 mt-1">{% trans "Paste a YouTube or Vimeo link to show a video in the product gallery." %}</p>
                         </div>
                     </div>
                 </div>
                 <!-- Sección: Otros -->
                 <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Otros" %}</h3>
+                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Others" %}</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label for="id_product_kind" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Product Kind" %}</label>
                             {{ form.product_kind|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
                         </div>
                         <div>
-                            <label for="id_uom" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Unidad de Medida" %}</label>
+                            <label for="id_uom" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Unit of Measure" %}</label>
                             {{ form.uom|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
                         </div>
                         <div>
-                            <label for="id_tracking" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Tipo de Seguimiento" %}</label>
+                            <label for="id_tracking" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Tracking Type" %}</label>
                             {{ form.tracking|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
                         </div>
                         <div class="flex items-center mt-6">
                             {{ form.is_published|add_class:'form-checkbox h-5 w-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500 transition' }}
-                            <label for="id_is_published" class="ml-2 text-xs font-semibold text-gray-900">{% trans "Publicado" %}</label>
+                            <label for="id_is_published" class="ml-2 text-xs font-semibold text-gray-900">{% trans "Published" %}</label>
                         </div>
                     </div>
                 </div>
@@ -183,7 +183,7 @@
                     <div id="image_grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" x-init="$watch('previewImages', () => updateImagesOrderField())">
                         <template x-for="(img, idx) in previewImages.filter(img => !img._delete)" :key="img.id || idx">
                             <div class="relative group rounded-lg overflow-hidden shadow bg-white">
-                                <img :src="img.url" alt="Imagen producto" class="w-full h-32 object-cover transition-transform duration-200 group-hover:scale-110 cursor-zoom-in" @click="openLightbox(img.url)">
+                                <img :src="img.url" alt="{% trans 'Product image' %}" class="w-full h-32 object-cover transition-transform duration-200 group-hover:scale-110 cursor-zoom-in" @click="openLightbox(img.url)">
                                 <button type="button" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 transition" @click="removeImage(idx)">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                                 </button>
@@ -202,8 +202,8 @@
                             <input type="file" id="id_images" name="images" accept="image/png,image/jpeg,image/jpg,image/gif" multiple class="hidden" x-ref="imagesInput" @change="handleFileSelect">
                             <svg class="w-10 h-10 text-purple-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16.5V19a2 2 0 002 2h12a2 2 0 002-2v-2.5"/></svg>
                             <span class="text-purple-600 font-semibold text-base">{% trans 'Upload images' %}</span>
-                            <span class="text-xs text-gray-500">PNG, JPG, GIF hasta 10MB cada una. Máx 250 imágenes.</span>
-                            <span class="text-xs text-gray-400">Arrastra y suelta o haz click para seleccionar archivos</span>
+                            <span class="text-xs text-gray-500">{% trans "PNG, JPG, GIF up to 10MB each. Max 250 images." %}</span>
+                            <span class="text-xs text-gray-400">{% trans "Drag and drop or click to select files" %}</span>
                             <p id="image_error" class="text-red-500 text-xs mt-2 hidden transition-opacity opacity-0"></p>
                         </div>
                     </div>
@@ -225,7 +225,7 @@
 
 <!-- Lightbox para zoom con animación fade-in -->
 <div id="lightboxModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 hidden transition-opacity duration-300 opacity-0">
-    <img id="lightboxImg" src="#" class="max-h-[80vh] max-w-[90vw] rounded-xl shadow-2xl border-4 border-white animate-fadeIn" alt="Zoom imagen">
+    <img id="lightboxImg" src="#" class="max-h-[80vh] max-w-[90vw] rounded-xl shadow-2xl border-4 border-white animate-fadeIn" alt="{% trans 'Zoom image' %}">
     <button onclick="closeLightbox()" class="absolute top-6 right-8 text-white text-3xl font-bold">&times;</button>
 </div>
 
@@ -254,11 +254,11 @@ function productForm() {
             for (let i = 0; i < files.length && this.previewImages.length < 250; i++) {
                 const file = files[i];
                 if (!['image/png', 'image/jpeg', 'image/jpg', 'image/gif'].includes(file.type)) {
-                    this.showImageError('Formato no permitido. Solo PNG, JPG, GIF.');
+                    this.showImageError('{% trans "Format not allowed. Only PNG, JPG, GIF." %}');
                     continue;
                 }
                 if (file.size > 10 * 1024 * 1024) {
-                    this.showImageError('El archivo supera el tamaño máximo de 10MB.');
+                    this.showImageError('{% trans "File exceeds maximum size of 10MB." %}');
                     continue;
                 }
                 const reader = new FileReader();
@@ -274,11 +274,11 @@ function productForm() {
             for (let i = 0; i < files.length && this.previewImages.length < 250; i++) {
                 const file = files[i];
                 if (!['image/png', 'image/jpeg', 'image/jpg', 'image/gif'].includes(file.type)) {
-                    this.showImageError('Formato no permitido. Solo PNG, JPG, GIF.');
+                    this.showImageError('{% trans "Format not allowed. Only PNG, JPG, GIF." %}');
                     continue;
                 }
                 if (file.size > 10 * 1024 * 1024) {
-                    this.showImageError('El archivo supera el tamaño máximo de 10MB.');
+                    this.showImageError('{% trans "File exceeds maximum size of 10MB." %}');
                     continue;
                 }
                 const reader = new FileReader();
@@ -357,7 +357,7 @@ function openEntityModal(url, selectId) {
   const modal = document.getElementById('entityModal');
   const content = document.getElementById('entityModalContent');
   modal.classList.remove('hidden');
-  content.innerHTML = '<div class="text-center py-8 text-gray-400">Cargando...</div>';
+  content.innerHTML = '<div class="text-center py-8 text-gray-400">{% trans "Loading..." %}</div>';
   fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
     .then(r => r.text())
     .then(html => { content.innerHTML = html; attachEntityFormHandler(selectId); });
@@ -425,14 +425,14 @@ function onBrandInput() {
             lastBrandResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((b, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name} <span class='text-xs text-gray-400'>({% trans "most used" %})</span></div>`;
                     lastBrandResults.push(b);
                     optionsCount++;
                 });
             }
             if (data.others && data.others.length) {
                 if (optionsCount > 0) {
-                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras marcas</div>`;
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>{% trans "Other brands" %}</div>`;
                 }
                 data.others.forEach((b, idx) => {
                     html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectBrand(${b.id}, "${b.name.replace(/"/g, '&quot;')}")'>${b.name}</div>`;
@@ -449,7 +449,7 @@ function onBrandInput() {
             });
             let foundExact = lastBrandResults.some(b => b.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
-                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastBrandResults.length}' onclick='createBrandFromInput()'>Crear "${q}"</div>`;
+                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastBrandResults.length}' onclick='createBrandFromInput()'>{% trans "Create" %} "${q}"</div>`;
             }
         }
         dropdown.innerHTML = html;
@@ -492,7 +492,7 @@ async function createBrandFromInput() {
     if (data.success) {
         selectBrand(data.id, data.name);
     } else {
-        error.textContent = data.error || 'Error al crear la marca';
+        error.textContent = data.error || '{% trans "Error creating brand" %}';
         error.classList.remove('hidden');
     }
 }
@@ -637,14 +637,14 @@ function onCategoryInput(forceShow = false) {
             lastCategoryResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((c, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name} <span class='text-xs text-gray-400'>({% trans "most used" %})</span></div>`;
                     lastCategoryResults.push(c);
                     optionsCount++;
                 });
             }
             if (data.others && data.others.length) {
                 if (optionsCount > 0) {
-                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras categorías</div>`;
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>{% trans "Other categories" %}</div>`;
                 }
                 data.others.forEach((c, idx) => {
                     html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectCategory(${c.id}, "${c.name.replace(/"/g, '&quot;')}")'>${c.name}</div>`;
@@ -661,7 +661,7 @@ function onCategoryInput(forceShow = false) {
             });
             let foundExact = lastCategoryResults.some(c => c.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
-                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastCategoryResults.length}' onclick='createCategoryFromInput()'>Crear "${q}"</div>`;
+                html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastCategoryResults.length}' onclick='createCategoryFromInput()'>{% trans "Create" %} "${q}"</div>`;
             }
         }
         dropdown.innerHTML = html;
@@ -705,7 +705,7 @@ async function createCategoryFromInput() {
     if (data.success) {
         selectCategory(data.id, data.name);
     } else {
-        error.textContent = data.error || 'Error al crear la categoría';
+        error.textContent = data.error || '{% trans "Error creating category" %}';
         error.classList.remove('hidden');
     }
 }
@@ -803,7 +803,7 @@ function onSubcategoryInput(forceShow = false) {
         const q = input.value.trim();
         const categoryId = document.getElementById('category_id')?.value;
         if (!categoryId) {
-            dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400">Selecciona un rubro primero...</div>';
+            dropdown.innerHTML = '<div class="px-3 py-2 text-gray-400">{% trans "Select a category first..." %}</div>';
             dropdown.classList.remove('hidden');
             return;
         }
@@ -815,14 +815,14 @@ function onSubcategoryInput(forceShow = false) {
             lastSubcategoryResults = [];
             if (data.top && data.top.length) {
                 data.top.forEach((s, idx) => {
-                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name} <span class='text-xs text-gray-400'>(más usada)</span></div>`;
+                    html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name} <span class='text-xs text-gray-400'>({% trans "most used" %})</span></div>`;
                     lastSubcategoryResults.push(s);
                     optionsCount++;
                 });
             }
             if (data.others && data.others.length) {
                 if (optionsCount > 0) {
-                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>Otras subcategorías</div>`;
+                    html += `<div class='px-3 py-1 text-xs text-gray-400 select-none border-t border-gray-200 my-1'>{% trans "Other subcategories" %}</div>`;
                 }
                 data.others.forEach((s, idx) => {
                     html += `<div class='px-3 py-2 hover:bg-purple-100 cursor-pointer' data-index='${optionsCount}' onclick='selectSubcategory(${s.id}, "${s.name.replace(/\"/g, '&quot;')}\")'>${s.name}</div>`;
@@ -840,9 +840,9 @@ function onSubcategoryInput(forceShow = false) {
             let foundExact = lastSubcategoryResults.some(s => s.name.toLowerCase() === q.toLowerCase());
             if (!foundExact) {
                 if (categoryId) {
-                    html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastSubcategoryResults.length}' onclick='createSubcategoryFromInput()'>Crear "${q}"</div>`;
+                    html += `<div class='px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 cursor-pointer' data-index='${lastSubcategoryResults.length}' onclick='createSubcategoryFromInput()'>{% trans "Create" %} "${q}"</div>`;
                 } else {
-                    html += `<div class='px-3 py-2 text-gray-400 select-none'>Selecciona un rubro antes de crear una subcategoría</div>`;
+                    html += `<div class='px-3 py-2 text-gray-400 select-none'>{% trans "Select a category before creating a subcategory" %}</div>`;
                 }
             }
         }
@@ -887,7 +887,7 @@ async function createSubcategoryFromInput() {
     if (data.success) {
         selectSubcategory(data.id, data.name);
     } else {
-        error.textContent = data.error || 'Error al crear la subcategoría';
+        error.textContent = data.error || '{% trans "Error creating subcategory" %}';
         error.classList.remove('hidden');
     }
 }
