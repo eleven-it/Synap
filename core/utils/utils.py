@@ -210,6 +210,34 @@ INVENTORY_SIDEBAR_MENU = {
             "icon": "location_on",
             "permission": "inventory.ver_location"
         }
+    ],
+    _( "Catalog" ): [
+        {
+            "label": _( "Brands" ),
+            "url_name": "inventory:brand_list",
+            "icon": "label",
+            "permission": "inventory.view_brand"
+        },
+        {
+            "label": _( "Categories" ),
+            "url_name": "inventory:category_list",
+            "icon": "category",
+            "permission": "inventory.view_category"
+        },
+        {
+            "label": _( "Subcategories" ),
+            "url_name": "inventory:subcategory_list",
+            "icon": "subdirectory_arrow_right",
+            "permission": "inventory.view_subcategory"
+        }
+    ],
+    _( "TiendaNube" ): [
+        {
+            "label": _( "Dashboard" ),
+            "url_name": "inventory:tiendanube_dashboard",
+            "icon": "cloud",
+            "permission": "inventory.ver_dashboard_tiendanube"
+        }
     ]
 }
 
@@ -325,7 +353,7 @@ def permisos_contextuales(
 
 
 def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[str, Any]]:
-    """Obtiene módulos visibles para un usuario, ordenados por prioridad"""
+    """Obtiene módulos visibles para un usuario, ordenados por prioridad, y agrega submenús (items) si corresponde"""
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return []
 
@@ -333,11 +361,38 @@ def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict
     if isinstance(user, UsuarioExtendido):
         permisos_usuario = user.get_permisos_totales()
 
-    modulos_filtrados = [
-        m for m in MODULOS_MENU
-        if "*" in permisos_usuario or m["permiso"] in permisos_usuario
-    ]
-    
+    modulos_filtrados = []
+    for m in MODULOS_MENU:
+        if "*" in permisos_usuario or m["permiso"] in permisos_usuario:
+            modulo = m.copy()
+            # Submenús para Inventory
+            if modulo["nombre"].lower() == "inventory":
+                sections = []
+                for section_name, section_items in INVENTORY_SIDEBAR_MENU.items():
+                    visible_items = []
+                    for item in section_items:
+                        if "*" in permisos_usuario or item["permission"] in permisos_usuario:
+                            visible_items.append({
+                                "label": str(item["label"]),
+                                "url": f"/{item['url_name'].replace(':', '/')}",
+                            })
+                    if visible_items:
+                        sections.append({
+                            "title": str(section_name),
+                            "items": visible_items
+                        })
+                if sections:
+                    modulo["sections"] = sections
+            # Submenús para TiendaNube
+            elif modulo["nombre"].lower() == "tiendanube":
+                items = [
+                    {"label": "Dashboard", "url": "/tiendanube/"},
+                    {"label": "Configuration", "url": "/tiendanube/config/"},
+                    {"label": "Sync Logs", "url": "/tiendanube/logs/"},
+                    {"label": "Product Mapping", "url": "/tiendanube/mappings/"},
+                ]
+                modulo["items"] = items
+            modulos_filtrados.append(modulo)
     # Ordenar por el campo 'orden'
     return sorted(modulos_filtrados, key=lambda x: x.get('orden', 999))
 

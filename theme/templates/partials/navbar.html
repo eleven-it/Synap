@@ -1,92 +1,272 @@
 {% load i18n %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-@keyframes gradient-move {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
-}
-.synap-animated {
-  background: linear-gradient(90deg, #a855f7, #3b82f6, #f472b6, #a855f7);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: gradient-move 2.5s linear infinite alternate;
-  font-weight: bold;
-  letter-spacing: 0.04em;
-  filter: drop-shadow(0 1px 6px #a855f7cc);
-}
+  body, .font-inter { font-family: 'Inter', sans-serif; }
+  .menu-app-item { transition: color 0.2s, border-bottom 0.2s; }
+  .menu-app-item:hover { color: #6366f1; border-bottom: 2px solid #6366f1; }
+  .dropdown-menu { display: none; position: absolute; left: 0; top: 100%; min-width: 180px; background: #fff; box-shadow: 0 8px 32px rgba(60,60,100,0.08); border-radius: 0.5rem; z-index: 50; padding: 0.5rem 0; }
+  .menu-app:hover .dropdown-menu, .menu-app:focus-within .dropdown-menu { display: block; animation: fadeIn 0.2s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
+  @keyframes gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+  .synap-animated {
+    background: linear-gradient(90deg, #a855f7, #3b82f6, #f472b6, #a855f7);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-move 2.5s linear infinite alternate;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    filter: drop-shadow(0 1px 6px #a855f7cc);
+  }
+  .animate-gradient-move {
+    animation: gradient-move 2.5s linear infinite alternate;
+  }
+  /* Microinteracción para el switch dark mode */
+  #dark-mode-switch:checked + span .dot {
+    transform: translateX(16px);
+    background: #1e293b;
+  }
+  #dark-mode-switch + span .dot {
+    transform: translateX(0);
+  }
+  /* Animación para el menú hamburguesa */
+  .mobile-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100vw;
+    background: #fff;
+    z-index: 100;
+    box-shadow: 0 8px 32px rgba(60,60,100,0.08);
+    border-radius: 0 0 1rem 1rem;
+    animation: fadeIn 0.2s;
+  }
+  .mobile-menu.open {
+    display: block;
+  }
+  @media (min-width: 768px) {
+    .mobile-menu { display: none !important; }
+  }
+  @keyframes fade-slide-down {
+    0% { opacity: 0; transform: translateY(-16px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-slide-down {
+    animation: fade-slide-down 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .dropdown-bg {
+    box-shadow: 0 8px 32px 0 rgba(60,60,60,0.10), 0 1.5px 0 0 #eee;
+    border-radius: 0 0 24px 24px;
+  }
 </style>
-<div class="flex w-full items-center justify-between px-2 sm:px-6">
-  <!-- Logo y menú a la izquierda -->
-  <div class="flex flex-1 items-center min-w-0">
-    <button @click="openMenu = !openMenu" class="text-white hover:text-purple-300 focus:outline-none mr-2 transition-transform duration-200 hover:scale-110">
-      <span class="material-icons" style="font-size: 1.5rem;">grid_view</span>
-    </button>
-    <span class="text-lg synap-animated flex items-center select-none cursor-pointer" style="font-size: 22px;">Synap</span>
-  </div>
-  <!-- Empresa/Sucursal centrado -->
-  <div class="flex flex-1 items-center justify-center min-w-0">
-    <div class="flex items-center gap-1 bg-white/10 dark:bg-gray-900/30 rounded-xl px-2 py-0.5 shadow-lg border border-white/20 dark:border-gray-800 transition-all duration-300 h-7 hover:shadow-purple-400/40 hover:bg-purple-400/10 hover:scale-105">
-      <span class="inline-flex items-center gap-0.5 text-xs font-bold text-white dark:text-gray-100 transition-colors duration-200">
-        <span class="material-icons text-purple-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">business</span>
-        <span class="transition-colors duration-200">{{ empresa_activa.nombre }}</span>
-      </span>
-      <span class="mx-0.5 text-gray-300 dark:text-gray-500">/</span>
-      <span class="inline-flex items-center gap-0.5 text-xs font-bold text-blue-100 dark:text-blue-300 transition-colors duration-200">
-        <span class="material-icons text-blue-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">store</span>
-        <span class="transition-colors duration-200">{{ branch_activa.name }}</span>
-      </span>
-      {% if empresas_disponibles|length > 1 or sucursales_disponibles|length > 1 %}
-        <button id="openSelector" type="button" class="ml-1 p-0.5 rounded-full bg-purple-500/80 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 shadow-md flex items-center justify-center" title="Cambiar empresa o sucursal" style="width: 1.3rem; height: 1.3rem;">
-          <span class="material-icons text-white align-middle transition-transform duration-200" style="font-size: 0.9rem;">swap_horiz</span>
-        </button>
-      {% endif %}
-    </div>
-    <!-- Modal selector -->
-    <dialog id="empresaBranchModal" class="rounded-xl shadow-2xl p-0 bg-white dark:bg-gray-900 w-full max-w-xs transition-all duration-300">
-      <form method="post" action="{% url 'core:cambiar_empresa_branch' %}" class="p-6 flex flex-col gap-4">
-        {% csrf_token %}
-        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Seleccionar empresa y sucursal</h3>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Empresa</label>
-        <select name="empresa_id" class="w-full rounded px-2 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 transition-all duration-200 mb-2" onchange="this.form.submit()">
-          {% for empresa in empresas_disponibles %}
-            <option value="{{ empresa.id }}" {% if empresa.id == empresa_activa.id %}selected{% endif %}>{{ empresa.nombre }}</option>
-          {% endfor %}
-        </select>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sucursal</label>
-        <select name="branch_id" class="w-full rounded px-2 py-2 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 transition-all duration-200" onchange="this.form.submit()">
-          {% for branch in sucursales_disponibles %}
-            <option value="{{ branch.id }}" {% if branch.id == branch_activa.id %}selected{% endif %}>{{ branch.nombre }}</option>
-          {% endfor %}
-        </select>
-        <div class="flex justify-end gap-2 mt-4">
-          <button type="button" onclick="document.getElementById('empresaBranchModal').close()" class="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">Cancelar</button>
-          <button type="submit" class="px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 transition shadow">Guardar</button>
+<div class="flex w-full items-center justify-between px-4 sm:px-8 h-16 bg-white font-inter relative border-b border-gray-200">
+  <!-- Logo imagen a la izquierda -->
+  <a href="/" class="flex items-center">
+    <img src="/media/empresas/logos/Synap-transparencia.png" alt="Logo Synap" class="h-12 w-auto mr-2"/>
+  </a>
+  <!-- Menú horizontal minimalista tipo Figma (desktop) -->
+  <nav class="hidden md:flex gap-4 items-center font-inter text-base font-normal tracking-wide relative">
+    {% for modulo in modulos_menu %}
+      <div class="relative" x-data="{ open: false }">
+        <a href="{{ modulo.url }}" class="group text-[#222] hover:underline underline-offset-4 transition py-1.5 focus:outline-none flex items-center gap-1" @click.prevent="open = !open" @keydown.escape.window="open = false">
+          <span class="group-hover:underline group-focus:underline underline-offset-4">{{ modulo.nombre }}</span>
+          {% if modulo.items or modulo.sections %}
+            <span class="material-icons text-xs align-middle transition-transform duration-200 ml-1 group-hover:no-underline group-focus:no-underline" :class="open ? 'rotate-180' : ''">expand_more</span>
+          {% endif %}
+        </a>
+        {% if modulo.items %}
+        <div x-show="open" @click.outside="open = false" x-transition class="dropdown-bg fixed left-0 top-16 w-screen bg-white shadow-xl z-50 border-b border-gray-100 animate-fade-slide-down">
+          <div class="max-w-5xl mx-auto px-8 py-8">
+            <div class="grid grid-cols-2 gap-8">
+              {% for item in modulo.items %}
+                <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+              {% endfor %}
+            </div>
+          </div>
         </div>
-      </form>
-    </dialog>
-    <script>
-      // Cerrar modal con Escape
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-          document.getElementById('empresaBranchModal').close();
+        {% endif %}
+        {% if modulo.sections %}
+        <div x-show="open" @click.outside="open = false" x-transition class="dropdown-bg fixed left-0 top-16 w-screen bg-white shadow-xl z-50 border-b border-gray-100 animate-fade-slide-down">
+          <div class="max-w-5xl mx-auto px-8 py-8">
+            <div class="grid grid-cols-4 gap-12">
+              {% for section in modulo.sections %}
+                <div class="space-y-3">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ section.title }}</h3>
+                  <div class="space-y-1">
+                    {% for item in section.items %}
+                      <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </nav>
+  <!-- Botón hamburguesa para mobile -->
+  <button id="hamburger-btn" class="md:hidden flex items-center p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 ml-2" aria-label="Abrir menú">
+    <svg class="w-7 h-7 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <!-- Controles a la derecha: badges y secundarios -->
+  <div class="ml-auto flex items-center gap-4">
+    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
+      <span class="material-icons text-base mr-1">business</span>
+      <span class="truncate max-w-[7rem]">{{ empresa_activa.nombre }}</span>
+    </span>
+    <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
+      <span class="material-icons text-base">location_on</span>
+    </span>
+    <button id="user-menu-btn" class="flex items-center justify-center w-8 h-8 rounded-full bg-purple-400 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 text-white font-bold text-base select-none" aria-label="Menú de usuario">
+      <span class="material-icons text-lg">person</span>
+    </button>
+    <label for="dark-mode-switch" class="ml-2 flex items-center cursor-pointer select-none">
+      <input id="dark-mode-switch" type="checkbox" class="sr-only">
+      <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
+        <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
+      </span>
+      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">Dark</span>
+    </label>
+  </div>
+</div>
+<!-- Menú mobile -->
+<div id="mobile-menu" class="mobile-menu md:hidden absolute left-0 top-16 w-full bg-white shadow-xl z-50 rounded-b-xl border-t border-gray-200 hidden">
+  <nav class="flex flex-col py-4 px-6 font-inter text-base font-normal tracking-wide">
+    {% for modulo in modulos_menu %}
+      <div class="mb-2">
+        <a href="{{ modulo.url }}" class="block text-[#222] hover:underline underline-offset-4 transition py-1.5 focus:outline-none flex items-center gap-1" onclick="this.nextElementSibling?.classList.toggle('hidden')">
+          {{ modulo.nombre }}
+          {% if modulo.items %}
+            <span class="material-icons text-xs align-middle">expand_more</span>
+          {% endif %}
+        </a>
+        {% if modulo.items %}
+        <div class="hidden pl-4 mt-1">
+          {% for item in modulo.items %}
+            <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if modulo.sections %}
+        <div class="hidden pl-4 mt-1">
+          {% for section in modulo.sections %}
+            <div class="space-y-3">
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ section.title }}</h3>
+              <div class="space-y-1">
+                {% for item in section.items %}
+                  <a href="{{ item.url }}" class="block text-[#222] hover:underline underline-offset-4 transition text-base py-1 px-2 rounded whitespace-nowrap">{{ item.label }}</a>
+                {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </nav>
+  <div class="flex items-center gap-3 mt-4 px-6 pb-4">
+    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
+      <span class="material-icons text-base mr-1">business</span>
+      <span class="truncate max-w-[7rem]">{{ empresa_activa.nombre }}</span>
+    </span>
+    <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
+      <span class="material-icons text-base">location_on</span>
+    </span>
+    <button id="user-menu-btn-mobile" class="flex items-center justify-center w-8 h-8 rounded-full bg-purple-400 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 text-white font-bold text-base select-none" aria-label="Menú de usuario">
+      <span class="material-icons text-lg">person</span>
+    </button>
+    <label for="dark-mode-switch-mobile" class="ml-2 flex items-center cursor-pointer select-none">
+      <input id="dark-mode-switch-mobile" type="checkbox" class="sr-only">
+      <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
+        <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
+      </span>
+      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">Dark</span>
+    </label>
+  </div>
+</div>
+<script>
+// Lógica para dropdowns accesibles y animados (desktop y mobile)
+document.addEventListener('DOMContentLoaded', function() {
+  // --- Menú hamburguesa responsivo ---
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  const mobileMenu = document.getElementById('mobile-menu');
+  hamburgerBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    mobileMenu.classList.toggle('open');
+  });
+  // Cierra el menú mobile al hacer click fuera
+  document.addEventListener('click', function(e) {
+    if (!mobileMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+      mobileMenu.classList.remove('open');
+    }
+  });
+  // --- Dropdowns desktop ---
+  const appMenus = document.querySelectorAll('.md\:flex .menu-app');
+  appMenus.forEach(function(menu) {
+    const button = menu.querySelector('button');
+    const dropdown = menu.querySelector('.dropdown-menu');
+    button.addEventListener('click', function(e) {
+      e.stopPropagation();
+      appMenus.forEach(function(other) {
+        if (other !== menu) {
+          other.querySelector('.dropdown-menu').style.display = 'none';
         }
       });
-    </script>
-  </div>
-  <!-- Usuario a la derecha -->
-  <div class="flex flex-1 items-center justify-end min-w-0">
-    <div class="flex items-center gap-1 bg-white/10 dark:bg-gray-900/30 rounded-xl px-2 py-0.5 shadow-lg border border-white/20 dark:border-gray-800 transition-all duration-300 h-7 hover:shadow-pink-400/40 hover:bg-pink-400/10 hover:scale-105" style="min-width: 0;">
-      <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-white dark:text-gray-100 transition-colors duration-200">
-        <span class="material-icons text-purple-200 align-middle transition-transform duration-200 group-hover:scale-110" style="font-size: 1rem;">person</span>
-        <span class="transition-colors duration-200 font-bold text-xs truncate">{{ user.email }}</span>
-      </span>
-      <button @click="openUserMenu = !openUserMenu" class="ml-1 p-0.5 rounded-full bg-purple-500/80 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 shadow-md flex items-center justify-center" style="width: 1.3rem; height: 1.3rem;">
-        <span class="material-icons text-white align-middle transition-transform duration-200" style="font-size: 0.9rem;">expand_more</span>
-      </button>
-    </div>
-    <div x-show="openUserMenu" class="absolute right-2 mt-2 w-48 bg-white text-black rounded shadow-md py-2 z-50">
-      <a href="/login/perfil/" class="block px-4 py-2 hover:bg-gray-100">🔐 {% trans "My profile" %}</a>
-      <a href="{% url 'login:logout' %}" class="block px-4 py-2 hover:bg-gray-100">🚪 {% trans "Sign Out" %}</a>
-    </div>
-  </div>
-</div> 
+      dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
+      if (dropdown.style.display === 'block') {
+        dropdown.focus();
+      }
+    });
+    button.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+        button.blur();
+      }
+    });
+    dropdown.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+        button.blur();
+      }
+    });
+  });
+  // --- Dropdowns mobile ---
+  const mobileAppMenus = mobileMenu.querySelectorAll('.menu-app');
+  mobileAppMenus.forEach(function(menu) {
+    const button = menu.querySelector('button');
+    const dropdown = menu.querySelector('.dropdown-menu');
+    button.addEventListener('click', function(e) {
+      e.stopPropagation();
+      mobileAppMenus.forEach(function(other) {
+        if (other !== menu) {
+          other.querySelector('.dropdown-menu').style.display = 'none';
+        }
+      });
+      dropdown.style.display = (dropdown.style.display === 'block') ? 'none' : 'block';
+      if (dropdown.style.display === 'block') {
+        dropdown.focus();
+      }
+    });
+    button.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+        button.blur();
+      }
+    });
+    dropdown.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+        button.blur();
+      }
+    });
+  });
+});
+</script>
+<!-- Alpine.js para dropdowns -->
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script> 

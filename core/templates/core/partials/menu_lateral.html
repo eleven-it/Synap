@@ -1,39 +1,51 @@
 {% load i18n %}
-<aside class="w-72 min-h-screen bg-gradient-to-b from-purple-600 via-purple-500 to-blue-500 shadow-xl flex flex-col" x-data="{ sidebarOpen: true }">
-  <div class="flex items-center justify-between px-6 py-5 border-b border-white/10">
+<aside class="w-72 h-screen flex flex-col bg-gradient-to-b from-purple-600 via-purple-500 to-blue-500 shadow-xl" x-data="{ sidebarOpen: true }">
+  <!-- Header fijo, fondo igual al sidebar -->
+  <div class="sticky top-0 z-10 bg-transparent px-6 py-5">
     <span class="text-2xl font-bold text-white">Ajustes</span>
     <button class="text-white/70 hover:text-white transition" @click="sidebarOpen = !sidebarOpen">
       <span class="material-icons">chevron_left</span>
     </button>
   </div>
-  <nav class="flex-1 py-4 space-y-2">
+  <!-- Menú scrollable -->
+  <nav class="flex-1 overflow-y-auto py-4">
     {% for section_data in admin_sidebar_items %}
       {% if section_data.items %}
-        <div class="px-6 pt-4 pb-2">
+        <div class="px-6 mt-6 mb-2">
           <span class="text-xs font-semibold text-white/70 uppercase tracking-wider">{{ section_data.section }}</span>
         </div>
+        <ul class="space-y-1 px-2">
         {% for item in section_data.items %}
-        <a href="{% if item.url_name %}{% url item.url_name %}{% else %}#{% endif %}"
-           class="flex items-center gap-3 bg-white/10 hover:bg-white/20 dark:bg-gray-900/30 rounded-xl px-4 py-3 mb-2 shadow border border-white/20 dark:border-gray-800 transition-all duration-200 hover:shadow-lg hover:scale-[1.04] group"
-           title="{{ item.label }}">
-          <span class="material-icons text-white/90 group-hover:text-yellow-200 transition">{{ item.icon }}</span>
-          <span x-show="sidebarOpen" class="text-white font-bold text-base group-hover:text-yellow-100 transition">{{ item.label }}</span>
-        </a>
+          <li>
+            <a href="{% if item.url_name %}{% url item.url_name %}{% else %}#{% endif %}"
+               class="flex items-center gap-2 text-white hover:text-purple-200 transition text-xs font-medium py-1 px-2 rounded"
+               title="{{ item.label }}">
+              <span class="material-icons text-white/90" style="font-size: 1rem;">{{ item.icon }}</span>
+              <span x-show="sidebarOpen" class="truncate">{{ item.label }}</span>
+            </a>
+          </li>
         {% endfor %}
+        </ul>
       {% endif %}
     {% endfor %}
     {% if user.is_admin %}
-    <div class="px-6 pt-4 pb-2">
+    <div class="px-6 mt-6 mb-2">
       <span class="text-xs font-semibold text-white/70 uppercase tracking-wider">{% trans "Configuración" %}</span>
     </div>
-    <a href="{% url 'core:empresa_listar' %}" class="flex items-center gap-3 bg-white/10 hover:bg-white/20 dark:bg-gray-900/30 rounded-xl px-4 py-3 mb-2 shadow border border-white/20 dark:border-gray-800 transition-all duration-200 hover:shadow-lg hover:scale-[1.04] group">
-      <span class="material-icons text-white/90 group-hover:text-yellow-200 transition">business</span>
-      <span x-show="sidebarOpen" class="text-white font-bold text-base group-hover:text-yellow-100 transition">{% trans "Empresas" %}</span>
-    </a>
-    <a href="{% url 'core:branch_list' empresa_activa.id %}" class="flex items-center gap-3 bg-white/10 hover:bg-white/20 dark:bg-gray-900/30 rounded-xl px-4 py-3 mb-2 shadow border border-white/20 dark:border-gray-800 transition-all duration-200 hover:shadow-lg hover:scale-[1.04] group">
-      <span class="material-icons text-white/90 group-hover:text-yellow-200 transition">store</span>
-      <span x-show="sidebarOpen" class="text-white font-bold text-base group-hover:text-yellow-100 transition">{% trans "Sucursales" %}</span>
-    </a>
+    <ul class="space-y-1 px-2">
+      <li>
+        <a href="{% url 'core:empresa_listar' %}" class="flex items-center gap-2 text-white hover:text-purple-200 transition text-xs font-medium py-1 px-2 rounded">
+          <span class="material-icons text-white/90" style="font-size: 1rem;">business</span>
+          <span x-show="sidebarOpen" class="truncate">{% trans "Empresas" %}</span>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'core:branch_list' empresa_activa.id %}" class="flex items-center gap-2 text-white hover:text-purple-200 transition text-xs font-medium py-1 px-2 rounded">
+          <span class="material-icons text-white/90" style="font-size: 1rem;">store</span>
+          <span x-show="sidebarOpen" class="truncate">{% trans "Sucursales" %}</span>
+        </a>
+      </li>
+    </ul>
     {% endif %}
   </nav>
   <div class="p-4 border-t border-white/10 text-xs text-white/60" x-show="sidebarOpen">
