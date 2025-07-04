@@ -58,7 +58,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.RequestUserMiddleware',
     'core.middleware.AdminAccessMiddleware',
-    'core.middleware.IdiomaUsuarioMiddleware',  
+    'core.middleware.IdiomaUsuarioMiddleware',
+    'core.middleware.DeviceDetectionMiddleware',  # Detección de dispositivos
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_project.settings.custom_ajax_login_required',

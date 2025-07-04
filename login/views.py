@@ -97,8 +97,13 @@ def login_view(request):
             logger.error(f"❌ Error en login: {e}")
             return JsonResponse({"error": str(e)}, status=400)
 
-    # Si es GET, devolvemos el login.html normalmente
-    return render(request, "login/login.html")
+    # Si es GET, devolvemos el template según el dispositivo
+    if hasattr(request, 'is_mobile') and request.is_mobile:
+        template_name = "login/login_mobile.html"
+    else:
+        template_name = "login/login.html"
+    
+    return render(request, template_name)
 
 
 def logout_view(request):
@@ -120,7 +125,14 @@ def reset_password_view(request):
 def register_view(request):
     if request.session.get("user"):
         return redirect("dashboard:home")
-    return render(request, "login/register.html")
+    
+    # Seleccionar template según el dispositivo
+    if hasattr(request, 'is_mobile') and request.is_mobile:
+        template_name = "login/register_mobile.html"
+    else:
+        template_name = "login/register.html"
+    
+    return render(request, template_name)
 
 def perfil_view(request):
     session_user = request.session.get("user")
@@ -222,3 +234,15 @@ def completar_perfil_view(request):
     return render(request, "login/completar_perfil.html", {
         "user": request.session["user"],
     })
+
+def index_view(request):
+    """
+    Vista para la landing page principal
+    """
+    # Seleccionar template según el dispositivo
+    if hasattr(request, 'is_mobile') and request.is_mobile:
+        template_name = "login/index_mobile.html"
+    else:
+        template_name = "login/index.html"
+    
+    return render(request, template_name)

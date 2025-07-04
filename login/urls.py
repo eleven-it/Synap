@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from .views import firebase_config_js, login_view, logout_view, reset_password_view, register_view, perfil_view, completar_perfil_view
+from .views import firebase_config_js, login_view, logout_view, reset_password_view, register_view, perfil_view, completar_perfil_view, index_view
 
 
 
@@ -8,6 +8,7 @@ app_name = "login"  # Definir el namespace para la app
 
 urlpatterns = [
     path("", login_view, name="login"),  # Este name es el que usás en {% url 'login' %}
+    path("index/", index_view, name="index"),  # Landing page
     path("logout/", logout_view, name="logout"),
     path("reset-password/", reset_password_view, name="reset_password"),
     path("register/", register_view, name="register"),

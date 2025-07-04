@@ -11,6 +11,8 @@ from core.views.views_auth import redireccionar_segun_rol
 from core.constantes_permisos import PERMISOS_AUDITABLES
 import time
 import json
+import re
+from django.utils.deprecation import MiddlewareMixin
 
 logger = logging.getLogger(__name__)
 
@@ -275,3 +277,54 @@ class RequestUserMiddleware:
         if hasattr(request, 'user') and request.user.is_authenticated:
             request.user._request = request
         return self.get_response(request)
+
+
+class DeviceDetectionMiddleware(MiddlewareMixin):
+    """
+    Middleware para detectar si el dispositivo es móvil o desktop
+    y agregar esta información al request
+    """
+    
+    def process_request(self, request):
+        # Obtener el User-Agent
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        
+        # Patrones para detectar dispositivos móviles
+        mobile_patterns = [
+            r'Android',
+            r'iPhone',
+            r'iPad',
+            r'iPod',
+            r'BlackBerry',
+            r'Windows Phone',
+            r'Mobile',
+            r'Opera Mini',
+            r'IEMobile',
+            r'webOS',
+            r'Kindle',
+            r'Silk',
+            r'PlayBook',
+            r'BB10',
+            r'RIM Tablet OS'
+        ]
+        
+        # Verificar si es móvil
+        is_mobile = any(re.search(pattern, user_agent, re.IGNORECASE) for pattern in mobile_patterns)
+        
+        # Agregar información al request
+        request.is_mobile = is_mobile
+        request.is_desktop = not is_mobile
+        
+        # Detectar tipo específico de dispositivo
+        if 'Android' in user_agent:
+            request.device_type = 'android'
+        elif 'iPhone' in user_agent:
+            request.device_type = 'iphone'
+        elif 'iPad' in user_agent:
+            request.device_type = 'ipad'
+        elif 'Windows Phone' in user_agent:
+            request.device_type = 'windows_phone'
+        else:
+            request.device_type = 'desktop' if not is_mobile else 'mobile'
+        
+        return None
