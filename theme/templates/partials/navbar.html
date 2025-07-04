@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load static %}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   body, .font-inter { font-family: 'Inter', sans-serif; }
@@ -122,7 +123,11 @@
 <div class="flex w-full items-center justify-between px-4 sm:px-8 h-16 bg-white font-inter relative border-b border-gray-200">
   <!-- Logo imagen a la izquierda -->
   <a href="/" class="flex items-center">
-    <img src="/media/empresas/logos/Synap-transparencia.png" alt="Logo Synap" class="h-12 w-auto mr-2"/>
+    {% if empresa_activa and empresa_activa.logo %}
+      <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="h-12 w-auto mr-2"/>
+    {% else %}
+      <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo Synap" class="h-12 w-auto mr-2"/>
+    {% endif %}
   </a>
   
   <!-- Menú horizontal minimalista tipo Figma (desktop) -->

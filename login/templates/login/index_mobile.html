@@ -385,7 +385,7 @@
             <div class="flex justify-between items-center">
                 <!-- Logo -->
                 <a href="/" class="flex items-center space-x-2">
-                    <img src="{% static 'images/Synap-transparencia.png' %}" 
+                    <img src="{% if empresa_activa and empresa_activa.logo %}{{ empresa_activa.logo.url }}{% else %}{% static 'images/Synap-transparencia.png' %}{% endif %}" 
                          alt="{% trans 'Synap Logo' %}" 
                          class="h-8 md:h-10"
                          loading="eager">
@@ -622,7 +622,7 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
                 <div class="col-span-1 md:col-span-2">
                     <div class="flex items-center space-x-2 mb-4">
-                        <img src="{% static 'images/Synap-transparencia.png' %}" 
+                        <img src="{% if empresa_activa and empresa_activa.logo %}{{ empresa_activa.logo.url }}{% else %}{% static 'images/Synap-transparencia.png' %}{% endif %}" 
                              alt="{% trans 'Synap Logo' %}" 
                              class="h-8">
                         <span class="text-xl font-bold">Synap</span>

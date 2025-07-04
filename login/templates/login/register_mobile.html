@@ -428,10 +428,17 @@
         <!-- Header Section -->
         <div class="header-section text-center mb-6 slide-in">
             <div class="mb-4">
-                <img src="{% static 'images/Synap-transparencia.png' %}" 
-                     alt="{% trans 'Synap Logo' %}" 
-                     class="h-14 md:h-16 mx-auto drop-shadow-lg"
-                     loading="eager">
+                {% if empresa_activa and empresa_activa.logo %}
+                    <img src="{{ empresa_activa.logo.url }}" 
+                         alt="{% trans 'Logo' %} {{ empresa_activa.nombre }}" 
+                         class="h-14 md:h-16 mx-auto drop-shadow-lg"
+                         loading="eager">
+                {% else %}
+                    <img src="{% if empresa_activa and empresa_activa.logo %}{{ empresa_activa.logo.url }}{% else %}{% static 'images/Synap-transparencia.png' %}{% endif %}" 
+                         alt="{% trans 'Synap Logo' %}" 
+                         class="h-14 md:h-16 mx-auto drop-shadow-lg"
+                         loading="eager">
+                {% endif %}
             </div>
             <h1 class="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
                 {% trans "Create Account" %}

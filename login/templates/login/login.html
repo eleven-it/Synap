@@ -41,7 +41,11 @@
   <div class="login-container">
     <div class="login-box">
       <div class="logo-container">
-        <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo de Synap" class="logo" />
+        {% if empresa_activa and empresa_activa.logo %}
+          <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="logo" />
+        {% else %}
+          <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo de Synap" class="logo" />
+        {% endif %}
       </div>
 
       <form onsubmit="loginUser(event)" class="space-y-6">

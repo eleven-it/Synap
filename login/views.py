@@ -11,7 +11,7 @@ import firebase_admin
 from firebase_admin import firestore
 from firebase_admin import auth
 from core.utils import sincronizar_usuario_desde_firestore
-from core.models import UsuarioExtendido, Rol
+from core.models import UsuarioExtendido, Rol, Empresa
 from urllib.parse import urlparse
 from django.utils import translation
 from django.utils.translation import gettext as _
@@ -103,7 +103,12 @@ def login_view(request):
     else:
         template_name = "login/login.html"
     
-    return render(request, template_name)
+    # Obtener empresa activa para el contexto
+    empresa_activa = Empresa.objects.filter(activa=True).first()
+    
+    return render(request, template_name, {
+        'empresa_activa': empresa_activa
+    })
 
 
 def logout_view(request):
@@ -132,7 +137,12 @@ def register_view(request):
     else:
         template_name = "login/register.html"
     
-    return render(request, template_name)
+    # Obtener empresa activa para el contexto
+    empresa_activa = Empresa.objects.filter(activa=True).first()
+    
+    return render(request, template_name, {
+        'empresa_activa': empresa_activa
+    })
 
 def perfil_view(request):
     session_user = request.session.get("user")
@@ -236,13 +246,15 @@ def completar_perfil_view(request):
     })
 
 def index_view(request):
-    """
-    Vista para la landing page principal
-    """
+    # Obtener empresa activa para el contexto
+    empresa_activa = Empresa.objects.filter(activa=True).first()
+    
     # Seleccionar template según el dispositivo
     if hasattr(request, 'is_mobile') and request.is_mobile:
         template_name = "login/index_mobile.html"
     else:
         template_name = "login/index.html"
     
-    return render(request, template_name)
+    return render(request, template_name, {
+        'empresa_activa': empresa_activa
+    })
