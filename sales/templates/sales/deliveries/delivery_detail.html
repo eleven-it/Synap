@@ -1,0 +1,220 @@
+{% extends 'sales/sales_base.html' %}
+{% load static %}
+
+{% block page_title %}Entrega {{ delivery.number }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'sales:delivery_order_edit' delivery.pk %}" 
+   class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+    </svg>
+    Editar
+</a>
+{% if delivery.state == 'confirmed' %}
+<a href="{% url 'sales:delivery_order_process' delivery.pk %}" 
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+    </svg>
+    Procesar Entrega
+</a>
+{% endif %}
+{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Delivery Header -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        Entrega {{ delivery.number }}
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Cliente: {{ delivery.client.name }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
+                        {% if delivery.state == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                        {% elif delivery.state == 'confirmed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif delivery.state == 'in_transit' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                        {% elif delivery.state == 'delivered' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                        {% elif delivery.state == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% else %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                        {{ delivery.get_state_display }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                        Información de la Entrega
+                    </h4>
+                    <dl class="space-y-2">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Número:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.number }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Fecha:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.delivery_date }}</dd>
+                        </div>
+                        {% if delivery.sales_order %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Pedido:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="{% url 'sales:sales_order_detail' delivery.sales_order.pk %}" class="text-blue-600 hover:text-blue-500">
+                                    {{ delivery.sales_order.number }}
+                                </a>
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if delivery.carrier %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Transportista:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.carrier }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if delivery.tracking_number %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Número de Seguimiento:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.tracking_number }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                        Información del Cliente
+                    </h4>
+                    <dl class="space-y-2">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Cliente:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="{% url 'sales:client_detail' delivery.client.pk %}" class="text-blue-600 hover:text-blue-500">
+                                    {{ delivery.client.name }}
+                                </a>
+                            </dd>
+                        </div>
+                        {% if delivery.client.vat %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">VAT:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.client.vat }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if delivery.client.email %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Email:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.client.email }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if delivery.client.phone %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Teléfono:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.client.phone }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Delivery Address -->
+            {% if delivery.delivery_address %}
+            <div class="mt-6">
+                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                    Dirección de Entrega
+                </h4>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <p class="text-sm text-gray-900 dark:text-white">{{ delivery.delivery_address }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Delivery Lines -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Productos a Entregar</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Producto
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Descripción
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Cantidad
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Unidad
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Estado
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for line in delivery.lines.all %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ line.product.name }}
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ line.product.sku }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {{ line.description|default:"-" }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {{ line.quantity }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {{ line.unit_of_measure }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                {% if line.state == 'pending' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                {% elif line.state == 'delivered' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% elif line.state == 'partial' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200{% endif %}">
+                                {{ line.get_state_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Delivery Notes -->
+    {% if delivery.notes %}
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Notas de Entrega</h3>
+        </div>
+        <div class="p-6">
+            <p class="text-sm text-gray-900 dark:text-white">{{ delivery.notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

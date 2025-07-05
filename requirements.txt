@@ -27,3 +27,4 @@ openpyxl
 django-crispy-forms
 crispy_tailwind
 django-widget-tweaks
+django-filter

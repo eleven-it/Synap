@@ -32,6 +32,8 @@ urlpatterns = [
     path("proveedores/", include("proveedores.urls", namespace="proveedores")),
     path("core/", include("core.urls", namespace="core")),
     path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
+    path('sales/', include('sales.urls', namespace='sales')),
+    path('api/sales/', include('sales.api.urls')),
 ]
 
 if settings.DEBUG:

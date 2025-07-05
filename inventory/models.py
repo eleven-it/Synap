@@ -222,23 +222,43 @@ class Product(models.Model):
                 mapping.save(update_fields=["sync_status"])
 
 # ─────────────────────────────────────────────
+# MODEL: Product Attribute
+# ─────────────────────────────────────────────
+class ProductAttribute(models.Model):
+    """Atributo de producto (ej: color, talla)"""
+    name = models.CharField(max_length=64)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+# ─────────────────────────────────────────────
+# MODEL: Product Attribute Value
+# ─────────────────────────────────────────────
+class ProductAttributeValue(models.Model):
+    """Valor posible para un atributo (ej: Rojo, XL)"""
+    attribute = models.ForeignKey(ProductAttribute, on_delete=models.CASCADE, related_name='values')
+    value = models.CharField(max_length=64)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"{self.attribute.name}: {self.value}"
+
+# ─────────────────────────────────────────────
 # MODEL: Product Variant
 # ─────────────────────────────────────────────
 class ProductVariant(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variants', verbose_name=_("Product"))
-    name = models.CharField(_("Name"), max_length=255)
-    sku = models.CharField(_("SKU"), max_length=100, unique=True)
-    price = models.DecimalField(_("Price"), max_digits=10, decimal_places=2)
-    quantity = models.IntegerField(_("Quantity"), default=0)
-    tiendanube_id = models.BigIntegerField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = _("Product Variant")
-        verbose_name_plural = _("Product Variants")
+    """Variante de producto (SKU único, combinación de atributos)"""
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='variants')
+    sku = models.CharField(max_length=64, unique=True)
+    barcode = models.CharField(max_length=64, blank=True, null=True)
+    attributes = models.ManyToManyField(ProductAttributeValue, blank=True, related_name='variants')
+    price = models.DecimalField(max_digits=12, decimal_places=2)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.product.name} - {self.name}"
-
+        return f"{self.product.name} - {self.sku}"
 
 # ─────────────────────────────────────────────
 # MODEL: Stock Lot or Serial Number

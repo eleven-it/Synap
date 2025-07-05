@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'celery',
     'crispy_forms',
     'crispy_tailwind',
+    'sales',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,272 @@
+{% extends 'sales/sales_base.html' %}
+{% load static %}
+
+{% block page_title %}Nota de Crédito {{ credit_note.number }}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'sales:credit_note_edit' credit_note.pk %}" 
+   class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+    </svg>
+    Editar
+</a>
+{% if credit_note.state == 'draft' %}
+<a href="{% url 'sales:credit_note_confirm' credit_note.pk %}" 
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+    </svg>
+    Confirmar
+</a>
+{% endif %}
+{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Credit Note Header -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        Nota de Crédito {{ credit_note.number }}
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Cliente: {{ credit_note.client.name }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
+                        {% if credit_note.state == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                        {% elif credit_note.state == 'confirmed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif credit_note.state == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% else %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                        {{ credit_note.get_state_display }}
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                        Información de la Nota de Crédito
+                    </h4>
+                    <dl class="space-y-2">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Número:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.number }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Fecha:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.date }}</dd>
+                        </div>
+                        {% if credit_note.invoice %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Factura:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="{% url 'sales:invoice_detail' credit_note.invoice.pk %}" class="text-blue-600 hover:text-blue-500">
+                                    {{ credit_note.invoice.number }}
+                                </a>
+                            </dd>
+                        </div>
+                        {% endif %}
+                        {% if credit_note.return_delivery %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Devolución:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="{% url 'sales:return_delivery_detail' credit_note.return_delivery.pk %}" class="text-blue-600 hover:text-blue-500">
+                                    {{ credit_note.return_delivery.number }}
+                                </a>
+                            </dd>
+                        </div>
+                        {% endif %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Tipo:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.get_credit_note_type_display }}</dd>
+                        </div>
+                    </dl>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                        Información del Cliente
+                    </h4>
+                    <dl class="space-y-2">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Cliente:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                <a href="{% url 'sales:client_detail' credit_note.client.pk %}" class="text-blue-600 hover:text-blue-500">
+                                    {{ credit_note.client.name }}
+                                </a>
+                            </dd>
+                        </div>
+                        {% if credit_note.client.vat %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">VAT:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.client.vat }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if credit_note.client.email %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Email:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.client.email }}</dd>
+                        </div>
+                        {% endif %}
+                        {% if credit_note.client.phone %}
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Teléfono:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ credit_note.client.phone }}</dd>
+                        </div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Credit Note Reason -->
+            {% if credit_note.reason %}
+            <div class="mt-6">
+                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
+                    Motivo de la Nota de Crédito
+                </h4>
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <p class="text-sm text-gray-900 dark:text-white">{{ credit_note.reason }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Credit Note Lines -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Líneas de Crédito</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Producto
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Descripción
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Cantidad
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Precio Unitario
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Descuento
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Subtotal
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            IVA
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Total
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for line in credit_note.lines.all %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ line.product.name }}
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ line.product.sku }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {{ line.description|default:"-" }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {{ line.quantity }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                ${{ line.unit_price }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                {% if line.discount_amount %}
+                                    ${{ line.discount_amount }}
+                                {% elif line.discount_percentage %}
+                                    {{ line.discount_percentage }}%
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                ${{ line.subtotal }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 dark:text-white">
+                                ${{ line.tax_amount }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                ${{ line.total }}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Credit Note Totals -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+        <div class="px-6 py-4">
+            <div class="flex justify-end">
+                <div class="w-64 space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Subtotal:</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">${{ credit_note.subtotal }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">Descuentos:</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">${{ credit_note.total_discounts }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">IVA:</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">${{ credit_note.total_tax }}</span>
+                    </div>
+                    <div class="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
+                        <span class="text-base font-medium text-gray-900 dark:text-white">Total:</span>
+                        <span class="text-base font-bold text-gray-900 dark:text-white">${{ credit_note.total }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Credit Note Notes -->
+    {% if credit_note.notes %}
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">Notas de la Nota de Crédito</h3>
+        </div>
+        <div class="p-6">
+            <p class="text-sm text-gray-900 dark:text-white">{{ credit_note.notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 
