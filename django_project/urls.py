@@ -34,6 +34,7 @@ urlpatterns = [
     path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
     path('sales/', include('sales.urls', namespace='sales')),
     path('api/sales/', include('sales.api.urls')),
+    path('accounting/', include('accounting.urls', namespace='accounting')),
 ]
 
 if settings.DEBUG:

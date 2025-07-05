@@ -1,0 +1,309 @@
+{% extends "theme/base_app.html" %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ titulo }} - {{ empresa.nombre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+    }
+    .form-section {
+        @apply border-b border-gray-200 dark:border-gray-700 last:border-b-0;
+    }
+    .form-section-title {
+        @apply text-lg font-medium text-gray-900 dark:text-white px-6 py-4 bg-gray-50 dark:bg-gray-700;
+    }
+    .form-fields {
+        @apply px-6 py-6 space-y-6;
+    }
+    .field-group {
+        @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+    }
+    .field-full {
+        @apply col-span-1 md:col-span-2;
+    }
+    .btn-primary {
+        @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200;
+    }
+    .btn-secondary {
+        @apply inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200;
+    }
+    .progress-bar {
+        @apply fixed top-0 left-0 w-full h-1 bg-orange-600 z-50 transition-all duration-300;
+    }
+    .progress-fill {
+        @apply h-full bg-orange-500 transition-all duration-300;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {{ titulo }}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Configure tax group settings and accounts" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'accounting:tax_group_list' %}" 
+                       class="btn-secondary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" id="taxGroupForm" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Basic Information -->
+            <div class="form-container">
+                <div class="form-section">
+                    <h2 class="form-section-title">
+                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Basic Information" %}
+                    </h2>
+                    <div class="form-fields">
+                        <div class="field-group">
+                            <div>
+                                {{ form.name|as_crispy_field }}
+                            </div>
+                            <div>
+                                {{ form.code|as_crispy_field }}
+                            </div>
+                        </div>
+                        <div class="field-full">
+                            {{ form.description|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Configuration -->
+                <div class="form-section">
+                    <h2 class="form-section-title">
+                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                        {% trans "Account Configuration" %}
+                    </h2>
+                    <div class="form-fields">
+                        <div class="field-group">
+                            <div>
+                                {{ form.account_id|as_crispy_field }}
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {% trans "Account where tax amounts will be recorded" %}
+                                </p>
+                            </div>
+                            <div>
+                                {{ form.refund_account_id|as_crispy_field }}
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {% trans "Account for tax refunds and credits" %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="form-section">
+                    <h2 class="form-section-title">
+                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Status" %}
+                    </h2>
+                    <div class="form-fields">
+                        <div class="flex items-center">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {% trans "Active" %}
+                            </label>
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Active tax groups can be used in transactions" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex justify-end space-x-3">
+                <a href="{% url 'accounting:tax_group_list' %}" 
+                   class="btn-secondary">
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" 
+                        class="btn-primary"
+                        id="submitBtn">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {{ submit_text }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Success Toast -->
+<div id="successToast" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+    <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>{% trans "Tax group saved successfully!" %}</span>
+    </div>
+</div>
+
+<!-- Error Toast -->
+<div id="errorToast" class="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+    <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+        <span id="errorMessage">{% trans "Error saving tax group" %}</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('taxGroupForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const progressFill = document.getElementById('progressFill');
+    const successToast = document.getElementById('successToast');
+    const errorToast = document.getElementById('errorToast');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // Progress bar animation
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+        progressFill.style.width = progress + '%';
+    }, 200);
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <svg class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Saving..." %}
+        `;
+
+        // Complete progress bar
+        progressFill.style.width = '100%';
+        clearInterval(progressInterval);
+
+        // Submit form
+        fetch(form.action || window.location.href, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(successToast, 'success');
+                setTimeout(() => {
+                    window.location.href = data.redirect_url || '{% url "accounting:tax_group_list" %}';
+                }, 1500);
+            } else {
+                showToast(errorToast, 'error');
+                errorMessage.textContent = data.message || '{% trans "Error saving tax group" %}';
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {{ submit_text }}
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast(errorToast, 'error');
+            errorMessage.textContent = '{% trans "Network error occurred" %}';
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                {{ submit_text }}
+            `;
+        });
+    });
+
+    function showToast(toast, type) {
+        toast.classList.remove('translate-x-full');
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+        }, 3000);
+    }
+
+    // Form validation feedback
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.checkValidity()) {
+                this.classList.remove('border-red-500');
+                this.classList.add('border-green-500');
+            } else {
+                this.classList.remove('border-green-500');
+                this.classList.add('border-red-500');
+            }
+        });
+
+        input.addEventListener('input', function() {
+            if (this.checkValidity()) {
+                this.classList.remove('border-red-500');
+                this.classList.add('border-green-500');
+            }
+        });
+    });
+
+    // Auto-save draft (optional)
+    let autoSaveTimeout;
+    inputs.forEach(input => {
+        input.addEventListener('input', function() {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                // Here you could implement auto-save functionality
+                console.log('Auto-saving draft...');
+            }, 2000);
+        });
+    });
+});
+</script>
+{% endblock %} 

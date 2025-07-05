@@ -6,6 +6,7 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
+from django.core.exceptions import ValidationError
 
 from .models import (
     Client, Contact, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
@@ -16,6 +17,8 @@ from .api.serializers import (
     ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
     PaymentSerializer, DeliveryOrderSerializer
 )
+from core.models import Currency
+from inventory.models import ProductVariant
 
 
 @login_required
@@ -313,6 +316,8 @@ def sales_order_create(request):
         'clients': Client.objects.filter(is_active=True),
         'payment_terms': PaymentTerm.objects.filter(is_active=True),
         'price_lists': PriceList.objects.filter(is_active=True),
+        'currencies': Currency.objects.filter(is_active=True),
+        'products': ProductVariant.objects.filter(is_active=True).select_related('product'),
         'today': timezone.now().date(),
     }
     
@@ -321,15 +326,77 @@ def sales_order_create(request):
 
 @login_required
 def sales_order_detail(request, pk):
-    """Detalle del pedido de venta"""
+    """Detalle del pedido de venta y gestión de acciones de workflow"""
     order = get_object_or_404(SalesOrder.objects.select_related('client', 'payment_term', 'price_list'), pk=pk)
+    logs = order.approvallog_set.select_related('user').order_by('-action_date')
     
+    # Obtener información de stock para el pedido
+    from .services import SalesInventoryValidator
+    stock_summary = SalesInventoryValidator.get_stock_summary(order)
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        reason = request.POST.get('reason', '').strip()
+        user = request.user
+        error = None
+        try:
+            if not reason:
+                raise ValidationError('El motivo es obligatorio para esta acción.')
+            
+            # Validaciones específicas según la acción
+            if action == 'confirm_order':
+                if not stock_summary['can_confirm']:
+                    raise ValidationError('No se puede confirmar el pedido: stock insuficiente.')
+            
+            if action == 'mark_delivered':
+                if not stock_summary['can_deliver']:
+                    raise ValidationError('No se puede entregar el pedido: no hay stock reservado.')
+            
+            # Ejecutar acciones
+            if action == 'send_quotation':
+                order.send_quotation(user, reason)
+                messages.success(request, 'Cotización enviada correctamente.')
+            elif action == 'confirm_order':
+                order.confirm_order(user, reason)
+                messages.success(request, 'Pedido confirmado correctamente.')
+            elif action == 'start_processing':
+                order.start_processing(user, reason)
+                messages.success(request, 'Procesamiento iniciado correctamente.')
+            elif action == 'mark_ready_to_deliver':
+                order.mark_ready_to_deliver(user, reason)
+                messages.success(request, 'Pedido marcado como listo para entregar.')
+            elif action == 'mark_delivered':
+                order.mark_delivered(user, reason)
+                messages.success(request, 'Pedido marcado como entregado.')
+            elif action == 'mark_invoiced':
+                order.mark_invoiced(user, reason)
+                messages.success(request, 'Pedido marcado como facturado.')
+            elif action == 'mark_paid':
+                order.mark_paid(user, reason)
+                messages.success(request, 'Pedido marcado como pagado.')
+            elif action == 'mark_completed':
+                order.mark_completed(user, reason)
+                messages.success(request, 'Pedido marcado como completado.')
+            elif action == 'cancel_order':
+                order.cancel_order(user, reason)
+                messages.success(request, 'Pedido cancelado correctamente.')
+            else:
+                error = 'Acción no reconocida.'
+        except ValidationError as ve:
+            error = str(ve)
+        except Exception as e:
+            error = str(e)
+        if error:
+            messages.error(request, error)
+        return redirect('sales:sales_order_detail', pk=order.pk)
+
     context = {
         'order': order,
         'lines': order.lines.select_related('product_variant__product').all(),
+        'logs': logs,
+        'stock_summary': stock_summary,
     }
-    
-    return render(request, 'sales/orders/sales_order_list.html', context)
+    return render(request, 'sales/orders/sales_order_detail.html', context)
 
 
 @login_required
@@ -359,6 +426,9 @@ def sales_order_edit(request, pk):
         'clients': Client.objects.filter(is_active=True),
         'payment_terms': PaymentTerm.objects.filter(is_active=True),
         'price_lists': PriceList.objects.filter(is_active=True),
+        'currencies': Currency.objects.filter(is_active=True),
+        'products': ProductVariant.objects.filter(is_active=True).select_related('product'),
+        'today': timezone.now().date(),
     }
     
     return render(request, 'sales/orders/sales_order_form.html', context)

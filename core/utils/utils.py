@@ -739,3 +739,24 @@ def require_empresa_activa(get_empresa):
             return view_func(request, *args, **kwargs)
         return _wrapped_view
     return decorator
+
+def get_empresa_actual(request):
+    """
+    Obtiene la empresa activa del usuario desde la sesión o del usuario
+    """
+    from core.models import Empresa
+    
+    # Intentar obtener desde la sesión
+    empresa_id = request.session.get('empresa_activa_id')
+    if empresa_id:
+        try:
+            return Empresa.objects.get(id=empresa_id, activa=True)
+        except Empresa.DoesNotExist:
+            pass
+    
+    # Intentar obtener desde el usuario
+    if hasattr(request.user, 'empresa_activa') and request.user.empresa_activa:
+        return request.user.empresa_activa
+    
+    # Fallback: primera empresa activa
+    return Empresa.objects.filter(activa=True).first()

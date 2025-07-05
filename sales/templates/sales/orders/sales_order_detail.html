@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% load static i18n %}
+
+{% block title %}{% trans 'Sales Order Detail' %} - Synap{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans 'Sales Order' %} #{{ order.number }}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {{ order.client.name }} &bull; {{ order.order_date }}
+                    </p>
+                </div>
+                <div class="flex flex-col items-end space-y-2">
+                    <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
+                        {% if order.state == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                        {% elif order.state == 'quotation_sent' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                        {% elif order.state == 'confirmed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif order.state == 'in_process' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                        {% elif order.state == 'ready_to_deliver' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200
+                        {% elif order.state == 'delivered' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                        {% elif order.state == 'invoiced' %}bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200
+                        {% elif order.state == 'paid' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200
+                        {% elif order.state == 'completed' %}bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100
+                        {% elif order.state == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% else %}bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                        {{ order.get_status_display_name }}
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ order.get_status_display_name }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <!-- Order Info -->
+            <div class="md:col-span-2">
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans 'Order Lines' %}</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Product' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Quantity' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Unit Price' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Discount' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Subtotal' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'State' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {% for line in lines %}
+                                <tr>
+                                    <td class="px-4 py-2 whitespace-nowrap">{{ line.product_variant }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">{{ line.quantity }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">${{ line.unit_price }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">{{ line.discount }}%</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">${{ line.subtotal }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                            {% if line.state == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                                            {% elif line.state == 'confirmed' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                            {% elif line.state == 'in_process' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                            {% elif line.state == 'delivered' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                                            {% elif line.state == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                            {% else %}bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                                            {{ line.get_state_display }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Stock Information -->
+                {% if stock_summary %}
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans 'Stock Information' %}</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{% trans 'Can Confirm:' %}</span>
+                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                {% if stock_summary.can_confirm %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                {% if stock_summary.can_confirm %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{% trans 'Can Deliver:' %}</span>
+                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                {% if stock_summary.can_deliver %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                {% if stock_summary.can_deliver %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Product' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Requested' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Available' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Reserved' %}</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Status' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {% for line in stock_summary.lines %}
+                                <tr>
+                                    <td class="px-4 py-2 whitespace-nowrap">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white">{{ line.product_name }}</div>
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">{{ line.product_sku }}</div>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.requested_quantity }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.available_quantity }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.reserved_quantity }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">
+                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                            {% if line.stock_status == 'sufficient' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                            {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                            {% if line.stock_status == 'sufficient' %}{% trans 'Sufficient' %}{% else %}{% trans 'Insufficient' %}{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Totals -->
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 flex flex-col md:flex-row md:justify-between md:items-center">
+                    <div class="mb-4 md:mb-0">
+                        <span class="block text-sm text-gray-500 dark:text-gray-400">{% trans 'Subtotal' %}</span>
+                        <span class="text-lg font-bold text-gray-900 dark:text-white">${{ order.get_subtotal }}</span>
+                    </div>
+                    <div class="mb-4 md:mb-0">
+                        <span class="block text-sm text-gray-500 dark:text-gray-400">{% trans 'Discount' %}</span>
+                        <span class="text-lg font-bold text-gray-900 dark:text-white">${{ order.total_discount }}</span>
+                    </div>
+                    <div class="mb-4 md:mb-0">
+                        <span class="block text-sm text-gray-500 dark:text-gray-400">{% trans 'Tax' %}</span>
+                        <span class="text-lg font-bold text-gray-900 dark:text-white">${{ order.total_tax }}</span>
+                    </div>
+                    <div>
+                        <span class="block text-sm text-gray-500 dark:text-gray-400">{% trans 'Total' %}</span>
+                        <span class="text-2xl font-bold text-orange-600 dark:text-orange-400">${{ order.get_total_with_tax }}</span>
+                    </div>
+                </div>
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-3 mt-4">
+                    {% if order.can_transition_to('quotation_sent') %}
+                        <button class="btn-action bg-blue-500 hover:bg-blue-600 text-white" onclick="showReasonModal('send_quotation')">{% trans 'Send Quotation' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('confirmed') %}
+                        <button class="btn-action bg-green-500 hover:bg-green-600 text-white" onclick="showReasonModal('confirm_order')">{% trans 'Confirm Order' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('in_process') %}
+                        <button class="btn-action bg-yellow-500 hover:bg-yellow-600 text-white" onclick="showReasonModal('start_processing')">{% trans 'Start Processing' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('ready_to_deliver') %}
+                        <button class="btn-action bg-indigo-500 hover:bg-indigo-600 text-white" onclick="showReasonModal('mark_ready_to_deliver')">{% trans 'Ready to Deliver' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('delivered') %}
+                        <button class="btn-action bg-purple-500 hover:bg-purple-600 text-white" onclick="showReasonModal('mark_delivered')">{% trans 'Mark as Delivered' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('invoiced') %}
+                        <button class="btn-action bg-pink-500 hover:bg-pink-600 text-white" onclick="showReasonModal('mark_invoiced')">{% trans 'Mark as Invoiced' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('paid') %}
+                        <button class="btn-action bg-teal-500 hover:bg-teal-600 text-white" onclick="showReasonModal('mark_paid')">{% trans 'Mark as Paid' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('completed') %}
+                        <button class="btn-action bg-green-700 hover:bg-green-800 text-white" onclick="showReasonModal('mark_completed')">{% trans 'Mark as Completed' %}</button>
+                    {% endif %}
+                    {% if order.can_transition_to('cancelled') %}
+                        <button class="btn-action bg-red-500 hover:bg-red-600 text-white" onclick="showReasonModal('cancel_order')">{% trans 'Cancel Order' %}</button>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Logs -->
+            <div>
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans 'Order History' %}</h2>
+                    <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for log in logs %}
+                        <li class="py-2 flex items-center space-x-3">
+                            <span class="inline-block w-2 h-2 rounded-full {% if 'cancel' in log.action %}bg-red-500{% elif 'confirm' in log.action %}bg-green-500{% elif 'quotation' in log.action %}bg-blue-500{% else %}bg-gray-400{% endif %}"></span>
+                            <span class="text-sm text-gray-700 dark:text-gray-200">{{ log.action|capfirst }}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ log.action_date|date:'SHORT_DATETIME_FORMAT' }}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ log.user }}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ log.reason }}</span>
+                        </li>
+                        {% empty %}
+                        <li class="py-2 text-gray-400 dark:text-gray-500">{% trans 'No history yet.' %}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para motivo obligatorio -->
+    <div id="reasonModal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-40 flex items-center justify-center">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 w-full max-w-md">
+            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">{% trans 'Reason required' %}</h3>
+            <form id="reasonForm" method="post" action="">
+                {% csrf_token %}
+                <input type="hidden" name="action" id="modalAction" value="">
+                <textarea name="reason" id="reasonInput" rows="3" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Please provide a reason...' %}"></textarea>
+                <div class="flex justify-end mt-4 space-x-2">
+                    <button type="button" onclick="hideReasonModal()" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600">{% trans 'Cancel' %}</button>
+                    <button type="submit" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded shadow">{% trans 'Confirm' %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showReasonModal(action) {
+    document.getElementById('reasonModal').classList.remove('hidden');
+    document.getElementById('modalAction').value = action;
+    document.getElementById('reasonInput').value = '';
+    document.getElementById('reasonInput').focus();
+}
+function hideReasonModal() {
+    document.getElementById('reasonModal').classList.add('hidden');
+}
+</script>
+
+<style>
+.btn-action {
+    @apply px-4 py-2 rounded shadow font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+</style>
+{% endblock %} 

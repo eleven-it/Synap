@@ -1,0 +1,454 @@
+{% extends "theme/base_app.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Taxes" %} - {{ empresa.nombre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-input {
+        @apply w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white;
+    }
+    .filter-select {
+        @apply px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white;
+    }
+    .tax-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-all duration-200 hover:shadow-md;
+    }
+    .status-badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    }
+    .status-active {
+        @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+    }
+    .status-inactive {
+        @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+    }
+    .action-btn {
+        @apply inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md transition-colors duration-200;
+    }
+    .btn-edit {
+        @apply text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300;
+    }
+    .btn-delete {
+        @apply text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300;
+    }
+    .btn-toggle {
+        @apply text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300;
+    }
+    .amount-type-badge {
+        @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium;
+    }
+    .amount-percent {
+        @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+    }
+    .amount-fixed {
+        @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Taxes" %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Configure individual taxes and rates" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'accounting:dashboard' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                    <a href="{% url 'accounting:tax_create' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        {% trans "Create Tax" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filters and Search -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans "Search" %}
+                    </label>
+                    <input type="text" name="search" id="search" value="{{ search }}" 
+                           class="search-input" 
+                           placeholder="{% trans 'Search by name, code or description...' %}">
+                </div>
+                <div>
+                    <label for="is_active" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans "Status" %}
+                    </label>
+                    <select name="is_active" id="is_active" class="filter-select">
+                        <option value="">{% trans "All Status" %}</option>
+                        <option value="true" {% if is_active_filter == 'true' %}selected{% endif %}>{% trans "Active" %}</option>
+                        <option value="false" {% if is_active_filter == 'false' %}selected{% endif %}>{% trans "Inactive" %}</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="tax_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans "Tax Group" %}
+                    </label>
+                    <select name="tax_group" id="tax_group" class="filter-select">
+                        <option value="">{% trans "All Groups" %}</option>
+                        {% for group in tax_groups %}
+                        <option value="{{ group.id }}" {% if tax_group_filter == group.id|stringformat:"s" %}selected{% endif %}>
+                            {{ group.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" 
+                            class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        {% trans "Filter" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Stats Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ total_count }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">{% trans "Total Taxes" %}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ active_count }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">{% trans "Active Taxes" %}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ inactive_count }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">{% trans "Inactive Taxes" %}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ tax_groups|length }}</div>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">{% trans "Tax Groups" %}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Taxes List -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Taxes" %} ({{ page_obj.paginator.count }})
+                </h3>
+            </div>
+            
+            {% if taxes %}
+            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                {% for tax in taxes %}
+                <div class="tax-card">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="text-lg font-medium text-gray-900 dark:text-white">
+                                        {{ tax.name }}
+                                    </h4>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                        {% trans "Code" %}: {{ tax.code }}
+                                    </p>
+                                    {% if tax.description %}
+                                    <p class="text-sm text-gray-600 dark:text-gray-300 mt-2">
+                                        {{ tax.description|truncatewords:20 }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <span class="status-badge {% if tax.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                        {% if tax.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                                    </span>
+                                    <div class="mt-2">
+                                        <span class="amount-type-badge {% if tax.amount_type == 'percent' %}amount-percent{% else %}amount-fixed{% endif %}">
+                                            {% if tax.amount_type == 'percent' %}
+                                                {{ tax.amount }}%
+                                            {% else %}
+                                                ${{ tax.amount|floatformat:2 }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                        {% trans "Tax Group" %}
+                                    </span>
+                                    <p class="text-sm text-gray-900 dark:text-white">
+                                        {{ tax.tax_group.name|default:"No Group" }}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                        {% trans "Sequence" %}
+                                    </span>
+                                    <p class="text-sm text-gray-900 dark:text-white">
+                                        {{ tax.sequence }}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                        {% trans "Type" %}
+                                    </span>
+                                    <p class="text-sm text-gray-900 dark:text-white">
+                                        {% if tax.amount_type == 'percent' %}{% trans "Percentage" %}{% else %}{% trans "Fixed Amount" %}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {% if tax.account_id or tax.refund_account_id %}
+                            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {% if tax.account_id %}
+                                <div>
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                        {% trans "Account" %}
+                                    </span>
+                                    <p class="text-sm text-gray-900 dark:text-white">
+                                        {{ tax.account_id.code }} - {{ tax.account_id.name }}
+                                    </p>
+                                </div>
+                                {% endif %}
+                                {% if tax.refund_account_id %}
+                                <div>
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                        {% trans "Refund Account" %}
+                                    </span>
+                                    <p class="text-sm text-gray-900 dark:text-white">
+                                        {{ tax.refund_account_id.code }} - {{ tax.refund_account_id.name }}
+                                    </p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="ml-6 flex items-center space-x-2">
+                            <button onclick="toggleStatus({{ tax.id }})" 
+                                    class="action-btn btn-toggle"
+                                    title="{% if tax.is_active %}{% trans 'Deactivate' %}{% else %}{% trans 'Activate' %}{% endif %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {% if tax.is_active %}
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path>
+                                    {% else %}
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    {% endif %}
+                                </svg>
+                            </button>
+                            <a href="{% url 'accounting:tax_edit' tax.id %}" 
+                               class="action-btn btn-edit"
+                               title="{% trans 'Edit' %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </a>
+                            <a href="{% url 'accounting:tax_delete' tax.id %}" 
+                               class="action-btn btn-delete"
+                               title="{% trans 'Delete' %}"
+                               onclick="return confirm('{% trans 'Are you sure you want to delete this tax?' %}')">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <nav class="flex items-center justify-between">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if is_active_filter %}&is_active={{ is_active_filter }}{% endif %}{% if tax_group_filter %}&tax_group={{ tax_group_filter }}{% endif %}{% if amount_type_filter %}&amount_type={{ amount_type_filter }}{% endif %}" 
+                           class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            {% trans "Previous" %}
+                        </a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if is_active_filter %}&is_active={{ is_active_filter }}{% endif %}{% if tax_group_filter %}&tax_group={{ tax_group_filter }}{% endif %}{% if amount_type_filter %}&amount_type={{ amount_type_filter }}{% endif %}" 
+                           class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            {% trans "Next" %}
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                {% if page_obj.has_previous %}
+                                <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if is_active_filter %}&is_active={{ is_active_filter }}{% endif %}{% if tax_group_filter %}&tax_group={{ tax_group_filter }}{% endif %}{% if amount_type_filter %}&amount_type={{ amount_type_filter }}{% endif %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                                
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                    <span class="relative inline-flex items-center px-4 py-2 border border-orange-500 bg-orange-50 dark:bg-orange-900 text-sm font-medium text-orange-600 dark:text-orange-400">
+                                        {{ num }}
+                                    </span>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <a href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if is_active_filter %}&is_active={{ is_active_filter }}{% endif %}{% if tax_group_filter %}&tax_group={{ tax_group_filter }}{% endif %}{% if amount_type_filter %}&amount_type={{ amount_type_filter }}{% endif %}" 
+                                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        {{ num }}
+                                    </a>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page_obj.has_next %}
+                                <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if is_active_filter %}&is_active={{ is_active_filter }}{% endif %}{% if tax_group_filter %}&tax_group={{ tax_group_filter }}{% endif %}{% if amount_type_filter %}&amount_type={{ amount_type_filter }}{% endif %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </nav>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="px-6 py-12 text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans "No taxes found" %}</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "Get started by creating a new tax." %}
+                </p>
+                <div class="mt-6">
+                    <a href="{% url 'accounting:tax_create' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        {% trans "Create Tax" %}
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleStatus(taxId) {
+    if (confirm('{% trans "Are you sure you want to change the status of this tax?" %}')) {
+        fetch(`/accounting/taxes/${taxId}/toggle-status/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || '{% trans "Error updating status" %}');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('{% trans "Error updating status" %}');
+        });
+    }
+}
+
+// Animaciones de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.tax-card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+{% endblock %} 

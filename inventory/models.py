@@ -183,6 +183,11 @@ class Product(models.Model):
         ('digital', _('Digital/Service')),
     ]
     product_kind = models.CharField(_('Product Kind'), max_length=10, choices=PRODUCT_KIND_CHOICES, default='physical')
+    
+    # Configuración de impuestos
+    taxes = models.ManyToManyField('accounting.Tax', blank=True, related_name='products', verbose_name=_('Taxes'))
+    fiscal_position = models.ForeignKey('accounting.FiscalPosition', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Fiscal Position'))
+    tax_category = models.CharField(_('Tax Category'), max_length=50, blank=True, help_text=_('Category for tax calculation (e.g., standard, reduced, zero)'))
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

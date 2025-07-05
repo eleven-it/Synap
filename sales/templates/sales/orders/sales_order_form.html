@@ -1,139 +1,1283 @@
 {% extends 'sales/sales_base.html' %}
 {% load static %}
+{% load i18n %}
 
 {% block page_title %}
-    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Nuevo</h1>
+    <div class="flex items-center space-x-4 relative z-20">
+        <div>
+            <span class="text-xl font-semibold text-gray-900 dark:text-white">
+                {% trans 'Sales Order' %}
+            </span>
+            <span class="ml-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                    {% if order %}
+                        {% if order.status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200
+                        {% elif order.status == 'sent' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                        {% elif order.status == 'sale' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}
+                    {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                    {% if order %}
+                        {% if order.status == 'draft' %}{% trans 'Draft' %}
+                        {% elif order.status == 'sent' %}{% trans 'Sent' %}
+                        {% elif order.status == 'sale' %}{% trans 'Confirmed' %}
+                        {% else %}{% trans 'Draft' %}{% endif %}
+                    {% else %}{% trans 'Draft' %}{% endif %}
+                </span>
+            </span>
+        </div>
+        <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {% if order %}{% trans 'Editing order' %}{% else %}{% trans 'Creating new order' %}{% endif %}
+        </span>
+    </div>
 {% endblock %}
 
 {% block page_actions %}
-    <button class="border border-indigo-500 text-indigo-600 dark:text-indigo-300 px-4 py-1 rounded-md bg-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900 transition">Confirmar</button>
-    <button class="border border-gray-300 text-gray-700 dark:text-gray-200 px-4 py-1 rounded-md bg-transparent ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Vista previa</button>
+    <a href="{% url 'sales:sales_order_list' %}" 
+       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {% trans 'Back' %}
+    </a>
+    <button type="button" id="preview-btn" 
+            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+        {% trans 'Preview' %}
+    </button>
+    <button type="button" id="send-email-btn" 
+            class="inline-flex items-center px-4 py-2 border border-synap-300 dark:border-synap-600 text-sm font-medium rounded-md text-synap-700 dark:text-synap-300 bg-synap-50 dark:bg-synap-900 hover:bg-synap-100 dark:hover:bg-synap-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+        </svg>
+        {% trans 'Send by email' %}
+    </button>
+    <button type="button" id="auto-taxes-btn"
+            class="inline-flex items-center px-4 py-2 border border-green-300 dark:border-green-600 text-sm font-medium rounded-md text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 dark:hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+        </svg>
+        {% trans 'Auto Taxes' %}
+    </button>
+    <button type="submit" id="confirm-btn"
+            class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        {% if order %}{% trans 'Update Order' %}{% else %}{% trans 'Create Order' %}{% endif %}
+    </button>
 {% endblock %}
 
 {% block sales_content %}
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6 animate-fade-in">
-    <form id="order-form" autocomplete="off" class="space-y-8">
-        <!-- Encabezado alineado a dos columnas -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 items-start">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente <span class="text-red-500">*</span></label>
-                    <select name="client" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5" required>
-                        <option value="">Seleccionar cliente</option>
-                        {% for client in clients %}
-                            <option value="{{ client.id }}">{{ client.name }}</option>
-                        {% endfor %}
-                    </select>
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Formulario principal -->
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+        <form method="post" id="order-form" class="space-y-4">
+            {% csrf_token %}
+            
+            <!-- Bloque de información principal del pedido -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-base font-medium text-gray-900 dark:text-white">{% trans 'Order Information' %}</h3>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plantilla de cotización</label>
-                    <input type="text" name="template" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5" placeholder="Opcional">
+                <div class="p-3">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-2">
+                        <!-- Columna izquierda (3/5) -->
+                        <div class="lg:col-span-3 space-y-2">
+                            <!-- Cliente -->
+                            <div class="flex items-center gap-2">
+                                <label for="client" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Client' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                    </div>
+                                    <select name="client" id="client" required
+                                            class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                        <option value="">{% trans 'Select client' %}</option>
+                                        {% for client in clients %}
+                                            <option value="{{ client.id }}" {% if order.client.id == client.id or client_filter == client.id %}selected{% endif %}>
+                                                {{ client.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Plantilla de cotización -->
+                            <div class="flex items-center gap-2">
+                                <label for="template" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Quotation template' %}</label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <input type="text" name="template" id="template" 
+                                           value="{{ order.template|default:'' }}"
+                                           class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                                           placeholder="{% trans 'Optional' %}">
+                                </div>
+                            </div>
+                            <!-- Fechas -->
+                            <div class="flex items-center gap-2">
+                                <label for="order_date" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Order date' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <input type="date" name="order_date" id="order_date" 
+                                           value="{{ order.order_date|date:'Y-m-d'|default:today }}" required
+                                           class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Columna derecha (2/5) -->
+                        <div class="lg:col-span-2 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <label for="currency" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Currency' %} <span class="text-red-500">*</span></label>
+                                <select name="currency" id="currency" required
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    {% for currency in currencies %}
+                                        <option value="{{ currency.code }}" {% if order.currency == currency.code %}selected{% endif %}>
+                                            {{ currency.code }} - {{ currency.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="price_list" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Price list' %}
+                                    <button type="button" class="ml-1 text-synap-500 hover:text-synap-600" title="{% trans 'Price list applied to this order' %}">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </button>
+                                </label>
+                                <select name="price_list" id="price_list"
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    <option value="">{% trans 'Select price list' %}</option>
+                                    {% for price_list in price_lists %}
+                                        <option value="{{ price_list.id }}" {% if order.price_list.id == price_list.id %}selected{% endif %}>
+                                            {{ price_list.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="payment_terms" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Payment terms' %}</label>
+                                <select name="payment_terms" id="payment_terms"
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    <option value="">{% trans 'Select terms' %}</option>
+                                    {% for term in payment_terms %}
+                                        <option value="{{ term.id }}" {% if order.payment_terms.id == term.id %}selected{% endif %}>
+                                            {{ term.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vencimiento</label>
-                    <input type="date" name="due_date" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de cotización</label>
-                    <input type="date" name="order_date" value="{{ today|date:'Y-m-d' }}" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lista de precios</label>
-                    <select name="price_list" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
-                        <option value="">Seleccionar</option>
-                        {% for pl in price_lists %}
-                            <option value="{{ pl.id }}">{{ pl.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Términos de pago</label>
-                    <select name="payment_term" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
-                        <option value="">Seleccionar</option>
-                        {% for pt in payment_terms %}
-                            <option value="{{ pt.id }}">{{ pt.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-        </div>
 
-        <!-- Tabs planos -->
-        <div class="border-b border-gray-200 dark:border-gray-700 flex gap-6 text-sm font-medium mb-2">
-            <button type="button" class="tab-link text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500 pb-2 bg-transparent focus:outline-none">Líneas de la orden</button>
-            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Productos opcionales</button>
-            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Otra información</button>
-            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Firma del cliente</button>
-        </div>
-
-        <!-- Tabla minimalista de líneas de la orden -->
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm text-gray-900 dark:text-gray-100 border-separate border-spacing-y-1">
-                <thead>
-                    <tr class="text-left">
-                        <th class="font-normal px-2 py-1">Producto</th>
-                        <th class="font-normal px-2 py-1">Descripción</th>
-                        <th class="font-normal px-2 py-1">Cantidad</th>
-                        <th class="font-normal px-2 py-1">UdM</th>
-                        <th class="font-normal px-2 py-1">Precio u.</th>
-                        <th class="font-normal px-2 py-1">Impuestos</th>
-                        <th class="font-normal px-2 py-1">% de desc.</th>
-                        <th class="font-normal px-2 py-1">Impuestos</th>
-                        <th class="font-normal px-2 py-1"></th>
-                    </tr>
-                </thead>
-                <tbody id="order-lines" class="align-top">
-                    <!-- Aquí se renderizan dinámicamente las líneas de la orden -->
-                </tbody>
-            </table>
-        </div>
-        <div class="flex gap-4 mt-2 text-sm">
-            <button type="button" class="border border-indigo-300 text-indigo-600 dark:text-indigo-300 rounded px-2 py-1 bg-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900 transition">Agregar un producto</button>
-            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Agregar una sección</button>
-            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Agregar una nota</button>
-            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Catálogo</button>
-        </div>
-
-        <!-- Términos y totales -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 items-end">
-            <div class="md:col-span-2">
-                <textarea class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-2 resize-none" rows="2" placeholder="Términos y condiciones..."></textarea>
+            <!-- Bloque de pestañas para líneas, alternativos y otra información -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg mt-4 text-xs">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-4 px-3" aria-label="Tabs">
+                        <button type="button" class="tab-link border-b-2 border-synap-500 py-2 px-1 text-xs font-medium text-synap-600 dark:text-synap-400" data-tab="lines">
+                            {% trans 'Order Lines' %}
+                        </button>
+                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="alternatives">
+                            {% trans 'Alternative Products' %}
+                        </button>
+                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="other">
+                            {% trans 'Other Information' %}
+                        </button>
+                    </nav>
+                </div>
+                <div class="p-3">
+                    <!-- Pestaña: Líneas del Pedido -->
+                    <div id="tab-lines" class="tab-content">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Product' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Description' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'UOM' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Quantity' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Unit Price' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans '% Disc.' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Taxes' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Subtotal' %}</th>
+                                        <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="order-lines" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                    <!-- Las líneas se renderizan dinámicamente con JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-3 flex justify-start">
+                            <button type="button" id="add-line" 
+                                    class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-synap-600 hover:bg-synap-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                {% trans 'Add Line' %}
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Pestaña: Productos alternativos -->
+                    <div id="tab-alternatives" class="tab-content hidden">
+                        <div class="space-y-2">
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+                                    <thead class="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Product' %}</th>
+                                            <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Description' %}</th>
+                                            <th class="px-2 py-2 text-left font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Unit Price' %}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="alternative-lines" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        <!-- Las líneas de productos alternativos se renderizarán aquí -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Pestaña: Otra información -->
+                    <div id="tab-other" class="tab-content hidden">
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-medium text-gray-900 dark:text-white">{% trans 'Other Information' %}</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Additional order information.' %}</p>
+                            <!-- Contenido adicional -->
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="flex flex-col items-end gap-2">
-                <div class="flex gap-2 items-center">
-                    <span class="text-gray-500 dark:text-gray-400">Subtotal:</span>
-                    <span class="font-medium text-gray-900 dark:text-white" id="subtotal">$0.00</span>
+
+            <!-- Sección de Términos y Condiciones -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg mt-4 text-xs">
+                <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-base font-medium text-gray-900 dark:text-white">{% trans 'Terms and Conditions' %}</h3>
                 </div>
-                <div class="flex gap-2 items-center">
-                    <span class="text-gray-500 dark:text-gray-400">IVA 21%:</span>
-                    <span class="font-medium text-gray-900 dark:text-white" id="tax">$0.00</span>
+                <div class="p-3">
+                    <div class="relative">
+                        <textarea name="terms_conditions" id="terms_conditions" rows="2"
+                                  class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors resize-none"
+                                  placeholder="{% trans 'Enter the order terms and conditions...' %}">{{ order.terms_conditions|default:'' }}</textarea>
+                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center">
+                            <button type="button" class="text-gray-400 hover:text-gray-600" title="{% trans 'Expand' %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex gap-2 items-center">
-                    <span class="text-gray-500 dark:text-gray-400">Total:</span>
-                    <span class="font-bold text-gray-900 dark:text-white text-lg" id="total">$0.00</span>
+            </div>
+
+            <!-- Restaurar el resumen de totales fijo al pie -->
+            <div class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg z-50">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-8">
+                            <div class="flex items-center space-x-4">
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{% trans 'Subtotal' %}</p>
+                                    <p class="text-lg font-medium text-gray-900 dark:text-white" id="subtotal">$0.00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{% trans 'VAT' %}</p>
+                                    <p class="text-lg font-medium text-gray-900 dark:text-white" id="total-tax">$0.00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{% trans 'Discounts' %}</p>
+                                    <p class="text-lg font-medium text-gray-900 dark:text-white" id="total-discount">$0.00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">{% trans 'Total' %}</p>
+                                    <p class="text-xl font-bold text-synap-600 dark:text-synap-400" id="total">$0.00</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button type="button" id="apply-discount-btn" 
+                                    class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                </svg>
+                                {% trans 'Apply discount' %}
+                            </button>
+                            <button type="submit" form="order-form"
+                                    class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                {% trans 'Save' %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Toast de notificación -->
+    <div id="toast" class="fixed bottom-4 right-4 z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900 dark:text-white" id="toast-message">{% trans 'Order saved successfully' %}</p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <button type="button" onclick="hideToast()" class="text-gray-400 hover:text-gray-600" title="{% trans 'Close' %}">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>
-    </form>
-</div>
+    </div>
 
 <style>
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.animate-fade-in { animation: fade-in 0.5s cubic-bezier(.4,0,.2,1) both; }
-.table-minimal th, .table-minimal td { border: none !important; }
+/* Estilos específicos para el pedido */
+.input-group {
+    position: relative;
+}
+
+.input-group input:focus,
+.input-group select:focus,
+.input-group textarea:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Estilos para campos de líneas sin bordes */
+.desc-input,
+.uom-input,
+.qty-input,
+.price-input,
+.discount-input,
+.tax-input {
+    transition: background-color 0.2s ease;
+}
+
+.desc-input:hover,
+.uom-input:hover,
+.qty-input:hover,
+.price-input:hover,
+.discount-input:hover,
+.tax-input:hover {
+    background-color: rgba(0, 0, 0, 0.02) !important;
+}
+
+.desc-input:focus,
+.uom-input:focus,
+.qty-input:focus,
+.price-input:focus,
+.discount-input:focus,
+.tax-input:focus {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    outline: none;
+}
+
+/* Campos numéricos alineados a la derecha */
+.text-right {
+    text-align: right;
+}
+
+/* Animaciones para las pestañas */
+.tab-content {
+    transition: opacity 0.2s ease-in-out;
+}
+
+.tab-content.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Estilos para la tabla responsive */
+@media (max-width: 768px) {
+    .table-responsive {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Estilos para el toast */
+.toast-enter {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+.toast-enter-active {
+    transform: translateX(0);
+    opacity: 1;
+    transition: all 0.3s ease-out;
+}
+
+.toast-exit {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-exit-active {
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease-in;
+}
+
+/* Dark mode para campos sin bordes */
+@media (prefers-color-scheme: dark) {
+    .desc-input:hover,
+    .uom-input:hover,
+    .qty-input:hover,
+    .price-input:hover,
+    .discount-input:hover,
+    .tax-input:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    .desc-input:focus,
+    .uom-input:focus,
+    .qty-input:focus,
+    .price-input:focus,
+    .discount-input:focus,
+    .tax-input:focus {
+        background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+}
 </style>
+
 <script>
-// Tabs planos
-const tabLinks = document.querySelectorAll('.tab-link');
-tabLinks.forEach(tab => {
-    tab.addEventListener('click', function() {
-        tabLinks.forEach(t => t.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'border-indigo-500'));
-        tabLinks.forEach(t => t.classList.add('text-gray-500', 'dark:text-gray-400', 'border-transparent'));
-        this.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
-        this.classList.add('text-indigo-600', 'dark:text-indigo-400', 'border-indigo-500');
+// Configuración de Tailwind para colores Synap
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                'synap': {
+                    50: '#f0f4ff',
+                    100: '#e0e9ff',
+                    200: '#c7d7ff',
+                    300: '#a4bfff',
+                    400: '#819dff',
+                    500: '#667eea',
+                    600: '#5a67d8',
+                    700: '#4c51bf',
+                    800: '#434190',
+                    900: '#3c366b',
+                }
+            }
+        }
+    }
+};
+
+// Funcionalidad de pestañas
+document.addEventListener('DOMContentLoaded', function() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabLinks.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Remover clases activas
+            tabLinks.forEach(t => {
+                t.classList.remove('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+                t.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            });
+            
+            // Ocultar todos los contenidos
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Activar pestaña seleccionada
+            this.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            this.classList.add('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+            
+            // Mostrar contenido correspondiente
+            document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
+        });
+    });
+
+    // Funcionalidad del toast
+    window.showToast = function(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        
+        toastMessage.textContent = message;
+        toast.classList.remove('hidden');
+        
+        setTimeout(() => {
+            hideToast();
+        }, 3000);
+    };
+
+    window.hideToast = function() {
+        const toast = document.getElementById('toast');
+        toast.classList.add('hidden');
+    };
+
+    // Validación en tiempo real
+    const inputs = document.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            validateField(this);
+        });
+    });
+
+    function validateField(field) {
+        const value = field.value.trim();
+        const isRequired = field.hasAttribute('required');
+        
+        if (isRequired && !value) {
+            showFieldError(field, gettext('This field is required'));
+        } else {
+            clearFieldError(field);
+        }
+    }
+
+    function showFieldError(field, message) {
+        field.classList.add('border-red-500');
+        
+        // Crear o actualizar mensaje de error
+        let errorElement = field.parentNode.querySelector('.error-message');
+        if (!errorElement) {
+            errorElement = document.createElement('p');
+            errorElement.className = 'error-message text-sm text-red-600 mt-1';
+            field.parentNode.appendChild(errorElement);
+        }
+        errorElement.textContent = message;
+    }
+
+    function clearFieldError(field) {
+        field.classList.remove('border-red-500');
+        
+        const errorElement = field.parentNode.querySelector('.error-message');
+        if (errorElement) {
+            errorElement.remove();
+        }
+    }
+
+    // Manejo del formulario
+    document.getElementById('order-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validar formulario
+        let isValid = true;
+        const requiredFields = this.querySelectorAll('[required]');
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                showFieldError(field, gettext('This field is required'));
+                isValid = false;
+            }
+        });
+        
+        if (isValid) {
+            showToast(gettext('Order saved successfully'), 'success');
+            // Aquí iría la lógica para enviar el formulario
+        } else {
+            showToast(gettext('Please complete all required fields'), 'error');
+        }
     });
 });
+
+// --- Productos para autocompletar (datalist) ---
+const PRODUCTS = [
+    {% for pv in products %}
+    {
+        id: '{{ pv.id }}',
+        sku: '{{ pv.sku|escapejs }}',
+        name: '{% if pv.product.name %}{{ pv.product.name }}{% else %}{% endif %}',
+        uom: '{% if pv.product.uom %}{{ pv.product.uom.code }}{% else %}{% endif %}',
+        price: '{{ pv.price }}',
+        description: '{{ pv.product.description|escapejs }}',
+        barcode: '{{ pv.barcode|default:'' }}'
+    },
+    {% endfor %}
+];
+
+// --- Lógica para agregar líneas dinámicamente ---
+let lineIndex = 0;
+const orderLinesTbody = document.getElementById('order-lines');
+const addLineBtn = document.getElementById('add-line');
+
+function createOrderLine(index) {
+    return `<tr data-index="${index}">
+        <td class="px-2 py-1">
+            <div class="flex items-center space-x-2">
+                <input type="text" 
+                       class="product-search w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                       placeholder="{% trans 'Search by name, SKU or barcode...' %}"
+                       list="products-list-${index}"
+                       data-line-index="${index}"
+                       autocomplete="off">
+                
+                <datalist id="products-list-${index}">
+                    ${PRODUCTS.map(pv => `
+                        <option value="${pv.sku} - ${pv.name}${pv.barcode ? ` (${pv.barcode})` : ''}" 
+                                data-id="${pv.id}"
+                                data-sku="${pv.sku}"
+                                data-name="${pv.name}"
+                                data-uom="${pv.uom}"
+                                data-price="${pv.price}"
+                                data-description="${pv.description}"
+                                data-barcode="${pv.barcode || ''}">
+                        </option>
+                    `).join('')}
+                </datalist>
+                
+                <div class="flex space-x-1">
+                    <button type="button" 
+                            class="edit-product-btn px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                            title="{% trans 'Edit selected product' %}"
+                            onclick="editSelectedProduct(${index})">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
+                    <button type="button" 
+                            class="new-product-btn px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                            title="{% trans 'Create new product' %}"
+                            onclick="createNewProduct()">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" class="product-id" value="" />
+        </td>
+        <td class="px-2 py-1"><input type="text" class="desc-input w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none" value="" /></td>
+        <td class="px-2 py-1"><input type="text" class="uom-input w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none text-right" value="" /></td>
+        <td class="px-2 py-1"><input type="number" class="qty-input w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none text-right" value="1" min="0" step="0.01" /></td>
+        <td class="px-2 py-1"><input type="number" class="price-input w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none text-right" value="0" min="0" step="0.01" /></td>
+        <td class="px-2 py-1"><input type="number" class="discount-input w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none text-right" value="0" min="0" max="100" step="0.01" /></td>
+        <td class="px-2 py-1">
+            <div class="flex items-center space-x-1">
+                <select class="tax-select w-full px-1 py-1 text-xs bg-transparent border-none focus:outline-none text-right" data-line-index="${index}">
+                    <option value="">{% trans 'Auto' %}</option>
+                </select>
+                <button type="button" 
+                        class="tax-config-btn px-1 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-colors"
+                        title="{% trans 'Configure taxes' %}"
+                        onclick="configureLineTaxes(${index})">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                </button>
+            </div>
+            <input type="hidden" class="selected-taxes" value="" />
+            <input type="hidden" class="fiscal-position-id" value="" />
+        </td>
+        <td class="px-2 py-1">
+            <div class="text-right">
+                <span class="line-subtotal text-xs font-medium block">0.00</span>
+                <span class="line-tax text-xs text-gray-500 block">+0.00</span>
+            </div>
+        </td>
+        <td class="px-2 py-1">
+            <button type="button" class="remove-line-btn text-red-500 hover:text-red-700" onclick="removeLine(${index})">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </button>
+        </td>
+    </tr>`;
+}
+
+function calculateOrderTotals() {
+    let subtotal = 0;
+    let totalDiscount = 0;
+    let totalTax = 0;
+    let total = 0;
+    
+    // Calcular totales de todas las líneas
+    document.querySelectorAll('#order-lines tbody tr').forEach(tr => {
+        const qty = parseFloat(tr.querySelector('.qty-input').value) || 0;
+        const price = parseFloat(tr.querySelector('.price-input').value) || 0;
+        const discountPct = parseFloat(tr.querySelector('.discount-input').value) || 0;
+        
+        const lineSubtotal = qty * price;
+        const lineDiscount = lineSubtotal * (discountPct / 100);
+        const lineSubtotalAfterDiscount = lineSubtotal - lineDiscount;
+        
+        // Obtener impuestos de la línea
+        const lineTaxText = tr.querySelector('.line-tax').textContent;
+        const lineTax = parseFloat(lineTaxText.replace('+', '')) || 0;
+        
+        subtotal += lineSubtotal;
+        totalDiscount += lineDiscount;
+        totalTax += lineTax;
+    });
+    
+    total = subtotal - totalDiscount + totalTax;
+    
+    // Actualizar campos de totales
+    document.getElementById('subtotal').textContent = subtotal.toFixed(2);
+    document.getElementById('total-discount').textContent = totalDiscount.toFixed(2);
+    document.getElementById('total-tax').textContent = totalTax.toFixed(2);
+    document.getElementById('total').textContent = total.toFixed(2);
+}
+
+addLineBtn.addEventListener('click', function() {
+    orderLinesTbody.insertAdjacentHTML('beforeend', createOrderLine(lineIndex++));
+});
+
+orderLinesTbody.addEventListener('input', function(e) {
+    const tr = e.target.closest('tr');
+    if (e.target.classList.contains('product-search')) {
+        // Buscar producto por nombre o SKU
+        const val = e.target.value.toLowerCase();
+        const prod = PRODUCTS.find(p => (`${p.sku} - ${p.name}`).toLowerCase() === val);
+        if (prod) {
+            tr.querySelector('.product-search').value = `${prod.sku} - ${prod.name}`;
+            tr.querySelector('.desc-input').value = prod.description;
+            tr.querySelector('.uom-input').value = prod.uom;
+            tr.querySelector('.price-input').value = prod.price;
+            tr.querySelector('.product-id').value = prod.id;
+            
+            // Calcular impuestos automáticamente
+            const lineIndex = tr.getAttribute('data-index');
+            calculateLineTaxes(lineIndex);
+        }
+    }
+    
+    // Recalcular totales si cambian cantidad, precio o descuento
+    if (e.target.classList.contains('qty-input') || 
+        e.target.classList.contains('price-input') || 
+        e.target.classList.contains('discount-input')) {
+        const lineIndex = tr.getAttribute('data-index');
+        calculateLineTaxes(lineIndex);
+    }
+    
+    calculateOrderTotals();
+});
+
+orderLinesTbody.addEventListener('change', function(e) {
+    const tr = e.target.closest('tr');
+    
+    // Si cambia el select de impuestos, recalcular
+    if (e.target.classList.contains('tax-select')) {
+        const lineIndex = tr.getAttribute('data-index');
+        calculateLineTaxes(lineIndex);
+    }
+    
+    calculateOrderTotals();
+});
+
+orderLinesTbody.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-line-btn') || 
+        e.target.closest('.remove-line-btn')) {
+        const tr = e.target.closest('tr');
+        if (tr) {
+            tr.remove();
+            calculateOrderTotals();
+        }
+    }
+});
+
+// Inicializar con una línea
+addLineBtn.click();
+
+// Event listener para botón de impuestos automáticos
+document.getElementById('auto-taxes-btn').addEventListener('click', function() {
+    applyAutomaticTaxesToOrder();
+});
+
+// Funciones para manejo de productos
+function editSelectedProduct(lineIndex) {
+    const productInput = document.querySelector(`[data-line-index="${lineIndex}"]`);
+    const selectedValue = productInput.value;
+    
+    if (!selectedValue) {
+        alert('{% trans "Please select a product first" %}');
+        return;
+    }
+    
+    // Extraer el SKU del valor seleccionado
+    const sku = selectedValue.split(' - ')[0];
+    const product = PRODUCTS.find(p => p.sku === sku);
+    
+    if (product) {
+        // Redirigir a la página de edición del producto
+        window.open(`/inventory/products/${product.id}/edit/`, '_blank');
+    } else {
+        alert('{% trans "Product not found" %}');
+    }
+}
+
+function createNewProduct() {
+    // Redirigir a la página de creación de producto
+    window.open('/inventory/products/create/', '_blank');
+}
+
+// Función para filtrar productos en tiempo real
+function filterProducts(searchTerm, datalistId) {
+    const datalist = document.getElementById(datalistId);
+    const options = datalist.querySelectorAll('option');
+    
+    options.forEach(option => {
+        const value = option.value.toLowerCase();
+        const barcode = option.getAttribute('data-barcode') || '';
+        const sku = option.getAttribute('data-sku') || '';
+        const name = option.getAttribute('data-name') || '';
+        
+        // Buscar en nombre, SKU o código de barras
+        const matches = value.includes(searchTerm.toLowerCase()) ||
+                       barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       name.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        option.style.display = matches ? '' : 'none';
+    });
+}
+
+// Event listeners para búsqueda de productos
+document.addEventListener('DOMContentLoaded', function() {
+    // Delegación de eventos para campos de búsqueda dinámicos
+    document.addEventListener('input', function(e) {
+        if (e.target.classList.contains('product-search')) {
+            const lineIndex = e.target.getAttribute('data-line-index');
+            const searchTerm = e.target.value;
+            filterProducts(searchTerm, `products-list-${lineIndex}`);
+        }
+    });
+    
+    // Mostrar todos los productos al hacer click o presionar flecha abajo
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('product-search')) {
+            const lineIndex = e.target.getAttribute('data-line-index');
+            filterProducts('', `products-list-${lineIndex}`);
+        }
+    });
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.target.classList.contains('product-search') && e.key === 'ArrowDown') {
+            const lineIndex = e.target.getAttribute('data-line-index');
+            filterProducts('', `products-list-${lineIndex}`);
+        }
+    });
+    
+    // Autocompletar campos cuando se selecciona un producto
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('product-search')) {
+            const selectedValue = e.target.value;
+            const tr = e.target.closest('tr');
+            
+            if (selectedValue) {
+                // Buscar por SKU (primera parte antes del guión)
+                const sku = selectedValue.split(' - ')[0];
+                const product = PRODUCTS.find(p => p.sku === sku);
+                
+                // Si no se encuentra por SKU, buscar por código de barras
+                let foundProduct = product;
+                if (!foundProduct) {
+                    foundProduct = PRODUCTS.find(p => p.barcode && p.barcode === selectedValue);
+                }
+                
+                if (foundProduct) {
+                    tr.querySelector('.desc-input').value = foundProduct.description || '';
+                    tr.querySelector('.uom-input').value = foundProduct.uom || '';
+                    tr.querySelector('.price-input').value = parseFloat(foundProduct.price || 0).toFixed(2);
+                    tr.querySelector('.product-id').value = foundProduct.id;
+                    
+                    // Recalcular totales
+                    calculateLineTotal(tr);
+                    calculateOrderTotals();
+                }
+            }
+        }
+    });
+});
+
+function removeLine(index) {
+    const tr = document.querySelector(`tr[data-index="${index}"]`);
+    if (tr) {
+        tr.remove();
+        calculateOrderTotals();
+    }
+}
+
+// Event listeners para cambios en líneas
+orderLinesTbody.addEventListener('input', function(e) {
+    const tr = e.target.closest('tr');
+    if (tr && (e.target.classList.contains('qty-input') || 
+               e.target.classList.contains('price-input') || 
+               e.target.classList.contains('discount-input') || 
+               e.target.classList.contains('tax-input'))) {
+        calculateLineTotal(tr);
+        calculateOrderTotals();
+    }
+});
+
+function calculateLineTotal(tr) {
+    const qty = parseFloat(tr.querySelector('.qty-input').value) || 0;
+    const price = parseFloat(tr.querySelector('.price-input').value) || 0;
+    const discountPct = parseFloat(tr.querySelector('.discount-input').value) || 0;
+    const taxPct = parseFloat(tr.querySelector('.tax-input').value) || 0;
+    
+    const lineSubtotal = qty * price;
+    const lineDiscount = lineSubtotal * (discountPct / 100);
+    const lineTax = (lineSubtotal - lineDiscount) * (taxPct / 100);
+    const lineTotal = lineSubtotal - lineDiscount + lineTax;
+    
+    tr.querySelector('.line-total').textContent = lineTotal.toFixed(2);
+}
+
+// Formatear campos numéricos al perder el foco
+orderLinesTbody.addEventListener('blur', function(e) {
+    if (e.target.classList.contains('price-input')) {
+        const value = parseFloat(e.target.value) || 0;
+        e.target.value = value.toFixed(2);
+    }
+    if (e.target.classList.contains('tax-input')) {
+        const value = parseFloat(e.target.value) || 0;
+        e.target.value = value.toFixed(2);
+    }
+    if (e.target.classList.contains('discount-input')) {
+        const value = parseFloat(e.target.value) || 0;
+        e.target.value = value.toFixed(2);
+    }
+}, true);
+
+// --- Funciones para manejo de impuestos ---
+
+// Cache de impuestos por producto
+const productTaxesCache = new Map();
+const fiscalPositionsCache = new Map();
+
+// Función para obtener impuestos de un producto
+async function getProductTaxes(productId) {
+    if (productTaxesCache.has(productId)) {
+        return productTaxesCache.get(productId);
+    }
+    
+    try {
+        const response = await fetch(`/accounting/api/taxes/for-product/?product_id=${productId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            productTaxesCache.set(productId, data);
+            return data;
+        }
+    } catch (error) {
+        console.error('Error fetching product taxes:', error);
+    }
+    
+    return null;
+}
+
+// Función para obtener posiciones fiscales
+async function getFiscalPositions(clientId = null) {
+    const cacheKey = clientId || 'default';
+    if (fiscalPositionsCache.has(cacheKey)) {
+        return fiscalPositionsCache.get(cacheKey);
+    }
+    
+    try {
+        const url = clientId 
+            ? `/accounting/api/fiscal-positions/?client_id=${clientId}`
+            : '/accounting/api/fiscal-positions/';
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            fiscalPositionsCache.set(cacheKey, data);
+            return data;
+        }
+    } catch (error) {
+        console.error('Error fetching fiscal positions:', error);
+    }
+    
+    return null;
+}
+
+// Función para calcular impuestos de una línea
+async function calculateLineTaxes(lineIndex) {
+    const tr = document.querySelector(`[data-index="${lineIndex}"]`);
+    if (!tr) return;
+    
+    const productId = tr.querySelector('.product-id').value;
+    const quantity = parseFloat(tr.querySelector('.qty-input').value) || 0;
+    const unitPrice = parseFloat(tr.querySelector('.price-input').value) || 0;
+    const discount = parseFloat(tr.querySelector('.discount-input').value) || 0;
+    const selectedTaxes = tr.querySelector('.selected-taxes').value;
+    const fiscalPositionId = tr.querySelector('.fiscal-position-id').value;
+    
+    if (!productId || quantity <= 0 || unitPrice <= 0) {
+        updateLineTotals(tr, 0, 0, 0);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/accounting/api/calculate-line-taxes/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                quantity: quantity,
+                unit_price: unitPrice,
+                discount: discount,
+                taxes: selectedTaxes ? selectedTaxes.split(',').map(id => parseInt(id)) : [],
+                fiscal_position_id: fiscalPositionId || null
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            updateLineTotals(tr, data.subtotal, data.total_tax_amount, data.total_with_tax);
+            
+            // Actualizar select de impuestos si es automático
+            const taxSelect = tr.querySelector('.tax-select');
+            if (taxSelect.value === '') {
+                updateTaxSelect(taxSelect, data.taxes, true);
+            }
+        }
+    } catch (error) {
+        console.error('Error calculating line taxes:', error);
+    }
+}
+
+// Función para actualizar totales de línea
+function updateLineTotals(tr, subtotal, taxAmount, totalWithTax) {
+    tr.querySelector('.line-subtotal').textContent = subtotal.toFixed(2);
+    tr.querySelector('.line-tax').textContent = `+${taxAmount.toFixed(2)}`;
+    tr.querySelector('.line-total').textContent = totalWithTax.toFixed(2);
+}
+
+// Función para actualizar select de impuestos
+function updateTaxSelect(select, taxes, isAutomatic = false) {
+    const currentValue = select.value;
+    
+    // Limpiar opciones existentes
+    select.innerHTML = '<option value="">{% trans "Auto" %}</option>';
+    
+    // Agregar impuestos disponibles
+    taxes.forEach(tax => {
+        const option = document.createElement('option');
+        option.value = tax.tax_id;
+        option.textContent = `${tax.tax_name} (${tax.rate}%)`;
+        option.selected = currentValue === tax.tax_id.toString();
+        select.appendChild(option);
+    });
+    
+    if (isAutomatic) {
+        select.value = '';
+    }
+}
+
+// Función para configurar impuestos manualmente
+async function configureLineTaxes(lineIndex) {
+    const tr = document.querySelector(`[data-index="${lineIndex}"]`);
+    if (!tr) return;
+    
+    const productId = tr.querySelector('.product-id').value;
+    if (!productId) {
+        showToast('{% trans "Please select a product first" %}', 'warning');
+        return;
+    }
+    
+    // Obtener impuestos del producto
+    const productTaxes = await getProductTaxes(productId);
+    if (!productTaxes) {
+        showToast('{% trans "Error loading product taxes" %}', 'error');
+        return;
+    }
+    
+    // Crear modal de configuración de impuestos
+    const modal = createTaxConfigurationModal(productTaxes, lineIndex);
+    document.body.appendChild(modal);
+    
+    // Mostrar modal
+    modal.classList.remove('hidden');
+}
+
+// Función para crear modal de configuración de impuestos
+function createTaxConfigurationModal(productTaxes, lineIndex) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.innerHTML = `
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Configure Taxes" %}
+                </h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Select Taxes" %}
+                        </label>
+                        <div class="space-y-2 max-h-40 overflow-y-auto">
+                            ${productTaxes.taxes.map(tax => `
+                                <label class="flex items-center">
+                                    <input type="checkbox" 
+                                           value="${tax.id}" 
+                                           class="tax-checkbox h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                           ${productTaxes.default_taxes.includes(tax.id) ? 'checked' : ''}>
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                        ${tax.name} (${tax.amount}${tax.amount_type === 'percent' ? '%' : ' USD'})
+                                    </span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Fiscal Position" %}
+                        </label>
+                        <select class="fiscal-position-select w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white">
+                            <option value="">{% trans "Default" %}</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" 
+                            class="cancel-tax-config px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                        {% trans "Cancel" %}
+                    </button>
+                    <button type="button" 
+                            class="apply-tax-config px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        {% trans "Apply" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Event listeners
+    modal.querySelector('.cancel-tax-config').addEventListener('click', () => {
+        modal.remove();
+    });
+    
+    modal.querySelector('.apply-tax-config').addEventListener('click', () => {
+        applyTaxConfiguration(lineIndex, modal);
+    });
+    
+    // Cargar posiciones fiscales
+    loadFiscalPositions(modal.querySelector('.fiscal-position-select'));
+    
+    return modal;
+}
+
+// Función para cargar posiciones fiscales en el modal
+async function loadFiscalPositions(select) {
+    const clientId = document.getElementById('client').value;
+    const fiscalPositions = await getFiscalPositions(clientId);
+    
+    if (fiscalPositions && fiscalPositions.fiscal_positions) {
+        fiscalPositions.fiscal_positions.forEach(position => {
+            const option = document.createElement('option');
+            option.value = position.id;
+            option.textContent = position.name;
+            select.appendChild(option);
+        });
+    }
+}
+
+// Función para aplicar configuración de impuestos
+async function applyTaxConfiguration(lineIndex, modal) {
+    const tr = document.querySelector(`[data-index="${lineIndex}"]`);
+    if (!tr) return;
+    
+    const selectedTaxes = Array.from(modal.querySelectorAll('.tax-checkbox:checked'))
+        .map(checkbox => checkbox.value);
+    
+    const fiscalPositionId = modal.querySelector('.fiscal-position-select').value;
+    
+    // Actualizar campos ocultos
+    tr.querySelector('.selected-taxes').value = selectedTaxes.join(',');
+    tr.querySelector('.fiscal-position-id').value = fiscalPositionId;
+    
+    // Actualizar select visible
+    const taxSelect = tr.querySelector('.tax-select');
+    if (selectedTaxes.length > 0) {
+        taxSelect.value = selectedTaxes[0]; // Mostrar el primer impuesto seleccionado
+    } else {
+        taxSelect.value = '';
+    }
+    
+    // Recalcular impuestos
+    await calculateLineTaxes(lineIndex);
+    
+    // Cerrar modal
+    modal.remove();
+    
+    showToast('{% trans "Tax configuration applied" %}', 'success');
+}
+
+// Función para aplicar impuestos automáticos a toda la orden
+async function applyAutomaticTaxesToOrder() {
+    const orderId = document.getElementById('order-id')?.value;
+    if (!orderId) {
+        showToast('{% trans "Please save the order first" %}', 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/accounting/api/apply-automatic-taxes/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                order_id: orderId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Actualizar totales de la orden
+            updateOrderTotals(data.order_totals);
+            
+            // Actualizar líneas
+            data.lines_updated.forEach(lineUpdate => {
+                const tr = document.querySelector(`[data-line-id="${lineUpdate.line_id}"]`);
+                if (tr) {
+                    tr.querySelector('.line-tax').textContent = `+${lineUpdate.tax_amount.toFixed(2)}`;
+                }
+            });
+            
+            showToast('{% trans "Automatic taxes applied successfully" %}', 'success');
+        }
+    } catch (error) {
+        console.error('Error applying automatic taxes:', error);
+        showToast('{% trans "Error applying automatic taxes" %}', 'error');
+    }
+}
+
+// Función para actualizar totales de la orden
+function updateOrderTotals(totals) {
+    document.getElementById('subtotal').textContent = totals.total_subtotal.toFixed(2);
+    document.getElementById('total-discount').textContent = totals.total_discount.toFixed(2);
+    document.getElementById('total-tax').textContent = totals.total_tax.toFixed(2);
+    document.getElementById('total').textContent = totals.total.toFixed(2);
+}
 </script>
-{% endblock %} 
+{% endblock %}

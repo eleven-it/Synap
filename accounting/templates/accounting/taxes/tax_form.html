@@ -1,0 +1,530 @@
+{% extends "theme/base_app.html" %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}{% trans "Edit Tax" %}{% else %}{% trans "Create Tax" %}{% endif %} - {{ empresa.nombre }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        @apply max-w-4xl mx-auto;
+    }
+    .form-section {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    .form-section-title {
+        @apply text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    .form-section-icon {
+        @apply w-5 h-5 mr-2 text-orange-600 dark:text-orange-400;
+    }
+    .form-group {
+        @apply mb-6;
+    }
+    .form-label {
+        @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2;
+    }
+    .form-input {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-200;
+    }
+    .form-select {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-200;
+    }
+    .form-textarea {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white transition-colors duration-200 resize-none;
+    }
+    .form-checkbox {
+        @apply h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 dark:border-gray-600 rounded;
+    }
+    .help-text {
+        @apply mt-1 text-sm text-gray-500 dark:text-gray-400;
+    }
+    .error-text {
+        @apply mt-1 text-sm text-red-600 dark:text-red-400;
+    }
+    .btn-primary {
+        @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200;
+    }
+    .btn-secondary {
+        @apply inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200;
+    }
+    .amount-type-toggle {
+        @apply relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200;
+    }
+    .amount-type-toggle.enabled {
+        @apply bg-orange-600;
+    }
+    .amount-type-toggle.disabled {
+        @apply bg-gray-200 dark:bg-gray-700;
+    }
+    .amount-type-toggle-thumb {
+        @apply inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200;
+    }
+    .amount-type-toggle.enabled .amount-type-toggle-thumb {
+        @apply translate-x-6;
+    }
+    .amount-type-toggle.disabled .amount-type-toggle-thumb {
+        @apply translate-x-1;
+    }
+    .progress-bar {
+        @apply fixed top-0 left-0 w-full h-1 bg-orange-600 z-50 transition-all duration-300;
+    }
+    .step-indicator {
+        @apply flex items-center justify-center w-8 h-8 rounded-full border-2 text-sm font-medium transition-all duration-200;
+    }
+    .step-indicator.active {
+        @apply border-orange-600 bg-orange-600 text-white;
+    }
+    .step-indicator.completed {
+        @apply border-green-600 bg-green-600 text-white;
+    }
+    .step-indicator.pending {
+        @apply border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Progress Bar -->
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% if form.instance.pk %}{% trans "Edit Tax" %}{% else %}{% trans "Create Tax" %}{% endif %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% if form.instance.pk %}
+                            {% trans "Update tax information and settings" %}
+                        {% else %}
+                            {% trans "Configure a new tax with rates and accounts" %}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'accounting:tax_list' %}" class="btn-secondary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" id="taxForm" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Step Indicators -->
+            <div class="flex items-center justify-center space-x-4 mb-8">
+                <div class="step-indicator active" id="step1">
+                    <span>1</span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                <div class="step-indicator pending" id="step2">
+                    <span>2</span>
+                </div>
+                <div class="w-8 h-0.5 bg-gray-300 dark:bg-gray-600"></div>
+                <div class="step-indicator pending" id="step3">
+                    <span>3</span>
+                </div>
+            </div>
+
+            <!-- Step 1: Basic Information -->
+            <div class="form-section" id="step1Content">
+                <h2 class="form-section-title">
+                    <svg class="form-section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    {% trans "Basic Information" %}
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            {% trans "Tax Name" %} *
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="error-text">{{ form.name.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Enter a descriptive name for this tax" %}</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.code.id_for_label }}" class="form-label">
+                            {% trans "Tax Code" %} *
+                        </label>
+                        {{ form.code }}
+                        {% if form.code.errors %}
+                        <div class="error-text">{{ form.code.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Unique code to identify this tax" %}</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="{{ form.description.id_for_label }}" class="form-label">
+                        {% trans "Description" %}
+                    </label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                    <div class="error-text">{{ form.description.errors.0 }}</div>
+                    {% endif %}
+                    <div class="help-text">{% trans "Optional description of the tax purpose" %}</div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label for="{{ form.tax_group.id_for_label }}" class="form-label">
+                            {% trans "Tax Group" %}
+                        </label>
+                        {{ form.tax_group }}
+                        {% if form.tax_group.errors %}
+                        <div class="error-text">{{ form.tax_group.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Group this tax belongs to (optional)" %}</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.sequence.id_for_label }}" class="form-label">
+                            {% trans "Sequence" %}
+                        </label>
+                        {{ form.sequence }}
+                        {% if form.sequence.errors %}
+                        <div class="error-text">{{ form.sequence.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Order of application (lower numbers first)" %}</div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between pt-4">
+                    <div></div>
+                    <button type="button" onclick="nextStep()" class="btn-primary">
+                        {% trans "Next: Tax Rate" %}
+                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Tax Rate Configuration -->
+            <div class="form-section hidden" id="step2Content">
+                <h2 class="form-section-title">
+                    <svg class="form-section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                    </svg>
+                    {% trans "Tax Rate Configuration" %}
+                </h2>
+                
+                <div class="form-group">
+                    <label class="form-label">{% trans "Amount Type" %} *</label>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <button type="button" id="percentToggle" class="amount-type-toggle enabled" onclick="toggleAmountType('percent')">
+                                <span class="amount-type-toggle-thumb"></span>
+                            </button>
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Percentage" %}</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button type="button" id="fixedToggle" class="amount-type-toggle disabled" onclick="toggleAmountType('fixed')">
+                                <span class="amount-type-toggle-thumb"></span>
+                            </button>
+                            <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Fixed Amount" %}</span>
+                        </div>
+                    </div>
+                    {{ form.amount_type }}
+                    {% if form.amount_type.errors %}
+                    <div class="error-text">{{ form.amount_type.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <label for="{{ form.amount.id_for_label }}" class="form-label">
+                        {% trans "Tax Amount" %} *
+                    </label>
+                    <div class="relative">
+                        {{ form.amount }}
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <span class="text-gray-500 dark:text-gray-400" id="amountSuffix">%</span>
+                        </div>
+                    </div>
+                    {% if form.amount.errors %}
+                    <div class="error-text">{{ form.amount.errors.0 }}</div>
+                    {% endif %}
+                    <div class="help-text" id="amountHelp">{% trans "Enter the tax percentage (e.g., 21 for 21%)" %}</div>
+                </div>
+                
+                <div class="flex items-center justify-between pt-4">
+                    <button type="button" onclick="prevStep()" class="btn-secondary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                        {% trans "Previous" %}
+                    </button>
+                    <button type="button" onclick="nextStep()" class="btn-primary">
+                        {% trans "Next: Accounts" %}
+                        <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Account Configuration -->
+            <div class="form-section hidden" id="step3Content">
+                <h2 class="form-section-title">
+                    <svg class="form-section-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                    </svg>
+                    {% trans "Account Configuration" %}
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label for="{{ form.account_id.id_for_label }}" class="form-label">
+                            {% trans "Tax Account" %}
+                        </label>
+                        {{ form.account_id }}
+                        {% if form.account_id.errors %}
+                        <div class="error-text">{{ form.account_id.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Account where tax amounts will be recorded" %}</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="{{ form.refund_account_id.id_for_label }}" class="form-label">
+                            {% trans "Refund Account" %}
+                        </label>
+                        {{ form.refund_account_id }}
+                        {% if form.refund_account_id.errors %}
+                        <div class="error-text">{{ form.refund_account_id.errors.0 }}</div>
+                        {% endif %}
+                        <div class="help-text">{% trans "Account for tax refunds (optional)" %}</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="flex items-center">
+                        {{ form.is_active }}
+                        <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            {% trans "Active" %}
+                        </label>
+                    </div>
+                    {% if form.is_active.errors %}
+                    <div class="error-text">{{ form.is_active.errors.0 }}</div>
+                    {% endif %}
+                    <div class="help-text">{% trans "Enable this tax for use in transactions" %}</div>
+                </div>
+                
+                <div class="flex items-center justify-between pt-4">
+                    <button type="button" onclick="prevStep()" class="btn-secondary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                        {% trans "Previous" %}
+                    </button>
+                    <button type="submit" class="btn-primary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        {% if form.instance.pk %}{% trans "Update Tax" %}{% else %}{% trans "Create Tax" %}{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStep = 1;
+const totalSteps = 3;
+
+// Inicializar el formulario
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar estilos de los campos
+    const inputs = document.querySelectorAll('input[type="text"], input[type="number"], textarea, select');
+    inputs.forEach(input => {
+        input.className = input.className.replace('form-control', 'form-input');
+        if (input.tagName === 'SELECT') {
+            input.className = input.className.replace('form-control', 'form-select');
+        }
+        if (input.tagName === 'TEXTAREA') {
+            input.className = input.className.replace('form-control', 'form-textarea');
+        }
+    });
+    
+    // Configurar checkbox
+    const checkbox = document.querySelector('input[type="checkbox"]');
+    if (checkbox) {
+        checkbox.className = checkbox.className.replace('form-check-input', 'form-checkbox');
+    }
+    
+    // Configurar amount type inicial
+    const amountTypeField = document.getElementById('{{ form.amount_type.id_for_label }}');
+    if (amountTypeField) {
+        toggleAmountType(amountTypeField.value || 'percent');
+    }
+    
+    // Actualizar barra de progreso
+    updateProgress();
+});
+
+function nextStep() {
+    if (currentStep < totalSteps) {
+        // Validar campos del paso actual
+        if (validateCurrentStep()) {
+            document.getElementById(`step${currentStep}Content`).classList.add('hidden');
+            currentStep++;
+            document.getElementById(`step${currentStep}Content`).classList.remove('hidden');
+            updateStepIndicators();
+            updateProgress();
+        }
+    }
+}
+
+function prevStep() {
+    if (currentStep > 1) {
+        document.getElementById(`step${currentStep}Content`).classList.add('hidden');
+        currentStep--;
+        document.getElementById(`step${currentStep}Content`).classList.remove('hidden');
+        updateStepIndicators();
+        updateProgress();
+    }
+}
+
+function updateStepIndicators() {
+    for (let i = 1; i <= totalSteps; i++) {
+        const indicator = document.getElementById(`step${i}`);
+        indicator.classList.remove('active', 'completed', 'pending');
+        
+        if (i < currentStep) {
+            indicator.classList.add('completed');
+        } else if (i === currentStep) {
+            indicator.classList.add('active');
+        } else {
+            indicator.classList.add('pending');
+        }
+    }
+}
+
+function updateProgress() {
+    const progress = (currentStep / totalSteps) * 100;
+    document.getElementById('progressBar').style.width = progress + '%';
+}
+
+function validateCurrentStep() {
+    const currentContent = document.getElementById(`step${currentStep}Content`);
+    const requiredFields = currentContent.querySelectorAll('[required], .required');
+    let isValid = true;
+    
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            field.classList.add('border-red-500');
+            isValid = false;
+        } else {
+            field.classList.remove('border-red-500');
+        }
+    });
+    
+    if (!isValid) {
+        showToast('{% trans "Please fill in all required fields" %}', 'error');
+    }
+    
+    return isValid;
+}
+
+function toggleAmountType(type) {
+    const percentToggle = document.getElementById('percentToggle');
+    const fixedToggle = document.getElementById('fixedToggle');
+    const amountField = document.getElementById('{{ form.amount.id_for_label }}');
+    const amountTypeField = document.getElementById('{{ form.amount_type.id_for_label }}');
+    const amountSuffix = document.getElementById('amountSuffix');
+    const amountHelp = document.getElementById('amountHelp');
+    
+    if (type === 'percent') {
+        percentToggle.classList.remove('disabled');
+        percentToggle.classList.add('enabled');
+        fixedToggle.classList.remove('enabled');
+        fixedToggle.classList.add('disabled');
+        amountSuffix.textContent = '%';
+        amountHelp.textContent = '{% trans "Enter the tax percentage (e.g., 21 for 21%)" %}';
+        amountField.placeholder = '21.00';
+    } else {
+        fixedToggle.classList.remove('disabled');
+        fixedToggle.classList.add('enabled');
+        percentToggle.classList.remove('enabled');
+        percentToggle.classList.add('disabled');
+        amountSuffix.textContent = '$';
+        amountHelp.textContent = '{% trans "Enter the fixed tax amount" %}';
+        amountField.placeholder = '5.00';
+    }
+    
+    if (amountTypeField) {
+        amountTypeField.value = type;
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Crear toast
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white transition-all duration-300 transform translate-x-full ${
+        type === 'error' ? 'bg-red-600' : 'bg-green-600'
+    }`;
+    toast.textContent = message;
+    
+    document.body.appendChild(toast);
+    
+    // Animar entrada
+    setTimeout(() => {
+        toast.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Remover después de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+// Validación del formulario antes de enviar
+document.getElementById('taxForm').addEventListener('submit', function(e) {
+    if (!validateCurrentStep()) {
+        e.preventDefault();
+        return false;
+    }
+    
+    // Mostrar indicador de carga
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        {% trans "Saving..." %}
+    `;
+    submitBtn.disabled = true;
+    
+    // Restaurar después de un tiempo (en caso de error)
+    setTimeout(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }, 5000);
+});
+</script>
+{% endblock %} 

@@ -3,252 +3,309 @@
 {% load i18n %}
 
 {% block inventory_content %}
-<div class="bg-white p-4 rounded-lg shadow-md max-w-4xl mx-auto">
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg max-w-7xl mx-auto">
     <form method="post" enctype="multipart/form-data" x-data="productForm()" x-init="window._initialProductImages && _initialProductImages.length > 0 && (previewImages = _initialProductImages.map(img => ({...img})));" @submit.prevent="fixDecimalSeparator(); $el.submit();">
         {% csrf_token %}
-        <!-- Header con botones de acción -->
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-semibold text-gray-800">{{ title }}</h1>
-            <div class="flex items-center space-x-2">
-                <a href="{% url 'inventory:product_list' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-1.5 px-3 rounded text-sm">{% trans "Cancel" %}</a>
-                <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 px-3 rounded text-sm">
-                    {% trans "Save Product" %}
-                </button>
+        
+        <!-- Header con título y botones de acción -->
+        <div class="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center">
+                    <div class="flex items-center space-x-4 relative z-20">
+                        <div>
+                            <span class="text-xl font-semibold text-gray-900 dark:text-white">
+                                {% trans 'Product' %}
+                            </span>
+                            <span class="ml-2">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                    {% if form.instance.pk %}
+                                        bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-200
+                                    {% else %}
+                                        bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-200
+                                    {% endif %}">
+                                    {% if form.instance.pk %}{% trans 'Edit' %}{% else %}{% trans 'Create' %}{% endif %}
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'inventory:product_list' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" 
+                            class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        {% trans "Save Product" %}
+                    </button>
+                </div>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Columna izquierda: Datos principales -->
-            <div class="space-y-8">
-                <!-- Sección: Identificación -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Identification" %}</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Product Name" %}<span class="text-red-500">*</span></label>
-                            {{ form.name|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Product name') }}
-                            {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors|first }}</p>{% endif %}
+
+        <!-- Tabs -->
+        <div class="p-4 sm:p-6 lg:p-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Columna izquierda: Tabs y contenido -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                        <div class="border-b border-gray-200 dark:border-gray-700">
+                            <nav class="flex space-x-4 px-3 pt-3" aria-label="Tabs">
+                                <button type="button" class="tab-link border-b-2 border-synap-500 py-2 px-1 text-xs font-medium text-synap-600 dark:text-synap-400" data-tab="identification">{% trans 'Identification' %}</button>
+                                <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="organization">{% trans 'Organization' %}</button>
+                                <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="prices">{% trans 'Prices & Margins' %}</button>
+                                <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="weight">{% trans 'Weight & Dimensions' %}</button>
+                                <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="multimedia">{% trans 'Multimedia' %}</button>
+                                <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="other">{% trans 'Other' %}</button>
+                            </nav>
                         </div>
-                        <div>
-                            <label for="id_sku" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "SKU" %}</label>
-                            <input type="text" id="id_sku" name="sku" x-ref="skuInput" x-model="sku" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Unique SKU' %}">
-                            {% if form.sku.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sku.errors|first }}</p>{% endif %}
-                        </div>
-                        <div>
-                            <label for="{{ form.handle.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Handle (URL)" %}</label>
-                            {{ form.handle|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:example-product' }}
-                            <p class="text-xs text-gray-500">{% trans "Friendly URL automatically suggested from the name, you can modify it if you wish." %}</p>
-                            {% if form.handle.errors %}<p class="text-red-500 text-xs mt-1">{{ form.handle.errors|first }}</p>{% endif %}
-                        </div>
-                        <div>
-                            <label for="{{ form.barcode.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Barcode" %}</label>
-                            {{ form.barcode|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Optional') }}
-                        </div>
-                        <div>
-                            <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Description" %}<span class="text-red-500">*</span></label>
-                            {{ form.description|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Describe the product') }}
-                            {% if form.description.errors %}<p class="text-red-500 text-xs mt-1">{{ form.description.errors|first }}</p>{% endif %}
-                        </div>
-                    </div>
-                </div>
-                <!-- Sección: Organización -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Organization" %}</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label for="category_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Category" %}<span class="text-red-500"></span></label>
-                            <div class="relative">
-                                <input type="text" id="category_combobox" name="category_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a category...' %}" oninput="onCategoryInput()" onfocus="onCategoryInput()">
-                                <input type="hidden" id="category_id" name="category" value="{{ form.category.value|default:'' }}" />
-                                <div id="category_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                        <div class="p-4">
+                            <!-- Tab: Identificación -->
+                            <div id="tab-identification" class="tab-content">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="flex flex-col">
+                                        <label for="{{ form.name.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Product Name" %} <span class="text-red-500">*</span></label>
+                                        {{ form.name|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Product name' }}
+                                        {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <label for="{{ form.sku.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "SKU" %}</label>
+                                        {{ form.sku|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Unique SKU' }}
+                                        {% if form.sku.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sku.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div class="md:col-span-2 flex flex-col">
+                                        <label for="{{ form.handle.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Handle (URL)" %}</label>
+                                        {{ form.handle|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:example-product' }}
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Friendly URL automatically suggested from the name, you can modify it if you wish." %}</p>
+                                        {% if form.handle.errors %}<p class="text-red-500 text-xs mt-1">{{ form.handle.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <label for="{{ form.barcode.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Barcode" %}</label>
+                                        {{ form.barcode|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Optional' }}
+                                    </div>
+                                    <div class="md:col-span-2 flex flex-col">
+                                        <label for="{{ form.description.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Description" %} <span class="text-red-500">*</span></label>
+                                        {{ form.description|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Describe the product' }}
+                                        {% if form.description.errors %}<p class="text-red-500 text-xs mt-1">{{ form.description.errors|first }}</p>{% endif %}
+                                    </div>
+                                </div>
                             </div>
-                            <p id="category_error" class="text-red-500 text-xs mt-1 hidden"></p>
-                        </div>
-                        <div>
-                            <label for="subcategory_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Subcategory" %}</label>
-                            <div class="relative">
-                                <input type="text" id="subcategory_combobox" name="subcategory_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a subcategory...' %}" oninput="onSubcategoryInput()" onfocus="onSubcategoryInput()" />
-                                <input type="hidden" id="subcategory_id" name="subcategory" value="{{ form.subcategory.value|default:'' }}" />
-                                <div id="subcategory_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                            <!-- Tab: Organización -->
+                            <div id="tab-organization" class="tab-content hidden">
+                                <!-- Sección: Organización -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="category_combobox" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Category" %}</label>
+                                        <div class="relative">
+                                            <input type="text" id="category_combobox" name="category_name" autocomplete="off" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Type or select a category...' %}" oninput="onCategoryInput()" onfocus="onCategoryInput()">
+                                            <input type="hidden" id="category_id" name="category" value="{{ form.category.value|default:'' }}" />
+                                            <div id="category_dropdown" class="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded shadow-lg mt-1 hidden"></div>
+                                        </div>
+                                        <p id="category_error" class="text-red-500 text-xs mt-1 hidden"></p>
+                                    </div>
+                                    <div>
+                                        <label for="subcategory_combobox" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Subcategory" %}</label>
+                                        <div class="relative">
+                                            <input type="text" id="subcategory_combobox" name="subcategory_name" autocomplete="off" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Type or select a subcategory...' %}" oninput="onSubcategoryInput()" onfocus="onSubcategoryInput()" />
+                                            <input type="hidden" id="subcategory_id" name="subcategory" value="{{ form.subcategory.value|default:'' }}" />
+                                            <div id="subcategory_dropdown" class="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded shadow-lg mt-1 hidden"></div>
+                                        </div>
+                                        <p id="subcategory_error" class="text-red-500 text-xs mt-1 hidden"></p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label for="brand_combobox" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Brand" %}</label>
+                                    <div class="relative">
+                                        <input type="text" id="brand_combobox" name="brand_name" autocomplete="off" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Type or select a brand...' %}" oninput="onBrandInput()" onfocus="onBrandInput()" />
+                                        <input type="hidden" id="brand_id" name="brand" value="{% if form.brand.value %}{{ form.brand.value }}{% elif form.instance.brand %}{{ form.instance.brand.id }}{% else %}{% endif %}" />
+                                        <div id="brand_dropdown" class="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded shadow-lg mt-1 hidden"></div>
+                                    </div>
+                                    <p id="brand_error" class="text-red-500 text-xs mt-1 hidden"></p>
+                                </div>
                             </div>
-                            <p id="subcategory_error" class="text-red-500 text-xs mt-1 hidden"></p>
-                        </div>
-                        <div>
-                            <label for="brand_combobox" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Brand" %}</label>
-                            <div class="relative">
-                                <input type="text" id="brand_combobox" name="brand_name" autocomplete="off" class="mt-1 block w-full px-2 py-1.5 bg-white border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500" placeholder="{% trans 'Type or select a brand...' %}" oninput="onBrandInput()" onfocus="onBrandInput()" />
-                                <input type="hidden" id="brand_id" name="brand" value="{% if form.brand.value %}{{ form.brand.value }}{% elif form.instance.brand %}{{ form.instance.brand.id }}{% else %}{% endif %}" />
-                                <div id="brand_dropdown" class="absolute z-10 w-full bg-white border border-gray-200 rounded shadow-lg mt-1 hidden"></div>
+                            <!-- Tab: Precios y márgenes -->
+                            <div id="tab-prices" class="tab-content hidden">
+                                <!-- Sección: Precios y márgenes -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="id_price" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Price" %} <span class="text-red-500">*</span></label>
+                                        <input type="text" id="id_price" name="price" x-ref="priceInput" x-model="price" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Sale price' %}" required autocomplete="off">
+                                        {% if form.price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.price.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div>
+                                        <label for="id_sale_price" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Promotional Price" %}</label>
+                                        <input type="text" id="id_sale_price" name="sale_price" x-ref="salePriceInput" x-model="sale_price" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Offer price' %}">
+                                        {% if form.sale_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sale_price.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div>
+                                        <label for="id_cost_price" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Cost Price" %}</label>
+                                        <input type="text" id="id_cost_price" name="cost_price" x-ref="costPriceInput" x-model="cost_price" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white" placeholder="{% trans 'Cost' %}">
+                                        {% if form.cost_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.cost_price.errors|first }}</p>{% endif %}
+                                    </div>
+                                    <div>
+                                        <label for="id_profit_margin" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Profit Margin (%)" %}</label>
+                                        <input type="text" id="id_profit_margin" name="profit_margin" x-model="profit_margin" readonly class="w-full px-2 py-1 text-xs bg-gray-100 dark:bg-gray-600 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none cursor-not-allowed" placeholder="{% trans 'Margin %' %}" tabindex="-1">
+                                    </div>
+                                    <div>
+                                        <label for="id_price_currency" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Currency" %}</label>
+                                        {{ form.price_currency|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white' }}
+                                    </div>
+                                </div>
                             </div>
-                            <p id="brand_error" class="text-red-500 text-xs mt-1 hidden"></p>
+                            <!-- Tab: Peso y dimensiones -->
+                            <div id="tab-weight" class="tab-content hidden">
+                                <!-- Sección: Peso y dimensiones -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="id_weight_kg" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Weight (kg)" %}</label>
+                                        {{ form.weight_kg|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Ex: 1.5' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_volume_m3" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Volume (m³)" %}</label>
+                                        {{ form.volume_m3|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Ex: 0.01' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_width_cm" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Width (cm)" %}</label>
+                                        {{ form.width_cm|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Ex: 10' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_height_cm" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Height (cm)" %}</label>
+                                        {{ form.height_cm|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Ex: 20' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_depth_cm" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Depth (cm)" %}</label>
+                                        {{ form.depth_cm|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Ex: 5' }}
+                                    </div>
+                                    <div class="flex items-center mt-4">
+                                        {{ form.is_dangerous|add_class:'h-4 w-4 text-synap-600 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-synap-500' }}
+                                        <label for="id_is_dangerous" class="ml-2 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans "Is Dangerous Goods" %}</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Tab: Multimedia -->
+                            <div id="tab-multimedia" class="tab-content hidden">
+                                <!-- Sección: Multimedia -->
+                                <div>
+                                    <label for="id_video_url" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Video (YouTube/Vimeo)" %}</label>
+                                    {{ form.video_url|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white'|attr:'placeholder:Video link' }}
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Paste a YouTube or Vimeo link to show a video in the product gallery." %}</p>
+                                </div>
+                            </div>
+                            <!-- Tab: Otros -->
+                            <div id="tab-other" class="tab-content hidden">
+                                <!-- Sección: Otros -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label for="id_product_kind" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Product Kind" %}</label>
+                                        {{ form.product_kind|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_uom" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Unit of Measure" %}</label>
+                                        {{ form.uom|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white' }}
+                                    </div>
+                                    <div>
+                                        <label for="id_tracking" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Tracking Type" %}</label>
+                                        {{ form.tracking|add_class:'w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white' }}
+                                    </div>
+                                    <div class="flex items-center mt-4">
+                                        {{ form.is_published|add_class:'h-4 w-4 text-synap-600 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-synap-500' }}
+                                        <label for="id_is_published" class="ml-2 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans "Published" %}</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <!-- Sección: Precios y márgenes -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Prices and Margins" %}</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="id_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Price" %}<span class="text-red-500">*</span></label>
-                            <input type="text" id="id_price" name="price" x-ref="priceInput" x-model="price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Sale price' %}" required autocomplete="off">
-                            {% if form.price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.price.errors|first }}</p>{% endif %}
+                <!-- Columna derecha: Galería de imágenes -->
+                <div class="space-y-6">
+                    <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Product Images" %}</h3>
                         </div>
-                        <div>
-                            <label for="id_sale_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Promotional Price" %}</label>
-                            <input type="text" id="id_sale_price" name="sale_price" x-ref="salePriceInput" x-model="sale_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Offer price' %}">
-                            {% if form.sale_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.sale_price.errors|first }}</p>{% endif %}
-                        </div>
-                        <div>
-                            <label for="id_cost_price" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Cost Price" %}</label>
-                            <input type="text" id="id_cost_price" name="cost_price" x-ref="costPriceInput" x-model="cost_price" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition" placeholder="{% trans 'Cost' %}">
-                            {% if form.cost_price.errors %}<p class="text-red-500 text-xs mt-1">{{ form.cost_price.errors|first }}</p>{% endif %}
-                        </div>
-                        <div>
-                            <label for="id_profit_margin" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Profit Margin (%)" %}</label>
-                            <input type="text" id="id_profit_margin" name="profit_margin" x-model="profit_margin" readonly class="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition cursor-not-allowed" placeholder="{% trans 'Margin %' %}" tabindex="-1">
-                        </div>
-                        <div>
-                            <label for="id_price_currency" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Currency" %}</label>
-                            {{ form.price_currency|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
-                        </div>
-                    </div>
-                </div>
-                <!-- Sección: Peso y dimensiones -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Weight and Dimensions" %}</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="id_weight_kg" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Weight (kg)" %}<span class="text-red-500"></span></label>
-                            {{ form.weight_kg|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 1.5' }}
-                        </div>
-                        <div>
-                            <label for="id_volume_m3" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Volume (m³)" %}</label>
-                            {{ form.volume_m3|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 0.01' }}
-                        </div>
-                        <div>
-                            <label for="id_width_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Width (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.width_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 10' }}
-                        </div>
-                        <div>
-                            <label for="id_height_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Height (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.height_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 20' }}
-                        </div>
-                        <div>
-                            <label for="id_depth_cm" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Depth (cm)" %}<span class="text-red-500"></span></label>
-                            {{ form.depth_cm|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:Ex: 5' }}
-                        </div>
-                        <div class="flex items-center mt-6">
-                            {{ form.is_dangerous|add_class:'form-checkbox h-4 w-4 text-purple-600 border-gray-300 rounded' }}
-                            <label for="id_is_dangerous" class="ml-2 text-xs font-semibold text-gray-700">{% trans "Is Dangerous Goods" %}</label>
-                        </div>
-                    </div>
-                </div>
-                <!-- Sección: Multimedia -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Multimedia" %}</h3>
-                    <div class="space-y-3">
-                        <div class="md:col-span-2">
-                            <label for="id_video_url" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Video (YouTube/Vimeo)" %}</label>
-                            {{ form.video_url|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition'|attr:'placeholder:'|add:_('Video link') }}
-                            <p class="text-xs text-gray-400 mt-1">{% trans "Paste a YouTube or Vimeo link to show a video in the product gallery." %}</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Sección: Otros -->
-                <div>
-                    <h3 class="text-sm font-bold text-gray-700 mb-2 border-b border-gray-200 pb-1">{% trans "Others" %}</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="id_product_kind" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Product Kind" %}</label>
-                            {{ form.product_kind|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
-                        </div>
-                        <div>
-                            <label for="id_uom" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Unit of Measure" %}</label>
-                            {{ form.uom|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
-                        </div>
-                        <div>
-                            <label for="id_tracking" class="block text-xs font-semibold text-gray-700 mb-1">{% trans "Tracking Type" %}</label>
-                            {{ form.tracking|add_class:'mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 transition' }}
-                        </div>
-                        <div class="flex items-center mt-6">
-                            {{ form.is_published|add_class:'form-checkbox h-5 w-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500 transition' }}
-                            <label for="id_is_published" class="ml-2 text-xs font-semibold text-gray-900">{% trans "Published" %}</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <!-- Columna derecha: Galería de imágenes -->
-            <div class="space-y-3">
-                <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 mb-4">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">{% trans "Product Images" %}<span class="text-red-500"></span></label>
-                    <div id="image_grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" x-init="$watch('previewImages', () => updateImagesOrderField())">
-                        <template x-for="(img, idx) in previewImages.filter(img => !img._delete)" :key="img.id || idx">
-                            <div class="relative group rounded-lg overflow-hidden shadow bg-white">
-                                <img :src="img.url" alt="{% trans 'Product image' %}" class="w-full h-32 object-cover transition-transform duration-200 group-hover:scale-110 cursor-zoom-in" @click="openLightbox(img.url)">
-                                <button type="button" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 transition" @click="removeImage(idx)">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                                <template x-if="img.id">
-                                    <input type="hidden" :name="'delete_image_' + img.id" value="1" x-show="img._delete" />
+                        <div class="p-4">
+                            <div id="image_grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4" x-init="$watch('previewImages', () => updateImagesOrderField())">
+                                <template x-for="(img, idx) in previewImages.filter(img => !img._delete)" :key="img.id || idx">
+                                    <div class="relative group rounded-lg overflow-hidden shadow bg-white">
+                                        <img :src="img.url" alt="{% trans 'Product image' %}" class="w-full h-32 object-cover transition-transform duration-200 group-hover:scale-110 cursor-zoom-in" @click="openLightbox(img.url)">
+                                        <button type="button" class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow hover:bg-red-600 transition" @click="removeImage(idx)">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                        <template x-if="img.id">
+                                            <input type="hidden" :name="'delete_image_' + img.id" value="1" x-show="img._delete" />
+                                        </template>
+                                    </div>
                                 </template>
                             </div>
-                        </template>
-                    </div>
-                    <div class="text-center mt-4">
-                        <div id="drop-area" class="border-2 border-dashed border-purple-400 rounded-lg flex flex-col items-center justify-center p-6 text-center bg-purple-50 hover:bg-purple-100 transition cursor-pointer min-h-[120px] relative"
-                            @click="() => $refs.imagesInput.click()"
-                            @dragover.prevent="isDragging = true"
-                            @dragleave="isDragging = false"
-                            @drop.prevent="handleDrop">
-                            <input type="file" id="id_images" name="images" accept="image/png,image/jpeg,image/jpg,image/gif" multiple class="hidden" x-ref="imagesInput" @change="handleFileSelect">
-                            <svg class="w-10 h-10 text-purple-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16.5V19a2 2 0 002 2h12a2 2 0 002-2v-2.5"/></svg>
-                            <span class="text-purple-600 font-semibold text-base">{% trans 'Upload images' %}</span>
-                            <span class="text-xs text-gray-500">{% trans "PNG, JPG, GIF up to 10MB each. Max 250 images." %}</span>
-                            <span class="text-xs text-gray-400">{% trans "Drag and drop or click to select files" %}</span>
-                            <p id="image_error" class="text-red-500 text-xs mt-2 hidden transition-opacity opacity-0"></p>
+                            <div class="text-center">
+                                <div id="drop-area" class="border-2 border-dashed border-synap-400 rounded-lg flex flex-col items-center justify-center p-6 text-center bg-synap-50 dark:bg-synap-900/20 hover:bg-synap-100 dark:hover:bg-synap-900/30 transition cursor-pointer min-h-[120px] relative"
+                                    @click="() => $refs.imagesInput.click()"
+                                    @dragover.prevent="isDragging = true"
+                                    @dragleave="isDragging = false"
+                                    @drop.prevent="handleDrop">
+                                    <input type="file" id="id_images" name="images" accept="image/png,image/jpeg,image/jpg,image/gif" multiple class="hidden" x-ref="imagesInput" @change="handleFileSelect">
+                                    <svg class="w-10 h-10 text-synap-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16.5V19a2 2 0 002 2h12a2 2 0 002-2v-2.5"/></svg>
+                                    <span class="text-synap-600 dark:text-synap-400 font-semibold text-sm">{% trans 'Upload images' %}</span>
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "PNG, JPG, GIF up to 10MB each. Max 250 images." %}</span>
+                                    <span class="text-xs text-gray-400 dark:text-gray-500">{% trans "Drag and drop or click to select files" %}</span>
+                                    <p id="image_error" class="text-red-500 text-xs mt-2 hidden transition-opacity opacity-0"></p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- Campo oculto para el orden de imágenes -->
         <input type="hidden" id="images_order" name="images_order" value="">
     </form>
 </div>
 
 <!-- Modal reutilizable para crear/editar entidades relacionadas -->
-<div id="entityModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
-  <div class="bg-white rounded-lg shadow-lg w-full max-w-lg p-6 relative animate-fadeIn">
-    <button id="closeEntityModal" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-xl">&times;</button>
-    <div id="entityModalContent" class="mt-2"></div>
-  </div>
+<div id="entityModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900" id="modalTitle">{% trans "Create" %}</h3>
+                <button onclick="closeEntityModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modalContent">
+                <!-- El contenido se cargará dinámicamente -->
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- Lightbox para zoom con animación fade-in -->
-<div id="lightboxModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 hidden transition-opacity duration-300 opacity-0">
-    <img id="lightboxImg" src="#" class="max-h-[80vh] max-w-[90vw] rounded-xl shadow-2xl border-4 border-white animate-fadeIn" alt="{% trans 'Zoom image' %}">
-    <button onclick="closeLightbox()" class="absolute top-6 right-8 text-white text-3xl font-bold">&times;</button>
+<!-- Lightbox para imágenes -->
+<div id="lightbox" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+    <div class="relative max-w-4xl max-h-full p-4">
+        <img id="lightbox-img" src="" alt="{% trans 'Product image' %}" class="max-w-full max-h-full object-contain">
+        <button onclick="closeLightbox()" class="absolute top-4 right-4 text-white hover:text-gray-300">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    </div>
 </div>
-
-<style>
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-.animate-fadeIn { animation: fadeIn 0.3s ease; }
-.draggable-image.dragging { opacity: 0.5; box-shadow: 0 0 0 4px #a78bfa; transform: scale(1.05); z-index: 10; }
-.draggable-image.drag-over { box-shadow: 0 0 0 4px #f472b6; }
-</style>
 
 <script>
 function productForm() {
     return {
-        previewImages: [],
-        fileInputId: 'id_images',
+        sku: '{{ form.sku.value|default:"" }}',
+        price: '{{ form.price.value|default:"" }}',
+        sale_price: '{{ form.sale_price.value|default:"" }}',
+        cost_price: '{{ form.cost_price.value|default:"" }}',
+        profit_margin: '{{ form.profit_margin.value|default:"" }}',
+        previewImages: window._initialProductImages ? window._initialProductImages.map(img => ({...img})) : [],
         isDragging: false,
-        price: '{{ form.price.value|default_if_none:"" }}',
-        sale_price: '{{ form.sale_price.value|default_if_none:"" }}',
-        cost_price: '{{ form.cost_price.value|default_if_none:"" }}',
-        profit_margin: '',
+        fileInputId: 'id_images',
         handleFileSelect(event) {
             const files = event.target.files;
             for (let i = 0; i < files.length && this.previewImages.length < 250; i++) {
@@ -369,8 +426,12 @@ function closeEntityModal() {
   document.getElementById('entityModal').classList.add('hidden');
   document.getElementById('entityModalContent').innerHTML = '';
 }
-document.getElementById('closeEntityModal').onclick = closeEntityModal;
-document.getElementById('entityModal').onclick = function(e) { if (e.target === this) closeEntityModal(); };
+if (document.getElementById('closeEntityModal')) {
+    document.getElementById('closeEntityModal').onclick = closeEntityModal;
+}
+if (document.getElementById('entityModal')) {
+    document.getElementById('entityModal').onclick = function(e) { if (e.target === this) closeEntityModal(); };
+}
 // Manejar envío del formulario en el modal
 function attachEntityFormHandler(selectId) {
   const form = document.querySelector('#entityModalContent form');
@@ -934,16 +995,16 @@ if (subcategoryInput) {
 
 // Lightbox con animación fade-in
 function openLightbox(url) {
-    const modal = document.getElementById('lightboxModal');
-    const img = document.getElementById('lightboxImg');
+    const modal = document.getElementById('lightbox');
+    const img = document.getElementById('lightbox-img');
     img.src = url;
     modal.classList.remove('hidden');
     setTimeout(() => modal.classList.remove('opacity-0'), 10);
 }
 function closeLightbox() {
-    const modal = document.getElementById('lightboxModal');
-    modal.classList.add('opacity-0');
-    setTimeout(() => modal.classList.add('hidden'), 300);
+    const modal = document.getElementById('lightbox');
+    modal.classList.add('hidden');
+    setTimeout(() => modal.classList.add('opacity-0'), 300);
 }
 window.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') closeLightbox();
@@ -1059,6 +1120,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Script de tabs optimizado
+function initializeTabs() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    if (tabLinks.length === 0 || tabContents.length === 0) {
+        // Si no hay elementos de pestañas, reintentar después
+        setTimeout(initializeTabs, 100);
+        return;
+    }
+    
+    tabLinks.forEach(tab => {
+        tab.addEventListener('click', function() {
+            const targetTab = this.getAttribute('data-tab');
+            
+            // Remover clases activas de todas las pestañas
+            tabLinks.forEach(t => {
+                t.classList.remove('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+                t.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            });
+            
+            // Ocultar todos los contenidos
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Activar la pestaña clickeada
+            this.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            this.classList.add('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+            
+            // Mostrar el contenido correspondiente
+            const targetContent = document.getElementById(`tab-${targetTab}`);
+            if (targetContent) {
+                targetContent.classList.remove('hidden');
+            }
+        });
+    });
+    
+    // Activar la pestaña por defecto (Identification)
+    const defaultTab = document.querySelector('.tab-link[data-tab="identification"]');
+    if (defaultTab) {
+        defaultTab.click();
+    }
+}
+
+// Inicializar pestañas cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeTabs);
+} else {
+    initializeTabs();
+}
 </script>
 {% if form.instance.pk and form.instance.images.exists %}
     <script>

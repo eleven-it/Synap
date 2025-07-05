@@ -1,0 +1,172 @@
+{% extends "theme/base_app.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Delete Tax" %} - {{ empresa.nombre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-container {
+        @apply max-w-md mx-auto;
+    }
+    .delete-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden;
+    }
+    .delete-header {
+        @apply bg-red-50 dark:bg-red-900/20 px-6 py-4 border-b border-red-200 dark:border-red-800;
+    }
+    .delete-icon {
+        @apply w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mx-auto mb-4;
+    }
+    .delete-content {
+        @apply px-6 py-6;
+    }
+    .tax-info {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6;
+    }
+    .btn-danger {
+        @apply w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200;
+    }
+    .btn-secondary {
+        @apply w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors duration-200;
+    }
+    .warning-text {
+        @apply text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="delete-container">
+        <div class="delete-card">
+            <div class="delete-header">
+                <div class="delete-icon">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-center text-lg font-medium text-red-800 dark:text-red-200">
+                    {% trans "Delete Tax" %}
+                </h2>
+            </div>
+            
+            <div class="delete-content">
+                <div class="warning-text">
+                    <div class="flex">
+                        <svg class="w-5 h-5 text-red-400 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <div>
+                            <p class="font-medium">{% trans "This action cannot be undone" %}</p>
+                            <p class="text-xs mt-1">{% trans "This will permanently delete the tax and all associated data" %}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tax-info">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                        {% trans "Tax Information" %}
+                    </h3>
+                    <dl class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Name" %}:</dt>
+                            <dd class="text-gray-900 dark:text-white font-medium">{{ tax.name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Code" %}:</dt>
+                            <dd class="text-gray-900 dark:text-white">{{ tax.code }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Amount" %}:</dt>
+                            <dd class="text-gray-900 dark:text-white">
+                                {% if tax.amount_type == 'percent' %}
+                                    {{ tax.amount }}%
+                                {% else %}
+                                    ${{ tax.amount|floatformat:2 }}
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% if tax.tax_group %}
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Group" %}:</dt>
+                            <dd class="text-gray-900 dark:text-white">{{ tax.tax_group.name }}</dd>
+                        </div>
+                        {% endif %}
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Status" %}:</dt>
+                            <dd class="text-gray-900 dark:text-white">
+                                {% if tax.is_active %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                        {% trans "Active" %}
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                        {% trans "Inactive" %}
+                                    </span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+                
+                {% if related_objects %}
+                <div class="warning-text">
+                    <div class="flex">
+                        <svg class="w-5 h-5 text-yellow-400 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <div>
+                            <p class="font-medium text-yellow-800 dark:text-yellow-200">{% trans "Related objects found" %}</p>
+                            <p class="text-xs mt-1 text-yellow-700 dark:text-yellow-300">
+                                {% trans "This tax is being used in other parts of the system. Deleting it may affect existing data." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <form method="post" class="space-y-4">
+                    {% csrf_token %}
+                    
+                    <div class="flex space-x-3">
+                        <a href="{% url 'accounting:tax_list' %}" class="btn-secondary">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            {% trans "Cancel" %}
+                        </a>
+                        <button type="submit" class="btn-danger" onclick="return confirmDelete()">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            {% trans "Delete Tax" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete() {
+    return confirm('{% trans "Are you absolutely sure you want to delete this tax? This action cannot be undone." %}');
+}
+
+// Animación de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    const card = document.querySelector('.delete-card');
+    card.style.opacity = '0';
+    card.style.transform = 'scale(0.95) translateY(20px)';
+    
+    setTimeout(() => {
+        card.style.transition = 'all 0.3s ease';
+        card.style.opacity = '1';
+        card.style.transform = 'scale(1) translateY(0)';
+    }, 100);
+});
+</script>
+{% endblock %} 
