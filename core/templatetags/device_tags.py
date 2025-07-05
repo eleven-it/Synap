@@ -66,4 +66,12 @@ def device_type(context):
     request = context.get('request')
     if request and hasattr(request, 'device_type'):
         return request.device_type
-    return 'desktop' 
+    return 'desktop'
+
+@register.filter
+def get_item(dictionary, key):
+    """Permite acceder a un valor de un diccionario por clave en los templates."""
+    try:
+        return dictionary.get(key)
+    except Exception:
+        return None 

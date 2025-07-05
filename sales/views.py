@@ -239,14 +239,14 @@ def client_delete(request, pk):
             messages.error(request, f'Error al eliminar cliente: {str(e)}')
     
     context = {'client': client}
-    return render(request, 'sales/clients/client_confirm_delete.html', context)
+    return render(request, 'sales/clients/client_list.html', context)
 
 
 # Vistas de Pedidos de Venta
 @login_required
 def sales_order_list(request):
     """Lista de pedidos de venta"""
-    orders = SalesOrder.objects.select_related('client').order_by('-created_at')
+    orders = SalesOrder.objects.select_related('client').order_by('-id')
     
     # Filtros
     search = request.GET.get('search', '')
@@ -313,6 +313,7 @@ def sales_order_create(request):
         'clients': Client.objects.filter(is_active=True),
         'payment_terms': PaymentTerm.objects.filter(is_active=True),
         'price_lists': PriceList.objects.filter(is_active=True),
+        'today': timezone.now().date(),
     }
     
     return render(request, 'sales/orders/sales_order_form.html', context)
@@ -328,7 +329,7 @@ def sales_order_detail(request, pk):
         'lines': order.lines.select_related('product_variant__product').all(),
     }
     
-    return render(request, 'sales/orders/sales_order_detail.html', context)
+    return render(request, 'sales/orders/sales_order_list.html', context)
 
 
 @login_required
@@ -378,7 +379,7 @@ def sales_order_delete(request, pk):
             messages.error(request, f'Error al eliminar pedido: {str(e)}')
     
     context = {'order': order}
-    return render(request, 'sales/orders/sales_order_confirm_delete.html', context)
+    return render(request, 'sales/orders/sales_order_list.html', context)
 
 
 @login_required
@@ -409,7 +410,7 @@ def sales_order_approve(request, pk):
         return redirect('sales:sales_order_detail', pk=order.pk)
     
     context = {'order': order}
-    return render(request, 'sales/orders/sales_order_approve.html', context)
+    return render(request, 'sales/orders/sales_order_list.html', context)
 
 
 @login_required
@@ -438,7 +439,7 @@ def sales_order_cancel(request, pk):
         return redirect('sales:sales_order_detail', pk=order.pk)
     
     context = {'order': order}
-    return render(request, 'sales/orders/sales_order_cancel.html', context)
+    return render(request, 'sales/orders/sales_order_list.html', context)
 
 
 @login_required
@@ -475,29 +476,24 @@ def sales_order_create_invoice(request, pk):
                         discount_percentage=line.discount_percentage,
                         discount_amount=line.discount_amount,
                         tax_percentage=line.tax_percentage,
-                        notes=line.notes
+                        tax_amount=line.tax_amount,
+                        total=line.total
                     )
                 
-                # Calcular totales
-                invoice.calculate_totals()
-                invoice.save()
-                
-                messages.success(request, f'Factura "{invoice.invoice_number}" creada correctamente.')
+                messages.success(request, f'Factura creada correctamente desde pedido "{order.order_number}".')
                 return redirect('sales:invoice_detail', pk=invoice.pk)
             except Exception as e:
                 messages.error(request, f'Error al crear factura: {str(e)}')
-        
-        return redirect('sales:sales_order_detail', pk=order.pk)
     
     context = {'order': order}
-    return render(request, 'sales/orders/sales_order_create_invoice.html', context)
+    return render(request, 'sales/orders/sales_order_list.html', context)
 
 
 # Vistas de Facturas (básicas)
 @login_required
 def invoice_list(request):
     """Lista de facturas"""
-    invoices = Invoice.objects.select_related('client').order_by('-created_at')
+    invoices = Invoice.objects.select_related('client').order_by('-invoice_date')
     
     # Filtros
     search = request.GET.get('search', '')
@@ -528,7 +524,7 @@ def invoice_detail(request, pk):
     context = {
         'invoice': invoice,
         'lines': invoice.lines.select_related('product_variant__product').all(),
-        'payments': Payment.objects.filter(invoice=invoice).order_by('-created_at'),
+        'payments': Payment.objects.filter(invoice=invoice).order_by('-payment_date'),
     }
     
     return render(request, 'sales/invoices/invoice_detail.html', context)
@@ -538,7 +534,7 @@ def invoice_detail(request, pk):
 @login_required
 def payment_list(request):
     """Lista de pagos"""
-    payments = Payment.objects.select_related('client', 'invoice').order_by('-created_at')
+    payments = Payment.objects.select_related('client', 'invoice').order_by('-payment_date')
     
     context = {
         'payments': payments,
@@ -551,33 +547,33 @@ def payment_list(request):
 @login_required
 def delivery_order_list(request):
     """Lista de órdenes de entrega"""
-    deliveries = DeliveryOrder.objects.select_related('client', 'sales_order', 'warehouse').order_by('-created_at')
+    deliveries = DeliveryOrder.objects.select_related('sales_order', 'branch', 'warehouse').order_by('-delivery_date')
     
     context = {
         'deliveries': deliveries,
     }
     
-    return render(request, 'sales/deliveries/delivery_order_list.html', context)
+    return render(request, 'sales/deliveries/delivery_list.html', context)
 
 
 # Vistas de Devoluciones (básicas)
 @login_required
 def return_delivery_list(request):
     """Lista de devoluciones"""
-    returns = ReturnDelivery.objects.select_related('client', 'sales_order').order_by('-created_at')
+    returns = ReturnDelivery.objects.select_related('sales_order').order_by('-return_date')
     
     context = {
         'returns': returns,
     }
     
-    return render(request, 'sales/returns/return_delivery_list.html', context)
+    return render(request, 'sales/returns/return_list.html', context)
 
 
 # Vistas de Notas de Crédito (básicas)
 @login_required
 def credit_note_list(request):
     """Lista de notas de crédito"""
-    credit_notes = CreditNote.objects.select_related('client', 'invoice').order_by('-created_at')
+    credit_notes = CreditNote.objects.select_related('invoice').order_by('-credit_date')
     
     context = {
         'credit_notes': credit_notes,
@@ -590,7 +586,7 @@ def credit_note_list(request):
 @login_required
 def price_list_list(request):
     """Lista de listas de precios"""
-    price_lists = PriceList.objects.all().order_by('-created_at')
+    price_lists = PriceList.objects.all().order_by('-id')
     
     context = {
         'price_lists': price_lists,
@@ -602,7 +598,7 @@ def price_list_list(request):
 @login_required
 def payment_term_list(request):
     """Lista de condiciones de pago"""
-    payment_terms = PaymentTerm.objects.all().order_by('-created_at')
+    payment_terms = PaymentTerm.objects.all().order_by('-id')
     
     context = {
         'payment_terms': payment_terms,
@@ -615,120 +611,139 @@ def payment_term_list(request):
 @login_required
 def reports_dashboard(request):
     """Dashboard de reportes"""
-    return render(request, 'sales/reports/reports_dashboard.html')
+    return render(request, 'sales/reports/reports.html')
 
 
 @login_required
 def sales_summary_report(request):
     """Reporte de resumen de ventas"""
-    return render(request, 'sales/reports/sales_summary_report.html')
+    return render(request, 'sales/reports/reports_detail.html')
 
 
 @login_required
 def client_analysis_report(request):
     """Reporte de análisis de clientes"""
-    return render(request, 'sales/reports/client_analysis_report.html')
+    return render(request, 'sales/reports/reports_detail.html')
 
 
 @login_required
 def product_performance_report(request):
     """Reporte de rendimiento de productos"""
-    return render(request, 'sales/reports/product_performance_report.html')
+    return render(request, 'sales/reports/reports_detail.html')
 
 
 # Vistas placeholder para el resto de funcionalidades
 def invoice_create(request):
-    return render(request, 'sales/invoices/invoice_form.html')
+    context = {'today': timezone.now().date()}
+    return render(request, 'sales/invoices/invoice_form.html', context)
 
 def invoice_edit(request, pk):
-    return render(request, 'sales/invoices/invoice_form.html')
+    context = {'today': timezone.now().date()}
+    return render(request, 'sales/invoices/invoice_form.html', context)
 
 def invoice_delete(request, pk):
-    return render(request, 'sales/invoices/invoice_confirm_delete.html')
+    return render(request, 'sales/invoices/invoice_list.html')
 
 def invoice_mark_paid(request, pk):
-    return render(request, 'sales/invoices/invoice_mark_paid.html')
+    return render(request, 'sales/invoices/invoice_detail.html')
 
 def invoice_create_payment(request, pk):
-    return render(request, 'sales/invoices/invoice_create_payment.html')
+    return render(request, 'sales/invoices/invoice_detail.html')
 
 def payment_create(request):
-    return render(request, 'sales/payments/payment_form.html')
+    context = {'today': timezone.now().date()}
+    return render(request, 'sales/payments/payment_form.html', context)
 
 def payment_detail(request, pk):
     return render(request, 'sales/payments/payment_detail.html')
 
 def payment_edit(request, pk):
-    return render(request, 'sales/payments/payment_form.html')
+    context = {'today': timezone.now().date()}
+    return render(request, 'sales/payments/payment_form.html', context)
 
 def payment_delete(request, pk):
-    return render(request, 'sales/payments/payment_confirm_delete.html')
+    return render(request, 'sales/payments/payment_list.html')
 
 def delivery_order_create(request):
-    return render(request, 'sales/deliveries/delivery_order_form.html')
+    return render(request, 'sales/deliveries/delivery_list.html')
 
 def delivery_order_detail(request, pk):
-    return render(request, 'sales/deliveries/delivery_order_detail.html')
+    return render(request, 'sales/deliveries/delivery_detail.html')
 
 def delivery_order_edit(request, pk):
-    return render(request, 'sales/deliveries/delivery_order_form.html')
+    return render(request, 'sales/deliveries/delivery_list.html')
 
 def delivery_order_delete(request, pk):
-    return render(request, 'sales/deliveries/delivery_order_confirm_delete.html')
+    return render(request, 'sales/deliveries/delivery_list.html')
 
 def delivery_order_process(request, pk):
-    return render(request, 'sales/deliveries/delivery_order_process.html')
+    return render(request, 'sales/deliveries/delivery_detail.html')
 
 def return_delivery_create(request):
-    return render(request, 'sales/returns/return_delivery_form.html')
+    return render(request, 'sales/returns/return_list.html')
 
 def return_delivery_detail(request, pk):
-    return render(request, 'sales/returns/return_delivery_detail.html')
+    return render(request, 'sales/returns/return_detail.html')
 
 def return_delivery_edit(request, pk):
-    return render(request, 'sales/returns/return_delivery_form.html')
+    return render(request, 'sales/returns/return_list.html')
 
 def return_delivery_delete(request, pk):
-    return render(request, 'sales/returns/return_delivery_confirm_delete.html')
+    return render(request, 'sales/returns/return_list.html')
 
 def return_delivery_approve(request, pk):
-    return render(request, 'sales/returns/return_delivery_approve.html')
+    return render(request, 'sales/returns/return_detail.html')
 
 def credit_note_create(request):
-    return render(request, 'sales/credit_notes/credit_note_form.html')
+    return render(request, 'sales/credit_notes/credit_note_list.html')
 
 def credit_note_detail(request, pk):
     return render(request, 'sales/credit_notes/credit_note_detail.html')
 
 def credit_note_edit(request, pk):
-    return render(request, 'sales/credit_notes/credit_note_form.html')
+    return render(request, 'sales/credit_notes/credit_note_list.html')
 
 def credit_note_delete(request, pk):
-    return render(request, 'sales/credit_notes/credit_note_confirm_delete.html')
+    return render(request, 'sales/credit_notes/credit_note_list.html')
 
 def credit_note_apply(request, pk):
-    return render(request, 'sales/credit_notes/credit_note_apply.html')
+    return render(request, 'sales/credit_notes/credit_note_detail.html')
 
 def price_list_create(request):
-    return render(request, 'sales/config/price_list_form.html')
+    return render(request, 'sales/config/price_list_list.html')
 
 def price_list_detail(request, pk):
     return render(request, 'sales/config/price_list_detail.html')
 
 def price_list_edit(request, pk):
-    return render(request, 'sales/config/price_list_form.html')
+    return render(request, 'sales/config/price_list_list.html')
 
 def price_list_delete(request, pk):
-    return render(request, 'sales/config/price_list_confirm_delete.html')
+    return render(request, 'sales/config/price_list_list.html')
+
+def price_list_deactivate(request, pk):
+    return render(request, 'sales/config/price_list_detail.html')
+
+def price_list_activate(request, pk):
+    return render(request, 'sales/config/price_list_detail.html')
+
+def price_list_item_add(request, pk):
+    return render(request, 'sales/config/price_list_detail.html')
+
+def price_list_item_edit(request, pk):
+    return render(request, 'sales/config/price_list_detail.html')
+
+def price_list_item_delete(request, pk):
+    return render(request, 'sales/config/price_list_detail.html')
 
 def payment_term_create(request):
-    return render(request, 'sales/config/payment_term_form.html')
+    return render(request, 'sales/config/payment_terms_list.html')
 
 def payment_term_detail(request, pk):
-    return render(request, 'sales/config/payment_term_detail.html')
+    return render(request, 'sales/config/payment_terms_detail.html')
 
 def payment_term_edit(request, pk):
-    return render(request, 'sales/config/payment_term_form.html')
+    return render(request, 'sales/config/payment_terms_list.html')
 
 def payment_term_delete(request, pk):
-    return render(request, 'sales/config/payment_term_confirm_delete.html')
+    return render(request, 'sales/config/payment_terms_list.html')

@@ -25,14 +25,66 @@ logger = logging.getLogger(__name__)
 # Configuración principal de apps/modulos
 APPS_MENU = [
     {
+        "id": "sales",
+        "nombre": _("Sales"),
+        "permiso": "sales.ver",
+        "url": "sales:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 3h6v6H3V3zm0 12h6v6H3v-6zm12-12h6v6h-6V3zm0 12h6v6h-6v-6z'/></svg>""",
+        "orden": 1,
+        "color": "orange",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {"label": _("Dashboard"), "url": "sales:dashboard", "icon": "dashboard", "permission": "sales.ver"},
+                ]
+            },
+            {
+                "seccion": _("Clients"),
+                "items": [
+                    {"label": _("Clients"), "url": "sales:client_list", "icon": "groups", "permission": "sales.ver_client"},
+                    {"label": _("Create Client"), "url": "sales:client_create", "icon": "person_add", "permission": "sales.crear_client"},
+                ]
+            },
+            {
+                "seccion": _("Orders"),
+                "items": [
+                    {"label": _("Orders"), "url": "sales:sales_order_list", "icon": "assignment", "permission": "sales.ver_order"},
+                    {"label": _("Create Order"), "url": "sales:sales_order_create", "icon": "add_box", "permission": "sales.crear_order"},
+                ]
+            },
+            {
+                "seccion": _("Invoices & Payments"),
+                "items": [
+                    {"label": _("Invoices"), "url": "sales:invoice_list", "icon": "receipt_long", "permission": "sales.ver_invoice"},
+                    {"label": _("Payments"), "url": "sales:payment_list", "icon": "payments", "permission": "sales.ver_payment"},
+                ]
+            },
+            {
+                "seccion": _("Deliveries & Returns"),
+                "items": [
+                    {"label": _("Deliveries"), "url": "sales:delivery_order_list", "icon": "local_shipping", "permission": "sales.ver_delivery"},
+                    {"label": _("Returns"), "url": "sales:return_delivery_list", "icon": "undo", "permission": "sales.ver_return"},
+                    {"label": _("Credit Notes"), "url": "sales:credit_note_list", "icon": "note_add", "permission": "sales.ver_credit_note"},
+                ]
+            },
+            {
+                "seccion": _("Reports & Config"),
+                "items": [
+                    {"label": _("Reports"), "url": "sales:reports_dashboard", "icon": "bar_chart", "permission": "sales.ver_report"},
+                    {"label": _("Price Lists"), "url": "sales:price_list_list", "icon": "price_change", "permission": "sales.ver_price_list"},
+                    {"label": _("Payment Terms"), "url": "sales:payment_term_list", "icon": "schedule", "permission": "sales.ver_payment_term"},
+                ]
+            }
+        ]
+    },
+    {
         "id": "inventory",
         "nombre": _("Inventory"),
         "permiso": "inventory.ver",
         "url": "inventory:stock_dashboard",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/>
-        </svg>""",
-        "orden": 1,
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/></svg>""",
+        "orden": 2,
         "color": "green",
         "submenus": [
             {
@@ -111,7 +163,7 @@ APPS_MENU = [
         "permiso": "tiendanube.access",
         "url": "tiendanube:dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M17.5 19a4.5 4.5 0 100-9 5.5 5.5 0 00-10.9 1.5A4.5 4.5 0 006.5 19h11z'/></svg>""",
-        "orden": 2,
+        "orden": 3,
         "color": "purple",
         "submenus": [
             {
@@ -155,11 +207,8 @@ APPS_MENU = [
         "nombre": _("Settings"),
         "permiso": "usuarios.dashboard",
         "url": "core:dashboard",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' />
-            <path stroke-linecap='round' stroke-linejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />
-        </svg>""",
-        "orden": 3,
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' /><path stroke-linecap='round' stroke-linejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /></svg>""",
+        "orden": 4,
         "color": "gray",
         "submenus": [
             {
@@ -248,7 +297,7 @@ APPS_MENU = [
                 ]
             }
         ]
-    }
+    },
 ]
 
 # Apps comentadas para futuras implementaciones

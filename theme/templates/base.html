@@ -23,11 +23,6 @@
     </header>
     <div class="pt-16 min-h-screen w-full">
         <main class="flex-1 p-8 w-full max-w-full">
-            {% if empresa_activa.logo %}
-              <div class="hidden md:flex w-full justify-center items-center my-8">
-                <img src="{{ empresa_activa.logo.url }}" alt="Logo" class="max-h-64 max-w-[22vw] object-contain" style="background: transparent;"/>
-              </div>
-            {% endif %}
             {% block content %}{% endblock content %}
         </main>
     </div>

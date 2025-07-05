@@ -1,337 +1,139 @@
-{% extends 'base.html' %}
+{% extends 'sales/sales_base.html' %}
 {% load static %}
 
-{% block title %}
-    {% if order %}Editar Pedido{% else %}Nuevo Pedido{% endif %} - Synap
+{% block page_title %}
+    <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Nuevo</h1>
 {% endblock %}
 
-{% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
+{% block page_actions %}
+    <button class="border border-indigo-500 text-indigo-600 dark:text-indigo-300 px-4 py-1 rounded-md bg-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900 transition">Confirmar</button>
+    <button class="border border-gray-300 text-gray-700 dark:text-gray-200 px-4 py-1 rounded-md bg-transparent ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Vista previa</button>
+{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6 animate-fade-in">
+    <form id="order-form" autocomplete="off" class="space-y-8">
+        <!-- Encabezado alineado a dos columnas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 items-start">
+            <div class="space-y-4">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        {% if order %}Editar Pedido{% else %}Nuevo Pedido{% endif %}
-                    </h1>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {% if order %}Modificar pedido de venta{% else %}Crear un nuevo pedido de venta{% endif %}
-                    </p>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente <span class="text-red-500">*</span></label>
+                    <select name="client" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5" required>
+                        <option value="">Seleccionar cliente</option>
+                        {% for client in clients %}
+                            <option value="{{ client.id }}">{{ client.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'sales:sales_order_list' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                        Volver
-                    </a>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plantilla de cotización</label>
+                    <input type="text" name="template" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5" placeholder="Opcional">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vencimiento</label>
+                    <input type="date" name="due_date" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de cotización</label>
+                    <input type="date" name="order_date" value="{{ today|date:'Y-m-d' }}" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lista de precios</label>
+                    <select name="price_list" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
+                        <option value="">Seleccionar</option>
+                        {% for pl in price_lists %}
+                            <option value="{{ pl.id }}">{{ pl.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Términos de pago</label>
+                    <select name="payment_term" class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-1.5">
+                        <option value="">Seleccionar</option>
+                        {% for pt in payment_terms %}
+                            <option value="{{ pt.id }}">{{ pt.name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Form -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <form method="post" id="order-form" class="space-y-6">
-            {% csrf_token %}
-            
-            <!-- Order Header -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Información del Pedido</h3>
+        <!-- Tabs planos -->
+        <div class="border-b border-gray-200 dark:border-gray-700 flex gap-6 text-sm font-medium mb-2">
+            <button type="button" class="tab-link text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-500 pb-2 bg-transparent focus:outline-none">Líneas de la orden</button>
+            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Productos opcionales</button>
+            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Otra información</button>
+            <button type="button" class="tab-link text-gray-500 dark:text-gray-400 border-b-2 border-transparent pb-2 bg-transparent focus:outline-none">Firma del cliente</button>
+        </div>
+
+        <!-- Tabla minimalista de líneas de la orden -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-gray-900 dark:text-gray-100 border-separate border-spacing-y-1">
+                <thead>
+                    <tr class="text-left">
+                        <th class="font-normal px-2 py-1">Producto</th>
+                        <th class="font-normal px-2 py-1">Descripción</th>
+                        <th class="font-normal px-2 py-1">Cantidad</th>
+                        <th class="font-normal px-2 py-1">UdM</th>
+                        <th class="font-normal px-2 py-1">Precio u.</th>
+                        <th class="font-normal px-2 py-1">Impuestos</th>
+                        <th class="font-normal px-2 py-1">% de desc.</th>
+                        <th class="font-normal px-2 py-1">Impuestos</th>
+                        <th class="font-normal px-2 py-1"></th>
+                    </tr>
+                </thead>
+                <tbody id="order-lines" class="align-top">
+                    <!-- Aquí se renderizan dinámicamente las líneas de la orden -->
+                </tbody>
+            </table>
+        </div>
+        <div class="flex gap-4 mt-2 text-sm">
+            <button type="button" class="border border-indigo-300 text-indigo-600 dark:text-indigo-300 rounded px-2 py-1 bg-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900 transition">Agregar un producto</button>
+            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Agregar una sección</button>
+            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Agregar una nota</button>
+            <button type="button" class="border border-gray-300 text-gray-500 dark:text-gray-400 rounded px-2 py-1 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 transition">Catálogo</button>
+        </div>
+
+        <!-- Términos y totales -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 items-end">
+            <div class="md:col-span-2">
+                <textarea class="w-full border-0 border-b border-gray-300 dark:border-gray-600 bg-transparent focus:ring-0 focus:border-indigo-500 text-base text-gray-900 dark:text-white py-2 resize-none" rows="2" placeholder="Términos y condiciones..."></textarea>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+                <div class="flex gap-2 items-center">
+                    <span class="text-gray-500 dark:text-gray-400">Subtotal:</span>
+                    <span class="font-medium text-gray-900 dark:text-white" id="subtotal">$0.00</span>
                 </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <label for="client" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Cliente <span class="text-red-500">*</span>
-                            </label>
-                            <select name="client" id="client" required
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                                <option value="">Seleccionar cliente</option>
-                                {% for client in clients %}
-                                    <option value="{{ client.id }}" {% if order.client.id == client.id or client_filter == client.id %}selected{% endif %}>
-                                        {{ client.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label for="order_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Fecha del Pedido <span class="text-red-500">*</span>
-                            </label>
-                            <input type="date" name="order_date" id="order_date" 
-                                   value="{{ order.order_date|date:'Y-m-d'|default:today }}" required
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                        </div>
-                        
-                        <div>
-                            <label for="delivery_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Fecha de Entrega
-                            </label>
-                            <input type="date" name="delivery_date" id="delivery_date" 
-                                   value="{{ order.delivery_date|date:'Y-m-d'|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                        </div>
-                        
-                        <div>
-                            <label for="currency" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Moneda <span class="text-red-500">*</span>
-                            </label>
-                            <select name="currency" id="currency" required
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                                {% for currency in currencies %}
-                                    <option value="{{ currency.code }}" {% if order.currency == currency.code or not order %}selected{% endif %}>
-                                        {{ currency.code }} - {{ currency.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label for="payment_terms" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Condiciones de Pago
-                            </label>
-                            <select name="payment_terms" id="payment_terms"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                                <option value="">Seleccionar condiciones</option>
-                                {% for term in payment_terms %}
-                                    <option value="{{ term.id }}" {% if order.payment_terms.id == term.id %}selected{% endif %}>
-                                        {{ term.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label for="origin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Origen
-                            </label>
-                            <input type="text" name="origin" id="origin" value="{{ order.origin|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="Web, Tienda, etc.">
-                        </div>
-                    </div>
-                    
-                    <div class="mt-6">
-                        <label for="notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Notas
-                        </label>
-                        <textarea name="notes" id="notes" rows="3"
-                                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                  placeholder="Notas adicionales del pedido">{{ order.notes|default:'' }}</textarea>
-                    </div>
+                <div class="flex gap-2 items-center">
+                    <span class="text-gray-500 dark:text-gray-400">IVA 21%:</span>
+                    <span class="font-medium text-gray-900 dark:text-white" id="tax">$0.00</span>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <span class="text-gray-500 dark:text-gray-400">Total:</span>
+                    <span class="font-bold text-gray-900 dark:text-white text-lg" id="total">$0.00</span>
                 </div>
             </div>
-
-            <!-- Order Lines -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Líneas del Pedido</h3>
-                        <button type="button" id="add-line" 
-                                class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            Agregar Línea
-                        </button>
-                    </div>
-                </div>
-                <div class="p-6">
-                    <div id="order-lines" class="space-y-4">
-                        <!-- Existing lines will be populated here -->
-                    </div>
-                    
-                    <!-- Totals -->
-                    <div class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-                        <div class="flex justify-end">
-                            <div class="w-64 space-y-2">
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-500 dark:text-gray-400">Subtotal:</span>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white" id="subtotal">$0.00</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-500 dark:text-gray-400">IVA:</span>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white" id="tax">$0.00</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-sm text-gray-500 dark:text-gray-400">Descuentos:</span>
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white" id="discounts">$0.00</span>
-                                </div>
-                                <div class="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
-                                    <span class="text-base font-medium text-gray-900 dark:text-white">Total:</span>
-                                    <span class="text-base font-bold text-gray-900 dark:text-white" id="total">$0.00</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Form Actions -->
-            <div class="flex justify-end space-x-3">
-                <a href="{% url 'sales:sales_order_list' %}" 
-                   class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                    Cancelar
-                </a>
-                <button type="submit"
-                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                    {% if order %}
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Actualizar Pedido
-                    {% else %}
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Crear Pedido
-                    {% endif %}
-                </button>
-            </div>
-        </form>
-    </div>
+        </div>
+    </form>
 </div>
 
-<!-- Template for order line -->
-<template id="order-line-template">
-    <div class="order-line border border-gray-200 dark:border-gray-600 rounded-lg p-4" data-line-index="">
-        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
-            <div class="md:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Producto <span class="text-red-500">*</span>
-                </label>
-                <select name="lines[][product]" class="product-select w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" required>
-                    <option value="">Seleccionar producto</option>
-                    {% for product in products %}
-                        <option value="{{ product.id }}" data-price="{{ product.sale_price }}" data-stock="{{ product.stock_quantity }}">
-                            {{ product.name }} - Stock: {{ product.stock_quantity }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Cantidad <span class="text-red-500">*</span>
-                </label>
-                <input type="number" name="lines[][quantity]" class="quantity-input w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" min="1" step="1" required>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Precio Unitario
-                </label>
-                <input type="number" name="lines[][unit_price]" class="unit-price-input w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white" min="0" step="0.01" required>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Total Línea
-                </label>
-                <input type="text" class="line-total w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-600 dark:text-white" readonly>
-            </div>
-            
-            <div class="flex items-end">
-                <button type="button" class="remove-line w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    </div>
-</template>
-
+<style>
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fade-in 0.5s cubic-bezier(.4,0,.2,1) both; }
+.table-minimal th, .table-minimal td { border: none !important; }
+</style>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const orderLinesContainer = document.getElementById('order-lines');
-    const addLineButton = document.getElementById('add-line');
-    const lineTemplate = document.getElementById('order-line-template');
-    let lineIndex = 0;
-
-    // Add initial line if no existing lines
-    if (orderLinesContainer.children.length === 0) {
-        addOrderLine();
-    }
-
-    addLineButton.addEventListener('click', addOrderLine);
-
-    function addOrderLine() {
-        const lineElement = lineTemplate.content.cloneNode(true);
-        const lineDiv = lineElement.querySelector('.order-line');
-        lineDiv.setAttribute('data-line-index', lineIndex);
-        
-        // Update form field names
-        lineDiv.querySelectorAll('select, input').forEach(input => {
-            input.name = input.name.replace('[]', `[${lineIndex}]`);
-        });
-        
-        orderLinesContainer.appendChild(lineDiv);
-        
-        // Add event listeners to new line
-        setupLineEventListeners(lineDiv);
-        lineIndex++;
-    }
-
-    function setupLineEventListeners(lineDiv) {
-        const productSelect = lineDiv.querySelector('.product-select');
-        const quantityInput = lineDiv.querySelector('.quantity-input');
-        const unitPriceInput = lineDiv.querySelector('.unit-price-input');
-        const lineTotalInput = lineDiv.querySelector('.line-total');
-        const removeButton = lineDiv.querySelector('.remove-line');
-
-        // Product selection
-        productSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption.value) {
-                const price = selectedOption.getAttribute('data-price');
-                unitPriceInput.value = price;
-                calculateLineTotal();
-            }
-        });
-
-        // Quantity and price changes
-        quantityInput.addEventListener('input', calculateLineTotal);
-        unitPriceInput.addEventListener('input', calculateLineTotal);
-
-        // Remove line
-        removeButton.addEventListener('click', function() {
-            lineDiv.remove();
-            calculateTotals();
-        });
-
-        function calculateLineTotal() {
-            const quantity = parseFloat(quantityInput.value) || 0;
-            const unitPrice = parseFloat(unitPriceInput.value) || 0;
-            const total = quantity * unitPrice;
-            lineTotalInput.value = '$' + total.toFixed(2);
-            calculateTotals();
-        }
-    }
-
-    function calculateTotals() {
-        let subtotal = 0;
-        document.querySelectorAll('.line-total').forEach(input => {
-            const value = parseFloat(input.value.replace('$', '')) || 0;
-            subtotal += value;
-        });
-
-        const tax = subtotal * 0.21; // 21% IVA
-        const discounts = 0; // Could be calculated based on discounts
-
-        document.getElementById('subtotal').textContent = '$' + subtotal.toFixed(2);
-        document.getElementById('tax').textContent = '$' + tax.toFixed(2);
-        document.getElementById('discounts').textContent = '$' + discounts.toFixed(2);
-        document.getElementById('total').textContent = '$' + (subtotal + tax - discounts).toFixed(2);
-    }
-
-    // Setup existing lines if any
-    document.querySelectorAll('.order-line').forEach(setupLineEventListeners);
+// Tabs planos
+const tabLinks = document.querySelectorAll('.tab-link');
+tabLinks.forEach(tab => {
+    tab.addEventListener('click', function() {
+        tabLinks.forEach(t => t.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'border-indigo-500'));
+        tabLinks.forEach(t => t.classList.add('text-gray-500', 'dark:text-gray-400', 'border-transparent'));
+        this.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+        this.classList.add('text-indigo-600', 'dark:text-indigo-400', 'border-indigo-500');
+    });
 });
 </script>
 {% endblock %} 

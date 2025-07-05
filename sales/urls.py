@@ -70,6 +70,11 @@ urlpatterns = [
     path('config/price-lists/<int:pk>/', views.price_list_detail, name='price_list_detail'),
     path('config/price-lists/<int:pk>/edit/', views.price_list_edit, name='price_list_edit'),
     path('config/price-lists/<int:pk>/delete/', views.price_list_delete, name='price_list_delete'),
+    path('config/price-lists/<int:pk>/deactivate/', views.price_list_deactivate, name='price_list_deactivate'),
+    path('config/price-lists/<int:pk>/activate/', views.price_list_activate, name='price_list_activate'),
+    path('config/price-lists/<int:pk>/items/add/', views.price_list_item_add, name='price_list_item_add'),
+    path('config/price-list-items/<int:pk>/edit/', views.price_list_item_edit, name='price_list_item_edit'),
+    path('config/price-list-items/<int:pk>/delete/', views.price_list_item_delete, name='price_list_item_delete'),
     
     path('config/payment-terms/', views.payment_term_list, name='payment_term_list'),
     path('config/payment-terms/create/', views.payment_term_create, name='payment_term_create'),
