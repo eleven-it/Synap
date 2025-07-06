@@ -1,0 +1,229 @@
+{% extends 'core/core_app_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% block purchases_title %}{% trans "Purchases" %}{% endblock %} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    .purchases-nav {
+        @apply bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700;
+    }
+    
+    .purchases-nav-item {
+        @apply px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200;
+    }
+    
+    .purchases-nav-item.active {
+        @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300;
+    }
+    
+    .purchases-nav-item:not(.active) {
+        @apply text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700;
+    }
+    
+    .purchases-content {
+        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8;
+    }
+    
+    .purchases-header {
+        @apply bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700;
+    }
+    
+    .purchases-header-content {
+        @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6;
+    }
+    
+    .btn-primary {
+        @apply inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200;
+    }
+    
+    .btn-secondary {
+        @apply inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200;
+    }
+    
+    .card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700;
+    }
+    
+    .card-header {
+        @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700;
+    }
+    
+    .card-body {
+        @apply p-6;
+    }
+    
+    .status-badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    }
+    
+    .status-draft { @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300; }
+    .status-pending { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300; }
+    .status-approved { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300; }
+    .status-rejected { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300; }
+    .status-converted { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300; }
+    .status-sent { @apply bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300; }
+    .status-confirmed { @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300; }
+    .status-received { @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300; }
+    .status-cancelled { @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="purchases-header">
+        <div class="purchases-header-content">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% block purchases_header %}{% trans "Purchases" %}{% endblock %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% block purchases_subheader %}{% trans "Manage your purchase operations" %}{% endblock %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    {% block purchases_actions %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="purchases-nav">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <nav class="flex space-x-8">
+                <a href="{% url 'purchases:dashboard' %}" 
+                   class="purchases-nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z"/>
+                    </svg>
+                    {% trans "Dashboard" %}
+                </a>
+                
+                <a href="{% url 'purchases:request_list' %}" 
+                   class="purchases-nav-item {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    {% trans "Requests" %}
+                </a>
+                
+                <a href="{% url 'purchases:quotation_list' %}" 
+                   class="purchases-nav-item {% if 'quotation' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    {% trans "Quotations" %}
+                </a>
+                
+                <a href="{% url 'purchases:order_list' %}" 
+                   class="purchases-nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                    </svg>
+                    {% trans "Orders" %}
+                </a>
+                
+                <a href="{% url 'purchases:receipt_list' %}" 
+                   class="purchases-nav-item {% if 'receipt' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                    {% trans "Receipts" %}
+                </a>
+                
+                <a href="{% url 'purchases:supplier_list' %}" 
+                   class="purchases-nav-item {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    {% trans "Suppliers" %}
+                </a>
+                
+                <a href="{% url 'purchases:rating_list' %}" 
+                   class="purchases-nav-item {% if 'rating' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                    </svg>
+                    {% trans "Ratings" %}
+                </a>
+                
+                <a href="{% url 'purchases:reports' %}" 
+                   class="purchases-nav-item {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                    {% trans "Reports" %}
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="purchases-content">
+        {% block purchases_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Funciones comunes para el módulo de compras
+    const PurchasesApp = {
+        // Formatear moneda
+        formatCurrency: function(amount, currency = 'USD') {
+            return new Intl.NumberFormat('es-AR', {
+                style: 'currency',
+                currency: currency
+            }).format(amount);
+        },
+        
+        // Formatear fecha
+        formatDate: function(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('es-AR');
+        },
+        
+        // Mostrar notificación
+        showNotification: function(message, type = 'success') {
+            // Implementar sistema de notificaciones
+            console.log(`${type}: ${message}`);
+        },
+        
+        // Confirmar acción
+        confirmAction: function(message, callback) {
+            if (confirm(message)) {
+                callback();
+            }
+        },
+        
+        // Actualizar estado de elementos
+        updateStatus: function(elementId, newStatus, newText) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.className = `status-badge status-${newStatus}`;
+                element.textContent = newText;
+            }
+        }
+    };
+    
+    // Inicializar cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', function() {
+        // Animaciones de entrada para las tarjetas
+        const cards = document.querySelectorAll('.card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+{% endblock %} 

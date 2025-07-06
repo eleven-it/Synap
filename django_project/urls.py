@@ -35,6 +35,8 @@ urlpatterns = [
     path('sales/', include('sales.urls', namespace='sales')),
     path('api/sales/', include('sales.api.urls')),
     path('accounting/', include('accounting.urls', namespace='accounting')),
+    path('purchases/', include('purchases.urls', namespace='purchases')),
+    path('api/purchases/', include('purchases.api.urls')),
 ]
 
 if settings.DEBUG:

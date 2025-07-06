@@ -1,9 +1,10 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from core.models import Empresa, Branch, Currency
 from .supplier import Supplier
 from .purchase_request import PurchaseRequest
+from django.conf import settings
 
 class PurchaseQuotation(models.Model):
     """
@@ -58,12 +59,12 @@ class PurchaseQuotation(models.Model):
     
     # Evaluación
     evaluation_score = models.PositiveIntegerField(_("Evaluation Score"), null=True, blank=True, 
-                                                 validators=[MinValueValidator(1)], max_value=10,
+                                                 validators=[MinValueValidator(1), MaxValueValidator(10)],
                                                  help_text=_("Score from 1 to 10"))
     evaluation_notes = models.TextField(_("Evaluation Notes"), blank=True)
     
     # Auditoría
-    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, related_name='created_quotations', verbose_name=_("Created By"))
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_quotations', verbose_name=_("Created By"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

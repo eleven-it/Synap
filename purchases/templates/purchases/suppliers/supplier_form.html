@@ -1,0 +1,251 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block purchases_title %}{% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}{% endblock %}
+
+{% block purchases_header %}{% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}{% endblock %}
+
+{% block purchases_subheader %}{% if form.instance.pk %}{% trans "Update supplier information" %}{% else %}{% trans "Register a new supplier" %}{% endif %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+    </svg>
+    {% trans "Back to List" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-4xl mx-auto">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="post" class="space-y-6" id="supplier-form">
+                {% csrf_token %}
+                
+                <!-- Información Básica -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                        {% trans "Basic Information" %}
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            {{ form.name|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.code|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.tax_id|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.supplier_category|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Información de Contacto -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                        {% trans "Contact Information" %}
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            {{ form.contact_person|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.email|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.phone|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.mobile|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dirección -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                        {% trans "Address" %}
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="md:col-span-2">
+                            {{ form.address|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.city|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.state|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.postal_code|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.country|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Condiciones Comerciales -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                        {% trans "Commercial Terms" %}
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            {{ form.payment_terms|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.delivery_terms|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.credit_limit|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.rating_class|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas -->
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
+                        {% trans "Additional Information" %}
+                    </h4>
+                    <div>
+                        {{ form.notes|as_crispy_field }}
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="btn-primary">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        {% if form.instance.pk %}{% trans "Update Supplier" %}{% else %}{% trans "Create Supplier" %}{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('supplier-form');
+    
+    // Validación en tiempo real
+    const inputs = form.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            validateField(this);
+        });
+        
+        input.addEventListener('input', function() {
+            clearFieldError(this);
+        });
+    });
+    
+    // Validación del formulario
+    form.addEventListener('submit', function(e) {
+        if (!validateForm()) {
+            e.preventDefault();
+            showNotification('{% trans "Please correct the errors below" %}', 'error');
+        }
+    });
+    
+    function validateField(field) {
+        const value = field.value.trim();
+        const fieldName = field.name;
+        
+        // Validaciones específicas
+        if (fieldName === 'email' && value) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                showFieldError(field, '{% trans "Please enter a valid email address" %}');
+                return false;
+            }
+        }
+        
+        if (fieldName === 'code' && value) {
+            if (value.length < 3) {
+                showFieldError(field, '{% trans "Code must be at least 3 characters long" %}');
+                return false;
+            }
+        }
+        
+        if (fieldName === 'credit_limit' && value) {
+            const limit = parseFloat(value);
+            if (isNaN(limit) || limit < 0) {
+                showFieldError(field, '{% trans "Credit limit must be a positive number" %}');
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    function validateForm() {
+        let isValid = true;
+        inputs.forEach(input => {
+            if (!validateField(input)) {
+                isValid = false;
+            }
+        });
+        return isValid;
+    }
+    
+    function showFieldError(field, message) {
+        clearFieldError(field);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-red-600 text-sm mt-1';
+        errorDiv.textContent = message;
+        field.parentNode.appendChild(errorDiv);
+        field.classList.add('border-red-500');
+    }
+    
+    function clearFieldError(field) {
+        const errorDiv = field.parentNode.querySelector('.text-red-600');
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+        field.classList.remove('border-red-500');
+    }
+    
+    function showNotification(message, type = 'success') {
+        // Implementar sistema de notificaciones
+        console.log(`${type}: ${message}`);
+    }
+    
+    // Auto-generar código si está vacío
+    const nameField = document.getElementById('id_name');
+    const codeField = document.getElementById('id_code');
+    
+    if (nameField && codeField) {
+        nameField.addEventListener('blur', function() {
+            if (!codeField.value && this.value) {
+                const code = this.value.substring(0, 3).toUpperCase() + 
+                           Math.random().toString(36).substring(2, 5).toUpperCase();
+                codeField.value = code;
+            }
+        });
+    }
+});
+</script>
+{% endblock %} 

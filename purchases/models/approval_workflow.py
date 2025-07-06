@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from core.models import Empresa, Branch
+from django.conf import settings
 
 User = get_user_model()
 
@@ -31,7 +32,7 @@ class ApprovalWorkflow(models.Model):
                                    help_text=_("Maximum amount for this workflow (null = no limit)"))
     
     # Auditoría
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_workflows', verbose_name=_("Created By"))
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_workflows', verbose_name=_("Created By"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -84,7 +85,7 @@ class ApprovalLevel(models.Model):
     ], default='role')
     
     # Aprobadores específicos (se usa según approval_type)
-    approvers = models.ManyToManyField(User, blank=True, related_name='approval_levels', verbose_name=_("Approvers"))
+    approvers = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='approval_levels', verbose_name=_("Approvers"))
     roles = models.JSONField(_("Roles"), default=list, blank=True, help_text=_("List of role IDs that can approve"))
     groups = models.JSONField(_("Groups"), default=list, blank=True, help_text=_("List of group IDs that can approve"))
     

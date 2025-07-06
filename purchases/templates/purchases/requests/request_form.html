@@ -1,0 +1,517 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block purchases_title %}{% if form.instance.pk %}{% trans "Edit Purchase Request" %}{% else %}{% trans "New Purchase Request" %}{% endif %}{% endblock %}
+
+{% block purchases_header %}{% if form.instance.pk %}{% trans "Edit Purchase Request" %}{% else %}{% trans "New Purchase Request" %}{% endif %}{% endblock %}
+
+{% block purchases_subheader %}{% if form.instance.pk %}{% trans "Update purchase request details" %}{% else %}{% trans "Create a new purchase request" %}{% endif %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:request_list' %}" class="btn-secondary">
+    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+    </svg>
+    {% trans "Back to List" %}
+</a>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tab-button {
+        @apply px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200;
+    }
+    
+    .tab-button.active {
+        @apply bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300;
+    }
+    
+    .tab-button:not(.active) {
+        @apply text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700;
+    }
+    
+    .tab-content {
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .line-item {
+        @apply bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4;
+        transition: all 0.3s ease;
+    }
+    
+    .line-item:hover {
+        @apply shadow-md;
+    }
+    
+    .remove-line {
+        @apply text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300;
+    }
+    
+    .priority-high { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300; }
+    .priority-medium { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300; }
+    .priority-low { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300; }
+</style>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-6xl mx-auto">
+    <form method="post" id="request-form">
+        {% csrf_token %}
+        
+        <!-- Pestañas de Navegación -->
+        <div class="mb-6">
+            <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+                <button type="button" class="tab-button active" data-tab="basic">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {% trans "Basic Info" %}
+                </button>
+                <button type="button" class="tab-button" data-tab="lines">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    {% trans "Items" %}
+                    <span id="lines-count" class="ml-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-medium px-2 py-1 rounded-full">0</span>
+                </button>
+                <button type="button" class="tab-button" data-tab="review">
+                    <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {% trans "Review" %}
+                </button>
+            </nav>
+        </div>
+
+        <!-- Pestaña: Información Básica -->
+        <div id="tab-basic" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Basic Information" %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="md:col-span-2">
+                            {{ form.title|as_crispy_field }}
+                        </div>
+                        <div class="md:col-span-2">
+                            {{ form.description|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.priority|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.required_date|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.supplier|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.currency|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Líneas de Producto -->
+        <div id="tab-lines" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Request Items" %}
+                        </h3>
+                        <button type="button" id="add-line" class="btn-primary">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            {% trans "Add Item" %}
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="lines-container">
+                        <!-- Las líneas se agregarán dinámicamente aquí -->
+                    </div>
+                    
+                    <!-- Resumen de líneas -->
+                    <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Total Items" %}:</span>
+                                <span id="total-items" class="font-medium text-gray-900 dark:text-white">0</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Total Quantity" %}:</span>
+                                <span id="total-quantity" class="font-medium text-gray-900 dark:text-white">0</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Estimated Total" %}:</span>
+                                <span id="estimated-total" class="font-medium text-gray-900 dark:text-white">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Revisión -->
+        <div id="tab-review" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Review Request" %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div id="review-content">
+                        <!-- El contenido de revisión se generará dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Navegación -->
+        <div class="flex justify-between mt-8">
+            <button type="button" id="prev-tab" class="btn-secondary" style="display: none;">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+                {% trans "Previous" %}
+            </button>
+            
+            <div class="flex space-x-4">
+                <button type="button" id="next-tab" class="btn-primary">
+                    {% trans "Next" %}
+                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+                
+                <button type="submit" id="submit-form" class="btn-primary" style="display: none;">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    {% if form.instance.pk %}{% trans "Update Request" %}{% else %}{% trans "Create Request" %}{% endif %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Template para líneas de producto -->
+<template id="line-template">
+    <div class="line-item" data-line-index="">
+        <div class="flex justify-between items-start mb-4">
+            <h4 class="text-md font-medium text-gray-900 dark:text-white">
+                {% trans "Item" %} <span class="line-number"></span>
+            </h4>
+            <button type="button" class="remove-line">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {% trans "Product" %}
+                </label>
+                <select name="lines[][product_variant]" class="line-product w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" required>
+                    <option value="">{% trans "Select product" %}</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {% trans "Quantity" %}
+                </label>
+                <input type="number" name="lines[][quantity]" class="line-quantity w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" min="1" step="1" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {% trans "Unit Price" %}
+                </label>
+                <input type="number" name="lines[][estimated_unit_price]" class="line-price w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" min="0" step="0.01" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {% trans "Unit of Measure" %}
+                </label>
+                <select name="lines[][unit_of_measure]" class="line-uom w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" required>
+                    <option value="">{% trans "Select UOM" %}</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {% trans "Description" %}
+            </label>
+            <textarea name="lines[][description]" class="line-description w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" rows="2"></textarea>
+        </div>
+        
+        <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {% trans "Specifications" %}
+            </label>
+            <textarea name="lines[][specifications]" class="line-specs w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-blue-500 focus:border-blue-500" rows="2"></textarea>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentTab = 0;
+    const tabs = ['basic', 'lines', 'review'];
+    let lineCounter = 0;
+    let lines = [];
+    
+    // Navegación de pestañas
+    document.querySelectorAll('.tab-button').forEach((button, index) => {
+        button.addEventListener('click', () => {
+            if (validateCurrentTab()) {
+                showTab(index);
+            }
+        });
+    });
+    
+    document.getElementById('next-tab').addEventListener('click', () => {
+        if (validateCurrentTab() && currentTab < tabs.length - 1) {
+            showTab(currentTab + 1);
+        }
+    });
+    
+    document.getElementById('prev-tab').addEventListener('click', () => {
+        if (currentTab > 0) {
+            showTab(currentTab - 1);
+        }
+    });
+    
+    function showTab(index) {
+        // Ocultar todas las pestañas
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+        
+        // Mostrar pestaña actual
+        document.getElementById(`tab-${tabs[index]}`).classList.add('active');
+        document.querySelectorAll('.tab-button')[index].classList.add('active');
+        
+        // Actualizar botones de navegación
+        document.getElementById('prev-tab').style.display = index > 0 ? 'inline-flex' : 'none';
+        document.getElementById('next-tab').style.display = index < tabs.length - 1 ? 'inline-flex' : 'none';
+        document.getElementById('submit-form').style.display = index === tabs.length - 1 ? 'inline-flex' : 'none';
+        
+        currentTab = index;
+        
+        // Actualizar contenido de revisión si es la última pestaña
+        if (index === tabs.length - 1) {
+            updateReviewContent();
+        }
+    }
+    
+    function validateCurrentTab() {
+        const currentTabElement = document.getElementById(`tab-${tabs[currentTab]}`);
+        const requiredFields = currentTabElement.querySelectorAll('[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('border-red-500');
+                isValid = false;
+            } else {
+                field.classList.remove('border-red-500');
+            }
+        });
+        
+        if (!isValid) {
+            showNotification('{% trans "Please fill in all required fields" %}', 'error');
+        }
+        
+        return isValid;
+    }
+    
+    // Gestión de líneas de producto
+    document.getElementById('add-line').addEventListener('click', addLine);
+    
+    function addLine() {
+        const template = document.getElementById('line-template');
+        const clone = template.content.cloneNode(true);
+        const lineElement = clone.querySelector('.line-item');
+        
+        lineCounter++;
+        lineElement.dataset.lineIndex = lineCounter;
+        lineElement.querySelector('.line-number').textContent = lineCounter;
+        
+        // Configurar eventos para la nueva línea
+        setupLineEvents(lineElement);
+        
+        document.getElementById('lines-container').appendChild(lineElement);
+        updateLinesCount();
+        updateTotals();
+    }
+    
+    function setupLineEvents(lineElement) {
+        // Botón eliminar
+        lineElement.querySelector('.remove-line').addEventListener('click', () => {
+            lineElement.remove();
+            updateLinesCount();
+            updateTotals();
+            updateLineNumbers();
+        });
+        
+        // Campos de cantidad y precio
+        const quantityField = lineElement.querySelector('.line-quantity');
+        const priceField = lineElement.querySelector('.line-price');
+        
+        [quantityField, priceField].forEach(field => {
+            field.addEventListener('input', updateTotals);
+        });
+    }
+    
+    function updateLinesCount() {
+        const count = document.querySelectorAll('.line-item').length;
+        document.getElementById('lines-count').textContent = count;
+        document.getElementById('total-items').textContent = count;
+    }
+    
+    function updateTotals() {
+        let totalQuantity = 0;
+        let totalAmount = 0;
+        
+        document.querySelectorAll('.line-item').forEach(line => {
+            const quantity = parseFloat(line.querySelector('.line-quantity').value) || 0;
+            const price = parseFloat(line.querySelector('.line-price').value) || 0;
+            
+            totalQuantity += quantity;
+            totalAmount += quantity * price;
+        });
+        
+        document.getElementById('total-quantity').textContent = totalQuantity;
+        document.getElementById('estimated-total').textContent = formatCurrency(totalAmount);
+    }
+    
+    function updateLineNumbers() {
+        document.querySelectorAll('.line-item').forEach((line, index) => {
+            line.querySelector('.line-number').textContent = index + 1;
+        });
+    }
+    
+    function updateReviewContent() {
+        const reviewContent = document.getElementById('review-content');
+        
+        // Obtener datos del formulario
+        const title = document.getElementById('id_title').value;
+        const description = document.getElementById('id_description').value;
+        const priority = document.getElementById('id_priority').value;
+        const requiredDate = document.getElementById('id_required_date').value;
+        const supplier = document.getElementById('id_supplier').value;
+        const currency = document.getElementById('id_currency').value;
+        
+        // Generar HTML de revisión
+        let html = `
+            <div class="space-y-6">
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">{% trans "Request Details" %}</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Title" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${title}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Priority" %}:</span>
+                            <span class="priority-${priority} px-2 py-1 rounded-full text-xs font-medium">${priority}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Required Date" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${requiredDate}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Currency" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${currency}</span>
+                        </div>
+                    </div>
+                    ${description ? `<div class="mt-3">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Description" %}:</span>
+                        <p class="text-gray-900 dark:text-white mt-1">${description}</p>
+                    </div>` : ''}
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-3">{% trans "Items Summary" %}</h4>
+                    <div class="space-y-2">
+        `;
+        
+        document.querySelectorAll('.line-item').forEach((line, index) => {
+            const product = line.querySelector('.line-product option:checked').text || '{% trans "No product selected" %}';
+            const quantity = line.querySelector('.line-quantity').value || 0;
+            const price = line.querySelector('.line-price').value || 0;
+            const total = quantity * price;
+            
+            html += `
+                <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-600 last:border-b-0">
+                    <div>
+                        <span class="font-medium text-gray-900 dark:text-white">${product}</span>
+                        <span class="text-gray-500 dark:text-gray-400 ml-2">${quantity} x ${formatCurrency(price)}</span>
+                    </div>
+                    <span class="font-medium text-gray-900 dark:text-white">${formatCurrency(total)}</span>
+                </div>
+            `;
+        });
+        
+        html += `
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                        <div class="flex justify-between items-center">
+                            <span class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Estimated Total" %}:</span>
+                            <span class="text-lg font-bold text-gray-900 dark:text-white">${document.getElementById('estimated-total').textContent}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        reviewContent.innerHTML = html;
+    }
+    
+    function formatCurrency(amount) {
+        return new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(amount);
+    }
+    
+    function showNotification(message, type = 'success') {
+        // Implementar sistema de notificaciones
+        console.log(`${type}: ${message}`);
+    }
+    
+    // Cargar datos iniciales si es edición
+    {% if form.instance.pk %}
+        // Cargar líneas existentes
+        // Esto se implementaría con datos del servidor
+    {% endif %}
+    
+    // Inicializar primera línea
+    addLine();
+});
+</script>
+{% endblock %} 
