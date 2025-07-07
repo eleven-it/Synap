@@ -203,12 +203,170 @@ APPS_MENU = [
         ]
     },
     {
+        "id": "purchases",
+        "nombre": _("Purchases"),
+        "permiso": "purchases.ver",
+        "url": "purchases:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/></svg>""",
+        "orden": 4,
+        "color": "red",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "purchases:dashboard",
+                        "icon": "dashboard",
+                        "permission": "purchases.ver_dashboard"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Suppliers"),
+                "items": [
+                    {
+                        "label": _("Suppliers"),
+                        "url": "purchases:supplier_list",
+                        "icon": "business",
+                        "permission": "purchases.ver_supplier"
+                    },
+                    {
+                        "label": _("Create Supplier"),
+                        "url": "purchases:supplier_create",
+                        "icon": "add_business",
+                        "permission": "purchases.crear_supplier"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Purchase Requests"),
+                "items": [
+                    {
+                        "label": _("Requests"),
+                        "url": "purchases:request_list",
+                        "icon": "assignment",
+                        "permission": "purchases.ver_request"
+                    },
+                    {
+                        "label": _("Create Request"),
+                        "url": "purchases:request_create",
+                        "icon": "add_task",
+                        "permission": "purchases.crear_request"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Quotations"),
+                "items": [
+                    {
+                        "label": _("Quotations"),
+                        "url": "purchases:quotation_list",
+                        "icon": "description",
+                        "permission": "purchases.ver_quotation"
+                    },
+                    {
+                        "label": _("Create Quotation"),
+                        "url": "purchases:quotation_create",
+                        "icon": "post_add",
+                        "permission": "purchases.crear_quotation"
+                    },
+                    {
+                        "label": _("Compare Quotations"),
+                        "url": "purchases:quotation_compare",
+                        "icon": "compare_arrows",
+                        "permission": "purchases.ver_quotation"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Purchase Orders"),
+                "items": [
+                    {
+                        "label": _("Orders"),
+                        "url": "purchases:order_list",
+                        "icon": "shopping_cart",
+                        "permission": "purchases.ver_order"
+                    },
+                    {
+                        "label": _("Create Order"),
+                        "url": "purchases:order_create",
+                        "icon": "add_shopping_cart",
+                        "permission": "purchases.crear_order"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Receipts"),
+                "items": [
+                    {
+                        "label": _("Receipts"),
+                        "url": "purchases:receipt_list",
+                        "icon": "inventory_2",
+                        "permission": "purchases.ver_receipt"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Supplier Ratings"),
+                "items": [
+                    {
+                        "label": _("Ratings"),
+                        "url": "purchases:rating_list",
+                        "icon": "star_rate",
+                        "permission": "purchases.ver_rating"
+                    },
+                    {
+                        "label": _("Create Rating"),
+                        "url": "purchases:rating_create",
+                        "icon": "rate_review",
+                        "permission": "purchases.crear_rating"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Approval Workflows"),
+                "items": [
+                    {
+                        "label": _("Workflows"),
+                        "url": "purchases:workflow_list",
+                        "icon": "account_tree",
+                        "permission": "purchases.ver_workflow"
+                    },
+                    {
+                        "label": _("Create Workflow"),
+                        "url": "purchases:workflow_create",
+                        "icon": "add_chart",
+                        "permission": "purchases.crear_workflow"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Reports & Settings"),
+                "items": [
+                    {
+                        "label": _("Reports"),
+                        "url": "purchases:reports",
+                        "icon": "bar_chart",
+                        "permission": "purchases.ver_report"
+                    },
+                    {
+                        "label": _("Settings"),
+                        "url": "purchases:settings",
+                        "icon": "settings",
+                        "permission": "purchases.ver_settings"
+                    }
+                ]
+            }
+        ]
+    },
+    {
         "id": "settings",
         "nombre": _("Settings"),
         "permiso": "usuarios.dashboard",
         "url": "core:dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' /><path stroke-linecap='round' stroke-linejoin='round' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' /></svg>""",
-        "orden": 4,
+        "orden": 5,
         "color": "gray",
         "submenus": [
             {

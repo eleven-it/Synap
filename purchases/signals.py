@@ -31,6 +31,12 @@ def purchase_order_post_save(sender, instance, created, **kwargs):
         # Lógica para órdenes nuevas
         pass
     
+    # Evitar recursión infinita: no calcular totales si solo se están actualizando campos de totales
+    if kwargs.get('update_fields') and set(kwargs['update_fields']).issubset({
+        'subtotal', 'tax_amount', 'discount_amount', 'shipping_amount', 'total_amount'
+    }):
+        return
+    
     # Actualizar totales si es necesario
     if hasattr(instance, 'calculate_totals'):
         instance.calculate_totals()
@@ -44,6 +50,12 @@ def purchase_quotation_post_save(sender, instance, created, **kwargs):
     if created:
         # Lógica para cotizaciones nuevas
         pass
+    
+    # Evitar recursión infinita: no calcular totales si solo se están actualizando campos de totales
+    if kwargs.get('update_fields') and set(kwargs['update_fields']).issubset({
+        'subtotal', 'tax_amount', 'discount_amount', 'total_amount'
+    }):
+        return
     
     # Actualizar totales si es necesario
     if hasattr(instance, 'calculate_totals'):

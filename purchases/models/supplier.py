@@ -99,9 +99,9 @@ class Supplier(models.Model):
     
     def get_rating_average(self):
         """Retorna el promedio de calificaciones del proveedor"""
-        ratings = self.ratings.filter(is_active=True)
+        ratings = self.ratings.filter(status='approved')
         if ratings.exists():
-            return ratings.aggregate(avg=models.Avg('rating'))['avg']
+            return ratings.aggregate(avg=models.Avg('overall_score'))['avg']
         return None
     
     def get_total_purchases(self, start_date=None, end_date=None):

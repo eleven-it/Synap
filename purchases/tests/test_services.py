@@ -6,7 +6,7 @@ from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch, MagicMock
 
-from core.models import Empresa, Branch, Currency, UnitOfMeasure
+from core.models import Empresa, Branch, Currency, UnitOfMeasure, DeliveryLocation
 from inventory.models import Product, ProductVariant, Category
 from purchases.models import (
     Supplier, ApprovalWorkflow, ApprovalLevel, PurchaseRequest, PurchaseRequestLine,
@@ -29,25 +29,27 @@ class NotificationServiceTest(TestCase):
     
     def setUp(self):
         """Configuración inicial"""
-        self.empresa = Empresa.objects.create(name="Empresa Test")
+        self.empresa = Empresa.objects.create(nombre="Empresa Test")
         self.branch = Branch.objects.create(
             empresa=self.empresa,
             name="Branch Test"
         )
-        self.currency = Currency.objects.create(
-            code="USD",
-            name="US Dollar",
-            symbol="$"
-        )
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
+        self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
             empresa=self.empresa,
             name="Proveedor Test",
-            email="proveedor@test.com"
+            email="proveedor@test.com",
+            branch=self.branch
+        )
+        
+        # Crear ubicación de entrega
+        self.delivery_location = DeliveryLocation.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            name="Delivery Location Test",
+            address="123 Test Street",
+            city="Test City"
         )
         
         self.notification_service = PurchaseNotificationService()
@@ -61,7 +63,7 @@ class NotificationServiceTest(TestCase):
             title="Solicitud Test",
             requested_by=self.user,
             currency=self.currency
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         self.notification_service.send_request_created_notification(request)
         
@@ -75,9 +77,7 @@ class NotificationServiceTest(TestCase):
     def test_send_request_submitted_notification(self, mock_send_mail):
         """Probar notificación de solicitud enviada a aprobación"""
         # Crear flujo de aprobación
-        workflow = ApprovalWorkflow.objects.create(
-            empresa=self.empresa,
-            name="Flujo Test",
+        workflow = ApprovalWorkflow.objects.create(empresa=self.empresa, branch=self.branch, name="Flujo Test",
             is_active=True
         )
         level = ApprovalLevel.objects.create(
@@ -95,7 +95,7 @@ class NotificationServiceTest(TestCase):
             requested_by=self.user,
             currency=self.currency,
             approval_workflow=workflow
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         self.notification_service.send_request_submitted_notification(request)
         
@@ -111,7 +111,7 @@ class NotificationServiceTest(TestCase):
             title="Solicitud Test",
             requested_by=self.user,
             currency=self.currency
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         self.notification_service.send_request_approved_notification(request, self.user)
         
@@ -128,7 +128,7 @@ class NotificationServiceTest(TestCase):
             supplier=self.supplier,
             created_by=self.user,
             currency=self.currency
-        )
+        , expected_delivery_date=timezone.now().date() + timedelta(days=30)
         
         self.notification_service.send_order_created_notification(order)
         
@@ -142,7 +142,10 @@ class NotificationServiceTest(TestCase):
             supplier=self.supplier,
             evaluated_by=self.user,
             overall_score=8.5
-        )
+        , quality_score=4,
+        delivery_score=4,
+        communication_score=4,
+        price_score=4)
         
         self.notification_service.send_supplier_rating_notification(rating)
         
@@ -156,27 +159,18 @@ class ValidatorServiceTest(TestCase):
     
     def setUp(self):
         """Configuración inicial"""
-        self.empresa = Empresa.objects.create(name="Empresa Test")
+        self.empresa = Empresa.objects.create(nombre="Empresa Test")
         self.branch = Branch.objects.create(
             empresa=self.empresa,
             name="Branch Test"
         )
-        self.currency = Currency.objects.create(
-            code="USD",
-            name="US Dollar",
-            symbol="$"
-        )
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
+        self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
             empresa=self.empresa,
             name="Proveedor Test",
-            credit_limit=Decimal('10000')
-        )
-    
+            credit_limit=Decimal('10000'),
+            branch=self.branch
     def test_validate_request_amount_valid(self):
         """Probar validación de monto válido"""
         amount = Decimal('5000')
@@ -213,14 +207,10 @@ class ValidatorServiceTest(TestCase):
         with self.assertRaises(ValidationError):
             PurchaseRequestValidator.validate_priority_for_amount(
                 'low', Decimal('60000')
-            )
-        
         # Monto bajo con prioridad alta debería fallar
         with self.assertRaises(ValidationError):
             PurchaseRequestValidator.validate_priority_for_amount(
                 'high', Decimal('500')
-            )
-    
     def test_validate_supplier_credit_limit(self):
         """Probar validación de límite de crédito"""
         # Crear órdenes pendientes para el proveedor
@@ -230,7 +220,7 @@ class ValidatorServiceTest(TestCase):
             supplier=self.supplier,
             created_by=self.user,
             currency=self.currency,
-            total_amount=Decimal('8000'),
+            total_amount=Decimal('8000', expected_delivery_date=timezone.now().date()),
             status='confirmed'
         )
         
@@ -238,8 +228,6 @@ class ValidatorServiceTest(TestCase):
         with self.assertRaises(ValidationError):
             PurchaseRequestValidator.validate_supplier_credit_limit(
                 self.supplier, Decimal('3000')
-            )
-    
     def test_validate_order_amount_valid(self):
         """Probar validación de monto de orden válido"""
         amount = Decimal('5000')
@@ -258,14 +246,14 @@ class ValidatorServiceTest(TestCase):
     def test_validate_supplier_availability(self):
         """Probar validación de disponibilidad del proveedor"""
         # Proveedor activo
-        PurchaseOrderValidator.validate_supplier_availability(self.supplier, timezone.now().date())
+        PurchaseOrderValidator.validate_supplier_availability(self.supplier, timezone.now().date()
         
         # Proveedor inactivo
         self.supplier.is_active = False
         self.supplier.save()
         
         with self.assertRaises(ValidationError):
-            PurchaseOrderValidator.validate_supplier_availability(self.supplier, timezone.now().date())
+            PurchaseOrderValidator.validate_supplier_availability(self.supplier, timezone.now().date()
     
     def test_validate_receipt_quantity_valid(self):
         """Probar validación de cantidad de recepción válida"""
@@ -329,10 +317,8 @@ class ValidatorServiceTest(TestCase):
                 supplier=self.supplier,
                 created_by=self.user,
                 currency=self.currency,
-                total_amount=Decimal('20000'),
+                total_amount=Decimal('20000', expected_delivery_date=timezone.now().date()),
                 order_date=timezone.now().date()
-            )
-        
         # Intentar crear orden que exceda límite diario
         with self.assertRaises(ValidationError):
             BusinessRuleValidator.validate_company_limits(
@@ -346,11 +332,7 @@ class ValidatorServiceTest(TestCase):
             BusinessRuleValidator.validate_user_permissions(None, 'create_request')
         
         # Usuario autenticado sin permisos específicos
-        user_no_perms = User.objects.create_user(
-            username='noperms',
-            email='noperms@example.com',
-            password='testpass123'
-        )
+        user_no_perms = User.objects.create_user(email='noperms@example.com', nombre='Test User', password='testpass123')
         
         with self.assertRaises(ValidationError):
             BusinessRuleValidator.validate_user_permissions(user_no_perms, 'approve_request')
@@ -363,7 +345,9 @@ class ValidatorServiceTest(TestCase):
             title="Solicitud Test",
             requested_by=self.user,
             currency=self.currency,
-            total_amount=Decimal('15000')  # Monto alto
+            total_amount=Decimal('15000'),
+            required_date=timezone.now().date() + timedelta(days=30),
+            delivery_location=self.delivery_location  # Monto alto
         )
         
         # Solicitud sin flujo de aprobación debería fallar
@@ -389,6 +373,8 @@ class ValidatorServiceTest(TestCase):
             currency=self.currency,
             total_amount=Decimal('5000'),
             required_date=timezone.now().date() + timedelta(days=30),
+            delivery_location=self.delivery_location,
+            required_date=timezone.now().date() + timedelta(days=30),
             supplier=self.supplier
         )
         
@@ -401,25 +387,17 @@ class ReportsServiceTest(TestCase):
     
     def setUp(self):
         """Configuración inicial"""
-        self.empresa = Empresa.objects.create(name="Empresa Test")
+        self.empresa = Empresa.objects.create(nombre="Empresa Test")
         self.branch = Branch.objects.create(
             empresa=self.empresa,
             name="Branch Test"
         )
-        self.currency = Currency.objects.create(
-            code="USD",
-            name="US Dollar",
-            symbol="$"
-        )
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
+        self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
             empresa=self.empresa,
             name="Proveedor Test"
-        )
+        , branch=self.branch)
         
         self.reports_service = PurchaseReportsService(self.empresa)
     
@@ -432,7 +410,7 @@ class ReportsServiceTest(TestCase):
             title="Solicitud Test",
             requested_by=self.user,
             currency=self.currency
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         PurchaseOrder.objects.create(
             empresa=self.empresa,
@@ -440,9 +418,7 @@ class ReportsServiceTest(TestCase):
             supplier=self.supplier,
             created_by=self.user,
             currency=self.currency,
-            total_amount=Decimal('1000')
-        )
-        
+            total_amount=Decimal('1000', expected_delivery_date=timezone.now().date() + timedelta(days=30)
         metrics = self.reports_service.get_dashboard_metrics()
         
         # Verificar estructura de métricas
@@ -468,10 +444,8 @@ class ReportsServiceTest(TestCase):
                 supplier=self.supplier,
                 created_by=self.user,
                 currency=self.currency,
-                total_amount=Decimal('1000'),
+                total_amount=Decimal('1000', expected_delivery_date=timezone.now().date()),
                 order_date=timezone.now().date() - timedelta(days=i*30)
-            )
-        
         trends = self.reports_service.get_spending_trends(period='month', months=3)
         
         self.assertIsInstance(trends, list)
@@ -492,14 +466,15 @@ class ReportsServiceTest(TestCase):
             supplier=self.supplier,
             created_by=self.user,
             currency=self.currency,
-            total_amount=Decimal('1000')
-        )
-        
+            total_amount=Decimal('1000', expected_delivery_date=timezone.now().date() + timedelta(days=30)
         SupplierRating.objects.create(
             supplier=self.supplier,
             evaluated_by=self.user,
             overall_score=8.5
-        )
+        , quality_score=4,
+        delivery_score=4,
+        communication_score=4,
+        price_score=4)
         
         performance = self.reports_service.get_supplier_performance(limit=10)
         
@@ -516,36 +491,21 @@ class ReportsServiceTest(TestCase):
     def test_get_category_spending(self):
         """Probar obtención de gastos por categoría"""
         # Crear categoría y producto
-        category = Category.objects.create(
-            empresa=self.empresa,
-            name="Categoría Test"
-        )
+        category = Category.objects.create(name="Categoría Test")
         product = Product.objects.create(
             empresa=self.empresa,
             name="Producto Test",
             category=category
-        )
-        product_variant = ProductVariant.objects.create(
-            product=product,
-            name="Variante Test"
-        )
-        
-        # Crear orden con línea de producto
-        order = PurchaseOrder.objects.create(
-            empresa=self.empresa,
-            sucursal=self.branch,
+        , price=Decimal('100.00'), branch=self.branch)
+        product_variant = ProductVariant.objects.create(product=product, sucursal=self.branch,
             supplier=self.supplier,
             created_by=self.user,
-            currency=self.currency
-        )
-        
+            currency=self.currency, price=Decimal('100.00')
         PurchaseOrderLine.objects.create(
             purchase_order=order,
             product_variant=product_variant,
             quantity=10,
             unit_price=Decimal('100.00')
-        )
-        
         category_spending = self.reports_service.get_category_spending()
         
         self.assertIsInstance(category_spending, list)
@@ -561,10 +521,8 @@ class ReportsServiceTest(TestCase):
             created_by=self.user,
             currency=self.currency,
             status='received',
-            last_receipt_date=timezone.now().date(),
+            last_receipt_date=timezone.now(, expected_delivery_date=timezone.now().date()).date(),
             expected_delivery_date=timezone.now().date() - timedelta(days=5)
-        )
-        
         order2 = PurchaseOrder.objects.create(
             empresa=self.empresa,
             sucursal=self.branch,
@@ -572,10 +530,8 @@ class ReportsServiceTest(TestCase):
             created_by=self.user,
             currency=self.currency,
             status='received',
-            last_receipt_date=timezone.now().date(),
+            last_receipt_date=timezone.now(, expected_delivery_date=timezone.now().date()).date(),
             expected_delivery_date=timezone.now().date() + timedelta(days=5)
-        )
-        
         delivery_trends = self.reports_service.get_delivery_performance_trends()
         
         self.assertIsInstance(delivery_trends, list)
@@ -591,7 +547,7 @@ class ReportsServiceTest(TestCase):
             requested_by=self.user,
             currency=self.currency,
             status='approved'
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         PurchaseRequest.objects.create(
             empresa=self.empresa,
@@ -600,7 +556,7 @@ class ReportsServiceTest(TestCase):
             requested_by=self.user,
             currency=self.currency,
             status='rejected'
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         approval_metrics = self.reports_service.get_request_approval_metrics()
         
@@ -617,7 +573,7 @@ class ReportsServiceTest(TestCase):
             requested_by=self.user,
             currency=self.currency,
             status='approved'
-        )
+        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
         
         quotation = PurchaseQuotation.objects.create(
             empresa=self.empresa,
@@ -635,9 +591,7 @@ class ReportsServiceTest(TestCase):
             quotation=quotation,
             created_by=self.user,
             currency=self.currency,
-            total_amount=Decimal('1000')
-        )
-        
+            total_amount=Decimal('1000', expected_delivery_date=timezone.now().date() + timedelta(days=30)
         savings_analysis = self.reports_service.get_cost_savings_analysis()
         
         self.assertIsInstance(savings_analysis, list)
@@ -653,42 +607,28 @@ class InventoryIntegrationServiceTest(TestCase):
     
     def setUp(self):
         """Configuración inicial"""
-        self.empresa = Empresa.objects.create(name="Empresa Test")
+        self.empresa = Empresa.objects.create(nombre="Empresa Test")
         self.branch = Branch.objects.create(
             empresa=self.empresa,
             name="Branch Test"
         )
-        self.currency = Currency.objects.create(
-            code="USD",
-            name="US Dollar",
-            symbol="$"
-        )
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='testpass123'
-        )
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
+        self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
             empresa=self.empresa,
             name="Proveedor Test"
-        )
+        , branch=self.branch)
         
         # Crear producto y variante
-        self.category = Category.objects.create(
-            empresa=self.empresa,
-            name="Categoría Test"
-        )
+        self.category = Category.objects.create(name="Categoría Test")
         self.product = Product.objects.create(
             empresa=self.empresa,
             name="Producto Test",
             category=self.category
-        )
-        self.product_variant = ProductVariant.objects.create(
-            product=self.product,
-            name="Variante Test",
-            sku="SKU001",
+        , price=Decimal('100.00'), branch=self.branch)
+        self.product_variant = ProductVariant.objects.create(product=self.product, sku="SKU001",
             current_stock=0,
-            average_cost=Decimal('0')
+            average_cost=Decimal('0', price=Decimal('100.00')
         )
         
         # Crear orden y línea
@@ -698,15 +638,13 @@ class InventoryIntegrationServiceTest(TestCase):
             supplier=self.supplier,
             created_by=self.user,
             currency=self.currency
-        )
+        , expected_delivery_date=timezone.now().date() + timedelta(days=30)
         
         self.order_line = PurchaseOrderLine.objects.create(
             purchase_order=self.order,
             product_variant=self.product_variant,
             quantity=10,
             unit_price=Decimal('100.00')
-        )
-        
         self.inventory_service = InventoryIntegrationService()
     
     @patch('purchases.inventory_integration.ProductVariant')

@@ -1,6 +1,11 @@
+app_name = 'api'
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views import (
+    DashboardMetricsView, CategorySpendingView, SpendingTrendsView, SupplierPerformanceDashboardView,
+    PurchaseOrderConfirmView, PurchaseQuotationCompareView
+)
 
 # Crear router para las APIs
 router = DefaultRouter()
@@ -35,5 +40,11 @@ urlpatterns = [
     
     # Rutas adicionales específicas
     path('dashboard/', views.PurchaseDashboardView.as_view(), name='purchase-dashboard'),
+    path('dashboard/metrics/', DashboardMetricsView.as_view(), name='dashboard-metrics'),
+    path('dashboard/category-spending/', CategorySpendingView.as_view(), name='category-spending'),
+    path('dashboard/spending-trends/', SpendingTrendsView.as_view(), name='spending-trends'),
+    path('dashboard/supplier-performance/', SupplierPerformanceDashboardView.as_view(), name='supplier-performance'),
     path('reports/', views.PurchaseReportsView.as_view(), name='purchase-reports'),
+    path('orders/<int:pk>/confirm/', PurchaseOrderConfirmView.as_view(), name='order-confirm'),
+    path('quotations/compare/<int:request_pk>/', PurchaseQuotationCompareView.as_view(), name='purchase-quotation-compare'),
 ] 

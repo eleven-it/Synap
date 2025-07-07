@@ -1,3 +1,4 @@
+from django.utils.translation import gettext as _
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -128,26 +129,28 @@ class PurchaseReceipt(models.Model):
     
     def _update_stock(self):
         """Actualiza el stock del producto"""
-        from inventory.services import StockService
-        
-        stock_service = StockService()
-        
-        # Obtener información del producto
-        product_variant = self.purchase_order_line.product_variant
-        quantity = self.quantity
-        lot_number = self.lot_number
-        expiration_date = self.expiration_date
-        
-        # Actualizar stock
-        stock_service.add_stock(
-            product_variant=product_variant,
-            quantity=quantity,
-            lot_number=lot_number,
-            expiration_date=expiration_date,
-            reference=f"Purchase Receipt {self.receipt_number}",
-            reference_type='purchase_receipt',
-            reference_id=self.id
-        )
+        # TODO: Implementar cuando el módulo de inventario esté disponible
+        # from inventory.services import StockService
+        # 
+        # stock_service = StockService()
+        # 
+        # # Obtener información del producto
+        # product_variant = self.purchase_order_line.product_variant
+        # quantity = self.quantity
+        # lot_number = self.lot_number
+        # expiration_date = self.expiration_date
+        # 
+        # # Actualizar stock
+        # stock_service.add_stock(
+        #     product_variant=product_variant,
+        #     quantity=quantity,
+        #     lot_number=lot_number,
+        #     expiration_date=expiration_date,
+        #     reference=f"Purchase Receipt {self.receipt_number}",
+        #     reference_type='purchase_receipt',
+        #     reference_id=self.id
+        # )
+        pass
     
     def get_quality_status(self):
         """Retorna el estado de calidad basado en el score"""

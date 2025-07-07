@@ -102,11 +102,11 @@ class SupplierRating(models.Model):
     def _calculate_overall_score(self):
         """Calcula el score general basado en los scores individuales"""
         scores = [
-            self.quality_score,
-            self.delivery_score,
-            self.communication_score,
-            self.price_score,
-            self.service_score
+            self.quality_score or 0,
+            self.delivery_score or 0,
+            self.communication_score or 0,
+            self.price_score or 0,
+            self.service_score or 0
         ]
         
         # Promedio ponderado (calidad y entrega tienen más peso)

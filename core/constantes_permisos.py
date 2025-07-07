@@ -77,6 +77,37 @@ PERMISOS_POR_MODULO = {
         ("compras.reportes", "Ver reportes de compras"),
         ("compras.exportar", "Exportar compras"),
     ],
+    "Purchases": [
+        ("purchases.ver", "Ver purchases"),
+        ("purchases.ver_dashboard", "Ver dashboard de purchases"),
+        ("purchases.ver_supplier", "Ver proveedores"),
+        ("purchases.crear_supplier", "Crear proveedores"),
+        ("purchases.editar_supplier", "Editar proveedores"),
+        ("purchases.eliminar_supplier", "Eliminar proveedores"),
+        ("purchases.ver_request", "Ver solicitudes de compra"),
+        ("purchases.crear_request", "Crear solicitudes de compra"),
+        ("purchases.editar_request", "Editar solicitudes de compra"),
+        ("purchases.eliminar_request", "Eliminar solicitudes de compra"),
+        ("purchases.aprobar_request", "Aprobar solicitudes de compra"),
+        ("purchases.ver_quotation", "Ver cotizaciones"),
+        ("purchases.crear_quotation", "Crear cotizaciones"),
+        ("purchases.editar_quotation", "Editar cotizaciones"),
+        ("purchases.eliminar_quotation", "Eliminar cotizaciones"),
+        ("purchases.evaluar_quotation", "Evaluar cotizaciones"),
+        ("purchases.ver_order", "Ver órdenes de compra"),
+        ("purchases.crear_order", "Crear órdenes de compra"),
+        ("purchases.editar_order", "Editar órdenes de compra"),
+        ("purchases.eliminar_order", "Eliminar órdenes de compra"),
+        ("purchases.confirmar_order", "Confirmar órdenes de compra"),
+        ("purchases.ver_receipt", "Ver recepciones"),
+        ("purchases.aprobar_receipt", "Aprobar recepciones"),
+        ("purchases.ver_rating", "Ver evaluaciones de proveedores"),
+        ("purchases.crear_rating", "Crear evaluaciones de proveedores"),
+        ("purchases.ver_workflow", "Ver flujos de aprobación"),
+        ("purchases.crear_workflow", "Crear flujos de aprobación"),
+        ("purchases.ver_report", "Ver reportes de compras"),
+        ("purchases.ver_settings", "Ver configuración de compras"),
+    ],
     "Finance": [
         ("finance.ver", "Ver finanzas"),
         ("finance.facturas", "Gestionar facturas"),
@@ -144,8 +175,8 @@ ROLES_PREDEFINIDOS = {
     "Gerente": {
         "descripcion": "Gestión completa de operaciones",
         "permisos": [
-            "clientes.*", "proveedores.*", "inventario.*", 
-            "ventas.*", "compras.*", "reportes.*",
+            "clientes.*", "proveedores.*", "inventory.*", 
+            "sales.*", "purchases.*", "compras.*", "reportes.*",
             "usuarios.ver", "usuarios.editar", "usuarios.perfil",
             "configuracion.general", "configuracion.empresa"
         ]
@@ -164,7 +195,13 @@ ROLES_PREDEFINIDOS = {
         "permisos": [
             "proveedores.ver", "proveedores.crear", "proveedores.editar",
             "compras.ver", "compras.crear", "compras.editar",
-            "inventario.ver", "inventario.ver_stock",
+            "purchases.ver", "purchases.ver_dashboard", "purchases.ver_supplier", "purchases.crear_supplier", "purchases.editar_supplier",
+            "purchases.ver_request", "purchases.crear_request", "purchases.editar_request", "purchases.aprobar_request",
+            "purchases.ver_quotation", "purchases.crear_quotation", "purchases.editar_quotation", "purchases.evaluar_quotation",
+            "purchases.ver_order", "purchases.crear_order", "purchases.editar_order", "purchases.confirmar_order",
+            "purchases.ver_receipt", "purchases.aprobar_receipt", "purchases.ver_rating", "purchases.crear_rating",
+            "purchases.ver_workflow", "purchases.crear_workflow", "purchases.ver_report", "purchases.ver_settings",
+            "inventory.ver", "inventory.ver_stock",
             "reportes.ver", "usuarios.perfil"
         ]
     },

@@ -254,3 +254,72 @@ class Branch(models.Model):
     def __str__(self):
         return f"{self.name} ({self.empresa.nombre})"
 
+
+class DeliveryLocation(models.Model):
+    """
+    Modelo para gestionar ubicaciones de entrega en el sistema
+    Diferente del modelo Location de inventory que maneja ubicaciones de materiales
+    """
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='delivery_locations', verbose_name=_('Company'))
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='delivery_locations', verbose_name=_('Branch'))
+    
+    # Información básica
+    name = models.CharField(_("Location Name"), max_length=255)
+    address = models.TextField(_("Full Address"), blank=True)
+    city = models.CharField(_("City"), max_length=100, blank=True)
+    state = models.CharField(_("State/Province"), max_length=100, blank=True)
+    country = models.CharField(_("Country"), max_length=100, blank=True)
+    postal_code = models.CharField(_("Postal Code"), max_length=20, blank=True)
+    
+    # Información de contacto
+    contact_name = models.CharField(_("Contact Person"), max_length=255, blank=True)
+    contact_phone = models.CharField(_("Contact Phone"), max_length=32, blank=True)
+    contact_email = models.EmailField(_("Contact Email"), blank=True)
+    
+    # Configuración
+    is_active = models.BooleanField(_("Active"), default=True)
+    is_default = models.BooleanField(_("Default Location"), default=False)
+    notes = models.TextField(_("Additional Notes"), blank=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created at"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated at"))
+
+    class Meta:
+        verbose_name = _("Delivery Location")
+        verbose_name_plural = _("Delivery Locations")
+        ordering = ['empresa', 'branch', 'name']
+        indexes = [
+            models.Index(fields=['empresa', 'branch']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['is_default']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.empresa.nombre} / {self.branch.name})"
+
+    def save(self, *args, **kwargs):
+        """Si se marca como default, desmarca otros de la misma empresa/sucursal"""
+        if self.is_default:
+            DeliveryLocation.objects.filter(
+                empresa=self.empresa,
+                branch=self.branch,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    @property
+    def full_address(self):
+        """Retorna la dirección completa formateada"""
+        parts = [self.address, self.city, self.state, self.postal_code, self.country]
+        return ", ".join(filter(None, parts))
+
+    @classmethod
+    def get_default_for_branch(cls, empresa, branch):
+        """Obtiene la ubicación por defecto para una empresa/sucursal"""
+        try:
+            return cls.objects.get(empresa=empresa, branch=branch, is_default=True, is_active=True)
+        except cls.DoesNotExist:
+            # Si no hay default, retorna la primera activa
+            return cls.objects.filter(empresa=empresa, branch=branch, is_active=True).first()
+

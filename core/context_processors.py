@@ -106,6 +106,10 @@ def menu_context(request):
             current_app_id = 'inventory'
         elif app_name == 'tiendanube':
             current_app_id = 'tiendanube'
+        elif app_name == 'purchases':
+            current_app_id = 'purchases'
+        elif app_name == 'sales':
+            current_app_id = 'sales'
     
     # Obtener submenús de la app actual con permisos procesados
     current_sidebar_items = []
@@ -161,4 +165,22 @@ def tiendanube_menu_context(request):
 
     return {
         "tiendanube_sidebar_items": tiendanube_sidebar_items
+    }
+
+def purchases_menu_context(request):
+    """
+    Procesa el contexto para el menú lateral del módulo de Purchases.
+    Mantenido para compatibilidad.
+    """
+    user = getattr(request, "user", None)
+    purchases_sidebar_items = []
+    
+    if user and getattr(user, "is_authenticated", False):
+        if request.resolver_match and request.resolver_match.app_name == 'purchases':
+            app = obtener_app_por_id("purchases")
+            if app and app.get("submenus"):
+                purchases_sidebar_items = app["submenus"]
+
+    return {
+        "purchases_sidebar_items": purchases_sidebar_items
     }

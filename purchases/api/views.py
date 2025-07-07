@@ -1,5 +1,6 @@
+from django.utils.translation import gettext as _
 from rest_framework import viewsets, status, filters
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
@@ -8,6 +9,8 @@ from django.db.models import Q, Sum, Count
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from datetime import timedelta
+from core.pagination import StandardResultsSetPagination
+import django_filters
 
 from ..models import (
     Supplier, PurchaseRequest, PurchaseRequestLine, PurchaseQuotation, 
@@ -34,18 +37,19 @@ class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'supplier_category', 'rating_class']
+    filterset_fields = ['is_active', 'supplier_category']
     search_fields = ['name', 'code', 'contact_person', 'email']
-    ordering_fields = ['name', 'created_at', 'rating_class']
+    ordering_fields = ['name', 'created_at']
     ordering = ['name']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return self.queryset.filter(empresa=self.request.user.empresa_activa)
     
     def perform_create(self, serializer):
         """Crear proveedor con empresa del usuario"""
-        serializer.save(empresa=self.request.user.empresa, branch=self.request.user.branch)
+        serializer.save(empresa=self.request.user.empresa_activa, branch=self.request.user.branch_activa)
     
     @action(detail=True, methods=['get'])
     def analytics(self, request, pk=None):
@@ -90,10 +94,22 @@ class SupplierViewSet(viewsets.ModelViewSet):
         category = request.query_params.get('category')
         
         recommendations = supplier_service.get_supplier_recommendations(
-            request.user.empresa, category
+            request.user.empresa_activa, category
         )
         
         return Response(recommendations)
+
+
+class PurchaseRequestFilter(django_filters.FilterSet):
+    """Filtro personalizado para PurchaseRequest"""
+    class Meta:
+        model = PurchaseRequest
+        fields = {
+            'status': ['exact'],
+            'priority': ['exact'],
+            'request_date': ['gte', 'lte'],
+            'required_date': ['gte', 'lte'],
+        }
 
 
 class PurchaseRequestViewSet(viewsets.ModelViewSet):
@@ -102,14 +118,18 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseRequestSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'priority', 'supplier']
-    search_fields = ['request_number', 'title', 'description']
-    ordering_fields = ['request_date', 'required_date', 'total_amount']
+    filterset_class = PurchaseRequestFilter
+    search_fields = ['title', 'request_number']
+    ordering_fields = ['request_date', 'title', 'status']
     ordering = ['-request_date']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        qs = PurchaseRequest.objects.filter(empresa=self.request.user.empresa_activa)
+        supplier_id = self.request.query_params.get('supplier')
+        if supplier_id:
+            qs = qs.filter(orders__supplier_id=supplier_id).distinct()
+        return qs
     
     def get_serializer_class(self):
         """Retornar serializador apropiado según la acción"""
@@ -188,7 +208,7 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            supplier = Supplier.objects.get(id=supplier_id, empresa=request.user.empresa)
+            supplier = Supplier.objects.get(id=supplier_id, empresa=request.user.empresa_activa)
         except Supplier.DoesNotExist:
             return Response({
                 'error': _('Supplier not found')
@@ -228,7 +248,7 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
             end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d').date()
         
         analytics = purchase_service.get_purchase_analytics(
-            request.user.empresa, start_date, end_date
+            request.user.empresa_activa, start_date, end_date
         )
         
         return Response(analytics)
@@ -236,8 +256,8 @@ class PurchaseRequestViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def pending_approvals(self, request):
         """Obtener solicitudes pendientes de aprobación"""
-        approval_service = ApprovalService().set_user(request.user)
-        pending = approval_service.get_pending_approvals(request.user, request.user.empresa)
+        approval_service = ApprovalService().set_object(request.user)
+        pending = approval_service.get_pending_approvals(request.user, request.user.empresa_activa)
         
         return Response(pending)
 
@@ -248,14 +268,14 @@ class PurchaseQuotationViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseQuotationSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'supplier', 'purchase_request']
-    search_fields = ['quotation_number', 'supplier__name']
-    ordering_fields = ['quotation_date', 'total_amount', 'evaluation_score']
+    filterset_fields = ['status', 'supplier']
+    search_fields = ['quotation_number']
+    ordering_fields = ['quotation_date', 'quotation_number', 'status']
     ordering = ['-quotation_date']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return PurchaseQuotation.objects.filter(empresa=self.request.user.empresa_activa)
     
     def get_serializer_class(self):
         """Retornar serializador apropiado según la acción"""
@@ -354,7 +374,7 @@ class PurchaseQuotationViewSet(viewsets.ModelViewSet):
         
         try:
             purchase_request = PurchaseRequest.objects.get(
-                id=request_id, empresa=request.user.empresa
+                id=request_id, empresa=request.user.empresa_activa
             )
         except PurchaseRequest.DoesNotExist:
             return Response({
@@ -382,7 +402,7 @@ class PurchaseQuotationViewSet(viewsets.ModelViewSet):
             end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d').date()
         
         analytics = quotation_service.get_quotation_analytics(
-            request.user.empresa, start_date, end_date
+            request.user.empresa_activa, start_date, end_date
         )
         
         return Response(analytics)
@@ -394,14 +414,15 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseOrderSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'supplier', 'purchase_request']
-    search_fields = ['order_number', 'supplier__name']
-    ordering_fields = ['order_date', 'expected_delivery_date', 'total_amount']
+    filterset_fields = ['status', 'supplier']
+    search_fields = ['order_number']
+    ordering_fields = ['order_date', 'order_number', 'status']
     ordering = ['-order_date']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return PurchaseOrder.objects.filter(empresa=self.request.user.empresa_activa)
     
     def get_serializer_class(self):
         """Retornar serializador apropiado según la acción"""
@@ -510,7 +531,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             end_date = timezone.datetime.strptime(end_date, '%Y-%m-%d').date()
         
         analytics = purchase_service.get_purchase_analytics(
-            request.user.empresa, start_date, end_date
+            request.user.empresa_activa, start_date, end_date
         )
         
         return Response(analytics)
@@ -526,10 +547,11 @@ class PurchaseReceiptViewSet(viewsets.ModelViewSet):
     search_fields = ['receipt_number', 'lot_number']
     ordering_fields = ['receipt_date', 'received_at']
     ordering = ['-receipt_date']
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return self.queryset.filter(empresa=self.request.user.empresa_activa)
     
     def get_serializer_class(self):
         """Retornar serializador apropiado según la acción"""
@@ -593,7 +615,7 @@ class SupplierRatingViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return self.queryset.filter(empresa=self.request.user.empresa_activa)
     
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -635,11 +657,11 @@ class ApprovalWorkflowViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(empresa=self.request.user.empresa)
+        return self.queryset.filter(empresa=self.request.user.empresa_activa)
     
     def perform_create(self, serializer):
         """Crear workflow con empresa del usuario"""
-        serializer.save(empresa=self.request.user.empresa, branch=self.request.user.branch)
+        serializer.save(empresa=self.request.user.empresa_activa, branch=self.request.user.branch_activa)
 
 
 class ApprovalLevelViewSet(viewsets.ModelViewSet):
@@ -666,7 +688,7 @@ class ApprovalRecordViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         """Filtrar por empresa del usuario"""
-        return self.queryset.filter(request__empresa=self.request.user.empresa)
+        return self.queryset.filter(request__empresa=self.request.user.empresa_activa)
 
 
 class PurchaseDashboardView(APIView):
@@ -675,7 +697,7 @@ class PurchaseDashboardView(APIView):
     
     def get(self, request):
         """Obtener datos del dashboard de compras"""
-        empresa = request.user.empresa
+        empresa = request.user.empresa_activa
         
         # Período de análisis (últimos 30 días)
         end_date = timezone.now().date()
@@ -783,7 +805,7 @@ class PurchaseReportsView(APIView):
     def get(self, request):
         """Obtener reportes de compras"""
         report_type = request.query_params.get('type', 'summary')
-        empresa = request.user.empresa
+        empresa = request.user.empresa_activa
         
         # Período de análisis
         start_date = request.query_params.get('start_date')
@@ -1006,4 +1028,180 @@ class PurchaseReportsView(APIView):
             'total_orders': total_orders,
             'on_time_rate': (on_time_orders / total_orders * 100) if total_orders > 0 else 0,
             'avg_delivery_time': avg_delivery_time
-        }) 
+        })
+
+
+# --- ENDPOINTS DE DASHBOARD ---
+
+class DashboardMetricsView(APIView):
+    """Endpoint para métricas principales del dashboard"""
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        empresa = request.user.empresa_activa
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        # Métricas de solicitudes
+        total_requests = PurchaseRequest.objects.filter(
+            empresa=empresa,
+            request_date__range=[start_date, end_date]
+        ).count()
+        
+        pending_requests = PurchaseRequest.objects.filter(
+            empresa=empresa,
+            status='pending_approval'
+        ).count()
+        
+        # Métricas de órdenes
+        total_orders = PurchaseOrder.objects.filter(
+            empresa=empresa,
+            order_date__range=[start_date, end_date]
+        ).count()
+        
+        total_spent = PurchaseOrder.objects.filter(
+            empresa=empresa,
+            status__in=['confirmed', 'partially_received', 'received'],
+            order_date__range=[start_date, end_date]
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        # Métricas adicionales
+        overdue_orders = PurchaseOrder.objects.filter(
+            empresa=empresa,
+            status__in=['sent', 'confirmed'],
+            expected_delivery_date__lt=timezone.now().date()
+        ).count()
+        
+        pending_receipts = PurchaseReceipt.objects.filter(
+            purchase_order_line__purchase_order__empresa=empresa,
+            status='pending'
+        ).count()
+        
+        active_suppliers = Supplier.objects.filter(
+            empresa=empresa,
+            is_active=True
+        ).count()
+        
+        return Response({
+            'requests': {
+                'total': total_requests,
+                'pending': pending_requests
+            },
+            'orders': {
+                'total': total_orders,
+                'overdue': overdue_orders
+            },
+            'spending': {
+                'total': total_spent,
+                'trend': 'up'  # Simulación de tendencia
+            },
+            'suppliers': {
+                'active': active_suppliers,
+                'total': active_suppliers
+            },
+            'delivery': {
+                'pending': pending_receipts,
+                'completed': 0  # Simulación
+            },
+            'alerts': [],
+            'total_requests': total_requests,
+            'pending_requests': pending_requests,
+            'total_orders': total_orders,
+            'total_spent': total_spent,
+            'overdue_orders': overdue_orders,
+            'pending_receipts': pending_receipts,
+            'active_suppliers': active_suppliers
+        })
+
+class CategorySpendingView(APIView):
+    """Endpoint para gastos por categoría"""
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        empresa = request.user.empresa_activa
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=30)
+        # Simulación: datos de gastos por categoría (sin usar el campo category que no existe)
+        data = [
+            {
+                'category_name': 'Electrónicos',
+                'total': 15000.00,
+                'count': 5
+            },
+            {
+                'category_name': 'Oficina',
+                'total': 8000.00,
+                'count': 3
+            },
+            {
+                'category_name': 'Servicios',
+                'total': 12000.00,
+                'count': 2
+            }
+        ]
+        return Response(data)
+
+class SpendingTrendsView(APIView):
+    """Endpoint para tendencias de gastos"""
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        empresa = request.user.empresa_activa
+        # Simulación: suma de gastos por semana en los últimos 12 meses
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=365)
+        data = []
+        for i in range(12):
+            period_start = end_date - timedelta(days=(i+1)*30)
+            period_end = end_date - timedelta(days=i*30)
+            total = PurchaseOrder.objects.filter(
+                empresa=empresa,
+                order_date__range=[period_start, period_end],
+                status__in=['confirmed', 'partially_received', 'received']
+            ).aggregate(total=Sum('total_amount'))['total'] or 0
+            data.append({
+                'period': f'{period_start} - {period_end}',
+                'total_spent': total
+            })
+        data.reverse()
+        return Response(data)
+
+class SupplierPerformanceDashboardView(APIView):
+    """Endpoint para rendimiento de proveedores (dashboard)"""
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        empresa = request.user.empresa_activa
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=90)
+        # Simulación: top 5 proveedores por score promedio
+        data = SupplierRating.objects.filter(
+            supplier__empresa=empresa,
+            rating_date__range=[start_date, end_date]
+        ).values('supplier__name').annotate(
+            avg_score=Sum('overall_score')/Count('id'),
+            count=Count('id')
+        ).order_by('-avg_score')[:5]
+        return Response(list(data))
+
+# --- ENDPOINTS DE ACCIONES ESPECÍFICAS ---
+
+from rest_framework.generics import get_object_or_404
+
+class PurchaseOrderConfirmView(APIView):
+    """Endpoint para confirmar una orden de compra"""
+    permission_classes = [IsAuthenticated]
+    def post(self, request, pk):
+        order = get_object_or_404(PurchaseOrder, pk=pk, empresa=request.user.empresa_activa)
+        if order.status != 'sent':
+            return Response({'error': _('Only sent orders can be confirmed')}, status=400)
+        order.status = 'confirmed'
+        order.save()
+        return Response({'status': 'success', 'order_id': order.id, 'new_status': order.status})
+
+class PurchaseQuotationCompareView(APIView):
+    """Endpoint para comparar cotizaciones de una solicitud"""
+    permission_classes = [IsAuthenticated]
+    def get(self, request, request_pk):
+        quotations = PurchaseQuotation.objects.filter(
+            purchase_request_id=request_pk, 
+            empresa=request.user.empresa_activa
+        )
+        serializer = PurchaseQuotationSerializer(quotations, many=True)
+        return Response(serializer.data) 

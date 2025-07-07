@@ -4,8 +4,9 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from typing import List, Dict, Any, Optional
+from django.contrib.contenttypes.models import ContentType
 
-from ..models import ApprovalWorkflow, ApprovalLevel, PurchaseRequest, PurchaseOrder
+from ..models import ApprovalWorkflow, ApprovalLevel, PurchaseRequest, PurchaseOrder, ApprovalRequest
 
 User = get_user_model()
 
@@ -28,29 +29,24 @@ class ApprovalService:
         empresa,
         name: str,
         description: str = "",
-        is_active: bool = True,
         min_amount: float = 0,
-        max_amount: float = None,
-        categories: List[str] = None,
+        max_amount: float = 999999999,
         levels_data: List[Dict] = None
     ) -> ApprovalWorkflow:
         """
-        Crea un nuevo flujo de aprobación
+        Crea un nuevo flujo de aprobación con niveles
         """
         with transaction.atomic():
+            # Crear el workflow
             workflow = ApprovalWorkflow.objects.create(
                 empresa=empresa,
+                branch=self.user.branch_activa,  # Agregar branch obligatorio
                 name=name,
                 description=description,
-                is_active=is_active,
                 min_amount=min_amount,
                 max_amount=max_amount,
-                created_by=self.user
+                is_active=True
             )
-            
-            # Agregar categorías si se proporcionan
-            if categories:
-                workflow.categories.set(categories)
             
             # Crear niveles de aprobación
             if levels_data:
@@ -65,19 +61,25 @@ class ApprovalService:
         level_data: Dict,
         level_number: int
     ) -> ApprovalLevel:
-        """Crea un nivel de aprobación"""
+        """Crear un nivel de aprobación"""
+        # Solo pasar los campos válidos
         level = ApprovalLevel.objects.create(
             workflow=workflow,
-            level_number=level_number,
             name=level_data['name'],
-            description=level_data.get('description', ''),
             approval_type=level_data['approval_type'],
-            approvers=level_data.get('approvers', []),
-            min_approvals=level_data.get('min_approvals', 1),
-            auto_approve=level_data.get('auto_approve', False),
-            timeout_hours=level_data.get('timeout_hours', 24)
+            priority=level_number  # Campo obligatorio
         )
-        
+        # Asignar campos opcionales si existen
+        if hasattr(level, 'min_approvals') and 'min_approvals' in level_data:
+            level.min_approvals = level_data['min_approvals']
+        if hasattr(level, 'auto_approve') and 'auto_approve' in level_data:
+            level.auto_approve = level_data['auto_approve']
+        if hasattr(level, 'level_number'):
+            level.level_number = level_number
+        level.save()
+        # Asignar aprobadores si se especifican
+        if 'approvers' in level_data:
+            level.approvers.set(level_data['approvers'])
         return level
     
     def get_applicable_workflow(
@@ -87,70 +89,58 @@ class ApprovalService:
         category: str = None
     ) -> Optional[ApprovalWorkflow]:
         """
-        Obtiene el flujo de aprobación aplicable para una solicitud
+        Obtiene el flujo de aprobación aplicable basado en empresa, monto y categoría
         """
-        workflows = ApprovalWorkflow.objects.filter(
-            empresa=empresa,
-            is_active=True,
-            min_amount__lte=amount
+        # Construir filtros base
+        filters = {
+            'empresa': empresa,
+            'is_active': True
+        }
+        
+        # Agregar filtros de monto
+        if amount is not None:
+            filters['min_amount__lte'] = amount
+            filters['max_amount__gte'] = amount
+        
+        # Filtrar workflows aplicables
+        workflows = ApprovalWorkflow.objects.filter(**filters)
+        
+        # Si se especifica categoría, filtrar por ella también
+        if category:
+            workflows = workflows.filter(categories__contains=[category])
+        
+        # Retornar el primer workflow encontrado (ordenado por prioridad)
+        return workflows.order_by('min_amount').first()
+    
+    def initiate_approval_process(self, request):
+        """Inicia el proceso de aprobación para una solicitud"""
+        if not request.approval_workflow:
+            raise ValidationError(_("Request has no approval workflow assigned"))
+        
+        workflow = request.approval_workflow
+        first_level = workflow.levels.filter(priority=1).first()
+        
+        if not first_level:
+            raise ValidationError(_("No approval levels found in workflow"))
+        
+        # Crear solicitud de aprobación
+        approval_request = ApprovalRequest.objects.create(
+            content_type=ContentType.objects.get_for_model(PurchaseRequest),
+            object_id=request.id,
+            workflow=workflow,
+            current_level=first_level,
+            amount=request.total_amount or request.get_total_amount(),
+            currency=request.currency,
+            requested_by=request.requested_by,
+            expires_at=self._calculate_expiry_date(first_level)
         )
         
-        if max_amount:
-            workflows = workflows.filter(
-                models.Q(max_amount__isnull=True) | models.Q(max_amount__gte=amount)
-            )
+        # Actualizar estado de la solicitud
+        request.status = 'submitted'
+        request.current_approval_level = 1
+        request.save()
         
-        if category:
-            workflows = workflows.filter(categories__name=category)
-        
-        # Retornar el flujo con el monto mínimo más alto que aplique
-        return workflows.order_by('-min_amount').first()
-    
-    def initiate_approval_process(
-        self,
-        request: PurchaseRequest
-    ) -> Dict[str, Any]:
-        """
-        Inicia el proceso de aprobación para una solicitud de compra
-        """
-        with transaction.atomic():
-            # Obtener flujo aplicable
-            workflow = self.get_applicable_workflow(
-                empresa=request.empresa,
-                amount=request.total_amount,
-                category=request.category.name if request.category else None
-            )
-            
-            if not workflow:
-                # Sin flujo de aprobación, aprobar automáticamente
-                request.status = 'approved'
-                request.approved_by = self.user
-                request.approved_at = timezone.now()
-                request.save()
-                
-                return {
-                    'status': 'auto_approved',
-                    'message': _('Request automatically approved (no approval workflow)'),
-                    'workflow': None
-                }
-            
-            # Asignar flujo a la solicitud
-            request.approval_workflow = workflow
-            request.status = 'pending_approval'
-            request.current_approval_level = 1
-            request.save()
-            
-            # Iniciar primer nivel de aprobación
-            first_level = workflow.levels.filter(level_number=1).first()
-            if first_level:
-                self._start_approval_level(request, first_level)
-            
-            return {
-                'status': 'pending_approval',
-                'message': _('Approval process initiated'),
-                'workflow': workflow,
-                'current_level': first_level
-            }
+        return approval_request
     
     def _start_approval_level(
         self,
@@ -179,6 +169,10 @@ class ApprovalService:
         with transaction.atomic():
             if request.status != 'pending_approval':
                 raise ValidationError(_("Request is not pending approval"))
+            
+            # Verificar que tiene un workflow asignado
+            if not request.approval_workflow:
+                raise ValidationError(_("Request has no approval workflow assigned"))
             
             # Obtener nivel actual
             current_level = request.approval_workflow.levels.filter(
@@ -445,4 +439,7 @@ class ApprovalService:
             else:
                 request.status = 'rejected'
                 request.rejection_reason = 'Approval timeout'
-                request.save() 
+                request.save()
+    
+    def _calculate_expiry_date(self, level):
+        return timezone.now() + timezone.timedelta(days=7) 

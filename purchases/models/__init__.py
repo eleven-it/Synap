@@ -1,6 +1,6 @@
 # Importar todos los modelos del módulo de compras
 from .supplier import Supplier
-from .approval_workflow import ApprovalWorkflow, ApprovalLevel
+from .approval_workflow import ApprovalWorkflow, ApprovalLevel, ApprovalRequest
 from .purchase_request import PurchaseRequest, PurchaseRequestLine
 from .purchase_quotation import PurchaseQuotation, PurchaseQuotationLine
 from .purchase_order import PurchaseOrder, PurchaseOrderLine
@@ -15,6 +15,7 @@ __all__ = [
     # Flujos de aprobación
     'ApprovalWorkflow',
     'ApprovalLevel',
+    'ApprovalRequest',
     'ApprovalRecord',
     
     # Solicitudes de compra

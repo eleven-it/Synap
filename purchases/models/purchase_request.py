@@ -2,8 +2,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator
-from core.models import Empresa, Branch, Currency
-from inventory.models import ProductVariant, Location
+from core.models import Empresa, Branch, Currency, DeliveryLocation
+from inventory.models import ProductVariant
 
 User = get_user_model()
 
@@ -44,7 +44,13 @@ class PurchaseRequest(models.Model):
     approved_date = models.DateField(_("Approved Date"), null=True, blank=True)
     
     # Ubicación de entrega
-    delivery_location = models.ForeignKey(Location, on_delete=models.CASCADE, verbose_name=_("Delivery Location"))
+    delivery_location = models.ForeignKey(
+        DeliveryLocation, 
+        on_delete=models.CASCADE, 
+        verbose_name=_("Delivery Location"),
+        null=True,
+        blank=True
+    )
     
     # Información de presupuesto
     budget_amount = models.DecimalField(_("Budget Amount"), max_digits=15, decimal_places=2, null=True, blank=True)
@@ -74,6 +80,40 @@ class PurchaseRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Workflow de aprobación asociado
+    approval_workflow = models.ForeignKey(
+        'purchases.ApprovalWorkflow',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='purchase_requests',
+        verbose_name=_('Approval Workflow'),
+        help_text=_('Approval workflow assigned to this request')
+    )
+    # Nivel actual de aprobación (número)
+    current_approval_level = models.IntegerField(
+        _('Current Approval Level'),
+        null=True,
+        blank=True,
+        help_text=_('Current approval level number')
+    )
+    # Número de aprobaciones recibidas
+    approvals_received = models.IntegerField(
+        _('Approvals Received'),
+        default=0,
+        help_text=_('Number of approvals received so far')
+    )
+    # Monto total de la solicitud (cacheado para búsquedas/ordenamiento)
+    total_amount = models.DecimalField(
+        _('Total Amount'),
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=_('Total amount of the request (auto-calculated)')
+    )
+    
     class Meta:
         verbose_name = _("Purchase Request")
         verbose_name_plural = _("Purchase Requests")
@@ -89,9 +129,12 @@ class PurchaseRequest(models.Model):
         return f"{self.request_number} - {self.title} ({self.get_status_display()})"
     
     def save(self, *args, **kwargs):
-        """Genera automáticamente el número de solicitud si no existe"""
+        """Genera automáticamente el número de solicitud si no existe y actualiza el total"""
         if not self.request_number:
             self.request_number = self._generate_request_number()
+        # Calcular y guardar el total solo si ya tiene PK
+        if self.pk:
+            self.total_amount = self.get_total_amount()
         super().save(*args, **kwargs)
     
     def _generate_request_number(self):
@@ -111,7 +154,10 @@ class PurchaseRequest(models.Model):
     
     def get_total_amount(self):
         """Calcula el monto total de la solicitud"""
-        return self.lines.aggregate(total=models.Sum('total_amount'))['total'] or 0
+        total = 0
+        for line in self.lines.all():
+            total += line.total_amount
+        return total
     
     def get_line_count(self):
         """Retorna el número de líneas en la solicitud"""
@@ -159,6 +205,11 @@ class PurchaseRequest(models.Model):
         """Retorna las órdenes de compra relacionadas con esta solicitud"""
         from .purchase_order import PurchaseOrder
         return PurchaseOrder.objects.filter(purchase_request=self)
+    
+    @property
+    def total_amount_value(self):
+        """Retorna el monto total calculado (si el campo es None)"""
+        return self.total_amount if self.total_amount is not None else self.get_total_amount()
 
 
 class PurchaseRequestLine(models.Model):

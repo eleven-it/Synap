@@ -116,7 +116,8 @@ class PurchaseOrder(models.Model):
         self.shipping_amount = sum(line.shipping_amount for line in lines)
         self.total_amount = self.subtotal + self.tax_amount - self.discount_amount + self.shipping_amount
         
-        self.save(update_fields=['subtotal', 'tax_amount', 'discount_amount', 'shipping_amount', 'total_amount'])
+        # Evitar recursión infinita usando update_fields y skip_signal
+        super().save(update_fields=['subtotal', 'tax_amount', 'discount_amount', 'shipping_amount', 'total_amount'])
     
     def get_total_in_base_currency(self):
         """Retorna el total en moneda base"""

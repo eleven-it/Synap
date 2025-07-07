@@ -104,6 +104,8 @@ TEMPLATES = [
                 'core.context_processors.usuario_y_permisos',
                 'core.context_processors.menu_context',
                 'core.context_processors.inventory_menu_context',
+                'core.context_processors.tiendanube_menu_context',
+                'core.context_processors.purchases_menu_context',
             ],
         },
     },
