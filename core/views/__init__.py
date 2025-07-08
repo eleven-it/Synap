@@ -23,3 +23,4 @@ from .views_contacts import (
     ContactDetailView, ContactDeleteView, ContactRelationshipListView,
     ContactableCreateView, ContactableUpdateView
 )
+from . import hook_admin

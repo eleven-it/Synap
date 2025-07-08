@@ -1,0 +1,111 @@
+{% load menu_tags %}
+{% load i18n %}
+
+<!-- Menú Dinámico del Sistema -->
+<div class="dynamic-menu bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4">
+    <div class="menu-header mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <i class="fas fa-bars mr-2 text-orange-500"></i>
+            {% trans "System Menu" %}
+        </h3>
+    </div>
+    
+    <nav class="menu-navigation space-y-1">
+        {% render_user_menu %}
+    </nav>
+</div>
+
+<!-- Script para funcionalidad de submenús -->
+<script>
+function toggleSubmenu(menuId) {
+    const submenu = document.getElementById(`submenu-${menuId}`);
+    const chevron = document.getElementById(`chevron-${menuId}`);
+    const button = event.target.closest('button');
+    
+    if (submenu.classList.contains('hidden')) {
+        // Mostrar submenú
+        submenu.classList.remove('hidden');
+        chevron.style.transform = 'rotate(180deg)';
+        button.setAttribute('aria-expanded', 'true');
+    } else {
+        // Ocultar submenú
+        submenu.classList.add('hidden');
+        chevron.style.transform = 'rotate(0deg)';
+        button.setAttribute('aria-expanded', 'false');
+    }
+}
+
+// Marcar ítem activo
+document.addEventListener('DOMContentLoaded', function() {
+    const currentPath = window.location.pathname;
+    const menuLinks = document.querySelectorAll('.nav-link, .submenu-link');
+    
+    menuLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href && currentPath.startsWith(href)) {
+            link.classList.add('bg-orange-100', 'dark:bg-orange-900/20', 'text-orange-700', 'dark:text-orange-300');
+            link.classList.remove('text-gray-700', 'dark:text-gray-300', 'hover:bg-gray-100', 'dark:hover:bg-gray-700');
+        }
+    });
+});
+</script>
+
+<style>
+.dynamic-menu {
+    @apply transition-all duration-200;
+}
+
+.menu-navigation {
+    @apply max-h-96 overflow-y-auto;
+}
+
+.nav-item {
+    @apply relative;
+}
+
+.submenu {
+    @apply border-l-2 border-gray-200 dark:border-gray-600;
+}
+
+.submenu-item {
+    @apply relative;
+}
+
+.submenu-item:before {
+    content: '';
+    @apply absolute left-0 top-1/2 w-2 h-px bg-gray-300 dark:bg-gray-600 transform -translate-y-1/2;
+}
+
+.nav-link.active,
+.submenu-link.active {
+    @apply bg-orange-100 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300;
+}
+
+/* Animaciones */
+.nav-link,
+.submenu-link {
+    @apply transition-all duration-200 ease-in-out;
+}
+
+.nav-link:hover,
+.submenu-link:hover {
+    @apply transform translate-x-1;
+}
+
+/* Scrollbar personalizado */
+.menu-navigation::-webkit-scrollbar {
+    @apply w-2;
+}
+
+.menu-navigation::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-700 rounded;
+}
+
+.menu-navigation::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600 rounded;
+}
+
+.menu-navigation::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+}
+</style> 

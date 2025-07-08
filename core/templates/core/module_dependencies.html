@@ -1,0 +1,383 @@
+{% extends "core/core_app_base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Module Dependencies" %} - {% trans "System" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dependency-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .dependency-header {
+        @apply flex items-center justify-between mb-6;
+    }
+    
+    .dependency-title {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .dependency-graph {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-6;
+    }
+    
+    .graph-node {
+        @apply inline-block bg-white dark:bg-gray-800 border-2 rounded-lg px-4 py-2 m-2 shadow-sm;
+    }
+    
+    .graph-node.core {
+        @apply border-blue-500 bg-blue-50 dark:bg-blue-900/20;
+    }
+    
+    .graph-node.required {
+        @apply border-purple-500 bg-purple-50 dark:bg-purple-900/20;
+    }
+    
+    .graph-node.active {
+        @apply border-green-500 bg-green-50 dark:bg-green-900/20;
+    }
+    
+    .graph-node.inactive {
+        @apply border-red-500 bg-red-50 dark:bg-red-900/20;
+    }
+    
+    .graph-node.optional {
+        @apply border-gray-500 bg-gray-50 dark:bg-gray-700;
+    }
+    
+    .node-name {
+        @apply font-semibold text-gray-900 dark:text-white;
+    }
+    
+    .node-status {
+        @apply text-xs text-gray-600 dark:text-gray-400;
+    }
+    
+    .dependency-arrow {
+        @apply text-gray-400 dark:text-gray-500 mx-2;
+    }
+    
+    .circular-warning {
+        @apply bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6;
+    }
+    
+    .circular-title {
+        @apply text-lg font-semibold text-red-800 dark:text-red-200 mb-2;
+    }
+    
+    .circular-list {
+        @apply space-y-2;
+    }
+    
+    .circular-item {
+        @apply text-sm text-red-700 dark:text-red-300;
+    }
+    
+    .dependency-list {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    }
+    
+    .dependency-item {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-4;
+    }
+    
+    .dependency-item-header {
+        @apply flex items-center justify-between mb-2;
+    }
+    
+    .dependency-item-name {
+        @apply font-semibold text-gray-900 dark:text-white;
+    }
+    
+    .dependency-item-status {
+        @apply px-2 py-1 text-xs rounded;
+    }
+    
+    .dependency-item-status.active {
+        @apply bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300;
+    }
+    
+    .dependency-item-status.inactive {
+        @apply bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300;
+    }
+    
+    .dependency-item-status.core {
+        @apply bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300;
+    }
+    
+    .dependency-item-status.required {
+        @apply bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300;
+    }
+    
+    .dependency-deps {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .dependency-deps-label {
+        @apply font-medium mb-1;
+    }
+    
+    .dependency-deps-list {
+        @apply space-y-1;
+    }
+    
+    .dependency-dep {
+        @apply text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300;
+    }
+    
+    .dependency-dep.missing {
+        @apply bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300;
+    }
+    
+    .dependency-dep.active {
+        @apply bg-green-200 dark:bg-green-800 text-green-700 dark:text-green-300;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-2 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .legend {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6;
+    }
+    
+    .legend-title {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-3;
+    }
+    
+    .legend-items {
+        @apply grid grid-cols-2 md:grid-cols-4 gap-4;
+    }
+    
+    .legend-item {
+        @apply flex items-center space-x-2;
+    }
+    
+    .legend-color {
+        @apply w-4 h-4 rounded border-2;
+    }
+    
+    .legend-color.core {
+        @apply border-blue-500 bg-blue-50 dark:bg-blue-900/20;
+    }
+    
+    .legend-color.required {
+        @apply border-purple-500 bg-purple-50 dark:bg-purple-900/20;
+    }
+    
+    .legend-color.active {
+        @apply border-green-500 bg-green-50 dark:bg-green-900/20;
+    }
+    
+    .legend-color.inactive {
+        @apply border-red-500 bg-red-50 dark:bg-red-900/20;
+    }
+    
+    .legend-color.optional {
+        @apply border-gray-500 bg-gray-50 dark:bg-gray-700;
+    }
+    
+    .legend-label {
+        @apply text-sm text-gray-700 dark:text-gray-300;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Module Dependencies" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Visualize and manage module dependencies" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'core:module_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to Modules" %}
+                    </a>
+                    <button onclick="location.reload()" class="btn-primary">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        {% trans "Refresh" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h3 class="legend-title">{% trans "Legend" %}</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color core"></div>
+                    <span class="legend-label">{% trans "Core Module" %}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color required"></div>
+                    <span class="legend-label">{% trans "Required Module" %}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color active"></div>
+                    <span class="legend-label">{% trans "Active Module" %}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color inactive"></div>
+                    <span class="legend-label">{% trans "Inactive Module" %}</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color optional"></div>
+                    <span class="legend-label">{% trans "Optional Module" %}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Circular Dependencies Warning -->
+        {% if circular_dependencies %}
+        <div class="circular-warning">
+            <h3 class="circular-title">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                {% trans "Circular Dependencies Detected" %}
+            </h3>
+            <div class="circular-list">
+                {% for cycle in circular_dependencies %}
+                <div class="circular-item">
+                    <i class="fas fa-arrow-right mr-2"></i>
+                    {{ cycle|join:" → " }} → {{ cycle.0 }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Dependency Graph -->
+        <div class="dependency-card">
+            <div class="dependency-header">
+                <h2 class="dependency-title">{% trans "Dependency Graph" %}</h2>
+            </div>
+            
+            <div class="dependency-graph">
+                {% for module in modules %}
+                <div class="graph-node 
+                    {% if module.is_core %}core
+                    {% elif module.is_required %}required
+                    {% elif module.is_active %}active
+                    {% else %}inactive{% endif %}">
+                    <div class="node-name">{{ module.display_name }}</div>
+                    <div class="node-status">
+                        {% if module.is_core %}
+                        {% trans "Core" %}
+                        {% elif module.is_required %}
+                        {% trans "Required" %}
+                        {% elif module.is_active %}
+                        {% trans "Active" %}
+                        {% else %}
+                        {% trans "Inactive" %}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if not forloop.last %}
+                <i class="fas fa-arrow-right dependency-arrow"></i>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Detailed Dependency List -->
+        <div class="dependency-card">
+            <h2 class="dependency-title mb-6">{% trans "Detailed Dependencies" %}</h2>
+            
+            <div class="dependency-list">
+                {% for module in modules %}
+                <div class="dependency-item">
+                    <div class="dependency-item-header">
+                        <div class="dependency-item-name">{{ module.display_name }}</div>
+                        <div class="dependency-item-status 
+                            {% if module.is_core %}core
+                            {% elif module.is_required %}required
+                            {% elif module.is_active %}active
+                            {% else %}inactive{% endif %}">
+                            {% if module.is_core %}
+                            {% trans "Core" %}
+                            {% elif module.is_required %}
+                            {% trans "Required" %}
+                            {% elif module.is_active %}
+                            {% trans "Active" %}
+                            {% else %}
+                            {% trans "Inactive" %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if module.dependencies %}
+                    <div class="dependency-deps">
+                        <div class="dependency-deps-label">{% trans "Dependencies:" %}</div>
+                        <div class="dependency-deps-list">
+                            {% for dep in module.dependencies %}
+                            <span class="dependency-dep 
+                                {% if dep in module.missing_dependencies %}missing
+                                {% else %}active{% endif %}">
+                                {{ dep }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if module.dependents %}
+                    <div class="dependency-deps mt-2">
+                        <div class="dependency-deps-label">{% trans "Dependents:" %}</div>
+                        <div class="dependency-deps-list">
+                            {% for dep in module.dependents %}
+                            <span class="dependency-dep">{{ dep }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Dependency Analysis -->
+        <div class="dependency-card">
+            <h2 class="dependency-title mb-6">{% trans "Dependency Analysis" %}</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        {% trans "Activation Order" %}
+                    </h3>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                        {% trans "Modules should be activated in dependency order to avoid conflicts." %}
+                    </p>
+                </div>
+                
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {% trans "Deactivation Impact" %}
+                    </h3>
+                    <p class="text-sm text-yellow-700 dark:text-yellow-300">
+                        {% trans "Deactivating a module will also deactivate all modules that depend on it." %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

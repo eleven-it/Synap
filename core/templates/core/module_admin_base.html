@@ -1,0 +1,239 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+{% load menu_tags %}
+
+{% block title %}{% block page_title %}{% trans "Module Management" %}{% endblock %} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-layout {
+        @apply flex min-h-screen bg-gray-50 dark:bg-gray-900;
+    }
+    
+    .admin-sidebar {
+        @apply w-64 bg-white dark:bg-gray-800 shadow-lg border-r border-gray-200 dark:border-gray-700 
+               fixed left-0 top-16 h-full z-30 transition-all duration-300;
+    }
+    
+    .admin-sidebar.collapsed {
+        @apply w-16;
+    }
+    
+    .admin-content {
+        @apply flex-1 ml-64 transition-all duration-300;
+    }
+    
+    .admin-content.expanded {
+        @apply ml-16;
+    }
+    
+    .admin-header {
+        @apply bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 
+               px-6 py-4 sticky top-16 z-20;
+    }
+    
+    .admin-main {
+        @apply p-6;
+    }
+    
+    .sidebar-toggle {
+        @apply p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200;
+    }
+    
+    .sidebar-toggle.collapsed {
+        @apply bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400;
+    }
+    
+    .module-status-indicator {
+        @apply inline-block w-2 h-2 rounded-full mr-2;
+    }
+    
+    .status-active {
+        @apply bg-green-500;
+    }
+    
+    .status-inactive {
+        @apply bg-red-500;
+    }
+    
+    .status-core {
+        @apply bg-blue-500;
+    }
+    
+    .status-required {
+        @apply bg-purple-500;
+    }
+    
+    .quick-actions {
+        @apply flex space-x-2;
+    }
+    
+    .btn-sm {
+        @apply px-3 py-1.5 text-sm rounded-lg font-medium transition-all duration-200;
+    }
+    
+    .btn-primary-sm {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white 
+               hover:from-orange-500 hover:to-orange-700 transform hover:scale-105;
+    }
+    
+    .btn-secondary-sm {
+        @apply bg-gray-500 text-white hover:bg-gray-600 transform hover:scale-105;
+    }
+    
+    .btn-danger-sm {
+        @apply bg-red-500 text-white hover:bg-red-600 transform hover:scale-105;
+    }
+    
+    .stats-grid {
+        @apply grid grid-cols-1 md:grid-cols-4 gap-4 mb-6;
+    }
+    
+    .stat-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .stat-value {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .stat-label {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .stat-icon {
+        @apply text-3xl text-orange-500 mb-2;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout" x-data="{ sidebarCollapsed: false }">
+    <!-- Sidebar de Administración -->
+    <aside class="admin-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
+        <div class="p-4">
+            <!-- Toggle del Sidebar -->
+            <button @click="sidebarCollapsed = !sidebarCollapsed" 
+                    class="sidebar-toggle w-full mb-4" 
+                    :class="{ 'collapsed': sidebarCollapsed }">
+                <i class="fas fa-bars"></i>
+                <span x-show="!sidebarCollapsed" class="ml-2">{% trans "Toggle Menu" %}</span>
+            </button>
+            
+            <!-- Menú Dinámico -->
+            <div x-show="!sidebarCollapsed">
+                {% include 'core/partials/dynamic_menu.html' %}
+            </div>
+            
+            <!-- Menú Colapsado -->
+            <div x-show="sidebarCollapsed" class="space-y-2">
+                <div class="text-center">
+                    <i class="fas fa-cogs text-orange-500 text-xl"></i>
+                </div>
+                <div class="text-center">
+                    <i class="fas fa-puzzle-piece text-gray-400 text-lg"></i>
+                </div>
+                <div class="text-center">
+                    <i class="fas fa-chart-bar text-gray-400 text-lg"></i>
+                </div>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Contenido Principal -->
+    <div class="admin-content" :class="{ 'expanded': sidebarCollapsed }">
+        <!-- Header de Administración -->
+        <header class="admin-header">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% block admin_title %}{% trans "Module Management" %}{% endblock %}
+                    </h1>
+                    <p class="text-gray-600 dark:text-gray-400 mt-1">
+                        {% block admin_subtitle %}{% trans "Manage system modules and configurations" %}{% endblock %}
+                    </p>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Breadcrumb -->
+                    <div class="hidden md:block">
+                        {% include 'core/partials/dynamic_breadcrumb.html' %}
+                    </div>
+                    
+                    <!-- Acciones Rápidas -->
+                    <div class="quick-actions">
+                        {% block quick_actions %}
+                        <a href="{% url 'core:module_list' %}" class="btn-sm btn-secondary-sm">
+                            <i class="fas fa-list mr-1"></i>
+                            {% trans "Modules" %}
+                        </a>
+                        <a href="{% url 'core:module_validation' %}" class="btn-sm btn-primary-sm">
+                            <i class="fas fa-check-circle mr-1"></i>
+                            {% trans "Validate" %}
+                        </a>
+                        {% endblock %}
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Contenido Principal -->
+        <main class="admin-main">
+            <!-- Estadísticas (opcional) -->
+            {% block admin_stats %}
+            {% if module_summary %}
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <i class="fas fa-puzzle-piece stat-icon"></i>
+                    <div class="stat-value">{{ module_summary.total_modules }}</div>
+                    <div class="stat-label">{% trans "Total Modules" %}</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-check-circle stat-icon text-green-500"></i>
+                    <div class="stat-value">{{ module_summary.active_modules }}</div>
+                    <div class="stat-label">{% trans "Active Modules" %}</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-shield-alt stat-icon text-blue-500"></i>
+                    <div class="stat-value">{{ module_summary.core_modules }}</div>
+                    <div class="stat-label">{% trans "Core Modules" %}</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-cog stat-icon text-purple-500"></i>
+                    <div class="stat-value">{{ module_summary.optional_modules }}</div>
+                    <div class="stat-label">{% trans "Optional Modules" %}</div>
+                </div>
+            </div>
+            {% endif %}
+            {% endblock %}
+            
+            <!-- Contenido de la Página -->
+            {% block admin_content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<!-- Scripts adicionales -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips y otros componentes
+    if (typeof tippy !== 'undefined') {
+        tippy('[data-tippy-content]', {
+            placement: 'top',
+            theme: 'light-border'
+        });
+    }
+    
+    // Manejar navegación del sidebar
+    const sidebarLinks = document.querySelectorAll('.nav-link, .submenu-link');
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', function() {
+            // Marcar como activo
+            sidebarLinks.forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+});
+</script>
+{% endblock %} 

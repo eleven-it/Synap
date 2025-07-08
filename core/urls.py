@@ -4,7 +4,14 @@ from .views import views_api
 from core.views.cdn_wizard import CDNWizardView
 from core.views.views import empresa_crear_view, empresa_editar_view, empresa_listar_view, empresa_eliminar_view, branch_list_view, branch_create_view, branch_edit_view, branch_delete_view, cambiar_empresa_branch
 from core.views.views_general import MenuExampleView
+from core.views.module_admin import (
+    ModuleListView, ModuleDetailView, ModuleToggleView, ModuleBulkActionView,
+    ModuleSettingsView, ModuleDependencyView, ModuleValidationView, ModuleAPIView
+)
 from django.views.generic import TemplateView
+from core.views.hook_admin import (
+    hook_dashboard, hook_list, hook_detail, hook_validation, reload_hooks, test_hooks, hook_stats_api, hook_execution_api, event_dispatch_api, event_list, event_detail, module_hooks
+)
 
 app_name = 'core'
 
@@ -60,6 +67,16 @@ urlpatterns = [
     path('configuracion/<int:pk>/editar/', views.SystemConfigurationUpdateView.as_view(), name='system_config_update'),
     path('configuracion/<int:pk>/eliminar/', views.SystemConfigurationDeleteView.as_view(), name='system_config_delete'),
 
+    # Gestión de Módulos
+    path('modules/', ModuleListView.as_view(), name='module_list'),
+    path('modules/<int:pk>/', ModuleDetailView.as_view(), name='module_detail'),
+    path('modules/<str:module_name>/toggle/', ModuleToggleView.as_view(), name='module_toggle'),
+    path('modules/bulk-action/', ModuleBulkActionView.as_view(), name='module_bulk_action'),
+    path('modules/<int:pk>/settings/', ModuleSettingsView.as_view(), name='module_settings'),
+    path('modules/dependencies/', ModuleDependencyView.as_view(), name='module_dependencies'),
+    path('modules/validation/', ModuleValidationView.as_view(), name='module_validation'),
+    path('modules/api/', ModuleAPIView.as_view(), name='module_api'),
+
     # URL de Errores
     path('403/', views.error_403_view, name='error_403'),
 
@@ -90,6 +107,24 @@ urlpatterns = [
     
     # Nuevo Dashboard con Arquitectura de Apps
     path('dashboard-apps/', TemplateView.as_view(template_name='dashboard_apps.html'), name='dashboard_apps'),
+    
+    # URLs de administración de hooks
+    path('hooks/', hook_dashboard, name='hook_dashboard'),
+    path('hooks/list/', hook_list, name='hook_list'),
+    path('hooks/<str:hook_name>/', hook_detail, name='hook_detail'),
+    path('hooks/validation/', hook_validation, name='hook_validation'),
+    path('hooks/reload/', reload_hooks, name='reload_hooks'),
+    path('hooks/test/', test_hooks, name='test_hooks'),
+    path('hooks/api/stats/', hook_stats_api, name='hook_stats_api'),
+    path('hooks/api/<str:hook_name>/execute/', hook_execution_api, name='hook_execution_api'),
+    path('hooks/api/events/dispatch/', event_dispatch_api, name='event_dispatch_api'),
+    
+    # URLs de eventos
+    path('events/', event_list, name='event_list'),
+    path('events/<str:event_name>/', event_detail, name='event_detail'),
+    
+    # URLs de hooks por módulo
+    path('modules/<str:module_name>/hooks/', module_hooks, name='module_hooks'),
 ]
 
 

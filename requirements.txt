@@ -24,3 +24,4 @@ celery>=5.2
 django-celery-beat>=2.8.1
 openpyxl
 django-filter
+PyYAML

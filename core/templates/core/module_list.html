@@ -1,0 +1,185 @@
+{% extends "core/module_admin_base.html" %}
+{% load i18n %}
+
+{% block page_title %}{% trans "Module Management" %}{% endblock %}
+
+{% block admin_title %}{% trans "Module Management" %}{% endblock %}
+
+{% block admin_subtitle %}{% trans "Activate, deactivate and configure system modules" %}{% endblock %}
+
+{% block quick_actions %}
+<a href="{% url 'core:module_validation' %}" class="btn-sm btn-secondary-sm">
+    <i class="fas fa-check-circle mr-1"></i>
+    {% trans "Validate" %}
+</a>
+<a href="{% url 'core:module_dependencies' %}" class="btn-sm btn-secondary-sm">
+    <i class="fas fa-project-diagram mr-1"></i>
+    {% trans "Dependencies" %}
+</a>
+{% endblock %}
+
+{% block admin_content %}
+<!-- Bulk Actions -->
+<div class="bulk-actions">
+    <div class="bulk-actions-header">
+        <h3 class="bulk-actions-title">{% trans "Bulk Actions" %}</h3>
+    </div>
+    <form method="post" action="{% url 'core:module_bulk_action' %}" class="bulk-actions-form">
+        {% csrf_token %}
+        <div class="checkbox-group">
+            <input type="checkbox" id="select-all" class="checkbox-input">
+            <label for="select-all" class="text-sm text-gray-700 dark:text-gray-300">
+                {% trans "Select All" %}
+            </label>
+        </div>
+        <select name="action" class="select-input">
+            <option value="">{% trans "Choose Action" %}</option>
+            <option value="activate">{% trans "Activate Selected" %}</option>
+            <option value="deactivate">{% trans "Deactivate Selected" %}</option>
+        </select>
+        <button type="submit" class="btn-primary">
+            <i class="fas fa-play mr-2"></i>
+            {% trans "Execute" %}
+        </button>
+    </form>
+</div>
+
+<!-- Module List -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% for module in modules %}
+    <div class="module-card">
+        <div class="module-header">
+            <div>
+                <h3 class="module-title">{{ module.display_name }}</h3>
+                <p class="text-sm text-gray-500">{{ module.name }}</p>
+            </div>
+            <div class="flex items-center space-x-2">
+                {% if module.is_core %}
+                <span class="module-status status-core">{% trans "Core" %}</span>
+                {% elif module.is_required %}
+                <span class="module-status status-required">{% trans "Required" %}</span>
+                {% elif module.is_active %}
+                <span class="module-status status-active">{% trans "Active" %}</span>
+                {% else %}
+                <span class="module-status status-inactive">{% trans "Inactive" %}</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <p class="module-description">{{ module.description }}</p>
+
+        <div class="module-meta">
+            <div class="meta-item">
+                <div class="meta-label">{% trans "Version" %}</div>
+                <div class="meta-value">{{ module.version }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">{% trans "Author" %}</div>
+                <div class="meta-value">{{ module.author|default:"Synap Team" }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">{% trans "Created" %}</div>
+                <div class="meta-value">{{ module.created_at|date:"M d, Y" }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-label">{% trans "Updated" %}</div>
+                <div class="meta-value">{{ module.updated_at|date:"M d, Y" }}</div>
+            </div>
+        </div>
+
+        <!-- Dependencies -->
+        {% if module.dependencies %}
+        <div class="dependencies-section">
+            <div class="dependencies-title">{% trans "Dependencies" %}</div>
+            <div class="dependency-tags">
+                {% for dep in module.dependencies %}
+                <span class="dependency-tag {% if dep in module.missing_dependencies %}missing{% else %}active{% endif %}">
+                    {{ dep }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Dependents -->
+        {% if module.dependents %}
+        <div class="dependencies-section">
+            <div class="dependencies-title">{% trans "Dependents" %}</div>
+            <div class="dependency-tags">
+                {% for dep in module.dependents %}
+                <span class="dependency-tag">{{ dep }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Actions -->
+        <div class="module-actions">
+            <a href="{% url 'core:module_detail' module.pk %}" class="btn-secondary">
+                <i class="fas fa-eye mr-2"></i>
+                {% trans "Details" %}
+            </a>
+            
+            {% if module.is_active %}
+                {% if module.can_deactivate %}
+                <form method="post" action="{% url 'core:module_toggle' module.name %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="deactivate">
+                    <button type="submit" class="btn-danger">
+                        <i class="fas fa-power-off mr-2"></i>
+                        {% trans "Deactivate" %}
+                    </button>
+                </form>
+                {% else %}
+                <button class="btn-disabled" disabled>
+                    <i class="fas fa-lock mr-2"></i>
+                    {% trans "Cannot Deactivate" %}
+                </button>
+                {% endif %}
+            {% else %}
+                {% if module.can_activate %}
+                <form method="post" action="{% url 'core:module_toggle' module.name %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="activate">
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-play mr-2"></i>
+                        {% trans "Activate" %}
+                    </button>
+                </form>
+                {% else %}
+                <button class="btn-disabled" disabled>
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    {% trans "Cannot Activate" %}
+                </button>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Select all functionality
+    const selectAllCheckbox = document.getElementById('select-all');
+    const moduleCheckboxes = document.querySelectorAll('input[name="modules"]');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        moduleCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+    
+    // Update select all when individual checkboxes change
+    moduleCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const allChecked = Array.from(moduleCheckboxes).every(cb => cb.checked);
+            const someChecked = Array.from(moduleCheckboxes).some(cb => cb.checked);
+            
+            selectAllCheckbox.checked = allChecked;
+            selectAllCheckbox.indeterminate = someChecked && !allChecked;
+        });
+    });
+});
+</script>
+{% endblock %} 

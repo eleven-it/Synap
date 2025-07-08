@@ -22,21 +22,32 @@ from django.views.generic import TemplateView
 from core.views import error_403_view
 from django.shortcuts import redirect
 
+# URLs base (siempre disponibles)
 urlpatterns = [
     path('', lambda request: redirect('/core/dashboard/')),  # Redirección raíz
     path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
     path("admin/", admin.site.urls),
     path("login/", include("login.urls")),  
-    path("inventory/", include("inventory.urls", namespace="inventory")),    
-    path("clientes/", include("clientes.urls", namespace="clientes")),
     path("core/", include("core.urls", namespace="core")),
-    path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
-    path('sales/', include('sales.urls', namespace='sales')),
-    path('api/sales/', include('sales.api.urls')),
-    path('accounting/', include('accounting.urls', namespace='accounting')),
-    path('purchases/', include('purchases.urls', namespace='purchases')),
-    path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),
 ]
+
+# URLs de módulos dinámicos
+try:
+    from core.url_registry import url_registry
+    module_url_patterns = url_registry.get_module_url_patterns()
+    urlpatterns.extend(module_url_patterns)
+except ImportError:
+    # Fallback: URLs estáticas si el sistema de módulos no está disponible
+    urlpatterns.extend([
+        path("inventory/", include("inventory.urls", namespace="inventory")),    
+        path("clientes/", include("clientes.urls", namespace="clientes")),
+        path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
+        path('sales/', include('sales.urls', namespace='sales')),
+        path('api/sales/', include('sales.api.urls')),
+        path('accounting/', include('accounting.urls', namespace='accounting')),
+        path('purchases/', include('purchases.urls', namespace='purchases')),
+        path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),
+    ])
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])

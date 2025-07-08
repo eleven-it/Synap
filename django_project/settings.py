@@ -62,10 +62,14 @@ MIDDLEWARE = [
     'core.middleware.AdminAccessMiddleware',
     'core.middleware.IdiomaUsuarioMiddleware',
     'core.middleware.DeviceDetectionMiddleware',  # Detección de dispositivos
+    'core.middleware.module_middleware.ModuleMiddleware',  # Gestión de módulos
+    'core.middleware.module_middleware.ModulePermissionMiddleware',  # Permisos de módulos
+    'core.middleware.module_middleware.ModuleContextMiddleware',  # Contexto de módulos
+    'core.middleware.module_middleware.ModuleCacheMiddleware',  # Cache de módulos
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_project.settings.custom_ajax_login_required',
-    'core.middleware.CDNCacheMiddleware',
+    # 'core.middleware.CDNCacheMiddleware',  # Comentado temporalmente
 ]
 
 # Middleware para AJAX login
