@@ -40,14 +40,14 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Clients"),
+                "seccion": _("Customer Management"),
                 "items": [
                     {"label": _("Clients"), "url": "sales:client_list", "icon": "groups", "permission": "sales.ver_client"},
                     {"label": _("Create Client"), "url": "sales:client_create", "icon": "person_add", "permission": "sales.crear_client"},
                 ]
             },
             {
-                "seccion": _("Orders"),
+                "seccion": _("Sales Operations"),
                 "items": [
                     {"label": _("Orders"), "url": "sales:sales_order_list", "icon": "assignment", "permission": "sales.ver_order"},
                     {"label": _("Create Order"), "url": "sales:sales_order_create", "icon": "add_box", "permission": "sales.crear_order"},
@@ -61,7 +61,7 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Deliveries & Returns"),
+                "seccion": _("Logistics"),
                 "items": [
                     {"label": _("Deliveries"), "url": "sales:delivery_order_list", "icon": "local_shipping", "permission": "sales.ver_delivery"},
                     {"label": _("Returns"), "url": "sales:return_delivery_list", "icon": "undo", "permission": "sales.ver_return"},
@@ -69,7 +69,7 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Reports & Config"),
+                "seccion": _("Reports & Configuration"),
                 "items": [
                     {"label": _("Reports"), "url": "sales:reports_dashboard", "icon": "bar_chart", "permission": "sales.ver_report"},
                     {"label": _("Price Lists"), "url": "sales:price_list_list", "icon": "price_change", "permission": "sales.ver_price_list"},
@@ -223,7 +223,7 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Suppliers"),
+                "seccion": _("Supplier Management"),
                 "items": [
                     {
                         "label": _("Suppliers"),
@@ -240,18 +240,18 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Purchase Requests"),
+                "seccion": _("Purchase Documents"),
                 "items": [
                     {
-                        "label": _("Requests"),
-                        "url": "purchases:request_list",
-                        "icon": "assignment",
+                        "label": _("Documents"),
+                        "url": "purchases:document_list",
+                        "icon": "description",
                         "permission": "purchases.ver_request"
                     },
                     {
-                        "label": _("Create Request"),
-                        "url": "purchases:request_create",
-                        "icon": "add_task",
+                        "label": _("Create Document"),
+                        "url": "purchases:document_create",
+                        "icon": "add",
                         "permission": "purchases.crear_request"
                     }
                 ]
@@ -400,6 +400,29 @@ APPS_MENU = [
                         "url": "core:listar_permisos",
                         "icon": "vpn_key",
                         "permission": "usuarios.permisos.ver"
+                    },
+                    {
+                        "label": _("Universal Contacts"),
+                        "items": [
+                            {
+                                "label": _("All Contacts"),
+                                "url": "core:contact_list",
+                                "icon": "contacts",
+                                "permission": "core.ver_contact"
+                            },
+                            {
+                                "label": _("Create Contact"),
+                                "url": "core:contact_create",
+                                "icon": "person_add",
+                                "permission": "core.crear_contact"
+                            },
+                            {
+                                "label": _("Contact Relationships"),
+                                "url": "core:contact_relationship_list",
+                                "icon": "link",
+                                "permission": "core.ver_contact"
+                            }
+                        ]
                     }
                 ]
             },
@@ -545,6 +568,9 @@ def obtener_app_por_id(app_id: str) -> Optional[Dict[str, Any]]:
 
 def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Dict[str, Any]]:
     """Obtiene los submenús visibles para una app específica según los permisos del usuario"""
+    from django.urls import reverse
+    from django.urls.exceptions import NoReverseMatch
+    
     app = obtener_app_por_id(app_id)
     if not app or not app.get("submenus"):
         return []
@@ -553,24 +579,34 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Di
     for submenu in app["submenus"]:
         items_visibles = []
         for item in submenu["items"]:
-            if "*" in permisos_usuario or item["permission"] in permisos_usuario:
+            if "*" in permisos_usuario or item.get("permission", "") in permisos_usuario:
                 try:
+                    # Verificar que la clave 'url' existe
+                    if "url" not in item:
+                        print(f"Warning: Item missing 'url' key: {item}")
+                        continue
+                    
                     # Usar reverse para generar la URL correcta
                     url = reverse(item["url"])
                 except NoReverseMatch:
                     # Si no se puede resolver la URL, usar una URL por defecto
+                    print(f"Warning: Could not resolve URL '{item.get('url', '')}' for item: {item}")
+                    url = "#"
+                except Exception as e:
+                    # Manejar cualquier otro error
+                    print(f"Error processing item {item}: {e}")
                     url = "#"
                 
                 items_visibles.append({
-                    "label": str(item["label"]),
+                    "label": str(item.get("label", "")),
                     "url": url,
-                    "icon": item["icon"],
-                    "permission": item["permission"]
+                    "icon": item.get("icon", ""),
+                    "permission": item.get("permission", "")
                 })
         
         if items_visibles:
             submenus_visibles.append({
-                "seccion": str(submenu["seccion"]),
+                "seccion": str(submenu.get("seccion", "")),
                 "items": items_visibles
             })
     

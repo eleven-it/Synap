@@ -2,44 +2,28 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import RegexValidator
 from django.contrib.auth import get_user_model
-from core.models import Empresa, Branch, Currency
+from core.models import Empresa, Branch, Currency, BusinessEntity
 from django.utils import timezone
 
 User = get_user_model()
 
 
-class Supplier(models.Model):
+class Supplier(BusinessEntity):
     """
-    Modelo para gestionar proveedores del sistema
-    Contiene información completa del proveedor para compras
+    Proveedor específico con funcionalidad de compras
+    Hereda de BusinessEntity para funcionalidad común
     """
+    
+    # Relaciones con empresa y sucursal
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='suppliers', verbose_name=_('Company'))
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='suppliers', verbose_name=_('Branch'))
     
-    # Información básica
-    name = models.CharField(_("Name"), max_length=255)
-    code = models.CharField(_("Code"), max_length=20, unique=True, help_text=_("Internal supplier code"))
-    tax_id = models.CharField(_("Tax ID"), max_length=50, blank=True, help_text=_("VAT number or tax identification"))
-    
-    # Información de contacto
-    contact_person = models.CharField(_("Contact Person"), max_length=100, blank=True)
-    email = models.EmailField(_("Email"), blank=True)
-    phone = models.CharField(_("Phone"), max_length=20, blank=True)
-    mobile = models.CharField(_("Mobile"), max_length=20, blank=True)
-    
-    # Dirección
-    address = models.TextField(_("Address"), blank=True)
-    city = models.CharField(_("City"), max_length=100, blank=True)
-    state = models.CharField(_("State/Province"), max_length=100, blank=True)
-    postal_code = models.CharField(_("Postal Code"), max_length=20, blank=True)
-    country = models.CharField(_("Country"), max_length=100, default="Argentina")
-    
-    # Información comercial
+    # Información específica de proveedor
     payment_terms = models.CharField(_("Payment Terms"), max_length=100, blank=True, help_text=_("e.g., Net 30, Net 60"))
     credit_limit = models.DecimalField(_("Credit Limit"), max_digits=15, decimal_places=2, null=True, blank=True)
     currency = models.ForeignKey(Currency, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Default Currency"))
     
-    # Categorización
+    # Categorización específica
     supplier_category = models.CharField(_("Category"), max_length=50, blank=True, help_text=_("e.g., Raw Materials, Services, Equipment"))
     supplier_type = models.CharField(_("Type"), max_length=50, choices=[
         ('manufacturer', _('Manufacturer')),
@@ -49,24 +33,17 @@ class Supplier(models.Model):
         ('other', _('Other')),
     ], default='other')
     
-    # Configuración de impuestos
+    # Configuración de impuestos específica
     tax_category = models.CharField(_("Tax Category"), max_length=50, blank=True, help_text=_("Category for tax calculation"))
     is_tax_exempt = models.BooleanField(_("Tax Exempt"), default=False)
     
-    # Estado y configuración
-    is_active = models.BooleanField(_("Active"), default=True)
+    # Estado específico de proveedor
     is_approved = models.BooleanField(_("Approved"), default=False)
     approval_date = models.DateTimeField(_("Approval Date"), null=True, blank=True)
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_suppliers', verbose_name=_("Approved By"))
     
-    # Información adicional
-    notes = models.TextField(_("Notes"), blank=True)
-    website = models.URLField(_("Website"), blank=True)
-    
-    # Auditoría
+    # Auditoría específica
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_suppliers', verbose_name=_("Created By"))
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         verbose_name = _("Supplier")
@@ -76,26 +53,31 @@ class Supplier(models.Model):
         indexes = [
             models.Index(fields=['empresa', 'is_active']),
             models.Index(fields=['supplier_category', 'is_active']),
-            models.Index(fields=['name']),
+            models.Index(fields=['supplier_type']),
+            models.Index(fields=['is_approved']),
         ]
     
     def __str__(self):
         return f"{self.code} - {self.name} ({self.empresa})"
     
-    def get_full_address(self):
-        """Retorna la dirección completa del proveedor"""
-        parts = [self.address, self.city, self.state, self.postal_code, self.country]
-        return ", ".join(filter(None, parts))
-    
-    def get_contact_info(self):
-        """Retorna la información de contacto principal"""
-        if self.email:
-            return self.email
-        elif self.phone:
-            return self.phone
-        elif self.mobile:
-            return self.mobile
-        return _("No contact information")
+    def clean(self):
+        """Validaciones específicas del proveedor"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar límite de crédito
+        if self.credit_limit and self.credit_limit < 0:
+            raise ValidationError(_('Credit limit cannot be negative.'))
+        
+        # Validar que tenga empresa y sucursal
+        if not self.empresa:
+            raise ValidationError(_('Supplier must be associated with a company.'))
+        
+        if not self.branch:
+            raise ValidationError(_('Supplier must be associated with a branch.'))
+        
+        # Validar que la sucursal pertenezca a la empresa
+        if self.empresa and self.branch and self.branch.empresa != self.empresa:
+            raise ValidationError(_('Branch must belong to the selected company.'))
     
     def get_rating_average(self):
         """Retorna el promedio de calificaciones del proveedor"""
@@ -116,6 +98,18 @@ class Supplier(models.Model):
         
         return queryset.aggregate(total=models.Sum('total_amount'))['total'] or 0
     
+    def get_purchase_history(self, days=30):
+        """Retorna el historial de compras de los últimos días"""
+        from django.utils import timezone
+        from datetime import timedelta
+        from .purchase_order import PurchaseOrder
+        
+        start_date = timezone.now() - timedelta(days=days)
+        return PurchaseOrder.objects.filter(
+            supplier=self,
+            order_date__gte=start_date
+        ).order_by('-order_date')
+    
     def approve(self, user):
         """Aprueba el proveedor"""
         self.is_approved = True
@@ -131,4 +125,43 @@ class Supplier(models.Model):
     def activate(self):
         """Activa el proveedor"""
         self.is_active = True
-        self.save() 
+        self.save()
+    
+    @property
+    def total_orders(self):
+        """Retorna el total de órdenes del proveedor"""
+        return self.purchase_orders.count()
+    
+    @property
+    def total_spent(self):
+        """Retorna el total gastado con el proveedor"""
+        return self.purchase_orders.filter(status='received').aggregate(
+            total=models.Sum('total_amount')
+        )['total'] or 0
+    
+    @property
+    def outstanding_balance(self):
+        """Retorna el saldo pendiente con el proveedor"""
+        return self.purchase_orders.filter(status='received', payment_status='pending').aggregate(
+            total=models.Sum('total_amount')
+        )['total'] or 0
+    
+    def can_place_order(self, amount):
+        """Verifica si se puede realizar una orden por el monto especificado"""
+        if not self.credit_limit:
+            return True
+        return self.credit_limit >= amount
+    
+    def get_primary_contact_info(self):
+        """
+        Obtiene la información del contacto principal (compatibilidad)
+        """
+        primary_contact = self.get_primary_contact()
+        if primary_contact:
+            return {
+                'name': primary_contact.full_name,
+                'email': primary_contact.email,
+                'phone': primary_contact.phone,
+                'position': primary_contact.position,
+            }
+        return None 

@@ -1,0 +1,426 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Evaluate Quotation" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">description</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">visibility</span>
+    <a href="{% url 'purchases:quotation_detail' quotation.pk %}">{{ quotation.quotation_number }}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">assessment</span>
+    {% trans "Evaluate" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Evaluate Quotation" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Evaluate quotation" %} "{{ quotation.quotation_number }}"{% endblock %}
+
+{% block purchases_actions %}
+<div class="flex space-x-3">
+    <a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+        <span class="material-icons mr-2">arrow_back</span>
+        {% trans "Cancel" %}
+    </a>
+    <button type="submit" form="evaluate-quotation-form" class="btn-primary">
+        <span class="material-icons mr-2">assessment</span>
+        {% trans "Save Evaluation" %}
+    </button>
+</div>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-4xl mx-auto">
+    <form method="post" id="evaluate-quotation-form" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Resumen de la Cotización -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Quotation Summary" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Quotation Number" %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ quotation.quotation_number }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Quotation Date" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.quotation_date|date:"M d, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Deadline" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.deadline|date:"M d, Y"|default:"N/A" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Total Amount" %}
+                        </label>
+                        <p class="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                            {{ quotation.currency.symbol }}{{ quotation.total_amount|floatformat:2|default:"N/A" }}
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Status" %}
+                        </label>
+                        <span class="status-badge status-{{ quotation.status }}">
+                            {{ quotation.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Line Items" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.lines.count }} {% trans "items" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Criterios de Evaluación -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Evaluation Criteria" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-6">
+                    <!-- Precio -->
+                    <div>
+                        <label for="price_score" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Price Score" %} (1-10)
+                        </label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" name="price_score" id="price_score" 
+                                   min="1" max="10" value="5" step="1"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                   oninput="updateScoreDisplay(this, 'price-display')">
+                            <span id="price-display" class="text-lg font-semibold text-gray-900 dark:text-white w-8 text-center">5</span>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{% trans "Poor" %}</span>
+                            <span>{% trans "Excellent" %}</span>
+                        </div>
+                    </div>
+
+                    <!-- Calidad -->
+                    <div>
+                        <label for="quality_score" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Quality Score" %} (1-10)
+                        </label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" name="quality_score" id="quality_score" 
+                                   min="1" max="10" value="5" step="1"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                   oninput="updateScoreDisplay(this, 'quality-display')">
+                            <span id="quality-display" class="text-lg font-semibold text-gray-900 dark:text-white w-8 text-center">5</span>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{% trans "Poor" %}</span>
+                            <span>{% trans "Excellent" %}</span>
+                        </div>
+                    </div>
+
+                    <!-- Entrega -->
+                    <div>
+                        <label for="delivery_score" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Delivery Score" %} (1-10)
+                        </label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" name="delivery_score" id="delivery_score" 
+                                   min="1" max="10" value="5" step="1"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                   oninput="updateScoreDisplay(this, 'delivery-display')">
+                            <span id="delivery-display" class="text-lg font-semibold text-gray-900 dark:text-white w-8 text-center">5</span>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{% trans "Poor" %}</span>
+                            <span>{% trans "Excellent" %}</span>
+                        </div>
+                    </div>
+
+                    <!-- Servicio -->
+                    <div>
+                        <label for="service_score" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Service Score" %} (1-10)
+                        </label>
+                        <div class="flex items-center space-x-4">
+                            <input type="range" name="service_score" id="service_score" 
+                                   min="1" max="10" value="5" step="1"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                                   oninput="updateScoreDisplay(this, 'service-display')">
+                            <span id="service-display" class="text-lg font-semibold text-gray-900 dark:text-white w-8 text-center">5</span>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{% trans "Poor" %}</span>
+                            <span>{% trans "Excellent" %}</span>
+                        </div>
+                    </div>
+
+                    <!-- Puntuación Total -->
+                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <div class="flex justify-between items-center">
+                            <label class="text-lg font-medium text-gray-900 dark:text-white">
+                                {% trans "Overall Score" %}
+                            </label>
+                            <span id="overall-score" class="text-2xl font-bold text-orange-600 dark:text-orange-400">5.0</span>
+                        </div>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
+                                <div id="overall-progress" class="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-300" style="width: 50%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comentarios de Evaluación -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Evaluation Comments" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-6">
+                    <!-- Comentarios por criterio -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="price_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                {% trans "Price Comments" %}
+                            </label>
+                            <textarea name="price_comments" id="price_comments" rows="3"
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Enter comments about pricing...' %}"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="quality_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                {% trans "Quality Comments" %}
+                            </label>
+                            <textarea name="quality_comments" id="quality_comments" rows="3"
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Enter comments about quality...' %}"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="delivery_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                {% trans "Delivery Comments" %}
+                            </label>
+                            <textarea name="delivery_comments" id="delivery_comments" rows="3"
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Enter comments about delivery...' %}"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="service_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                {% trans "Service Comments" %}
+                            </label>
+                            <textarea name="service_comments" id="service_comments" rows="3"
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Enter comments about service...' %}"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Comentarios generales -->
+                    <div>
+                        <label for="general_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "General Comments" %}
+                        </label>
+                        <textarea name="general_comments" id="general_comments" rows="4"
+                                  class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                  placeholder="{% trans 'Enter general evaluation comments...' %}"></textarea>
+                    </div>
+
+                    <!-- Recomendaciones -->
+                    <div>
+                        <label for="recommendations" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Recommendations" %}
+                        </label>
+                        <textarea name="recommendations" id="recommendations" rows="3"
+                                  class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                  placeholder="{% trans 'Enter recommendations...' %}"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decisión -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Evaluation Decision" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-6">
+                    <!-- Decisión -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            {% trans "Decision" %}
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="decision" value="approved" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-green-600 dark:text-green-400 mr-2">check_circle</span>
+                                            {% trans "Approved" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Approve this quotation" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="decision" value="rejected" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-red-600 dark:text-red-400 mr-2">cancel</span>
+                                            {% trans "Rejected" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Reject this quotation" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="decision" value="pending" class="sr-only" checked>
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">pending</span>
+                                            {% trans "Pending" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Keep under review" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Fecha de evaluación -->
+                    <div>
+                        <label for="evaluation_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Evaluation Date" %}
+                        </label>
+                        <input type="date" name="evaluation_date" id="evaluation_date" 
+                               value="{{ today|date:'Y-m-d' }}"
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               required>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="flex justify-between items-center">
+            <a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+                <span class="material-icons mr-2">cancel</span>
+                {% trans "Cancel" %}
+            </a>
+            
+            <button type="submit" class="btn-primary">
+                <span class="material-icons mr-2">assessment</span>
+                {% trans "Save Evaluation" %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateScoreDisplay(slider, displayId) {
+    const display = document.getElementById(displayId);
+    display.textContent = slider.value;
+    
+    // Actualizar puntuación total
+    updateOverallScore();
+}
+
+function updateOverallScore() {
+    const priceScore = parseInt(document.getElementById('price_score').value);
+    const qualityScore = parseInt(document.getElementById('quality_score').value);
+    const deliveryScore = parseInt(document.getElementById('delivery_score').value);
+    const serviceScore = parseInt(document.getElementById('service_score').value);
+    
+    const overallScore = (priceScore + qualityScore + deliveryScore + serviceScore) / 4;
+    
+    document.getElementById('overall-score').textContent = overallScore.toFixed(1);
+    document.getElementById('overall-progress').style.width = (overallScore * 10) + '%';
+    
+    // Cambiar color basado en la puntuación
+    const progressBar = document.getElementById('overall-progress');
+    if (overallScore >= 8) {
+        progressBar.className = 'bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all duration-300';
+    } else if (overallScore >= 6) {
+        progressBar.className = 'bg-gradient-to-r from-yellow-500 to-yellow-600 h-2 rounded-full transition-all duration-300';
+    } else {
+        progressBar.className = 'bg-gradient-to-r from-red-500 to-red-600 h-2 rounded-full transition-all duration-300';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar puntuación total
+    updateOverallScore();
+    
+    // Confirmación antes de enviar
+    document.getElementById('evaluate-quotation-form').addEventListener('submit', function(e) {
+        if (!confirm('{% trans "Are you sure you want to save this evaluation?" %}')) {
+            e.preventDefault();
+            return false;
+        }
+    });
+    
+    // Animaciones para las tarjetas de decisión
+    const decisionCards = document.querySelectorAll('input[name="decision"]');
+    decisionCards.forEach(card => {
+        card.addEventListener('change', function() {
+            // Remover selección de todas las tarjetas
+            document.querySelectorAll('label[for*="decision"]').forEach(label => {
+                label.classList.remove('ring-2', 'ring-orange-500', 'border-orange-500');
+            });
+            
+            // Agregar selección a la tarjeta seleccionada
+            if (this.checked) {
+                this.closest('label').classList.add('ring-2', 'ring-orange-500', 'border-orange-500');
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

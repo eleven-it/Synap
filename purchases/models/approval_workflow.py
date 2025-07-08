@@ -43,7 +43,10 @@ class ApprovalWorkflow(models.Model):
         unique_together = [['empresa', 'name']]
     
     def __str__(self):
-        return f"{self.name} ({self.empresa})"
+        if self.max_amount:
+            return f"{self.name} (${self.min_amount:,.0f} - ${self.max_amount:,.0f})"
+        else:
+            return f"{self.name} (${self.min_amount:,.0f}+)"
     
     def get_levels(self):
         """Retorna los niveles de aprobación ordenados por prioridad"""

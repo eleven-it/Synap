@@ -1,0 +1,190 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Delete Supplier" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">business</span>
+    <a href="{% url 'purchases:supplier_list' %}">{% trans "Suppliers" %}</a>
+</div>
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">visibility</span>
+    <a href="{% url 'purchases:supplier_detail' supplier.pk %}">{{ supplier.name }}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">delete</span>
+    {% trans "Delete" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Delete Supplier" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Are you sure you want to delete this supplier?" %}{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="card-body">
+            <!-- Advertencia -->
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <span class="material-icons text-red-400 text-xl">warning</span>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
+                            {% trans "Warning" %}
+                        </h3>
+                        <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                            <p>
+                                {% trans "This action cannot be undone. All supplier data will be permanently deleted." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información del proveedor -->
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 mb-6">
+                <div class="flex items-center mb-4">
+                    <div class="flex-shrink-0 h-12 w-12">
+                        <div class="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                            <span class="text-white font-medium text-lg">
+                                {{ supplier.name|first|upper }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {{ supplier.name }}
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ supplier.code|default:"No code" }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Email:" %}</span>
+                        <span class="text-gray-900 dark:text-white ml-2">{{ supplier.email|default:"N/A" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Phone:" %}</span>
+                        <span class="text-gray-900 dark:text-white ml-2">{{ supplier.phone|default:"N/A" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Status:" %}</span>
+                        {% if supplier.is_active %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 ml-2">
+                                {% trans "Active" %}
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 ml-2">
+                                {% trans "Inactive" %}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Created:" %}</span>
+                        <span class="text-gray-900 dark:text-white ml-2">{{ supplier.created_at|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Impacto de la eliminación -->
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <span class="material-icons text-yellow-400 text-xl">info</span>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            {% trans "Impact of deletion" %}
+                        </h3>
+                        <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>{% trans "All supplier information will be permanently deleted" %}</li>
+                                <li>{% trans "Related purchase orders will be affected" %}</li>
+                                <li>{% trans "Supplier ratings and evaluations will be lost" %}</li>
+                                <li>{% trans "This action cannot be undone" %}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de confirmación -->
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" name="confirm_delete" required
+                               class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            {% trans "I understand that this action cannot be undone and I want to proceed with the deletion." %}
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="flex justify-end space-x-4">
+                    <a href="{% url 'purchases:supplier_detail' supplier.pk %}" class="btn-secondary">
+                        <span class="material-icons mr-2">cancel</span>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="btn-danger" id="deleteBtn" disabled>
+                        <span class="material-icons mr-2">delete</span>
+                        {% trans "Delete Supplier" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.querySelector('input[name="confirm_delete"]');
+    const deleteBtn = document.getElementById('deleteBtn');
+    
+    // Habilitar/deshabilitar botón según el checkbox
+    confirmCheckbox.addEventListener('change', function() {
+        deleteBtn.disabled = !this.checked;
+        
+        if (this.checked) {
+            deleteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            deleteBtn.classList.add('hover:bg-red-700');
+        } else {
+            deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            deleteBtn.classList.remove('hover:bg-red-700');
+        }
+    });
+    
+    // Confirmación adicional al hacer clic en eliminar
+    deleteBtn.addEventListener('click', function(e) {
+        if (!confirmCheckbox.checked) {
+            e.preventDefault();
+            return;
+        }
+        
+        const confirmed = confirm('{% trans "Are you absolutely sure you want to delete this supplier? This action cannot be undone." %}');
+        if (!confirmed) {
+            e.preventDefault();
+        }
+    });
+    
+    // Prevenir envío accidental del formulario
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!confirmCheckbox.checked) {
+            e.preventDefault();
+            alert('{% trans "Please confirm that you want to delete this supplier." %}');
+            return;
+        }
+    });
+});
+</script>
+{% endblock %} 

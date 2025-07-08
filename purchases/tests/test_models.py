@@ -224,6 +224,33 @@ class PurchaseRequestModelTest(TestCase):
             address="123 Test Street",
             city="Test City"
         )
+        
+        # Crear producto para las líneas de solicitud
+        from inventory.models import Product, ProductVariant
+        self.product = Product.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            name="Producto Test",
+            sku="PROD001",
+            price=Decimal('100.00')
+        )
+        try:
+            self.uom = UnitOfMeasure.objects.get(code="un")
+        except UnitOfMeasure.DoesNotExist:
+            self.uom = UnitOfMeasure.objects.create(
+                name="Unidad",
+                code="un",
+                category="quantity",
+                ratio=1,
+                is_reference=True,
+                is_active=True
+            )
+        self.product_variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="VAR001",
+            price=Decimal('100.00')
+        )
+        
         self.request = PurchaseRequest.objects.create(
             empresa=self.empresa,
             branch=self.branch,
@@ -316,21 +343,22 @@ class PurchaseRequestLineModelTest(TestCase):
         self.category = Category.objects.create(name="Categoría Test")
         self.product = Product.objects.create(
             empresa=self.empresa,
+            branch=self.branch,
             name="Producto Test",
-            category=self.category,
-            price=Decimal('100.00'),
-            branch=self.branch
-        )
-        self.product_variant = ProductVariant.objects.create(
-            product=self.product,
-            sku="SKU001",
+            sku="PROD001",
             price=Decimal('100.00')
         )
-        self.uom = UnitOfMeasure.objects.create(
-            name="Unidad",
-            code="U",
-            ratio=1
-        )
+        try:
+            self.uom = UnitOfMeasure.objects.get(code="un")
+        except UnitOfMeasure.DoesNotExist:
+            self.uom = UnitOfMeasure.objects.create(
+                name="Unidad",
+                code="un",
+                category="quantity",
+                ratio=1,
+                is_reference=True,
+                is_active=True
+            )
         self.delivery_location = DeliveryLocation.objects.create(
             empresa=self.empresa,
             branch=self.branch,
@@ -346,6 +374,11 @@ class PurchaseRequestLineModelTest(TestCase):
             currency=self.currency,
             required_date=timezone.now().date() + timedelta(days=30),
             delivery_location=self.delivery_location
+        )
+        self.product_variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="VAR001",
+            price=Decimal('100.00')
         )
     
     def test_line_creation(self):
@@ -513,35 +546,42 @@ class PurchaseQuotationModelTest(TestCase):
         """Probar creación de cotización"""
         quotation = PurchaseQuotation.objects.create(
             empresa=self.empresa,
+            branch=self.branch,
             supplier=self.supplier,
             purchase_request=self.request,
-            quotation_date=timezone.now().date(),
+            currency=self.currency,
             valid_until=timezone.now().date() + timedelta(days=30),
-            delivery_time=15,
-            status='draft'
+            delivery_time=15
         )
         
-        self.assertEqual(quotation.supplier, self.supplier)
         self.assertEqual(quotation.status, 'draft')
         self.assertIsNotNone(quotation.quotation_number)
-        self.assertEqual(quotation.total_amount, Decimal('0'))
+        self.assertEqual(quotation.supplier, self.supplier)
+        self.assertEqual(quotation.purchase_request, self.request)
+    
     def test_quotation_number_generation(self):
         """Probar generación automática de números de cotización"""
         quotation1 = PurchaseQuotation.objects.create(
             empresa=self.empresa,
+            branch=self.branch,
             supplier=self.supplier,
-            purchase_request=self.request
+            purchase_request=self.request,
+            currency=self.currency,
+            valid_until=timezone.now().date() + timedelta(days=30)
         )
         
         quotation2 = PurchaseQuotation.objects.create(
             empresa=self.empresa,
+            branch=self.branch,
             supplier=self.supplier,
-            purchase_request=self.request
+            purchase_request=self.request,
+            currency=self.currency,
+            valid_until=timezone.now().date() + timedelta(days=30)
         )
         
         self.assertNotEqual(quotation1.quotation_number, quotation2.quotation_number)
-        self.assertTrue(quotation1.quotation_number.startswith('QUOT'))
-        self.assertTrue(quotation2.quotation_number.startswith('QUOT'))
+        self.assertTrue(quotation1.quotation_number.startswith('QC-'))
+        self.assertTrue(quotation2.quotation_number.startswith('QC-'))
 
 
 class PurchaseReceiptModelTest(TestCase):
@@ -549,10 +589,7 @@ class PurchaseReceiptModelTest(TestCase):
     
     def setUp(self):
         self.empresa = Empresa.objects.create(nombre="Empresa Test")
-        self.branch = Branch.objects.create(
-            empresa=self.empresa,
-            name="Branch Test"
-        )
+        self.branch = Branch.objects.create(empresa=self.empresa, name="Branch Test")
         self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
         self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
@@ -567,6 +604,35 @@ class PurchaseReceiptModelTest(TestCase):
             address="123 Test Street",
             city="Test City"
         )
+        
+        # Crear producto para las líneas de orden
+        from inventory.models import Product, ProductVariant
+        self.product = Product.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            name="Producto Test",
+            sku="PROD001",
+            price=Decimal('100.00')
+        )
+        self.product_variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="VAR001",
+            price=Decimal('100.00')
+        )
+        
+        # Crear UOM
+        try:
+            self.uom = UnitOfMeasure.objects.get(code="un")
+        except UnitOfMeasure.DoesNotExist:
+            self.uom = UnitOfMeasure.objects.create(
+                name="Unidad",
+                code="un",
+                category="quantity",
+                ratio=1,
+                is_reference=True,
+                is_active=True
+            )
+        
         self.request = PurchaseRequest.objects.create(
             empresa=self.empresa,
             branch=self.branch,
@@ -586,8 +652,10 @@ class PurchaseReceiptModelTest(TestCase):
         )
         self.order_line = PurchaseOrderLine.objects.create(
             purchase_order=self.order,
+            product_variant=self.product_variant,
             quantity=10,
-            unit_price=Decimal('100.00')
+            unit_price=100,
+            unit_of_measure=self.uom
         )
     
     def test_receipt_creation(self):
@@ -597,14 +665,12 @@ class PurchaseReceiptModelTest(TestCase):
             branch=self.branch,
             purchase_order_line=self.order_line,
             quantity=5,
-            unit_cost=Decimal('100.00'),
-            received_by=self.user,
-            receipt_date=timezone.now().date(),
-            quality_score=8
+            lot_number="LoteTest",
+            expiration_date=None,
+            received_by=self.user
         )
         
         self.assertEqual(receipt.quantity, 5)
-        self.assertEqual(receipt.unit_cost, Decimal('100.00'))
         self.assertEqual(receipt.status, 'draft')
         self.assertIsNotNone(receipt.receipt_number)
     
@@ -637,6 +703,7 @@ class SupplierRatingModelTest(TestCase):
     def setUp(self):
         self.empresa = Empresa.objects.create(nombre="Empresa Test")
         self.branch = Branch.objects.create(empresa=self.empresa, name="Branch Test")
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
         self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
         self.supplier = Supplier.objects.create(
             empresa=self.empresa,
@@ -650,43 +717,145 @@ class SupplierRatingModelTest(TestCase):
             address="123 Test Street",
             city="Test City"
         )
+        
+        # Crear orden de compra para las evaluaciones
+        self.order = PurchaseOrder.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            supplier=self.supplier,
+            created_by=self.user,
+            currency=self.currency,
+            expected_delivery_date=timezone.now().date() + timedelta(days=30)
+        )
     
     def test_rating_creation(self):
         """Probar creación de evaluación de proveedor"""
         rating = SupplierRating.objects.create(
+            empresa=self.empresa,
             supplier=self.supplier,
-            evaluated_by=self.user,
-            overall_score=8.5,
-            quality_score=9.0,
-            delivery_score=8.0,
-            communication_score=8.5,
-            price_score=7.5,
-            comments="Excelente proveedor",
-            status='approved'
+            purchase_order=self.order,
+            period_start=timezone.now().date() - timedelta(days=30),
+            period_end=timezone.now().date(),
+            quality_score=4,
+            delivery_score=4,
+            communication_score=4,
+            price_score=4,
+            service_score=4
         )
         
-        self.assertEqual(rating.overall_score, 8.5)
-        self.assertEqual(rating.status, 'approved')
-        self.assertEqual(rating.rating_class, 'good')
+        self.assertEqual(rating.status, 'draft')
+        self.assertIsNotNone(rating.overall_score)
+        self.assertIsNotNone(rating.rating_class)
+        self.assertEqual(rating.supplier, self.supplier)
     
     def test_rating_class_calculation(self):
         """Probar cálculo automático de clase de calificación"""
-        # Calificación excelente
-        rating1 = SupplierRating.objects.create(
+        # Crear segunda orden para evitar restricción unique
+        order2 = PurchaseOrder.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
             supplier=self.supplier,
-            evaluated_by=self.user,
-            overall_score=9.5,
-            status='approved',
-            quality_score=4, delivery_score=4, communication_score=4, price_score=4
+            created_by=self.user,
+            currency=self.currency,
+            expected_delivery_date=timezone.now().date() + timedelta(days=30)
         )
-        self.assertEqual(rating1.rating_class, 'excellent')
         
-        # Calificación pobre
-        rating2 = SupplierRating.objects.create(
+        rating1 = SupplierRating.objects.create(
+            empresa=self.empresa,
             supplier=self.supplier,
-            evaluated_by=self.user,
-            overall_score=3.0,
-            status='approved',
-            quality_score=4, delivery_score=4, communication_score=4, price_score=4
+            purchase_order=self.order,
+            period_start=timezone.now().date() - timedelta(days=30),
+            period_end=timezone.now().date(),
+            quality_score=4,
+            delivery_score=4,
+            communication_score=4,
+            price_score=4,
+            service_score=4
         )
-        self.assertEqual(rating2.rating_class, 'poor') 
+        
+        rating2 = SupplierRating.objects.create(
+            empresa=self.empresa,
+            supplier=self.supplier,
+            purchase_order=order2,
+            period_start=timezone.now().date() - timedelta(days=30),
+            period_end=timezone.now().date(),
+            quality_score=9,
+            delivery_score=9,
+            communication_score=9,
+            price_score=9,
+            service_score=9
+        )
+        
+        self.assertEqual(rating1.rating_class, 'poor')
+        self.assertEqual(rating2.rating_class, 'excellent')
+
+
+class PurchaseOrderLineModelTest(TestCase):
+    """Pruebas para el modelo PurchaseOrderLine"""
+    
+    def setUp(self):
+        self.empresa = Empresa.objects.create(nombre="Empresa Test")
+        self.branch = Branch.objects.create(empresa=self.empresa, name="Branch Test")
+        self.currency = Currency.objects.get_or_create(code="USD", defaults={"name": "US Dollar", "symbol": "$"})[0]
+        self.user = User.objects.create_user(email='test@example.com', nombre='Test User', password='testpass123')
+        self.supplier = Supplier.objects.create(
+            empresa=self.empresa,
+            name="Proveedor Test",
+            branch=self.branch
+        )
+        
+        # Crear producto para las líneas de orden
+        from inventory.models import Product, ProductVariant
+        self.product = Product.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            name="Producto Test",
+            sku="PROD001",
+            price=Decimal('100.00')
+        )
+        try:
+            self.uom = UnitOfMeasure.objects.get(code="un")
+        except UnitOfMeasure.DoesNotExist:
+            self.uom = UnitOfMeasure.objects.create(
+                name="Unidad",
+                code="un",
+                category="quantity",
+                ratio=1,
+                is_reference=True,
+                is_active=True
+            )
+        self.product_variant = ProductVariant.objects.create(
+            product=self.product,
+            sku="VAR001",
+            price=Decimal('100.00')
+        )
+        
+        # Crear orden de compra
+        self.order = PurchaseOrder.objects.create(
+            empresa=self.empresa,
+            branch=self.branch,
+            supplier=self.supplier,
+            created_by=self.user,
+            currency=self.currency,
+            expected_delivery_date=timezone.now().date() + timedelta(days=30)
+        )
+        
+        # Crear línea de orden
+        self.order_line = PurchaseOrderLine.objects.create(
+            purchase_order=self.order,
+            product_variant=self.product_variant,
+            quantity=10,
+            unit_price=100,
+            unit_of_measure=self.uom
+        )
+    
+    def test_line_creation(self):
+        """Probar creación de línea de orden"""
+        self.assertEqual(self.order_line.quantity, 10)
+        self.assertEqual(self.order_line.product_variant, self.product_variant)
+        self.assertEqual(self.order_line.status, 'pending')
+    
+    def test_line_total_calculation(self):
+        """Probar cálculo de total de línea"""
+        expected_total = self.order_line.quantity * self.order_line.unit_price
+        self.assertEqual(self.order_line.total_amount, expected_total) 

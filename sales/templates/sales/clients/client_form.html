@@ -1,170 +1,348 @@
-{% extends 'base.html' %}
+{% extends "sales/sales_base.html" %}
 {% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
 
-{% block title %}
-    {% if client %}Editar Cliente{% else %}Nuevo Cliente{% endif %} - Synap
+{% block title %}{% if object %}{% trans "Edit Client" %}{% else %}{% trans "New Client" %}{% endif %} - {% trans "Sales" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .form-section h3 {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    
+    .form-section h3::before {
+        content: '';
+        @apply w-1 h-6 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full mr-3;
+    }
+    
+    .form-row {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    }
+    
+    .form-group {
+        @apply space-y-2;
+    }
+    
+    .form-label {
+        @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+    }
+    
+    .form-input {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .form-input:focus {
+        @apply transform scale-[1.02] shadow-lg;
+    }
+    
+    .form-select {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .form-textarea {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200 resize-none;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-6 py-3 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-6 py-3 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .required-field::after {
+        content: ' *';
+        @apply text-red-500;
+    }
+    
+    .progress-bar {
+        @apply fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600 z-50;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.3s ease;
+    }
+    
+    .progress-bar.active {
+        transform: scaleX(1);
+    }
+    
+    .form-tabs {
+        @apply flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1;
+    }
+    
+    .form-tab {
+        @apply flex-1 text-center py-2 px-4 rounded-md text-sm font-medium transition-all duration-200;
+    }
+    
+    .form-tab.active {
+        @apply bg-white dark:bg-gray-600 text-orange-600 dark:text-orange-400 shadow-sm;
+    }
+    
+    .form-tab:not(.active) {
+        @apply text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white;
+    }
+    
+    .tab-content {
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+        animation: fadeInUp 0.3s ease;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
+    <!-- Progress Bar -->
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        {% if client %}Editar Cliente{% else %}Nuevo Cliente{% endif %}
+                        {% if object %}
+                            {% trans "Edit Client" %}
+                        {% else %}
+                            {% trans "New Client" %}
+                        {% endif %}
                     </h1>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {% if client %}Modificar información del cliente{% else %}Crear un nuevo cliente{% endif %}
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% if object %}
+                            {% trans "Update client information and settings" %}
+                        {% else %}
+                            {% trans "Create a new client with complete information" %}
+                        {% endif %}
                     </p>
                 </div>
                 <div class="flex space-x-3">
-                    <a href="{% url 'sales:client_list' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                        Volver
+                    <a href="{% url 'sales:client_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to List" %}
                     </a>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Form -->
-    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-            <form method="post" class="p-6 space-y-6">
-                {% csrf_token %}
-                
-                <!-- Basic Information -->
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Básica</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Nombre * <span class="text-red-500">*</span>
-                            </label>
-                            <input type="text" name="name" id="name" value="{{ client.name|default:'' }}" required
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="Nombre del cliente">
-                        </div>
-                        
-                        <div>
-                            <label for="vat" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                VAT / Tax ID
-                            </label>
-                            <input type="text" name="vat" id="vat" value="{{ client.vat|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="Número de identificación fiscal">
-                        </div>
-                        
-                        <div>
-                            <label for="type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Tipo <span class="text-red-500">*</span>
-                            </label>
-                            <select name="type" id="type" required
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
-                                <option value="">Seleccionar tipo</option>
-                                <option value="company" {% if client.type == 'company' %}selected{% endif %}>Empresa</option>
-                                <option value="person" {% if client.type == 'person' %}selected{% endif %}>Persona</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label for="credit_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Límite de Crédito
-                            </label>
-                            <input type="number" name="credit_limit" id="credit_limit" value="{{ client.credit_limit|default:'0.00' }}" step="0.01"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="0.00">
-                        </div>
-                    </div>
-                </div>
+        <!-- Form -->
+        <form method="post" id="clientForm" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Form Tabs -->
+            <div class="form-tabs">
+                <button type="button" class="form-tab active" data-tab="basic">
+                    <i class="fas fa-user mr-2"></i>
+                    {% trans "Basic Info" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="address">
+                    <i class="fas fa-map-marker-alt mr-2"></i>
+                    {% trans "Address" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="commercial">
+                    <i class="fas fa-chart-line mr-2"></i>
+                    {% trans "Commercial" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="settings">
+                    <i class="fas fa-cog mr-2"></i>
+                    {% trans "Settings" %}
+                </button>
+            </div>
 
-                <!-- Contact Information -->
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Información de Contacto</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Email
-                            </label>
-                            <input type="email" name="email" id="email" value="{{ client.email|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="email@ejemplo.com">
+            <!-- Basic Info Tab -->
+            <div class="tab-content active" id="basic-tab">
+                <div class="form-section">
+                    <h3>{% trans "Basic Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.name|as_crispy_field }}
                         </div>
                         
-                        <div>
-                            <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Teléfono
-                            </label>
-                            <input type="tel" name="phone" id="phone" value="{{ client.phone|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="+1 234 567 8900">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Additional Information -->
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Adicional</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="origin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Origen
-                            </label>
-                            <input type="text" name="origin" id="origin" value="{{ client.origin|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="Web, Referido, etc.">
+                        <div class="form-group">
+                            {{ form.code|as_crispy_field }}
                         </div>
                         
-                        <div>
-                            <label for="tiendanube_customer_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                ID Cliente Tiendanube
-                            </label>
-                            <input type="text" name="tiendanube_customer_id" id="tiendanube_customer_id" value="{{ client.tiendanube_customer_id|default:'' }}"
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                                   placeholder="ID de cliente en Tiendanube">
+                        <div class="form-group">
+                            {{ form.contact_person|as_crispy_field }}
                         </div>
                     </div>
                     
-                    <div class="mt-6">
-                        <div class="flex items-center">
-                            <input type="checkbox" name="is_active" id="is_active" 
-                                   {% if client.is_active or not client %}checked{% endif %}
-                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <label for="is_active" class="ml-2 block text-sm text-gray-900 dark:text-white">
-                                Cliente activo
-                            </label>
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.email|as_crispy_field }}
+                        </div>
+                        
+                        <div class="form-group">
+                            {{ form.phone|as_crispy_field }}
+                        </div>
+                        
+                        <div class="form-group">
+                            {{ form.mobile|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.website|as_crispy_field }}
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Form Actions -->
-                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <a href="{% url 'sales:client_list' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        Cancelar
-                    </a>
-                    <button type="submit"
-                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        {% if client %}
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                            </svg>
-                            Actualizar Cliente
-                        {% else %}
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                            </svg>
-                            Crear Cliente
-                        {% endif %}
-                    </button>
+            <!-- Address Tab -->
+            <div class="tab-content" id="address-tab">
+                <div class="form-section">
+                    <h3>{% trans "Address Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.country|as_crispy_field }}
+                        </div>
+                        
+                        <div class="form-group">
+                            {{ form.state|as_crispy_field }}
+                        </div>
+                        
+                        <div class="form-group">
+                            {{ form.city|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.address|as_crispy_field }}
+                        </div>
+                        
+                        <div class="form-group">
+                            {{ form.postal_code|as_crispy_field }}
+                        </div>
+                    </div>
                 </div>
-            </form>
-        </div>
+            </div>
+
+            <!-- Commercial Tab -->
+            <div class="tab-content" id="commercial-tab">
+                <div class="form-section">
+                    <h3>{% trans "Commercial Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.tax_id|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        {{ form.notes|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings-tab">
+                <div class="form-section">
+                    <h3>
+                        <i class="fas fa-cog mr-2"></i>
+                        {% trans "Settings & Configuration" %}
+                    </h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            {{ form.is_active|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <a href="{% url 'sales:client_list' %}" class="btn-secondary">
+                    <i class="fas fa-times mr-2"></i>
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save mr-2"></i>
+                    {% if object %}
+                        {% trans "Update Client" %}
+                    {% else %}
+                        {% trans "Create Client" %}
+                    {% endif %}
+                </button>
+            </div>
+        </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabs = document.querySelectorAll('.form-tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.dataset.tab;
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active content
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === `${targetTab}-tab`) {
+                    content.classList.add('active');
+                }
+            });
+        });
+    });
+    
+    // Form progress bar
+    const form = document.getElementById('clientForm');
+    const progressBar = document.getElementById('progressBar');
+    
+    form.addEventListener('input', () => {
+        progressBar.classList.add('active');
+        setTimeout(() => {
+            progressBar.classList.remove('active');
+        }, 300);
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Saving..." %}';
+    });
+});
+</script>
 {% endblock %} 

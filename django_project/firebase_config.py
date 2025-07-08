@@ -16,6 +16,10 @@ def get_firebase_app():
     if _firebase_app is None:
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
         logger.info(f"[Firebase] Inicializando Firebase con credenciales: {cred_path}")
+        
+        if not cred_path:
+            raise ValueError("FIREBASE_CREDENTIALS_PATH no está configurado. Firebase es obligatorio para la autenticación.")
+            
         try:
             cred = credentials.Certificate(cred_path)
             _firebase_app = firebase_admin.initialize_app(cred)

@@ -1,12 +1,200 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load i18n %}
+
+{% block extra_css %}
+<style>
+    .sidebar {
+        @apply fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800 shadow-lg transform transition-transform duration-300 ease-in-out;
+    }
+    
+    .sidebar.closed {
+        @apply -translate-x-full;
+    }
+    
+    .sidebar-overlay {
+        @apply fixed inset-0 z-30 bg-black bg-opacity-50 transition-opacity duration-300;
+    }
+    
+    .sidebar-overlay.hidden {
+        @apply opacity-0 pointer-events-none;
+    }
+    
+    .nav-item {
+        @apply flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 
+               hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white 
+               transition-all duration-200 rounded-lg mx-2;
+    }
+    
+    .nav-item.active {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white shadow-lg;
+    }
+    
+    .nav-item.active:hover {
+        @apply from-orange-500 to-orange-700;
+    }
+    
+    .nav-icon {
+        @apply w-5 h-5 mr-3;
+    }
+    
+    .nav-group {
+        @apply mb-6;
+    }
+    
+    .nav-group-title {
+        @apply px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+    }
+    
+    .submenu {
+        @apply ml-4 space-y-1;
+    }
+    
+    .submenu-item {
+        @apply flex items-center px-4 py-2 text-sm text-gray-600 dark:text-gray-400 
+               hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white 
+               transition-all duration-200 rounded-lg;
+    }
+    
+    .submenu-item.active {
+        @apply bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200;
+    }
+    
+    .main-content {
+        @apply lg:ml-64 transition-all duration-300;
+    }
+    
+    .main-content.full-width {
+        @apply lg:ml-0;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    {% comment %} <!-- Sidebar Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay hidden lg:hidden"></div>
+    
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar lg:translate-x-0">
+        <div class="flex flex-col h-full">
+            <!-- Sidebar Header -->
+            <div class="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center">
+                    <img src="{% static 'images/synap-logo.png' %}" alt="Synap" class="h-8 w-auto">
+                    <span class="ml-2 text-lg font-bold text-gray-900 dark:text-white">Sales</span>
+                </div>
+                <button id="close-sidebar" class="lg:hidden p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Sidebar Navigation -->
+            <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+                <!-- Dashboard -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Overview" %}</div>
+                    <a href="{% url 'sales:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                        <i class="fas fa-tachometer-alt nav-icon"></i>
+                        {% trans "Dashboard" %}
+                    </a>
+                </div>
+                
+                <!-- Customer Management -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Customer Management" %}</div>
+                    <a href="{% url 'sales:client_list' %}" class="nav-item {% if 'client' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-users nav-icon"></i>
+                        {% trans "Clients" %}
+                    </a>
+                    <a href="{% url 'sales:contact_list' %}" class="nav-item {% if 'contact' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-address-book nav-icon"></i>
+                        {% trans "Contacts" %}
+                    </a>
+                </div>
+                
+                <!-- Sales Operations -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Sales Operations" %}</div>
+                    <a href="{% url 'sales:sales_order_list' %}" class="nav-item {% if 'sales_order' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-shopping-cart nav-icon"></i>
+                        {% trans "Sales Orders" %}
+                    </a>
+                    <a href="{% url 'sales:invoice_list' %}" class="nav-item {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-file-invoice-dollar nav-icon"></i>
+                        {% trans "Invoices" %}
+                    </a>
+                    <a href="{% url 'sales:payment_list' %}" class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-credit-card nav-icon"></i>
+                        {% trans "Payments" %}
+                    </a>
+                </div>
+                
+                <!-- Logistics -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Logistics" %}</div>
+                    <a href="{% url 'sales:delivery_order_list' %}" class="nav-item {% if 'delivery_order' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-truck nav-icon"></i>
+                        {% trans "Deliveries" %}
+                    </a>
+                    <a href="{% url 'sales:return_delivery_list' %}" class="nav-item {% if 'return_delivery' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-undo nav-icon"></i>
+                        {% trans "Returns" %}
+                    </a>
+                </div>
+                
+                <!-- Financial -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Financial" %}</div>
+                    <a href="{% url 'sales:credit_note_list' %}" class="nav-item {% if 'credit_note' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-sticky-note nav-icon"></i>
+                        {% trans "Credit Notes" %}
+                    </a>
+                </div>
+                
+                <!-- Configuration -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Configuration" %}</div>
+                    <a href="{% url 'sales:price_list_list' %}" class="nav-item {% if 'price_list' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-tags nav-icon"></i>
+                        {% trans "Price Lists" %}
+                    </a>
+                    <a href="{% url 'sales:payment_term_list' %}" class="nav-item {% if 'payment_term' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-calendar-alt nav-icon"></i>
+                        {% trans "Payment Terms" %}
+                    </a>
+                </div>
+                
+                <!-- Reports -->
+                <div class="nav-group">
+                    <div class="nav-group-title">{% trans "Reports" %}</div>
+                    <a href="{% url 'sales:reports_dashboard' %}" class="nav-item {% if 'reports' in request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-chart-bar nav-icon"></i>
+                        {% trans "Reports" %}
+                    </a>
+                </div>
+            </nav>
+            
+            <!-- Sidebar Footer -->
+            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Sales Module" %}
+                    </div>
+                    <button id="toggle-sidebar" class="p-1 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div> {% endcomment %}
+    
     <!-- Main Content -->
-    <div>
+    <div id="main-content" class="main-content">
         <!-- Top Navigation -->
-        <div class="sticky top-0 z-30 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="sticky top-0 z-20 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
             <div class="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center">
                     <button id="open-sidebar" class="lg:hidden p-2 rounded-md text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
@@ -33,6 +221,52 @@
 </div>
 
 <script>
-// ... código JS de sidebar eliminado ...
+document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const mainContent = document.getElementById('main-content');
+    const openSidebarBtn = document.getElementById('open-sidebar');
+    const closeSidebarBtn = document.getElementById('close-sidebar');
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+    
+    // Abrir sidebar en móvil
+    openSidebarBtn.addEventListener('click', () => {
+        sidebar.classList.remove('closed');
+        sidebarOverlay.classList.remove('hidden');
+    });
+    
+    // Cerrar sidebar en móvil
+    closeSidebarBtn.addEventListener('click', () => {
+        sidebar.classList.add('closed');
+        sidebarOverlay.classList.add('hidden');
+    });
+    
+    // Cerrar sidebar al hacer clic en overlay
+    sidebarOverlay.addEventListener('click', () => {
+        sidebar.classList.add('closed');
+        sidebarOverlay.classList.add('hidden');
+    });
+    
+    // Toggle sidebar en desktop
+    toggleSidebarBtn.addEventListener('click', () => {
+        const isCollapsed = sidebar.classList.contains('closed');
+        
+        if (isCollapsed) {
+            sidebar.classList.remove('closed');
+            mainContent.classList.remove('full-width');
+            toggleSidebarBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        } else {
+            sidebar.classList.add('closed');
+            mainContent.classList.add('full-width');
+            toggleSidebarBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        }
+    });
+    
+    // Cerrar sidebar en móvil al cambiar de página
+    if (window.innerWidth < 1024) {
+        sidebar.classList.add('closed');
+        sidebarOverlay.classList.add('hidden');
+    }
+});
 </script>
 {% endblock %} 

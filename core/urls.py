@@ -80,6 +80,14 @@ urlpatterns = [
     # Ejemplo de Nueva Arquitectura de Menús
     path('menu-example/', MenuExampleView.as_view(), name='menu_example'),
     
+    # Gestión de Contactos Universales
+    path('contacts/', views.ContactListView.as_view(), name='contact_list'),
+    path('contacts/create/', views.ContactCreateView.as_view(), name='contact_create'),
+    path('contacts/<int:pk>/', views.ContactDetailView.as_view(), name='contact_detail'),
+    path('contacts/<int:pk>/edit/', views.ContactUpdateView.as_view(), name='contact_update'),
+    path('contacts/<int:pk>/delete/', views.ContactDeleteView.as_view(), name='contact_delete'),
+    path('contacts/relationships/', views.ContactRelationshipListView.as_view(), name='contact_relationship_list'),
+    
     # Nuevo Dashboard con Arquitectura de Apps
     path('dashboard-apps/', TemplateView.as_view(template_name='dashboard_apps.html'), name='dashboard_apps'),
 ]

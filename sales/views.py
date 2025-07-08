@@ -7,18 +7,27 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.core.exceptions import ValidationError
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.urls import reverse_lazy, reverse
+from django.core.paginator import Paginator
+from django.utils.translation import gettext_lazy as _
+from django.contrib.contenttypes.models import ContentType
 
 from .models import (
-    Client, Contact, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
+    Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
     DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
 )
+from core.models import Contact, ContactRelationship
 from .api.serializers import (
     ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
     PaymentSerializer, DeliveryOrderSerializer
 )
 from core.models import Currency
 from inventory.models import ProductVariant
+from .forms import ClientForm, ContactForm, ClientSearchForm
+
 
 
 @login_required
@@ -817,3 +826,425 @@ def payment_term_edit(request, pk):
 
 def payment_term_delete(request, pk):
     return render(request, 'sales/config/payment_terms_list.html')
+
+
+class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    """Vista para listar clientes"""
+    model = Client
+    template_name = 'sales/clients/client_list.html'
+    context_object_name = 'clients'
+    permission_required = 'sales.view_client'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = Client.objects.all()
+        
+        # Aplicar filtros de búsqueda
+        search = self.request.GET.get('search', '')
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(email__icontains=search) |
+                Q(tax_id__icontains=search) |
+                Q(phone__icontains=search)
+            )
+        
+        # Filtro por tipo
+        type_filter = self.request.GET.get('type', '')
+        if type_filter:
+            queryset = queryset.filter(type=type_filter)
+        
+        # Filtro por país
+        country_filter = self.request.GET.get('country', '')
+        if country_filter:
+            queryset = queryset.filter(country=country_filter)
+        
+        # Filtro por estado/provincia
+        state_filter = self.request.GET.get('state', '')
+        if state_filter:
+            queryset = queryset.filter(state=state_filter)
+        
+        # Filtro por cliente
+        is_customer_filter = self.request.GET.get('is_customer', '')
+        if is_customer_filter == 'True':
+            queryset = queryset.filter(is_customer=True)
+        elif is_customer_filter == 'False':
+            queryset = queryset.filter(is_customer=False)
+        
+        # Filtro por proveedor
+        is_supplier_filter = self.request.GET.get('is_supplier', '')
+        if is_supplier_filter == 'True':
+            queryset = queryset.filter(is_supplier=True)
+        elif is_supplier_filter == 'False':
+            queryset = queryset.filter(is_supplier=False)
+        
+        # Filtro por estado activo
+        is_active_filter = self.request.GET.get('is_active', '')
+        if is_active_filter == 'True':
+            queryset = queryset.filter(is_active=True)
+        elif is_active_filter == 'False':
+            queryset = queryset.filter(is_active=False)
+        
+        # Filtro por vendedor asignado
+        assigned_seller_filter = self.request.GET.get('assigned_seller', '')
+        if assigned_seller_filter:
+            queryset = queryset.filter(
+                Q(assigned_seller__nombre__icontains=assigned_seller_filter) |
+                Q(assigned_seller__email__icontains=assigned_seller_filter)
+            )
+        
+        return queryset.order_by('-id')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search'] = self.request.GET.get('search', '')
+        context['type_filter'] = self.request.GET.get('type', '')
+        context['country_filter'] = self.request.GET.get('country', '')
+        context['state_filter'] = self.request.GET.get('state', '')
+        context['is_customer_filter'] = self.request.GET.get('is_customer', '')
+        context['is_supplier_filter'] = self.request.GET.get('is_supplier', '')
+        context['is_active_filter'] = self.request.GET.get('is_active', '')
+        context['assigned_seller_filter'] = self.request.GET.get('assigned_seller', '')
+        context['total_clients'] = self.get_queryset().count()
+        context['active_clients'] = self.get_queryset().filter(is_active=True).count()
+        context['customer_clients'] = self.get_queryset().filter(is_customer=True).count()
+        context['supplier_clients'] = 0  # Los clientes no son proveedores, eso está en el módulo de compras
+        
+        # Agregar search_form al contexto
+        from .forms import ClientSearchForm
+        context['search_form'] = ClientSearchForm(self.request.GET)
+        
+        return context
+
+
+class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    """Vista para mostrar detalles de cliente"""
+    model = Client
+    template_name = 'sales/clients/client_detail.html'
+    context_object_name = 'client'
+    permission_required = 'sales.view_client'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Obtener contactos usando el sistema de relaciones genéricas
+        context['contacts'] = self.object.get_contacts(active_only=True)
+        context['primary_contact'] = self.object.get_primary_contact_object()
+        
+        # Obtener pedidos recientes
+        context['orders'] = self.object.orders.all().order_by('-created_at')[:10]
+        
+        # Estadísticas del cliente
+        context['total_orders'] = self.object.orders.count()
+        
+        # Obtener facturas y pagos usando consultas directas
+        context['total_invoices'] = Invoice.objects.filter(client=self.object).count()
+        context['total_payments'] = Payment.objects.filter(client=self.object).count()
+        
+        return context
+
+
+class ClientCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """Vista para crear cliente"""
+    model = Client
+    form_class = ClientForm
+    template_name = 'sales/clients/client_form.html'
+    permission_required = 'sales.add_client'
+    success_url = reverse_lazy('sales:client_list')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['payment_terms'] = PaymentTerm.objects.filter(is_active=True)
+        context['price_lists'] = PriceList.objects.filter(is_active=True)
+        return context
+    
+    def form_valid(self, form):
+        messages.success(self.request, _('Client created successfully.'))
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, _('Error creating client. Please check the form.'))
+        return super().form_invalid(form)
+
+
+class ClientUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """Vista para editar cliente"""
+    model = Client
+    form_class = ClientForm
+    template_name = 'sales/clients/client_form.html'
+    permission_required = 'sales.change_client'
+    
+    def get_success_url(self):
+        return reverse('sales:client_detail', kwargs={'pk': self.object.pk})
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['payment_terms'] = PaymentTerm.objects.filter(is_active=True)
+        context['price_lists'] = PriceList.objects.filter(is_active=True)
+        return context
+    
+    def form_valid(self, form):
+        messages.success(self.request, _('Client updated successfully.'))
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, _('Error updating client. Please check the form.'))
+        return super().form_invalid(form)
+
+
+class ClientDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """Vista para eliminar cliente"""
+    model = Client
+    template_name = 'sales/clients/client_confirm_delete.html'
+    permission_required = 'sales.delete_client'
+    success_url = reverse_lazy('sales:client_list')
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, _('Client deleted successfully.'))
+        return super().delete(request, *args, **kwargs)
+
+
+class ContactListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    """Vista para listar contactos de un cliente"""
+    model = Contact
+    template_name = 'sales/contacts/contact_list.html'
+    context_object_name = 'contacts'
+    permission_required = 'sales.view_contact'
+    
+    def get_queryset(self):
+        client_id = self.kwargs.get('client_id')
+        if client_id:
+            # Obtener contactos a través de relaciones genéricas
+            from django.contrib.contenttypes.models import ContentType
+            from core.models import ContactRelationship
+            
+            client = get_object_or_404(Client, pk=client_id)
+            content_type = ContentType.objects.get_for_model(Client)
+            
+            return ContactRelationship.objects.filter(
+                content_type=content_type,
+                object_id=client_id,
+                is_active=True
+            ).select_related('contact', 'contact__country', 'contact__state').order_by('relationship_type', 'contact__name')
+        
+        # Si no hay client_id, mostrar todos los contactos
+        return Contact.objects.select_related('country', 'state').order_by('name')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        client_id = self.kwargs.get('client_id')
+        if client_id:
+            context['client'] = get_object_or_404(Client, pk=client_id)
+        return context
+
+
+class ContactDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+    """Vista para mostrar detalles de contacto"""
+    model = Contact
+    template_name = 'sales/contacts/contact_detail.html'
+    context_object_name = 'contact'
+    permission_required = 'sales.view_contact'
+
+
+class ContactCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    """Vista para crear contacto"""
+    model = Contact
+    form_class = ContactForm
+    template_name = 'sales/contacts/contact_form.html'
+    permission_required = 'sales.add_contact'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        client_id = self.kwargs.get('client_id')
+        if client_id:
+            kwargs['client'] = get_object_or_404(Client, pk=client_id)
+        return kwargs
+    
+    def get_success_url(self):
+        client_id = self.kwargs.get('client_id')
+        if client_id:
+            return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
+        return reverse('sales:contact_list')
+    
+    def form_valid(self, form):
+        client_id = self.kwargs.get('client_id')
+        if client_id:
+            form.instance.client = get_object_or_404(Client, pk=client_id)
+        messages.success(self.request, _('Contact created successfully.'))
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, _('Please correct the errors below.'))
+        return super().form_invalid(form)
+
+
+class ContactUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    """Vista para editar contacto"""
+    model = Contact
+    form_class = ContactForm
+    template_name = 'sales/contacts/contact_form.html'
+    permission_required = 'sales.change_contact'
+    
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['client'] = self.object.client
+        return kwargs
+    
+    def get_success_url(self):
+        return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
+    
+    def form_valid(self, form):
+        messages.success(self.request, _('Contact updated successfully.'))
+        return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, _('Please correct the errors below.'))
+        return super().form_invalid(form)
+
+
+class ContactDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    """Vista para eliminar contacto"""
+    model = Contact
+    template_name = 'sales/contacts/contact_confirm_delete.html'
+    permission_required = 'sales.delete_contact'
+    
+    def get_success_url(self):
+        return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
+    
+    def delete(self, request, *args, **kwargs):
+        messages.success(request, _('Contact deleted successfully.'))
+        return super().delete(request, *args, **kwargs)
+
+
+# Vistas de autocompletado
+# def autocomplete_country(request):
+#     """Autocompletado de países"""
+#     query = request.GET.get('q', '')
+#     if len(query) < 2:
+#         return JsonResponse({'results': []})
+#     
+#     countries = Country.objects.filter(
+#         Q(name__icontains=query) |
+#         Q(name_es__icontains=query) |
+#         Q(name_en__icontains=query) |
+#         Q(name_pt__icontains=query),
+#         is_active=True
+#     )[:10]
+#     
+#     results = [{
+#         'id': country.id,
+#         'text': country.name,
+#         'code': country.code,
+#         'phone_code': country.phone_code,
+#         'currency_code': country.currency_code,
+#         'timezone': country.timezone
+#     } for country in countries]
+#     
+#     return JsonResponse({'results': results})
+
+
+# def autocomplete_state(request):
+#     """Autocompletado de estados/provincias"""
+#     query = request.GET.get('q', '')
+#     country_id = request.GET.get('country_id')
+#     
+#     if len(query) < 2:
+#         return JsonResponse({'results': []})
+#     
+#     states = State.objects.filter(
+#         Q(name__icontains=query) |
+#         Q(name_es__icontains=query) |
+#         Q(name_en__icontains=query) |
+#         Q(name_pt__icontains=query),
+#         is_active=True
+#     )
+#     
+#     if country_id:
+#         states = states.filter(country_id=country_id)
+#     
+#     states = states[:10]
+#     
+#     results = [{
+#         'id': state.id,
+#         'text': state.name,
+#         'code': state.code,
+#         'country_id': state.country.id,
+#         'country_name': state.country.name
+#     } for state in states]
+#     
+#     return JsonResponse({'results': results})
+
+
+def autocomplete_city(request):
+    """Autocompletado de ciudades"""
+    query = request.GET.get('q', '')
+    state_id = request.GET.get('state_id')
+    
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    # Buscar en clientes existentes
+    clients = Client.objects.filter(
+        city__icontains=query,
+        city__isnull=False
+    ).exclude(city='')
+    
+    if state_id:
+        clients = clients.filter(state_id=state_id)
+    
+    cities = clients.values_list('city', flat=True).distinct()[:10]
+    
+    results = [{'id': city, 'text': city} for city in cities]
+    
+    return JsonResponse({'results': results})
+
+
+def autocomplete_seller(request):
+    """Autocompletado de vendedores"""
+    query = request.GET.get('q', '')
+    
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    sellers = User.objects.filter(
+        Q(nombre__icontains=query) |
+        Q(email__icontains=query),
+        is_active=True
+    )[:10]
+    
+    results = [{
+        'id': seller.id,
+        'text': f"{seller.nombre} ({seller.email})",
+        'email': seller.email
+    } for seller in sellers]
+    
+    return JsonResponse({'results': results})
+
+
+def get_states_by_country(request):
+    """Obtener estados por país"""
+    country_id = request.GET.get('country_id')
+    
+    if not country_id:
+        return JsonResponse({'states': []})
+    
+    try:
+        from core.models import State
+        states = State.objects.filter(
+            country_id=country_id,
+            is_active=True
+        ).order_by('name')
+        
+        results = [{
+            'id': state.id,
+            'text': state.name,
+            'code': state.code
+        } for state in states]
+        
+        return JsonResponse({'states': results})
+    except Exception as e:
+        # Si hay algún error, devolver lista vacía
+        return JsonResponse({'states': []})

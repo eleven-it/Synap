@@ -1,0 +1,435 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Compare Quotations" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">receipt</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">compare</span>
+    {% trans "Compare" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Compare Quotations" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Evaluate and compare supplier quotations side by side" %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:quotation_list' %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Back to List" %}
+</a>
+<a href="{% url 'purchases:quotation_create' %}" class="btn-primary">
+    <span class="material-icons mr-2">add</span>
+    {% trans "New Quotation" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="space-y-6">
+    <!-- Selector de cotizaciones -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Select Quotations to Compare" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="get" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="quotation1" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Quotation 1" %}
+                        </label>
+                        <select name="quotation1" id="quotation1" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">{% trans "Select quotation..." %}</option>
+                            {% for quotation in available_quotations %}
+                            <option value="{{ quotation.id }}" {% if request.GET.quotation1 == quotation.id|stringformat:"s" %}selected{% endif %}>
+                                {{ quotation.quotation_number }} - {{ quotation.supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="quotation2" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Quotation 2" %}
+                        </label>
+                        <select name="quotation2" id="quotation2" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">{% trans "Select quotation..." %}</option>
+                            {% for quotation in available_quotations %}
+                            <option value="{{ quotation.id }}" {% if request.GET.quotation2 == quotation.id|stringformat:"s" %}selected{% endif %}>
+                                {{ quotation.quotation_number }} - {{ quotation.supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="quotation3" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Quotation 3 (Optional)" %}
+                        </label>
+                        <select name="quotation3" id="quotation3" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">{% trans "Select quotation..." %}</option>
+                            {% for quotation in available_quotations %}
+                            <option value="{{ quotation.id }}" {% if request.GET.quotation3 == quotation.id|stringformat:"s" %}selected{% endif %}>
+                                {{ quotation.quotation_number }} - {{ quotation.supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center">
+                    <button type="submit" class="btn-primary">
+                        <span class="material-icons mr-2">compare</span>
+                        {% trans "Compare Quotations" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Comparación de cotizaciones -->
+    {% if quotations %}
+    <div class="space-y-6">
+        <!-- Resumen de comparación -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Comparison Summary" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-{{ quotations|length }} gap-6">
+                    {% for quotation in quotations %}
+                    <div class="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                        <div class="w-16 h-16 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <span class="material-icons text-orange-600 dark:text-orange-400 text-2xl">receipt</span>
+                        </div>
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                            {{ quotation.quotation_number }}
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            {{ quotation.supplier.name }}
+                        </p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ quotation.currency.symbol }}{{ quotation.total_amount|floatformat:2 }}
+                        </p>
+                        <span class="status-badge status-{{ quotation.status }} mt-2">
+                            {{ quotation.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparación detallada -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Detailed Comparison" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Criteria" %}
+                                </th>
+                                {% for quotation in quotations %}
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {{ quotation.quotation_number }}
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- Información básica -->
+                            <tr class="bg-gray-50 dark:bg-gray-800">
+                                <td colspan="{{ quotations|length|add:1 }}" class="px-6 py-3">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Basic Information" %}</h4>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Supplier" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ quotation.supplier.name }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Total Amount" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ quotation.currency.symbol }}{{ quotation.total_amount|floatformat:2 }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Valid Until" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ quotation.valid_until|date:"M d, Y" }}
+                                    {% if quotation.is_expired %}
+                                        <span class="text-xs text-red-600 dark:text-red-400 ml-2">{% trans "Expired" %}</span>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Delivery Time" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ quotation.delivery_time|default:"N/A" }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Payment Terms" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ quotation.payment_terms|default:"N/A" }}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <!-- Comparación de líneas -->
+                            <tr class="bg-gray-50 dark:bg-gray-800">
+                                <td colspan="{{ quotations|length|add:1 }}" class="px-6 py-3">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Item Comparison" %}</h4>
+                                </td>
+                            </tr>
+                            
+                            {% for item_name in common_items %}
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ item_name }}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {% for line in quotation.lines.all %}
+                                        {% if line.product_name == item_name %}
+                                            <div class="space-y-1">
+                                                <div class="font-medium">{{ line.quantity }} x {{ quotation.currency.symbol }}{{ line.unit_price|floatformat:2 }}</div>
+                                                <div class="text-xs text-gray-500">{{ line.description|truncatechars:50 }}</div>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                            
+                            <!-- Evaluación -->
+                            <tr class="bg-gray-50 dark:bg-gray-800">
+                                <td colspan="{{ quotations|length|add:1 }}" class="px-6 py-3">
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Evaluation" %}</h4>
+                                </td>
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Price Score" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                                            <div class="bg-orange-500 h-2 rounded-full" style="width: {{ quotation.price_score|default:0 }}%"></div>
+                                        </div>
+                                        <span class="text-sm text-gray-900 dark:text-white">{{ quotation.price_score|default:0 }}/100</span>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Quality Score" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                                            <div class="bg-green-500 h-2 rounded-full" style="width: {{ quotation.quality_score|default:0 }}%"></div>
+                                        </div>
+                                        <span class="text-sm text-gray-900 dark:text-white">{{ quotation.quality_score|default:0 }}/100</span>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Delivery Score" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                                            <div class="bg-blue-500 h-2 rounded-full" style="width: {{ quotation.delivery_score|default:0 }}%"></div>
+                                        </div>
+                                        <span class="text-sm text-gray-900 dark:text-white">{{ quotation.delivery_score|default:0 }}/100</span>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            
+                            <tr>
+                                <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                                    {% trans "Overall Score" %}
+                                </td>
+                                {% for quotation in quotations %}
+                                <td class="px-6 py-4">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                                            <div class="bg-purple-500 h-2 rounded-full" style="width: {{ quotation.overall_score|default:0 }}%"></div>
+                                        </div>
+                                        <span class="text-sm font-bold text-gray-900 dark:text-white">{{ quotation.overall_score|default:0 }}/100</span>
+                                    </div>
+                                </td>
+                                {% endfor %}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones recomendadas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Recommended Actions" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                        <div class="flex items-center mb-3">
+                            <span class="material-icons text-green-600 dark:text-green-400 mr-2">check_circle</span>
+                            <h4 class="text-sm font-semibold text-green-900 dark:text-green-300">{% trans "Best Value" %}</h4>
+                        </div>
+                        <p class="text-sm text-green-700 dark:text-green-400 mb-3">
+                            {% trans "Based on price, quality, and delivery factors, we recommend:" %}
+                        </p>
+                        <div class="text-sm font-medium text-green-900 dark:text-green-300">
+                            {{ best_quotation.quotation_number }} - {{ best_quotation.supplier.name }}
+                        </div>
+                    </div>
+                    
+                    <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div class="flex items-center mb-3">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">schedule</span>
+                            <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-300">{% trans "Next Steps" %}</h4>
+                        </div>
+                        <div class="space-y-2 text-sm text-blue-700 dark:text-blue-400">
+                            <p>• {% trans "Review detailed terms and conditions" %}</p>
+                            <p>• {% trans "Contact supplier for clarifications" %}</p>
+                            <p>• {% trans "Proceed with order creation" %}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex space-x-3">
+                    {% for quotation in quotations %}
+                    <a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+                        <span class="material-icons mr-2">visibility</span>
+                        {% trans "View" %} {{ quotation.quotation_number }}
+                    </a>
+                    {% endfor %}
+                    
+                    {% if best_quotation %}
+                    <a href="{% url 'purchases:order_create_from_quotation' best_quotation.pk %}" class="btn-primary">
+                        <span class="material-icons mr-2">receipt</span>
+                        {% trans "Create Order from Best" %}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Estado inicial -->
+    <div class="text-center py-12">
+        <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+            <span class="material-icons text-gray-400 text-3xl">compare</span>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "Select Quotations to Compare" %}</h3>
+        <p class="text-gray-500 dark:text-gray-400 mb-6">
+            {% trans "Choose two or three quotations from the dropdown menus above to start comparing them." %}
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Validación de selección de cotizaciones
+    const quotationSelects = document.querySelectorAll('select[name^="quotation"]');
+    const compareButton = document.querySelector('button[type="submit"]');
+    
+    function validateSelections() {
+        const selectedValues = Array.from(quotationSelects)
+            .map(select => select.value)
+            .filter(value => value !== '');
+        
+        const uniqueValues = new Set(selectedValues);
+        
+        if (selectedValues.length < 2) {
+            compareButton.disabled = true;
+            compareButton.classList.add('opacity-50', 'cursor-not-allowed');
+        } else if (uniqueValues.size !== selectedValues.length) {
+            compareButton.disabled = true;
+            compareButton.classList.add('opacity-50', 'cursor-not-allowed');
+            PurchasesApp.showNotification('{% trans "Please select different quotations" %}', 'error');
+        } else {
+            compareButton.disabled = false;
+            compareButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    quotationSelects.forEach(select => {
+        select.addEventListener('change', validateSelections);
+    });
+    
+    // Validación inicial
+    validateSelections();
+    
+    // Animaciones para las barras de progreso
+    const progressBars = document.querySelectorAll('.bg-orange-500, .bg-green-500, .bg-blue-500, .bg-purple-500');
+    progressBars.forEach(bar => {
+        const width = bar.style.width;
+        bar.style.width = '0%';
+        setTimeout(() => {
+            bar.style.width = width;
+        }, 500);
+    });
+});
+</script>
+{% endblock %} 

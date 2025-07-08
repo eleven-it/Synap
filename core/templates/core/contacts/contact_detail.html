@@ -1,0 +1,333 @@
+{% extends 'base_app.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{{ contact.display_name }} - {% trans "Contact Details" %} - Synap{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div class="flex items-center space-x-4">
+            {% if contact.photo %}
+                <img class="h-16 w-16 rounded-full object-cover" src="{{ contact.photo.url }}" alt="{{ contact.name }}">
+            {% else %}
+                <div class="h-16 w-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                    <span class="text-white font-bold text-xl">{{ contact.name|first|upper }}</span>
+                </div>
+            {% endif %}
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {{ contact.display_name }}
+                </h1>
+                {% if contact.position %}
+                    <p class="text-gray-600 dark:text-gray-400">{{ contact.position }}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex space-x-3">
+            <a href="{% url 'core:contact_update' contact.pk %}" class="btn-primary">
+                <span class="material-icons mr-2">edit</span>
+                {% trans "Edit" %}
+            </a>
+            <a href="{% url 'core:contact_delete' contact.pk %}" class="btn-danger">
+                <span class="material-icons mr-2">delete</span>
+                {% trans "Delete" %}
+            </a>
+        </div>
+    </div>
+
+    <!-- Status Badges -->
+    <div class="flex space-x-4">
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+            {% if contact.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+            <span class="material-icons text-sm mr-1">{% if contact.is_active %}check_circle{% else %}cancel{% endif %}</span>
+            {% if contact.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+        </span>
+        
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+            {% if contact.is_primary %}bg-purple-100 text-purple-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+            <span class="material-icons text-sm mr-1">{% if contact.is_primary %}star{% else %}person{% endif %}</span>
+            {% if contact.is_primary %}{% trans "Primary Contact" %}{% else %}{% trans "Secondary Contact" %}{% endif %}
+        </span>
+        
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium
+            {% if contact.type == 'person' %}bg-blue-100 text-blue-800
+            {% elif contact.type == 'company' %}bg-green-100 text-green-800
+            {% else %}bg-purple-100 text-purple-800{% endif %}">
+            <span class="material-icons text-sm mr-1">
+                {% if contact.type == 'person' %}person
+                {% elif contact.type == 'company' %}business
+                {% else %}work{% endif %}
+            </span>
+            {{ contact.get_type_display }}
+        </span>
+    </div>
+
+    <!-- Contact Information Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Basic Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons mr-2 text-blue-600">person</span>
+                {% trans "Basic Information" %}
+            </h3>
+            
+            <dl class="space-y-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Full Name" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.display_name }}</dd>
+                </div>
+                
+                {% if contact.company_name %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Company" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.company_name }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.position %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Position" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.position }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.department %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Department" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.department }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.tags %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Tags" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        {% for tag in contact.tags.split|slice:":5" %}
+                            <span class="inline-block bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ tag }}</span>
+                        {% endfor %}
+                        {% if contact.tags.split|length > 5 %}
+                            <span class="text-gray-500">+{{ contact.tags.split|length|add:"-5" }} more</span>
+                        {% endif %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons mr-2 text-green-600">contact_phone</span>
+                {% trans "Contact Information" %}
+            </h3>
+            
+            <dl class="space-y-4">
+                {% if contact.email %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Email" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        <a href="mailto:{{ contact.email }}" class="text-blue-600 hover:text-blue-800">{{ contact.email }}</a>
+                    </dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.phone %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Phone" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        <a href="tel:{{ contact.phone }}" class="text-blue-600 hover:text-blue-800">{{ contact.phone }}</a>
+                    </dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.mobile %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Mobile" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        <a href="tel:{{ contact.mobile }}" class="text-blue-600 hover:text-blue-800">{{ contact.mobile }}</a>
+                    </dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.fax %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Fax" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.fax }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.website %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Website" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        <a href="{{ contact.website }}" target="_blank" class="text-blue-600 hover:text-blue-800">{{ contact.website }}</a>
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Address Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons mr-2 text-purple-600">location_on</span>
+                {% trans "Address Information" %}
+            </h3>
+            
+            <dl class="space-y-4">
+                {% if contact.full_address %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Full Address" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.full_address }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.address %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Address" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.address }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.city %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "City" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.city }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.state %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "State/Province" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.state }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.postal_code %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Postal Code" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.postal_code }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.country %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Country" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.country }}</dd>
+                </div>
+                {% endif %}
+                
+                {% if contact.latitude and contact.longitude %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Coordinates" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">
+                        {{ contact.latitude }}, {{ contact.longitude }}
+                        {% if contact.google_maps_url %}
+                            <a href="{{ contact.google_maps_url }}" target="_blank" class="text-blue-600 hover:text-blue-800 ml-2">
+                                <span class="material-icons text-sm">map</span>
+                            </a>
+                        {% endif %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons mr-2 text-orange-600">info</span>
+                {% trans "Additional Information" %}
+            </h3>
+            
+            <dl class="space-y-4">
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Created" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.created_at|date:"F j, Y" }}</dd>
+                </div>
+                
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Last Updated" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white">{{ contact.updated_at|date:"F j, Y" }}</dd>
+                </div>
+                
+                {% if contact.notes %}
+                <div>
+                    <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Notes" %}</dt>
+                    <dd class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ contact.notes }}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+    </div>
+
+    <!-- Relationships -->
+    {% if relationships %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons mr-2 text-indigo-600">link</span>
+                {% trans "Related Entities" %}
+            </h3>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Entity Type" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Entity Name" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Relationship Type" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Status" %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for relationship in relationships %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ relationship.content_type.model|title }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ relationship.related_object }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if relationship.relationship_type == 'primary' %}bg-purple-100 text-purple-800
+                                {% elif relationship.relationship_type == 'secondary' %}bg-blue-100 text-blue-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ relationship.get_relationship_type_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if relationship.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {% if relationship.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Back Button -->
+    <div class="flex justify-center">
+        <a href="{% url 'core:contact_list' %}" class="btn-secondary">
+            <span class="material-icons mr-2">arrow_back</span>
+            {% trans "Back to Contacts" %}
+        </a>
+    </div>
+</div>
+{% endblock %} 

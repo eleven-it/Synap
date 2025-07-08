@@ -3,249 +3,404 @@
 {% load i18n %}
 {% load crispy_forms_tags %}
 
-{% block purchases_title %}{% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}{% endblock %}
+{% block purchases_title %}
+    {% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}
+{% endblock %}
 
-{% block purchases_header %}{% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}{% endblock %}
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">business</span>
+    <a href="{% url 'purchases:supplier_list' %}">{% trans "Suppliers" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">{% if form.instance.pk %}edit{% else %}add{% endif %}</span>
+    {% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}
+</div>
+{% endblock %}
 
-{% block purchases_subheader %}{% if form.instance.pk %}{% trans "Update supplier information" %}{% else %}{% trans "Register a new supplier" %}{% endif %}{% endblock %}
+{% block purchases_header %}
+    {% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}
+{% endblock %}
+
+{% block purchases_subheader %}
+    {% if form.instance.pk %}
+        {% trans "Update supplier information and details" %}
+    {% else %}
+        {% trans "Add a new supplier to your network" %}
+    {% endif %}
+{% endblock %}
 
 {% block purchases_actions %}
 <a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
-    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-    </svg>
+    <span class="material-icons mr-2">arrow_back</span>
     {% trans "Back to List" %}
 </a>
 {% endblock %}
 
 {% block purchases_content %}
-<div class="max-w-4xl mx-auto">
-    <div class="card">
-        <div class="card-header">
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                {% if form.instance.pk %}{% trans "Edit Supplier" %}{% else %}{% trans "New Supplier" %}{% endif %}
-            </h3>
-        </div>
-        <div class="card-body">
-            <form method="post" class="space-y-6" id="supplier-form">
-                {% csrf_token %}
-                
-                <!-- Información Básica -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
-                        {% trans "Basic Information" %}
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            {{ form.name|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.code|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.tax_id|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.supplier_category|as_crispy_field }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Información de Contacto -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
-                        {% trans "Contact Information" %}
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            {{ form.contact_person|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.email|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.phone|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.mobile|as_crispy_field }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dirección -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
-                        {% trans "Address" %}
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="md:col-span-2">
-                            {{ form.address|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.city|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.state|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.postal_code|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.country|as_crispy_field }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Condiciones Comerciales -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
-                        {% trans "Commercial Terms" %}
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            {{ form.payment_terms|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.delivery_terms|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.credit_limit|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.rating_class|as_crispy_field }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Notas -->
-                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
-                    <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">
-                        {% trans "Additional Information" %}
-                    </h4>
+<div class="max-w-6xl mx-auto">
+    <form method="post" class="space-y-8" id="supplierForm">
+        {% csrf_token %}
+        
+        <!-- Información Básica -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Basic Information" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        {{ form.notes|as_crispy_field }}
+                        {{ form.name|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.code|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tax_id|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.supplier_category|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.supplier_type|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.currency|as_crispy_field }}
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Botones de Acción -->
-                <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
-                        {% trans "Cancel" %}
-                    </a>
-                    <button type="submit" class="btn-primary">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                        {% if form.instance.pk %}{% trans "Update Supplier" %}{% else %}{% trans "Create Supplier" %}{% endif %}
+        <!-- Contactos Relacionados -->
+        <div class="card">
+            <div class="card-header">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Related Contacts" %}
+                    </h3>
+                    <button type="button" onclick="addContactForm()" class="btn-primary">
+                        <span class="material-icons mr-2">person_add</span>
+                        {% trans "Add Contact" %}
                     </button>
                 </div>
-            </form>
+            </div>
+            <div class="card-body">
+                <div id="contactsContainer" class="space-y-4">
+                    <!-- Los formularios de contactos se agregarán aquí dinámicamente -->
+                </div>
+                
+                <!-- Template para formulario de contacto -->
+                <template id="contactFormTemplate">
+                    <div class="contact-form bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-md font-medium text-gray-900 dark:text-white">
+                                {% trans "Contact" %} <span class="contact-number"></span>
+                            </h4>
+                            <button type="button" onclick="removeContactForm(this)" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                                <span class="material-icons">delete</span>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Full Name" %} *
+                                </label>
+                                <input type="text" name="contact_name[]" required
+                                       class="form-input w-full" placeholder="{% trans 'Enter full name' %}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Email" %}
+                                </label>
+                                <input type="email" name="contact_email[]"
+                                       class="form-input w-full" placeholder="{% trans 'Enter email address' %}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Phone" %}
+                                </label>
+                                <input type="tel" name="contact_phone[]"
+                                       class="form-input w-full" placeholder="{% trans 'Enter phone number' %}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Mobile" %}
+                                </label>
+                                <input type="tel" name="contact_mobile[]"
+                                       class="form-input w-full" placeholder="{% trans 'Enter mobile number' %}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Position" %}
+                                </label>
+                                <input type="text" name="contact_position[]"
+                                       class="form-input w-full" placeholder="{% trans 'Enter position or role' %}">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Relationship Type" %}
+                                </label>
+                                <select name="contact_relationship[]" class="form-select w-full">
+                                    <option value="primary">{% trans "Primary Contact" %}</option>
+                                    <option value="secondary">{% trans "Secondary Contact" %}</option>
+                                    <option value="billing">{% trans "Billing Contact" %}</option>
+                                    <option value="technical">{% trans "Technical Contact" %}</option>
+                                    <option value="other">{% trans "Other" %}</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2 lg:col-span-3">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {% trans "Notes" %}
+                                </label>
+                                <textarea name="contact_notes[]" rows="2"
+                                          class="form-textarea w-full" placeholder="{% trans 'Additional notes about this contact' %}"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
         </div>
-    </div>
-</div>
-{% endblock %}
 
-{% block extra_js %}
+        <!-- Información de Contacto Principal -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Primary Contact Information" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.contact_person|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.email|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.phone|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.mobile|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dirección -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Address Information" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        {{ form.address|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.city|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.state|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.postal_code|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.country|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Condiciones Comerciales -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Commercial Terms" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.payment_terms|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.credit_limit|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notas -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Additional Information" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div>
+                    {{ form.notes|as_crispy_field }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="flex justify-end space-x-4">
+            <a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" class="btn-primary">
+                <span class="material-icons mr-2">{% if form.instance.pk %}save{% else %}add{% endif %}</span>
+                {% if form.instance.pk %}{% trans "Update Supplier" %}{% else %}{% trans "Create Supplier" %}{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
 <script>
+let contactCounter = 0;
+
+function addContactForm() {
+    const container = document.getElementById('contactsContainer');
+    const template = document.getElementById('contactFormTemplate');
+    const clone = template.content.cloneNode(true);
+    
+    contactCounter++;
+    clone.querySelector('.contact-number').textContent = contactCounter;
+    
+    // Agregar animación de entrada
+    const contactForm = clone.querySelector('.contact-form');
+    contactForm.style.opacity = '0';
+    contactForm.style.transform = 'translateY(-10px)';
+    
+    container.appendChild(clone);
+    
+    // Animar entrada
+    setTimeout(() => {
+        contactForm.style.transition = 'all 0.3s ease';
+        contactForm.style.opacity = '1';
+        contactForm.style.transform = 'translateY(0)';
+    }, 10);
+    
+    // Scroll suave al nuevo formulario
+    contactForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function removeContactForm(button) {
+    const contactForm = button.closest('.contact-form');
+    
+    // Animar salida
+    contactForm.style.transition = 'all 0.3s ease';
+    contactForm.style.opacity = '0';
+    contactForm.style.transform = 'translateY(-10px)';
+    
+    setTimeout(() => {
+        contactForm.remove();
+        updateContactNumbers();
+    }, 300);
+}
+
+function updateContactNumbers() {
+    const contactForms = document.querySelectorAll('.contact-form');
+    contactForms.forEach((form, index) => {
+        form.querySelector('.contact-number').textContent = index + 1;
+    });
+    contactCounter = contactForms.length;
+}
+
+// Validación del formulario
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('supplier-form');
+    const form = document.getElementById('supplierForm');
+    const emailField = document.getElementById('id_email');
+    const codeField = document.getElementById('id_code');
     
-    // Validación en tiempo real
-    const inputs = form.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-        input.addEventListener('blur', function() {
-            validateField(this);
-        });
-        
-        input.addEventListener('input', function() {
-            clearFieldError(this);
-        });
-    });
-    
-    // Validación del formulario
-    form.addEventListener('submit', function(e) {
-        if (!validateForm()) {
-            e.preventDefault();
-            showNotification('{% trans "Please correct the errors below" %}', 'error');
-        }
-    });
-    
-    function validateField(field) {
-        const value = field.value.trim();
-        const fieldName = field.name;
-        
-        // Validaciones específicas
-        if (fieldName === 'email' && value) {
+    // Validación de email
+    if (emailField) {
+        emailField.addEventListener('blur', function() {
+            const email = this.value;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(value)) {
-                showFieldError(field, '{% trans "Please enter a valid email address" %}');
-                return false;
+            
+            if (email && !emailRegex.test(email)) {
+                this.classList.add('border-red-500');
+                showError(this, '{% trans "Please enter a valid email address" %}');
+            } else {
+                this.classList.remove('border-red-500');
+                removeError(this);
             }
-        }
-        
-        if (fieldName === 'code' && value) {
-            if (value.length < 3) {
-                showFieldError(field, '{% trans "Code must be at least 3 characters long" %}');
-                return false;
-            }
-        }
-        
-        if (fieldName === 'credit_limit' && value) {
-            const limit = parseFloat(value);
-            if (isNaN(limit) || limit < 0) {
-                showFieldError(field, '{% trans "Credit limit must be a positive number" %}');
-                return false;
-            }
-        }
-        
-        return true;
+        });
     }
     
-    function validateForm() {
+    // Validación de código único
+    if (codeField) {
+        codeField.addEventListener('blur', function() {
+            const code = this.value;
+            if (code) {
+                if (code.length < 3) {
+                    this.classList.add('border-red-500');
+                    showError(this, '{% trans "Code must be at least 3 characters long" %}');
+                } else {
+                    this.classList.remove('border-red-500');
+                    removeError(this);
+                }
+            }
+        });
+    }
+    
+    // Validación del formulario antes de enviar
+    form.addEventListener('submit', function(e) {
         let isValid = true;
-        inputs.forEach(input => {
-            if (!validateField(input)) {
+        
+        // Validar campos requeridos
+        const requiredFields = form.querySelectorAll('[required]');
+        requiredFields.forEach(function(field) {
+            if (!field.value.trim()) {
+                field.classList.add('border-red-500');
+                showError(field, '{% trans "This field is required" %}');
                 isValid = false;
             }
         });
-        return isValid;
-    }
-    
-    function showFieldError(field, message) {
-        clearFieldError(field);
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'text-red-600 text-sm mt-1';
-        errorDiv.textContent = message;
-        field.parentNode.appendChild(errorDiv);
-        field.classList.add('border-red-500');
-    }
-    
-    function clearFieldError(field) {
-        const errorDiv = field.parentNode.querySelector('.text-red-600');
-        if (errorDiv) {
-            errorDiv.remove();
-        }
-        field.classList.remove('border-red-500');
-    }
-    
-    function showNotification(message, type = 'success') {
-        // Implementar sistema de notificaciones
-        console.log(`${type}: ${message}`);
-    }
-    
-    // Auto-generar código si está vacío
-    const nameField = document.getElementById('id_name');
-    const codeField = document.getElementById('id_code');
-    
-    if (nameField && codeField) {
-        nameField.addEventListener('blur', function() {
-            if (!codeField.value && this.value) {
-                const code = this.value.substring(0, 3).toUpperCase() + 
-                           Math.random().toString(36).substring(2, 5).toUpperCase();
-                codeField.value = code;
+        
+        // Validar al menos un contacto si se agregaron
+        const contactForms = document.querySelectorAll('.contact-form');
+        contactForms.forEach(function(contactForm) {
+            const nameField = contactForm.querySelector('input[name="contact_name[]"]');
+            if (nameField && !nameField.value.trim()) {
+                nameField.classList.add('border-red-500');
+                showError(nameField, '{% trans "Contact name is required" %}');
+                isValid = false;
             }
         });
-    }
+        
+        if (!isValid) {
+            e.preventDefault();
+            showToast('{% trans "Please correct the errors before submitting" %}', 'error');
+        }
+    });
 });
+
+function showError(field, message) {
+    removeError(field);
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'text-red-600 text-sm mt-1';
+    errorDiv.textContent = message;
+    field.parentNode.appendChild(errorDiv);
+}
+
+function removeError(field) {
+    const errorDiv = field.parentNode.querySelector('.text-red-600');
+    if (errorDiv) {
+        errorDiv.remove();
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Implementar sistema de toasts
+    console.log(message);
+}
 </script>
 {% endblock %} 

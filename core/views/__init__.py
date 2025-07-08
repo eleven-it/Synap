@@ -18,3 +18,8 @@ from .views_system_config import (
     SystemConfigurationListView, SystemConfigurationCreateView, 
     SystemConfigurationUpdateView, SystemConfigurationDeleteView
 )
+from .views_contacts import (
+    ContactListView, ContactCreateView, ContactUpdateView, 
+    ContactDetailView, ContactDeleteView, ContactRelationshipListView,
+    ContactableCreateView, ContactableUpdateView
+)

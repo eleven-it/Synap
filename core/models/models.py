@@ -3,6 +3,9 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.core.cache import cache
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from core.mixins import ContactableMixin
 
 
 class Empresa(models.Model):
@@ -322,4 +325,434 @@ class DeliveryLocation(models.Model):
         except cls.DoesNotExist:
             # Si no hay default, retorna la primera activa
             return cls.objects.filter(empresa=empresa, branch=branch, is_active=True).first()
+
+
+# --- MODELO DE CONTACTO UNIVERSAL ---
+
+class Contact(models.Model):
+    """
+    Modelo universal de contacto que puede estar vinculado a múltiples entidades:
+    - Clientes (sales.Client)
+    - Proveedores (purchases.Supplier) 
+    - Empleados (core.UsuarioExtendido)
+    - Otros contactos
+    """
+    
+    # Información básica del contacto
+    name = models.CharField(_('Name'), max_length=255)
+    type = models.CharField(
+        max_length=16,
+        choices=[
+            ('person', _('Person')),
+            ('company', _('Company')),
+            ('employee', _('Employee')),
+        ],
+        default='person',
+        verbose_name=_('Contact Type')
+    )
+    
+    # Información personal/profesional
+    first_name = models.CharField(_('First Name'), max_length=100, blank=True)
+    last_name = models.CharField(_('Last Name'), max_length=100, blank=True)
+    company_name = models.CharField(_('Company Name'), max_length=255, blank=True)
+    position = models.CharField(_('Position/Job Title'), max_length=100, blank=True)
+    department = models.CharField(_('Department'), max_length=100, blank=True)
+    
+    # Datos de contacto
+    email = models.EmailField(_('Email'), blank=True)
+    phone = models.CharField(_('Phone'), max_length=32, blank=True)
+    mobile = models.CharField(_('Mobile'), max_length=32, blank=True)
+    fax = models.CharField(_('Fax'), max_length=32, blank=True)
+    website = models.URLField(_('Website'), blank=True, null=True)
+    
+    # Dirección
+    address = models.TextField(_('Address'), blank=True, null=True)
+    postal_code = models.CharField(_('Postal Code'), max_length=20, blank=True, null=True)
+    city = models.CharField(_('City'), max_length=100, blank=True, null=True)
+    state = models.CharField(_('State/Province'), max_length=100, blank=True, null=True)
+    country = models.CharField(_('Country'), max_length=100, default="Argentina", blank=True, null=True)
+    
+    # Ubicación geográfica
+    latitude = models.DecimalField(_('Latitude'), max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(_('Longitude'), max_digits=9, decimal_places=6, blank=True, null=True)
+    
+    # Información adicional
+    notes = models.TextField(_('Notes'), blank=True, null=True)
+    tags = models.CharField(_('Tags'), max_length=255, blank=True, help_text=_('Comma-separated tags'))
+    
+    # Imagen
+    photo = models.ImageField(_('Photo'), upload_to='contacts/photos/', blank=True, null=True)
+    
+    # Estado
+    is_active = models.BooleanField(_('Active'), default=True)
+    is_primary = models.BooleanField(_('Primary Contact'), default=False)
+    
+    # Auditoría
+    created_at = models.DateTimeField(_('Created at'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Updated at'), auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Contact')
+        verbose_name_plural = _('Contacts')
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['type']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['email']),
+            models.Index(fields=['company_name']),
+        ]
+    
+    def __str__(self):
+        if self.type == 'person':
+            return f"{self.first_name} {self.last_name}".strip() or self.name
+        elif self.type == 'company':
+            return self.company_name or self.name
+        return self.name
+    
+    def clean(self):
+        """Validaciones del modelo"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar que al menos tenga nombre o nombre completo
+        if not self.name and not (self.first_name or self.last_name):
+            raise ValidationError(_('Contact must have a name or first/last name.'))
+        
+        # Validar que tenga al menos un método de contacto
+        if not any([self.email, self.phone, self.mobile]):
+            raise ValidationError(_('Contact must have at least one contact method (email, phone, or mobile).'))
+    
+    @property
+    def full_name(self):
+        """Nombre completo del contacto"""
+        if self.type == 'person':
+            return f"{self.first_name} {self.last_name}".strip()
+        return self.name
+    
+    @property
+    def display_name(self):
+        """Nombre para mostrar"""
+        if self.type == 'person':
+            name = self.full_name
+            if self.company_name:
+                return f"{name} ({self.company_name})"
+            return name
+        elif self.type == 'company':
+            return self.company_name or self.name
+        return self.name
+    
+    @property
+    def full_address(self):
+        """Dirección completa formateada"""
+        parts = []
+        if self.address:
+            parts.append(self.address)
+        if self.city:
+            parts.append(self.city)
+        if self.state:
+            parts.append(self.state)
+        if self.postal_code:
+            parts.append(self.postal_code)
+        if self.country:
+            parts.append(self.country)
+        return ', '.join(parts) if parts else ''
+    
+    @property
+    def google_maps_url(self):
+        """URL de Google Maps para la ubicación"""
+        if self.latitude and self.longitude:
+            return f"https://maps.google.com/?q={self.latitude},{self.longitude}"
+        elif self.full_address:
+            return f"https://maps.google.com/?q={self.full_address}"
+        return None
+
+
+class ContactRelationship(models.Model):
+    """
+    Modelo para gestionar las relaciones entre contactos y entidades del sistema
+    Permite que un contacto esté vinculado a múltiples entidades
+    """
+    
+    # El contacto
+    contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='relationships', verbose_name=_('Contact'))
+    
+    # Entidad relacionada (usando ContentType para flexibilidad)
+    content_type = models.ForeignKey('contenttypes.ContentType', on_delete=models.CASCADE, verbose_name=_('Content Type'))
+    object_id = models.PositiveIntegerField(_('Object ID'))
+    related_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Tipo de relación
+    RELATIONSHIP_TYPES = [
+        ('primary', _('Primary Contact')),
+        ('secondary', _('Secondary Contact')),
+        ('billing', _('Billing Contact')),
+        ('technical', _('Technical Contact')),
+        ('decision_maker', _('Decision Maker')),
+        ('employee', _('Employee')),
+        ('representative', _('Representative')),
+        ('other', _('Other')),
+    ]
+    
+    relationship_type = models.CharField(
+        max_length=20,
+        choices=RELATIONSHIP_TYPES,
+        default='secondary',
+        verbose_name=_('Relationship Type')
+    )
+    
+    # Información adicional de la relación
+    is_active = models.BooleanField(_('Active'), default=True)
+    notes = models.TextField(_('Notes'), blank=True)
+    
+    # Fechas de la relación
+    start_date = models.DateField(_('Start Date'), blank=True, null=True)
+    end_date = models.DateField(_('End Date'), blank=True, null=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(_('Created at'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Updated at'), auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Contact Relationship')
+        verbose_name_plural = _('Contact Relationships')
+        ordering = ['contact', 'relationship_type']
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['relationship_type']),
+            models.Index(fields=['is_active']),
+        ]
+        unique_together = ['contact', 'content_type', 'object_id', 'relationship_type']
+    
+    def __str__(self):
+        return f"{self.contact.display_name} - {self.get_relationship_type_display()} ({self.related_object})"
+    
+    def clean(self):
+        """Validaciones del modelo"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar que no haya relaciones duplicadas
+        if ContactRelationship.objects.filter(
+            contact=self.contact,
+            content_type=self.content_type,
+            object_id=self.object_id,
+            relationship_type=self.relationship_type,
+            is_active=True
+        ).exclude(pk=self.pk).exists():
+            raise ValidationError(_('This contact already has this type of relationship with this entity.'))
+        
+        # Validar fechas
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValidationError(_('Start date cannot be after end date.'))
+    
+    @property
+    def is_current(self):
+        """Verifica si la relación está activa actualmente"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        if not self.is_active:
+            return False
+        
+        if self.start_date and self.start_date > today:
+            return False
+        
+        if self.end_date and self.end_date < today:
+            return False
+        
+        return True
+
+
+class Country(models.Model):
+    """
+    Modelo para gestionar países del mundo
+    """
+    name = models.CharField(_('Name'), max_length=100, unique=True)
+    name_es = models.CharField(_('Name (Spanish)'), max_length=100, blank=True)
+    name_en = models.CharField(_('Name (English)'), max_length=100, blank=True)
+    name_pt = models.CharField(_('Name (Portuguese)'), max_length=100, blank=True)
+    
+    # Códigos estándar
+    code = models.CharField(_('ISO Code'), max_length=3, unique=True, help_text=_('ISO 3166-1 alpha-3 code'))
+    code_2 = models.CharField(_('ISO Code (2 letters)'), max_length=2, blank=True, help_text=_('ISO 3166-1 alpha-2 code'))
+    
+    # Información adicional
+    phone_code = models.CharField(_('Phone Code'), max_length=10, blank=True, help_text=_('International calling code'))
+    currency_code = models.CharField(_('Currency Code'), max_length=3, blank=True, help_text=_('ISO 4217 currency code'))
+    timezone = models.CharField(_('Timezone'), max_length=50, blank=True, help_text=_('Primary timezone'))
+    
+    # Estado
+    is_active = models.BooleanField(_('Active'), default=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Country')
+        verbose_name_plural = _('Countries')
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_localized_name(self, language=None):
+        """Obtiene el nombre en el idioma especificado"""
+        if language == 'es' and self.name_es:
+            return self.name_es
+        elif language == 'en' and self.name_en:
+            return self.name_en
+        elif language == 'pt' and self.name_pt:
+            return self.name_pt
+        return self.name
+
+    @classmethod
+    def get_active_countries(cls):
+        """Obtiene todos los países activos"""
+        return cls.objects.filter(is_active=True).order_by('name')
+
+
+class State(models.Model):
+    """
+    Modelo para gestionar estados/provincias de países
+    """
+    name = models.CharField(_('Name'), max_length=100)
+    name_es = models.CharField(_('Name (Spanish)'), max_length=100, blank=True)
+    name_en = models.CharField(_('Name (English)'), max_length=100, blank=True)
+    name_pt = models.CharField(_('Name (Portuguese)'), max_length=100, blank=True)
+    
+    # Códigos
+    code = models.CharField(_('Code'), max_length=10, blank=True, help_text=_('State/province code'))
+    
+    # Relación con país
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, related_name='states', verbose_name=_('Country'))
+    
+    # Estado
+    is_active = models.BooleanField(_('Active'), default=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('State/Province')
+        verbose_name_plural = _('States/Provinces')
+        ordering = ['country', 'name']
+        indexes = [
+            models.Index(fields=['country']),
+            models.Index(fields=['is_active']),
+        ]
+        unique_together = ['country', 'name']
+
+    def __str__(self):
+        return f"{self.name}, {self.country.name}"
+
+    def get_localized_name(self, language=None):
+        """Obtiene el nombre en el idioma especificado"""
+        if language == 'es' and self.name_es:
+            return self.name_es
+        elif language == 'en' and self.name_en:
+            return self.name_en
+        elif language == 'pt' and self.name_pt:
+            return self.name_pt
+        return self.name
+
+    @classmethod
+    def get_states_by_country(cls, country_id):
+        """Obtiene estados por país"""
+        return cls.objects.filter(country_id=country_id, is_active=True).order_by('name')
+
+
+# --- MODELO BASE PARA ENTIDADES COMERCIALES ---
+
+class BusinessEntity(ContactableMixin, models.Model):
+    """
+    Modelo base abstracto para entidades comerciales (clientes y proveedores)
+    Contiene toda la funcionalidad común entre clientes y proveedores
+    """
+    
+    # Información básica
+    name = models.CharField(_("Name"), max_length=255)
+    code = models.CharField(_("Code"), max_length=20, unique=True, null=True, blank=True, help_text=_("Internal business entity code"))
+    tax_id = models.CharField(_("Tax ID"), max_length=50, blank=True, help_text=_("VAT number or tax identification"))
+    
+    # Dirección común
+    address = models.TextField(_("Address"), blank=True, null=True)
+    city = models.CharField(_("City"), max_length=100, blank=True, null=True)
+    state = models.CharField(_("State/Province"), max_length=100, blank=True, null=True)
+    postal_code = models.CharField(_("Postal Code"), max_length=20, blank=True, null=True)
+    country = models.CharField(_("Country"), max_length=100, default="Argentina", blank=True, null=True)
+    
+    # Información de contacto principal (legacy - para compatibilidad)
+    contact_person = models.CharField(_("Contact Person"), max_length=100, blank=True, null=True)
+    email = models.EmailField(_("Email"), blank=True, null=True)
+    phone = models.CharField(_("Phone"), max_length=20, blank=True, null=True)
+    mobile = models.CharField(_("Mobile"), max_length=20, blank=True, null=True)
+    
+    # Información adicional
+    website = models.URLField(_("Website"), blank=True, null=True)
+    notes = models.TextField(_("Notes"), blank=True, null=True)
+    
+    # Estado
+    is_active = models.BooleanField(_("Active"), default=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        abstract = True
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    def clean(self):
+        """Validaciones del modelo base"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar que tenga al menos un método de contacto (legacy o contactos universales)
+        if not any([self.email, self.phone, self.mobile]) and not self.has_contacts:
+            raise ValidationError(_('Business entity must have at least one contact method.'))
+    
+    def get_full_address(self):
+        """Retorna la dirección completa formateada"""
+        parts = [self.address, self.city, self.state, self.postal_code, self.country]
+        return ", ".join(filter(None, parts))
+    
+    def get_contact_info(self):
+        """Retorna la información de contacto principal (legacy)"""
+        if self.email:
+            return self.email
+        elif self.phone:
+            return self.phone
+        elif self.mobile:
+            return self.mobile
+        return _("No contact information")
+    
+    @property
+    def primary_contact(self):
+        """
+        Obtiene el contacto principal del sistema universal (compatibilidad)
+        """
+        return self.get_primary_contact_object()
+    
+    def get_contacts_by_type(self, relationship_type=None):
+        """
+        Obtiene contactos por tipo de relación (compatibilidad)
+        """
+        return self.get_contacts(relationship_type=relationship_type)
+    
+    def add_contact_relationship(self, contact, relationship_type='secondary', **kwargs):
+        """
+        Agrega un contacto con un tipo de relación específico (compatibilidad)
+        """
+        return self.add_contact(contact, relationship_type, **kwargs)
 

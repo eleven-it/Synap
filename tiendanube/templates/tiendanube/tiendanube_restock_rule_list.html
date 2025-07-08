@@ -1,0 +1,207 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Restock Rules" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Restock Rules" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Manage automatic restocking rules for Tiendanube products" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'tiendanube:restock_rule_create' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Create Rule" %}
+                    </a>
+                    <a href="{% url 'tiendanube:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filters -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label for="rule_type" class="block text-sm font-medium text-gray-700">{% trans "Rule Type" %}</label>
+                        <select name="rule_type" id="rule_type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="">{% trans "All Types" %}</option>
+                            {% for value, label in rule_types %}
+                                <option value="{{ value }}" {% if request.GET.rule_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="action_type" class="block text-sm font-medium text-gray-700">{% trans "Action Type" %}</label>
+                        <select name="action_type" id="action_type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="">{% trans "All Actions" %}</option>
+                            {% for value, label in action_types %}
+                                <option value="{{ value }}" {% if request.GET.action_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="is_active" class="block text-sm font-medium text-gray-700">{% trans "Status" %}</label>
+                        <select name="is_active" id="is_active" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="">{% trans "All Status" %}</option>
+                            <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>{% trans "Active" %}</option>
+                            <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>{% trans "Inactive" %}</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Filter" %}
+                        </button>
+                        <a href="{% url 'tiendanube:restock_rule_list' %}" class="ml-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Clear" %}
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Rules List -->
+        <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul class="divide-y divide-gray-200">
+                {% for rule in rules %}
+                <li>
+                    <div class="px-4 py-4 sm:px-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <div class="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
+                                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="flex items-center">
+                                        <h3 class="text-lg font-medium text-gray-900">{{ rule.name }}</h3>
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if rule.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                            {% if rule.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 flex items-center text-sm text-gray-500">
+                                        <span class="mr-4">
+                                            <strong>{% trans "Type" %}:</strong> {{ rule.get_rule_type_display }}
+                                        </span>
+                                        <span class="mr-4">
+                                            <strong>{% trans "Action" %}:</strong> {{ rule.get_action_type_display }}
+                                        </span>
+                                        <span class="mr-4">
+                                            <strong>{% trans "Threshold" %}:</strong> {{ rule.threshold }}
+                                        </span>
+                                        <span>
+                                            <strong>{% trans "Quantity" %}:</strong> {{ rule.restock_quantity }}
+                                        </span>
+                                    </div>
+                                    {% if rule.product %}
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        <strong>{% trans "Product" %}:</strong> {{ rule.product.name }} ({{ rule.product.sku }})
+                                    </div>
+                                    {% endif %}
+                                    {% if rule.category %}
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        <strong>{% trans "Category" %}:</strong> {{ rule.category.name }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <a href="{% url 'tiendanube:restock_rule_update' rule.pk %}" class="text-blue-600 hover:text-blue-900 text-sm font-medium">
+                                    {% trans "Edit" %}
+                                </a>
+                                <a href="{% url 'tiendanube:restock_rule_delete' rule.pk %}" class="text-red-600 hover:text-red-900 text-sm font-medium">
+                                    {% trans "Delete" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% empty %}
+                <li class="px-4 py-8 text-center text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No restock rules" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Get started by creating a new restock rule." %}</p>
+                    <div class="mt-6">
+                        <a href="{% url 'tiendanube:restock_rule_create' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                            {% trans "Create Rule" %}
+                        </a>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        {% trans "Previous" %}
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        {% trans "Next" %}
+                    </a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        {% trans "Showing" %} <span class="font-medium">{{ page_obj.start_index }}</span> {% trans "to" %} <span class="font-medium">{{ page_obj.end_index }}</span> {% trans "of" %} <span class="font-medium">{{ page_obj.paginator.count }}</span> {% trans "results" %}
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">{% trans "Previous" %}</span>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">
+                                    {{ num }}
+                                </span>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <a href="?page={{ num }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                    {{ num }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">{% trans "Next" %}</span>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

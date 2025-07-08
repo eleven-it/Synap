@@ -29,7 +29,6 @@ urlpatterns = [
     path("login/", include("login.urls")),  
     path("inventory/", include("inventory.urls", namespace="inventory")),    
     path("clientes/", include("clientes.urls", namespace="clientes")),
-    path("proveedores/", include("proveedores.urls", namespace="proveedores")),
     path("core/", include("core.urls", namespace="core")),
     path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
     path('sales/', include('sales.urls', namespace='sales')),

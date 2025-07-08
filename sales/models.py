@@ -1,10 +1,15 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.utils import timezone
+from django.utils import timezone as dj_timezone
 from django.utils.translation import gettext_lazy as _
 from decimal import Decimal
 import uuid
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+from django.core.cache import cache
+import re
+from core.mixins import ContactableMixin
+from core.models import BusinessEntity
 
 # --- CONSTANTES DE ESTADOS ---
 class SalesOrderStates:
@@ -68,33 +73,224 @@ class SalesOrderLineStates:
         (CANCELLED, 'Cancelled'),
     ]
 
-# --- CLIENTES Y CONTACTOS ---
-class Client(models.Model):
-    """Cliente: empresa o persona física"""
-    name = models.CharField(max_length=255)
-    vat = models.CharField(max_length=32, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=32, blank=True, null=True)
-    type = models.CharField(max_length=16, choices=[('company', 'Company'), ('person', 'Person')])
-    origin = models.CharField(max_length=32, blank=True, null=True)
-    tiendanube_customer_id = models.CharField(max_length=64, blank=True, null=True)
-    from_ecommerce = models.BooleanField(default=False)
-    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    is_active = models.BooleanField(default=True)
+# --- VALIDADORES Y UTILIDADES ---
+class VATValidator:
+    """Validador de números de identificación fiscal por país"""
+    
+    @staticmethod
+    def validate_argentina_cuit(cuit):
+        """Validar CUIT argentino"""
+        if not cuit or len(cuit) != 11:
+            return False
+        
+        # Implementar algoritmo de validación de CUIT
+        # Por ahora, validación básica
+        return cuit.isdigit()
+    
+    @staticmethod
+    def validate_brazil_cnpj(cnpj):
+        """Validar CNPJ brasileño"""
+        if not cnpj or len(cnpj) != 14:
+            return False
+        
+        # Implementar algoritmo de validación de CNPJ
+        return cnpj.isdigit()
+    
+    @staticmethod
+    def validate_mexico_rfc(rfc):
+        """Validar RFC mexicano"""
+        if not rfc or len(rfc) < 10:
+            return False
+        
+        # Implementar validación de RFC
+        return True
+    
+    @staticmethod
+    def validate_spain_nif(nif):
+        """Validar NIF español"""
+        if not nif or len(nif) != 9:
+            return False
+        
+        # Implementar validación de NIF
+        return True
+    
+    @staticmethod
+    def validate_usa_ein(ein):
+        """Validar EIN estadounidense"""
+        if not ein or len(ein) != 9:
+            return False
+        
+        # Implementar validación de EIN
+        return ein.isdigit()
+    
+    @staticmethod
+    def validate_vat(vat, country_code):
+        """Validar VAT según el país"""
+        if not vat or not country_code:
+            return False
+        
+        country_code = country_code.upper()
+        
+        if country_code == 'AR':
+            return VATValidator.validate_argentina_cuit(vat)
+        elif country_code == 'BR':
+            return VATValidator.validate_brazil_cnpj(vat)
+        elif country_code == 'MX':
+            return VATValidator.validate_mexico_rfc(vat)
+        elif country_code == 'ES':
+            return VATValidator.validate_spain_nif(vat)
+        elif country_code == 'US':
+            return VATValidator.validate_usa_ein(vat)
+        
+        # Para otros países, validación básica
+        return len(vat) >= 5
 
+# --- CLIENTES Y CONTACTOS ACTUALIZADOS ---
+class Client(BusinessEntity):
+    """
+    Cliente específico con funcionalidad de ventas
+    Hereda de BusinessEntity para funcionalidad común
+    """
+    
+    # Información específica de cliente
+    credit_limit = models.DecimalField(_("Credit Limit"), max_digits=15, decimal_places=2, null=True, blank=True)
+    payment_terms = models.CharField(_("Payment Terms"), max_length=100, blank=True, null=True)
+    customer_category = models.CharField(_("Category"), max_length=50, blank=True, null=True)
+    
+    # Información fiscal específica
+    fiscal_conditions = models.CharField(_("Fiscal Conditions"), max_length=100, blank=True, null=True)
+    
+    # Configuración de ventas
+    default_price_list = models.ForeignKey('PriceList', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Default Price List"))
+    sales_person = models.ForeignKey('core.UsuarioExtendido', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Sales Person"))
+    
+    # Configuración de entrega
+    default_delivery_location = models.ForeignKey('core.DeliveryLocation', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Default Delivery Location"))
+    
+    # Configuración de facturación
+    invoice_delivery_method = models.CharField(
+        _("Invoice Delivery Method"),
+        max_length=20,
+        choices=[
+            ('email', _('Email')),
+            ('postal', _('Postal Mail')),
+            ('digital', _('Digital Portal')),
+        ],
+        default='email'
+    )
+    
+    # Configuración de pagos
+    payment_method = models.CharField(
+        _("Payment Method"),
+        max_length=20,
+        choices=[
+            ('bank_transfer', _('Bank Transfer')),
+            ('check', _('Check')),
+            ('cash', _('Cash')),
+            ('credit_card', _('Credit Card')),
+            ('other', _('Other')),
+        ],
+        default='bank_transfer'
+    )
+    
+    # Configuración de descuentos
+    default_discount = models.DecimalField(_("Default Discount"), max_digits=5, decimal_places=2, null=True, blank=True, help_text=_("Default discount percentage"))
+    
+    # Estado específico de cliente
+    is_customer = models.BooleanField(default=True, verbose_name=_('Is Customer'))
+    is_prospect = models.BooleanField(default=False, verbose_name=_('Is Prospect'))
+    is_vip = models.BooleanField(default=False, verbose_name=_('VIP Customer'))
+    
+    class Meta:
+        verbose_name = _('Client')
+        verbose_name_plural = _('Clients')
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['customer_category']),
+            models.Index(fields=['is_customer']),
+            models.Index(fields=['is_vip']),
+            models.Index(fields=['sales_person']),
+        ]
+    
     def __str__(self):
-        return self.name
+        return f"{self.code} - {self.name}"
+    
+    def clean(self):
+        """Validaciones específicas del cliente"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar límite de crédito
+        if self.credit_limit and self.credit_limit < 0:
+            raise ValidationError(_('Credit limit cannot be negative.'))
+        
+        # Validar descuento por defecto
+        if self.default_discount:
+            if self.default_discount < 0 or self.default_discount > 100:
+                raise ValidationError(_('Default discount must be between 0 and 100.'))
+        
+        # Validar VAT según el país (si se implementa)
+        if self.tax_id and self.country:
+            # Aquí se podría agregar validación específica por país
+            pass
+    
+    @property
+    def total_orders(self):
+        """Retorna el total de órdenes del cliente"""
+        return self.orders.count()
+    
+    @property
+    def total_sales(self):
+        """Retorna el total de ventas del cliente"""
+        return self.orders.filter(state='completed').aggregate(
+            total=models.Sum('total')
+        )['total'] or 0
+    
+    @property
+    def outstanding_balance(self):
+        """Retorna el saldo pendiente del cliente"""
+        return self.invoices.filter(state='open').aggregate(
+            total=models.Sum('total')
+        )['total'] or 0
+    
+    @property
+    def credit_available(self):
+        """Retorna el crédito disponible"""
+        if not self.credit_limit:
+            return 0
+        return self.credit_limit - self.outstanding_balance
+    
+    def can_place_order(self, amount):
+        """Verifica si el cliente puede realizar una orden por el monto especificado"""
+        if not self.credit_limit:
+            return True
+        return self.credit_available >= amount
+    
+    def get_sales_history(self, days=30):
+        """Retorna el historial de ventas de los últimos días"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        start_date = timezone.now() - timedelta(days=days)
+        return self.orders.filter(
+            created_at__gte=start_date,
+            state='completed'
+        ).order_by('-created_at')
+    
+    def get_primary_contact_info(self):
+        """
+        Obtiene la información del contacto principal (compatibilidad)
+        """
+        primary_contact = self.get_primary_contact()
+        if primary_contact:
+            return {
+                'name': primary_contact.full_name,
+                'email': primary_contact.email,
+                'phone': primary_contact.phone,
+                'position': primary_contact.position,
+            }
+        return None
 
-class Contact(models.Model):
-    """Contacto de cliente"""
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='contacts')
-    name = models.CharField(max_length=255)
-    email = models.EmailField(blank=True, null=True)
-    phone = models.CharField(max_length=32, blank=True, null=True)
-    is_primary = models.BooleanField(default=False)
-
-    def __str__(self):
-        return f"{self.name} ({self.client.name})"
+# El modelo Contact se eliminó - ahora usamos el sistema universal de contactos en core.models
 
 # --- LISTAS DE PRECIOS ---
 class PriceList(models.Model):
@@ -158,8 +354,8 @@ class SalesOrder(models.Model):
     credit_override_reason = models.TextField(blank=True, null=True)
     
     # Campos de auditoría
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=dj_timezone.now, verbose_name=_('Created at'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated at'))
     confirmed_at = models.DateTimeField(blank=True, null=True)
     delivered_at = models.DateTimeField(blank=True, null=True)
     invoiced_at = models.DateTimeField(blank=True, null=True)
@@ -210,7 +406,7 @@ class SalesOrder(models.Model):
         else:
             number = 1
         
-        return f"SO-{timezone.now().strftime('%Y%m')}-{number:04d}"
+        return f"SO-{dj_timezone.now().strftime('%Y%m')}-{number:04d}"
 
     # --- MÉTODOS DE NEGOCIO ---
     
@@ -237,15 +433,15 @@ class SalesOrder(models.Model):
         
         # Actualizar timestamps según el estado
         if new_state == SalesOrderStates.CONFIRMED:
-            self.confirmed_at = timezone.now()
+            self.confirmed_at = dj_timezone.now()
         elif new_state == SalesOrderStates.DELIVERED:
-            self.delivered_at = timezone.now()
+            self.delivered_at = dj_timezone.now()
         elif new_state == SalesOrderStates.INVOICED:
-            self.invoiced_at = timezone.now()
+            self.invoiced_at = dj_timezone.now()
         elif new_state == SalesOrderStates.PAID:
-            self.paid_at = timezone.now()
+            self.paid_at = dj_timezone.now()
         elif new_state == SalesOrderStates.COMPLETED:
-            self.completed_at = timezone.now()
+            self.completed_at = dj_timezone.now()
         
         self.save()
         
@@ -419,8 +615,8 @@ class SalesOrderLine(models.Model):
     fiscal_position = models.ForeignKey('accounting.FiscalPosition', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Fiscal Position'))
     
     # Campos de auditoría
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=dj_timezone.now, verbose_name=_('Created at'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated at'))
 
     class Meta:
         ordering = ['id']

@@ -4,12 +4,22 @@ from django.views import View
 from django.views.generic import TemplateView, ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.conf import settings
-from .models import TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping
+from django.http import JsonResponse, HttpResponse
+from django.contrib import messages
+from django.db.models import Q, Count, Sum
+from django.utils import timezone
+from django.core.paginator import Paginator
+from .models import (
+    TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping,
+    TiendaNubeCustomerMapping, TiendaNubeOrderMapping, TiendaNubeRestockRule,
+    TiendaNubeRestockLog
+)
 from core.decorators import tiene_permiso
 import logging
 from .services import TiendaNubeService
 from django.http import HttpResponseRedirect
 import requests
+import json
 
 class TiendaNubePermissionMixin(UserPassesTestMixin):
     """Mixin to check TiendaNube access permissions."""
@@ -33,6 +43,12 @@ class TiendaNubeDashboardView(TiendaNubePermissionMixin, TemplateView):
             context['auto_sync'] = getattr(config, 'auto_sync', False)
             context['sync_interval'] = getattr(config, 'sync_interval', 30)
             context['tiendanube_config'] = config
+            
+            # Obtener estadísticas del servicio
+            service = TiendaNubeService(config)
+            context['sync_status'] = service.get_sync_status()
+            context['recent_logs'] = service.get_recent_logs(limit=10)
+            
             logging.info(f"[TiendaNubeDashboard] Usando configuración de BD: store_id={config.store_id}, api_url={getattr(config, 'api_url', 'https://api.tiendanube.com/v1')}, auto_sync={getattr(config, 'auto_sync', False)}, sync_interval={getattr(config, 'sync_interval', 30)}")
         else:
             context['env_configured'] = bool(
@@ -92,6 +108,33 @@ class TiendaNubeSyncLogListView(TiendaNubePermissionMixin, ListView):
     model = TiendaNubeSyncLog
     template_name = 'tiendanube/tiendanube_logs_list.html'
     context_object_name = 'logs'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        sync_type = self.request.GET.get('sync_type')
+        status = self.request.GET.get('status')
+        date_from = self.request.GET.get('date_from')
+        date_to = self.request.GET.get('date_to')
+        
+        if sync_type:
+            queryset = queryset.filter(sync_type=sync_type)
+        if status:
+            queryset = queryset.filter(status=status)
+        if date_from:
+            queryset = queryset.filter(started_at__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(started_at__lte=date_to)
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['sync_types'] = TiendaNubeSyncLog.SyncType.choices
+        context['statuses'] = TiendaNubeSyncLog.Status.choices
+        return context
 
 class TiendaNubeSyncLogDetailView(TiendaNubePermissionMixin, DetailView):
     """Show details of a sync log."""
@@ -104,12 +147,296 @@ class TiendaNubeProductMappingListView(TiendaNubePermissionMixin, ListView):
     model = TiendaNubeProductMapping
     template_name = 'tiendanube/tiendanube_product_mapping_list.html'
     context_object_name = 'mappings'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        sync_status = self.request.GET.get('sync_status')
+        search = self.request.GET.get('search')
+        
+        if sync_status:
+            queryset = queryset.filter(sync_status=sync_status)
+        if search:
+            queryset = queryset.filter(
+                Q(product__name__icontains=search) |
+                Q(product__sku__icontains=search) |
+                Q(tiendanube_handle__icontains=search)
+            )
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['sync_statuses'] = TiendaNubeProductMapping.SyncStatus.choices
+        return context
 
 class TiendaNubeProductMappingDetailView(TiendaNubePermissionMixin, DetailView):
     """Show details of a product mapping."""
     model = TiendaNubeProductMapping
     template_name = 'tiendanube/tiendanube_product_mapping_detail.html'
     context_object_name = 'mapping'
+
+# Nuevas vistas para clientes
+class TiendaNubeCustomerMappingListView(TiendaNubePermissionMixin, ListView):
+    """List all customer mappings with Tiendanube."""
+    model = TiendaNubeCustomerMapping
+    template_name = 'tiendanube/tiendanube_customer_mapping_list.html'
+    context_object_name = 'mappings'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        sync_status = self.request.GET.get('sync_status')
+        search = self.request.GET.get('search')
+        
+        if sync_status:
+            queryset = queryset.filter(sync_status=sync_status)
+        if search:
+            queryset = queryset.filter(
+                Q(client__name__icontains=search) |
+                Q(client__email__icontains=search) |
+                Q(tiendanube_email__icontains=search)
+            )
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['sync_statuses'] = TiendaNubeCustomerMapping.SyncStatus.choices
+        return context
+
+class TiendaNubeCustomerMappingDetailView(TiendaNubePermissionMixin, DetailView):
+    """Show details of a customer mapping."""
+    model = TiendaNubeCustomerMapping
+    template_name = 'tiendanube/tiendanube_customer_mapping_detail.html'
+    context_object_name = 'mapping'
+
+# Nuevas vistas para pedidos
+class TiendaNubeOrderMappingListView(TiendaNubePermissionMixin, ListView):
+    """List all order mappings with Tiendanube."""
+    model = TiendaNubeOrderMapping
+    template_name = 'tiendanube/tiendanube_order_mapping_list.html'
+    context_object_name = 'mappings'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        sync_status = self.request.GET.get('sync_status')
+        search = self.request.GET.get('search')
+        
+        if sync_status:
+            queryset = queryset.filter(sync_status=sync_status)
+        if search:
+            queryset = queryset.filter(
+                Q(sales_order__number__icontains=search) |
+                Q(tiendanube_order_number__icontains=search) |
+                Q(sales_order__client__name__icontains=search)
+            )
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['sync_statuses'] = TiendaNubeOrderMapping.SyncStatus.choices
+        return context
+
+class TiendaNubeOrderMappingDetailView(TiendaNubePermissionMixin, DetailView):
+    """Show details of an order mapping."""
+    model = TiendaNubeOrderMapping
+    template_name = 'tiendanube/tiendanube_order_mapping_detail.html'
+    context_object_name = 'mapping'
+
+# Vistas para reabastecimiento
+class TiendaNubeRestockRuleListView(TiendaNubePermissionMixin, ListView):
+    """List all restock rules."""
+    model = TiendaNubeRestockRule
+    template_name = 'tiendanube/tiendanube_restock_rule_list.html'
+    context_object_name = 'rules'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        rule_type = self.request.GET.get('rule_type')
+        action_type = self.request.GET.get('action_type')
+        is_active = self.request.GET.get('is_active')
+        
+        if rule_type:
+            queryset = queryset.filter(rule_type=rule_type)
+        if action_type:
+            queryset = queryset.filter(action_type=action_type)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active == 'true')
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['rule_types'] = TiendaNubeRestockRule.RuleType.choices
+        context['action_types'] = TiendaNubeRestockRule.ActionType.choices
+        return context
+
+class TiendaNubeRestockRuleCreateView(TiendaNubePermissionMixin, CreateView):
+    """Create a new restock rule."""
+    model = TiendaNubeRestockRule
+    fields = '__all__'
+    template_name = 'tiendanube/tiendanube_restock_rule_form.html'
+    success_url = reverse_lazy('tiendanube:restock_rule_list')
+
+class TiendaNubeRestockRuleUpdateView(TiendaNubePermissionMixin, UpdateView):
+    """Edit an existing restock rule."""
+    model = TiendaNubeRestockRule
+    fields = '__all__'
+    template_name = 'tiendanube/tiendanube_restock_rule_form.html'
+    success_url = reverse_lazy('tiendanube:restock_rule_list')
+
+class TiendaNubeRestockRuleDeleteView(TiendaNubePermissionMixin, DeleteView):
+    """Delete a restock rule."""
+    model = TiendaNubeRestockRule
+    template_name = 'tiendanube/tiendanube_restock_rule_confirm_delete.html'
+    success_url = reverse_lazy('tiendanube:restock_rule_list')
+
+class TiendaNubeRestockLogListView(TiendaNubePermissionMixin, ListView):
+    """List all restock logs."""
+    model = TiendaNubeRestockLog
+    template_name = 'tiendanube/tiendanube_restock_log_list.html'
+    context_object_name = 'logs'
+    paginate_by = 50
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filtros
+        action_type = self.request.GET.get('action_type')
+        status = self.request.GET.get('status')
+        product_id = self.request.GET.get('product_id')
+        
+        if action_type:
+            queryset = queryset.filter(action_type=action_type)
+        if status:
+            queryset = queryset.filter(status=status)
+        if product_id:
+            queryset = queryset.filter(product_id=product_id)
+        
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['action_types'] = TiendaNubeRestockLog.ActionType.choices
+        context['statuses'] = TiendaNubeRestockLog.Status.choices
+        return context
+
+# Vistas para reportes
+class TiendaNubeReportsView(TiendaNubePermissionMixin, TemplateView):
+    """Reports and KPIs dashboard."""
+    template_name = 'tiendanube/tiendanube_reports.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # KPIs básicos
+        context['total_products'] = TiendaNubeProductMapping.objects.count()
+        context['synced_products'] = TiendaNubeProductMapping.objects.filter(sync_status='synced').count()
+        context['error_products'] = TiendaNubeProductMapping.objects.filter(sync_status='error').count()
+        context['pending_products'] = TiendaNubeProductMapping.objects.filter(sync_status='pending').count()
+        
+        context['total_customers'] = TiendaNubeCustomerMapping.objects.count()
+        context['synced_customers'] = TiendaNubeCustomerMapping.objects.filter(sync_status='synced').count()
+        
+        context['total_orders'] = TiendaNubeOrderMapping.objects.count()
+        context['synced_orders'] = TiendaNubeOrderMapping.objects.filter(sync_status='synced').count()
+        
+        # Estadísticas de sincronización
+        context['recent_syncs'] = TiendaNubeSyncLog.objects.filter(
+            started_at__gte=timezone.now() - timezone.timedelta(days=7)
+        ).count()
+        
+        context['failed_syncs'] = TiendaNubeSyncLog.objects.filter(
+            status='error',
+            started_at__gte=timezone.now() - timezone.timedelta(days=7)
+        ).count()
+        
+        # Estadísticas de reabastecimiento
+        context['total_restocks'] = TiendaNubeRestockLog.objects.count()
+        context['completed_restocks'] = TiendaNubeRestockLog.objects.filter(status='completed').count()
+        context['pending_restocks'] = TiendaNubeRestockLog.objects.filter(status='pending').count()
+        
+        return context
+
+# Vistas para sincronización manual
+class TiendaNubeManualSyncView(TiendaNubePermissionMixin, View):
+    """Manual sync operations."""
+    
+    def post(self, request, *args, **kwargs):
+        sync_type = request.POST.get('sync_type')
+        config = TiendaNubeConfig.objects.first()
+        
+        if not config:
+            messages.error(request, 'No hay configuración de Tiendanube activa.')
+            return JsonResponse({'success': False, 'message': 'No configuration found'})
+        
+        service = TiendaNubeService(config)
+        
+        try:
+            if sync_type == 'products':
+                success_count, failed_count = service.sync_products_from_tiendanube()
+                message = f'Sincronización de productos completada. Exitosos: {success_count}, Fallidos: {failed_count}'
+            elif sync_type == 'customers':
+                success_count, failed_count = service.sync_customers_from_tiendanube()
+                message = f'Sincronización de clientes completada. Exitosos: {success_count}, Fallidos: {failed_count}'
+            elif sync_type == 'orders':
+                success_count, failed_count = service.sync_orders_from_tiendanube()
+                message = f'Sincronización de pedidos completada. Exitosos: {success_count}, Fallidos: {failed_count}'
+            elif sync_type == 'stock':
+                success_count, failed_count = service.sync_stock_to_tiendanube()
+                message = f'Sincronización de stock completada. Exitosos: {success_count}, Fallidos: {failed_count}'
+            elif sync_type == 'restock':
+                success_count, failed_count = service.check_and_restock_products()
+                message = f'Verificación de reabastecimiento completada. Exitosos: {success_count}, Fallidos: {failed_count}'
+            else:
+                return JsonResponse({'success': False, 'message': 'Tipo de sincronización no válido'})
+            
+            messages.success(request, message)
+            return JsonResponse({'success': True, 'message': message})
+            
+        except Exception as e:
+            error_message = f'Error en sincronización: {str(e)}'
+            messages.error(request, error_message)
+            return JsonResponse({'success': False, 'message': error_message})
+
+# Vistas para webhooks
+class TiendaNubeWebhookView(View):
+    """Handle incoming webhooks from Tiendanube."""
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            # Verificar autenticación del webhook
+            webhook_secret = request.headers.get('X-Tiendanube-Webhook-Secret')
+            config = TiendaNubeConfig.objects.filter(webhook_secret=webhook_secret).first()
+            
+            if not config:
+                return HttpResponse(status=401)
+            
+            # Procesar webhook
+            webhook_data = json.loads(request.body)
+            service = TiendaNubeService(config)
+            success = service.handle_webhook(webhook_data)
+            
+            if success:
+                return HttpResponse(status=200)
+            else:
+                return HttpResponse(status=500)
+                
+        except Exception as e:
+            logging.error(f"Error processing webhook: {str(e)}")
+            return HttpResponse(status=500)
 
 class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
     template_name = 'tiendanube/tiendanube_config_wizard.html'
@@ -135,7 +462,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
             context['sync_stock'] = session.get('wizard_sync_stock', True)
             context['sync_variants'] = session.get('wizard_sync_variants', True)
         if context['step'] == 6:
-            # Resumen final con datos de la tienda desde TiendaNube
+            # Resumen final con datos de la tienda desde Tiendanube
             access_token = session.get('wizard_access_token')
             user_id = session.get('wizard_user_id')
             tienda_data = session.get('wizard_tienda_data')
@@ -146,7 +473,7 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
                         headers={
                             'Content-Type': 'application/json',
                             'Authentication': f'bearer {access_token}',
-                            'User-Agent': 'Synap (https://synap.com.ar)'
+                            'User-Agent': 'administranet_tiendanube - tiendanube@administranet.com.ar'
                         })
                     if resp.status_code == 200:
                         tienda_data = resp.json()
@@ -249,33 +576,40 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
                 context = self.get_context_data()
                 context['wizard_error'] = 'This store is already registered in Synap.'
                 return self.render_to_response(context)
-            # Crear la nueva configuración de tienda
-            TiendaNubeConfig.objects.create(
+            # Crear nueva configuración
+            config = TiendaNubeConfig.objects.create(
                 store_id=store_id,
                 access_token=access_token,
-                api_url='https://api.tiendanube.com/v1',
                 auto_sync=session.get('wizard_auto_sync', True),
                 sync_interval=session.get('wizard_sync_interval', 30),
                 sync_products=session.get('wizard_sync_products', True),
                 sync_stock=session.get('wizard_sync_stock', True),
                 sync_variants=session.get('wizard_sync_variants', True),
             )
-            # Limpiar la sesión del wizard
-            for k in list(session.keys()):
-                if k.startswith('wizard_'):
-                    del session[k]
-            from django.urls import reverse
-            return HttpResponseRedirect(reverse('tiendanube:config_list'))
-        else:
-            session['wizard_step'] = 1
-            return self.get(request, *args, **kwargs)
+            # Limpiar sesión
+            session.pop('wizard_app_id', None)
+            session.pop('wizard_client_secret', None)
+            session.pop('wizard_code', None)
+            session.pop('wizard_state', None)
+            session.pop('wizard_access_token', None)
+            session.pop('wizard_user_id', None)
+            session.pop('wizard_tienda_data', None)
+            session.pop('wizard_auto_sync', None)
+            session.pop('wizard_sync_interval', None)
+            session.pop('wizard_sync_products', None)
+            session.pop('wizard_sync_stock', None)
+            session.pop('wizard_sync_variants', None)
+            session.pop('wizard_step', None)
+            messages.success(request, 'TiendaNube configuration created successfully!')
+            return redirect('tiendanube:dashboard')
+        return self.get(request, *args, **kwargs)
 
 class TiendaNubeConfigWizardCallbackView(View):
     def get(self, request, *args, **kwargs):
+        session = request.session
         code = request.GET.get('code')
         state = request.GET.get('state')
-        # Guardar el code en sesión y avanzar al siguiente paso
-        request.session['wizard_code'] = code
-        request.session['wizard_state'] = state
-        request.session['wizard_step'] = 4
-        return HttpResponseRedirect('/tiendanube/config/wizard/')
+        session['wizard_code'] = code
+        session['wizard_state'] = state
+        session['wizard_step'] = 4
+        return redirect('tiendanube:config_wizard')

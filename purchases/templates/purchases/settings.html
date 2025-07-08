@@ -1,0 +1,316 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}
+    {% trans "Purchase Settings" %}
+{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">dashboard</span>
+    <a href="{% url 'purchases:dashboard' %}">{% trans "Dashboard" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">settings</span>
+    {% trans "Settings" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}
+    {% trans "Purchase Settings" %}
+{% endblock %}
+
+{% block purchases_subheader %}
+    {% trans "Configure your purchase management system settings and preferences" %}
+{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:dashboard' %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Back to Dashboard" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-6xl mx-auto space-y-8">
+    
+    <!-- Configuración General -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "General Settings" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Moneda por defecto -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Default Currency" %}
+                    </label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="USD">USD - US Dollar</option>
+                        <option value="EUR">EUR - Euro</option>
+                        <option value="ARS" selected>ARS - Argentine Peso</option>
+                        <option value="BRL">BRL - Brazilian Real</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {% trans "Default currency for new purchase orders and requests" %}
+                    </p>
+                </div>
+
+                <!-- Términos de pago por defecto -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Default Payment Terms" %}
+                    </label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="net_30">Net 30</option>
+                        <option value="net_60">Net 60</option>
+                        <option value="net_90">Net 90</option>
+                        <option value="immediate">Immediate</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {% trans "Default payment terms for new suppliers" %}
+                    </p>
+                </div>
+
+                <!-- Aprobación automática -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Auto-approval Threshold" %}
+                    </label>
+                    <input type="number" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                           placeholder="1000" min="0" step="0.01">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {% trans "Orders below this amount will be auto-approved" %}
+                    </p>
+                </div>
+
+                <!-- Notificaciones por email -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Email Notifications" %}
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50" checked>
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "New purchase requests" %}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50" checked>
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Order confirmations" %}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Delivery notifications" %}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración de Flujos de Aprobación -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Approval Workflows" %}
+                </h3>
+                <a href="{% url 'purchases:workflow_list' %}" class="btn-primary">
+                    <span class="material-icons mr-2">add</span>
+                    {% trans "Manage Workflows" %}
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="space-y-4">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    {% trans "Configure approval workflows for different purchase amounts and categories" %}
+                </p>
+                
+                <!-- Lista de flujos activos -->
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                        {% trans "Active Workflows" %}
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center p-3 bg-white dark:bg-gray-700 rounded border">
+                            <div>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">Standard Approval</span>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">$1,000 - $10,000</p>
+                            </div>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                {% trans "Active" %}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center p-3 bg-white dark:bg-gray-700 rounded border">
+                            <div>
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">Executive Approval</span>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">$10,000+</p>
+                            </div>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                {% trans "Active" %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración de Proveedores -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Supplier Settings" %}
+                </h3>
+                <a href="{% url 'purchases:supplier_list' %}" class="btn-primary">
+                    <span class="material-icons mr-2">business</span>
+                    {% trans "Manage Suppliers" %}
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Categorías de proveedores -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Supplier Categories" %}
+                    </label>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Raw Materials</span>
+                            <span class="text-xs text-gray-500">12 suppliers</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Services</span>
+                            <span class="text-xs text-gray-500">8 suppliers</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Equipment</span>
+                            <span class="text-xs text-gray-500">5 suppliers</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evaluación automática -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Automatic Supplier Evaluation" %}
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50" checked>
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Enable automatic evaluation" %}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Notify on low ratings" %}</span>
+                        </label>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        {% trans "Automatically evaluate suppliers based on delivery performance" %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración de Reportes -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Report Settings" %}
+                </h3>
+                <a href="{% url 'purchases:reports' %}" class="btn-primary">
+                    <span class="material-icons mr-2">assessment</span>
+                    {% trans "View Reports" %}
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Frecuencia de reportes -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Report Frequency" %}
+                    </label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <option value="daily">{% trans "Daily" %}</option>
+                        <option value="weekly" selected>{% trans "Weekly" %}</option>
+                        <option value="monthly">{% trans "Monthly" %}</option>
+                        <option value="quarterly">{% trans "Quarterly" %}</option>
+                    </select>
+                </div>
+
+                <!-- Exportación automática -->
+                <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Auto-export Reports" %}
+                    </label>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Enable automatic export" %}</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-purple-600 shadow-sm focus:border-purple-300 focus:ring focus:ring-purple-200 focus:ring-opacity-50">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Send via email" %}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="flex justify-end space-x-4">
+        <button type="button" class="btn-secondary">
+            {% trans "Reset to Defaults" %}
+        </button>
+        <button type="submit" class="btn-primary">
+            <span class="material-icons mr-2">save</span>
+            {% trans "Save Settings" %}
+        </button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Validación de formulario
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Mostrar mensaje de éxito
+            showToast('{% trans "Settings saved successfully" %}', 'success');
+        });
+    }
+    
+    // Función para mostrar toasts
+    function showToast(message, type = 'info') {
+        // Implementar sistema de toasts
+        console.log(message);
+    }
+    
+    // Actualizar configuración en tiempo real
+    const inputs = document.querySelectorAll('input, select');
+    inputs.forEach(input => {
+        input.addEventListener('change', function() {
+            // Aquí se podría implementar guardado automático
+            console.log('Setting changed:', this.name, this.value);
+        });
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,356 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Integration Settings" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Integration Settings" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Configure external system integrations" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Inventory Integration -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">{% trans "Inventory System Integration" %}</h3>
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                            {% if inventory_integration.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                            {% if inventory_integration.is_active %}{% trans "Connected" %}{% else %}{% trans "Disconnected" %}{% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <form method="post" action="{% url 'purchases:inventory_integration_update' %}" class="space-y-6">
+                    {% csrf_token %}
+                    <input type="hidden" name="integration_type" value="inventory">
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" name="sync_with_inventory" id="sync_with_inventory" {% if inventory_integration.is_active %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="sync_with_inventory" class="ml-2 block text-sm text-gray-900">
+                            {% trans "Enable inventory synchronization" %}
+                        </label>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="inventory_api_url" class="block text-sm font-medium text-gray-700">
+                                {% trans "Inventory API URL" %}
+                            </label>
+                            <input type="url" name="inventory_api_url" id="inventory_api_url" value="{{ inventory_integration.api_url|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="https://inventory.example.com/api">
+                        </div>
+                        
+                        <div>
+                            <label for="inventory_api_key" class="block text-sm font-medium text-gray-700">
+                                {% trans "API Key" %}
+                            </label>
+                            <div class="relative">
+                                <input type="password" name="inventory_api_key" id="inventory_api_key" value="{{ inventory_integration.api_key|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10">
+                                <button type="button" onclick="togglePassword('inventory_api_key')" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-medium text-gray-700">{% trans "Sync Options" %}</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_products" id="sync_products" {% if inventory_integration.sync_products %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_products" class="ml-2 block text-sm text-gray-900">{% trans "Sync product catalog" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_stock_levels" id="sync_stock_levels" {% if inventory_integration.sync_stock_levels %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_stock_levels" class="ml-2 block text-sm text-gray-900">{% trans "Sync stock levels" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_receipts" id="sync_receipts" {% if inventory_integration.sync_receipts %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_receipts" class="ml-2 block text-sm text-gray-900">{% trans "Sync goods receipts" %}</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Save Inventory Settings" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Accounting Integration -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">{% trans "Accounting System Integration" %}</h3>
+                    <div class="flex items-center">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                            {% if accounting_integration.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                            {% if accounting_integration.is_active %}{% trans "Connected" %}{% else %}{% trans "Disconnected" %}{% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <form method="post" action="{% url 'purchases:accounting_integration_update' %}" class="space-y-6">
+                    {% csrf_token %}
+                    <input type="hidden" name="integration_type" value="accounting">
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" name="sync_with_accounting" id="sync_with_accounting" {% if accounting_integration.is_active %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="sync_with_accounting" class="ml-2 block text-sm text-gray-900">
+                            {% trans "Enable accounting synchronization" %}
+                        </label>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="accounting_api_url" class="block text-sm font-medium text-gray-700">
+                                {% trans "Accounting API URL" %}
+                            </label>
+                            <input type="url" name="accounting_api_url" id="accounting_api_url" value="{{ accounting_integration.api_url|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="https://accounting.example.com/api">
+                        </div>
+                        
+                        <div>
+                            <label for="accounting_api_key" class="block text-sm font-medium text-gray-700">
+                                {% trans "API Key" %}
+                            </label>
+                            <div class="relative">
+                                <input type="password" name="accounting_api_key" id="accounting_api_key" value="{{ accounting_integration.api_key|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10">
+                                <button type="button" onclick="togglePassword('accounting_api_key')" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-medium text-gray-700">{% trans "Sync Options" %}</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_purchase_orders" id="sync_purchase_orders" {% if accounting_integration.sync_purchase_orders %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_purchase_orders" class="ml-2 block text-sm text-gray-900">{% trans "Sync purchase orders" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_invoices" id="sync_invoices" {% if accounting_integration.sync_invoices %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_invoices" class="ml-2 block text-sm text-gray-900">{% trans "Sync supplier invoices" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="sync_payments" id="sync_payments" {% if accounting_integration.sync_payments %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="sync_payments" class="ml-2 block text-sm text-gray-900">{% trans "Sync payments" %}</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Save Accounting Settings" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Webhook Configuration -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Webhook Configuration" %}</h3>
+                
+                <form method="post" action="{% url 'purchases:webhook_update' %}" class="space-y-6">
+                    {% csrf_token %}
+                    
+                    <div>
+                        <label for="webhook_url" class="block text-sm font-medium text-gray-700">
+                            {% trans "Webhook URL" %}
+                        </label>
+                        <input type="url" name="webhook_url" id="webhook_url" value="{{ webhook_settings.url|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="https://your-system.com/webhook">
+                        <p class="mt-1 text-sm text-gray-500">{% trans "URL to send purchase events to external systems" %}</p>
+                    </div>
+                    
+                    <div>
+                        <label for="webhook_secret" class="block text-sm font-medium text-gray-700">
+                            {% trans "Webhook Secret" %}
+                        </label>
+                        <div class="relative">
+                            <input type="password" name="webhook_secret" id="webhook_secret" value="{{ webhook_settings.secret|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm pr-10">
+                            <button type="button" onclick="togglePassword('webhook_secret')" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-medium text-gray-700">{% trans "Webhook Events" %}</h4>
+                        <div class="space-y-2">
+                            <div class="flex items-center">
+                                <input type="checkbox" name="webhook_order_created" id="webhook_order_created" {% if webhook_settings.order_created %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="webhook_order_created" class="ml-2 block text-sm text-gray-900">{% trans "Order created" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="webhook_order_updated" id="webhook_order_updated" {% if webhook_settings.order_updated %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="webhook_order_updated" class="ml-2 block text-sm text-gray-900">{% trans "Order updated" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="webhook_order_approved" id="webhook_order_approved" {% if webhook_settings.order_approved %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="webhook_order_approved" class="ml-2 block text-sm text-gray-900">{% trans "Order approved" %}</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input type="checkbox" name="webhook_receipt_created" id="webhook_receipt_created" {% if webhook_settings.receipt_created %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="webhook_receipt_created" class="ml-2 block text-sm text-gray-900">{% trans "Receipt created" %}</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Save Webhook Settings" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Integration Status -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Integration Status" %}</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Inventory System" %}</h4>
+                                <p class="text-sm text-gray-500">{{ inventory_integration.last_sync|date:"M d, Y H:i"|default:"Never" }}</p>
+                            </div>
+                            <button onclick="testConnection('inventory')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs">
+                                {% trans "Test" %}
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Accounting System" %}</h4>
+                                <p class="text-sm text-gray-500">{{ accounting_integration.last_sync|date:"M d, Y H:i"|default:"Never" }}</p>
+                            </div>
+                            <button onclick="testConnection('accounting')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs">
+                                {% trans "Test" %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button onclick="syncAll()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Sync All Systems" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const button = field.nextElementSibling;
+    const icon = button.querySelector('svg');
+    
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"></path>';
+    } else {
+        field.type = 'password';
+        icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>';
+    }
+}
+
+function testConnection(type) {
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = '{% trans "Testing..." %}';
+    button.disabled = true;
+    
+    fetch(`/purchases/integrations/${type}/test/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('{% trans "Connection successful!" %}');
+        } else {
+            alert('{% trans "Connection failed: " %}' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('{% trans "Connection failed: " %}' + error);
+    })
+    .finally(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+    });
+}
+
+function syncAll() {
+    if (confirm('{% trans "Are you sure you want to sync all systems? This may take some time." %}')) {
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = '{% trans "Syncing..." %}';
+        button.disabled = true;
+        
+        fetch('/purchases/integrations/sync-all/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('{% trans "Sync completed successfully!" %}');
+                location.reload();
+            } else {
+                alert('{% trans "Sync failed: " %}' + data.error);
+            }
+        })
+        .catch(error => {
+            alert('{% trans "Sync failed: " %}' + error);
+        })
+        .finally(() => {
+            button.textContent = originalText;
+            button.disabled = false;
+        });
+    }
+}
+</script>
+{% endblock %} 

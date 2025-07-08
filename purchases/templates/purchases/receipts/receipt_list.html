@@ -1,0 +1,209 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Purchase Receipts" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Purchase Receipts" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Manage received goods and materials" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Filters -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700">{% trans "Status" %}</label>
+                        <select name="status" id="status" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="">{% trans "All Status" %}</option>
+                            <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>{% trans "Pending" %}</option>
+                            <option value="approved" {% if request.GET.status == 'approved' %}selected{% endif %}>{% trans "Approved" %}</option>
+                            <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>{% trans "Rejected" %}</option>
+                            <option value="returned" {% if request.GET.status == 'returned' %}selected{% endif %}>{% trans "Returned" %}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="supplier" class="block text-sm font-medium text-gray-700">{% trans "Supplier" %}</label>
+                        <select name="supplier" id="supplier" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="">{% trans "All Suppliers" %}</option>
+                            {% for supplier in suppliers %}
+                                <option value="{{ supplier.pk }}" {% if request.GET.supplier == supplier.pk|stringformat:"s" %}selected{% endif %}>{{ supplier.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="search" class="block text-sm font-medium text-gray-700">{% trans "Search" %}</label>
+                        <input type="text" name="search" id="search" value="{{ request.GET.search }}" placeholder="{% trans 'Receipt number, order...' %}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Filter" %}
+                        </button>
+                        <a href="{% url 'purchases:receipt_list' %}" class="ml-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Clear" %}
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Receipts List -->
+        <div class="bg-white shadow overflow-hidden sm:rounded-md">
+            <ul class="divide-y divide-gray-200">
+                {% for receipt in receipts %}
+                <li>
+                    <div class="px-4 py-4 sm:px-6">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <div class="h-10 w-10 rounded-full bg-green-500 flex items-center justify-center">
+                                        <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="flex items-center">
+                                        <h3 class="text-lg font-medium text-gray-900">{{ receipt.receipt_number }}</h3>
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                            {% if receipt.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                            {% elif receipt.status == 'approved' %}bg-green-100 text-green-800
+                                            {% elif receipt.status == 'rejected' %}bg-red-100 text-red-800
+                                            {% elif receipt.status == 'returned' %}bg-orange-100 text-orange-800
+                                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                            {{ receipt.get_status_display }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 flex items-center text-sm text-gray-500">
+                                        <span class="mr-4">
+                                            <strong>{% trans "Order" %}:</strong> {{ receipt.purchase_order.order_number }}
+                                        </span>
+                                        <span class="mr-4">
+                                            <strong>{% trans "Supplier" %}:</strong> {{ receipt.purchase_order.supplier.name }}
+                                        </span>
+                                        <span class="mr-4">
+                                            <strong>{% trans "Items" %}:</strong> {{ receipt.items.count }}
+                                        </span>
+                                        <span>
+                                            <strong>{% trans "Received Date" %}:</strong> {{ receipt.received_date|date:"M d, Y" }}
+                                        </span>
+                                    </div>
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        <strong>{% trans "Total Received" %}:</strong> {{ receipt.total_received|floatformat:2 }}
+                                        {% if receipt.notes %}
+                                        <span class="ml-4">
+                                            <strong>{% trans "Notes" %}:</strong> {{ receipt.notes|truncatechars:50 }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <a href="{% url 'purchases:receipt_detail' receipt.pk %}" class="text-blue-600 hover:text-blue-900 text-sm font-medium">
+                                    {% trans "View Details" %}
+                                </a>
+                                {% if receipt.status == 'pending' %}
+                                <a href="{% url 'purchases:receipt_approve' receipt.pk %}" class="text-green-600 hover:text-green-900 text-sm font-medium">
+                                    {% trans "Approve" %}
+                                </a>
+                                <a href="{% url 'purchases:receipt_reject' receipt.pk %}" class="text-red-600 hover:text-red-900 text-sm font-medium">
+                                    {% trans "Reject" %}
+                                </a>
+                                {% endif %}
+                                {% if receipt.status == 'approved' %}
+                                <a href="{% url 'purchases:receipt_return' receipt.pk %}" class="text-orange-600 hover:text-orange-900 text-sm font-medium">
+                                    {% trans "Return" %}
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </li>
+                {% empty %}
+                <li class="px-4 py-8 text-center text-gray-500">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No purchase receipts" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Purchase receipts will appear here when goods are received." %}</p>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 mt-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        {% trans "Previous" %}
+                    </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        {% trans "Next" %}
+                    </a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        {% trans "Showing" %} <span class="font-medium">{{ page_obj.start_index }}</span> {% trans "to" %} <span class="font-medium">{{ page_obj.end_index }}</span> {% trans "of" %} <span class="font-medium">{{ page_obj.paginator.count }}</span> {% trans "results" %}
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">{% trans "Previous" %}</span>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">
+                                    {{ num }}
+                                </span>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <a href="?page={{ num }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                    {{ num }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">{% trans "Next" %}</span>
+                                <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

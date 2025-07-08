@@ -1,0 +1,231 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Purchase Quotations" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">receipt</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">list</span>
+    {% trans "All Quotations" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Purchase Quotations" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Manage and evaluate supplier quotations" %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:quotation_create' %}" class="btn-primary">
+    <span class="material-icons mr-2">add</span>
+    {% trans "New Quotation" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="space-y-6">
+    <!-- Filtros y búsqueda -->
+    <div class="card">
+        <div class="card-body">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Status" %}
+                    </label>
+                    <select name="status" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                        <option value="">{% trans "All Statuses" %}</option>
+                        <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>{% trans "Draft" %}</option>
+                        <option value="sent" {% if request.GET.status == 'sent' %}selected{% endif %}>{% trans "Sent" %}</option>
+                        <option value="received" {% if request.GET.status == 'received' %}selected{% endif %}>{% trans "Received" %}</option>
+                        <option value="evaluated" {% if request.GET.status == 'evaluated' %}selected{% endif %}>{% trans "Evaluated" %}</option>
+                        <option value="selected" {% if request.GET.status == 'selected' %}selected{% endif %}>{% trans "Selected" %}</option>
+                        <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>{% trans "Rejected" %}</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Supplier" %}
+                    </label>
+                    <select name="supplier" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                        <option value="">{% trans "All Suppliers" %}</option>
+                        <!-- Opciones de proveedores se cargarán dinámicamente -->
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Search" %}
+                    </label>
+                    <input type="text" name="search" value="{{ request.GET.search }}" 
+                           placeholder="{% trans 'Search quotations...' %}"
+                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                </div>
+                
+                <div class="flex items-end">
+                    <button type="submit" class="btn-primary w-full">
+                        <span class="material-icons mr-2">search</span>
+                        {% trans "Filter" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de cotizaciones -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Quotations" %} ({{ quotations.count }})
+            </h3>
+        </div>
+        <div class="card-body">
+            {% if quotations %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Quotation" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Supplier" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Request" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Total Amount" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Valid Until" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Status" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Actions" %}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for quotation in quotations %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ quotation.quotation_number }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ quotation.created_at|date:"M d, Y" }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ quotation.supplier.name }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ quotation.supplier.code }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900 dark:text-white">
+                                        {{ quotation.purchase_request.request_number }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ quotation.purchase_request.title|truncatechars:30 }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ quotation.currency.symbol }}{{ quotation.total_amount|floatformat:2 }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900 dark:text-white">
+                                        {{ quotation.valid_until|date:"M d, Y" }}
+                                    </div>
+                                    {% if quotation.is_expired %}
+                                        <div class="text-xs text-red-600 dark:text-red-400">
+                                            {% trans "Expired" %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="status-badge status-{{ quotation.status }}">
+                                        {{ quotation.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <a href="{% url 'purchases:quotation_detail' quotation.pk %}" 
+                                           class="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300 transition-colors">
+                                            {% trans "View" %}
+                                        </a>
+                                        {% if quotation.status == 'received' %}
+                                            <a href="{% url 'purchases:quotation_evaluate' quotation.pk %}" 
+                                               class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 transition-colors">
+                                                {% trans "Evaluate" %}
+                                            </a>
+                                        {% endif %}
+                                        {% if quotation.status == 'evaluated' %}
+                                            <a href="{% url 'purchases:quotation_select' quotation.pk %}" 
+                                               class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 transition-colors">
+                                                {% trans "Select" %}
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                {% if is_paginated %}
+                <div class="mt-6 flex items-center justify-between">
+                    <div class="text-sm text-gray-700 dark:text-gray-300">
+                        {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+                    </div>
+                    <div class="flex space-x-2">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                               class="btn-secondary">
+                                <span class="material-icons mr-2 text-sm">chevron_left</span>
+                                {% trans "Previous" %}
+                            </a>
+                        {% endif %}
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                               class="btn-secondary">
+                                {% trans "Next" %}
+                                <span class="material-icons ml-2 text-sm">chevron_right</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="material-icons text-gray-400 text-3xl">receipt</span>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "No quotations found" %}</h3>
+                    <p class="text-gray-500 dark:text-gray-400 mb-6">
+                        {% trans "Get started by creating a new quotation." %}
+                    </p>
+                    <a href="{% url 'purchases:quotation_create' %}" class="btn-primary">
+                        <span class="material-icons mr-2">add</span>
+                        {% trans "New Quotation" %}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

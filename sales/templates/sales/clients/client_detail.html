@@ -1,295 +1,454 @@
-{% extends 'base.html' %}
+{% extends "sales/sales_base.html" %}
 {% load static %}
+{% load i18n %}
 
-{% block title %}{{ client.name }} - Detalle Cliente - Synap{% endblock %}
+{% block title %}{{ client.name }} - {% trans "Client Details" %} - {% trans "Sales" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .detail-header {
+        @apply border-b border-gray-200 dark:border-gray-700 pb-4 mb-6;
+    }
+    
+    .detail-title {
+        @apply text-2xl font-bold text-gray-900 dark:text-white mb-2;
+    }
+    
+    .detail-subtitle {
+        @apply text-gray-600 dark:text-gray-400;
+    }
+    
+    .detail-section {
+        @apply mb-6;
+    }
+    
+    .detail-section h3 {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    
+    .detail-section h3::before {
+        content: '';
+        @apply w-1 h-6 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full mr-3;
+    }
+    
+    .detail-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    }
+    
+    .detail-item {
+        @apply space-y-1;
+    }
+    
+    .detail-label {
+        @apply text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide;
+    }
+    
+    .detail-value {
+        @apply text-gray-900 dark:text-white font-medium;
+    }
+    
+    .detail-value.empty {
+        @apply text-gray-400 dark:text-gray-500 italic;
+    }
+    
+    .status-badge {
+        @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+    }
+    
+    .status-active {
+        @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+    }
+    
+    .status-inactive {
+        @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-2 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .btn-danger {
+        @apply bg-red-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-red-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .stats-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6;
+    }
+    
+    .stat-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .stat-value {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .stat-label {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .contact-list {
+        @apply space-y-3;
+    }
+    
+    .contact-item {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600;
+    }
+    
+    .contact-header {
+        @apply flex items-center justify-between mb-2;
+    }
+    
+    .contact-name {
+        @apply font-medium text-gray-900 dark:text-white;
+    }
+    
+    .contact-role {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .contact-info {
+        @apply space-y-1 text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .action-buttons {
+        @apply flex flex-wrap gap-3;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        {{ client.name }}
+                        {% trans "Client Details" %}
                     </h1>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Detalle del cliente
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Complete information about this client" %}
                     </p>
                 </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'sales:client_edit' client.pk %}" 
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        Editar
+                <div class="action-buttons">
+                    <a href="{% url 'sales:client_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to List" %}
                     </a>
-                    <a href="{% url 'sales:sales_order_create' %}?client={{ client.pk }}" 
-                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        Nuevo Pedido
+                    <a href="{% url 'sales:client_update' client.pk %}" class="btn-primary">
+                        <i class="fas fa-edit mr-2"></i>
+                        {% trans "Edit Client" %}
+                    </a>
+                    <a href="{% url 'sales:client_delete' client.pk %}" class="btn-danger">
+                        <i class="fas fa-trash mr-2"></i>
+                        {% trans "Delete" %}
                     </a>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Client Information -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Main Info -->
-            <div class="lg:col-span-2">
-                <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Información del Cliente</h3>
+        <!-- Client Header -->
+        <div class="detail-card">
+            <div class="detail-header">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="detail-title">{{ client.name }}</h2>
+                        <p class="detail-subtitle">
+                            {% if client.code %}{{ client.code }} • {% endif %}
+                            {% if client.is_customer %}{% trans "Customer" %}{% endif %}
+                            {% if client.is_prospect %} • {% trans "Prospect" %}{% endif %}
+                            {% if client.is_vip %} • {% trans "VIP" %}{% endif %}
+                        </p>
                     </div>
-                    <div class="p-6">
-                        <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Nombre</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ client.name }}</dd>
-                            </div>
-                            
-                            {% if client.vat %}
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">VAT / Tax ID</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ client.vat }}</dd>
-                            </div>
-                            {% endif %}
-                            
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Tipo</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                                        {% if client.type == 'company' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
-                                        {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
-                                        {{ client.get_type_display }}
-                                    </span>
-                                </dd>
-                            </div>
-                            
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Estado</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                                        {% if client.is_active %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                        {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                                        {% if client.is_active %}Activo{% else %}Inactivo{% endif %}
-                                    </span>
-                                </dd>
-                            </div>
-                            
-                            {% if client.email %}
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                                    <a href="mailto:{{ client.email }}" class="text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                                        {{ client.email }}
-                                    </a>
-                                </dd>
-                            </div>
-                            {% endif %}
-                            
-                            {% if client.phone %}
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Teléfono</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                                    <a href="tel:{{ client.phone }}" class="text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                                        {{ client.phone }}
-                                    </a>
-                                </dd>
-                            </div>
-                            {% endif %}
-                            
-                            {% if client.origin %}
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Origen</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ client.origin }}</dd>
-                            </div>
-                            {% endif %}
-                            
-                            {% if client.tiendanube_customer_id %}
-                            <div>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">ID Tiendanube</dt>
-                                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{{ client.tiendanube_customer_id }}</dd>
-                            </div>
-                            {% endif %}
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Statistics -->
-            <div class="lg:col-span-1">
-                <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Estadísticas</h3>
-                    </div>
-                    <div class="p-6 space-y-4">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Total Pedidos</span>
-                            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ total_orders }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Total Facturado</span>
-                            <span class="text-sm font-medium text-gray-900 dark:text-white">${{ total_billed }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Total Pagado</span>
-                            <span class="text-sm font-medium text-gray-900 dark:text-white">${{ total_paid }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Saldo Pendiente</span>
-                            <span class="text-sm font-medium {% if pending_balance > 0 %}text-red-600 dark:text-red-400{% else %}text-green-600 dark:text-green-400{% endif %}">
-                                ${{ pending_balance }}
-                            </span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Límite de Crédito</span>
-                            <span class="text-sm font-medium text-gray-900 dark:text-white">${{ client.credit_limit }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500 dark:text-gray-400">Crédito Disponible</span>
-                            <span class="text-sm font-medium {% if client.credit_limit > pending_balance %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                                ${{ client.credit_limit|add:pending_balance|floatformat:2 }}
-                            </span>
-                        </div>
+                    <div class="flex items-center space-x-2">
+                        {% if client.is_active %}
+                        <span class="status-badge status-active">
+                            {% trans "Active" %}
+                        </span>
+                        {% else %}
+                        <span class="status-badge status-inactive">
+                            {% trans "Inactive" %}
+                        </span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Activity -->
-        <div class="mt-8">
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Actividad Reciente</h3>
-                </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        <!-- Recent Orders -->
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">Pedidos Recientes</h4>
-                            {% if recent_orders %}
-                                <div class="space-y-3">
-                                    {% for order in recent_orders %}
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                <a href="{% url 'sales:sales_order_detail' order.pk %}" class="hover:text-blue-600 dark:hover:text-blue-400">
-                                                    {{ order.number }}
-                                                </a>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ order.order_date }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                ${{ order.total }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                {{ order.state }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="mt-4">
-                                    <a href="{% url 'sales:sales_order_list' %}?client={{ client.pk }}" 
-                                       class="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                                        Ver todos los pedidos →
-                                    </a>
-                                </div>
-                            {% else %}
-                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay pedidos recientes</p>
-                            {% endif %}
-                        </div>
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_orders|default:0 }}</div>
+                <div class="stat-label">{% trans "Total Orders" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_invoices|default:0 }}</div>
+                <div class="stat-label">{% trans "Total Invoices" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_payments|default:0 }}</div>
+                <div class="stat-label">{% trans "Total Payments" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ client.credit_limit|default:0|floatformat:2 }}</div>
+                <div class="stat-label">{% trans "Credit Limit" %}</div>
+            </div>
+        </div>
 
-                        <!-- Recent Invoices -->
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">Facturas Recientes</h4>
-                            {% if recent_invoices %}
-                                <div class="space-y-3">
-                                    {% for invoice in recent_invoices %}
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                <a href="{% url 'sales:invoice_detail' invoice.pk %}" class="hover:text-blue-600 dark:hover:text-blue-400">
-                                                    {{ invoice.number }}
-                                                </a>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ invoice.invoice_date }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                ${{ invoice.total }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                {{ invoice.state }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="mt-4">
-                                    <a href="{% url 'sales:invoice_list' %}?client={{ client.pk }}" 
-                                       class="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                                        Ver todas las facturas →
-                                    </a>
-                                </div>
-                            {% else %}
-                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay facturas recientes</p>
-                            {% endif %}
-                        </div>
-
-                        <!-- Recent Payments -->
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">Pagos Recientes</h4>
-                            {% if recent_payments %}
-                                <div class="space-y-3">
-                                    {% for payment in recent_payments %}
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                <a href="{% url 'sales:payment_detail' payment.pk %}" class="hover:text-blue-600 dark:hover:text-blue-400">
-                                                    {{ payment.number }}
-                                                </a>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                                                {{ payment.payment_date }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                ${{ payment.amount }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                {{ payment.state }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="mt-4">
-                                    <a href="{% url 'sales:payment_list' %}?client={{ client.pk }}" 
-                                       class="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                                        Ver todos los pagos →
-                                    </a>
-                                </div>
-                            {% else %}
-                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay pagos recientes</p>
-                            {% endif %}
+        <!-- Basic Information -->
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Basic Information" %}</h3>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Name" %}</div>
+                        <div class="detail-value">{{ client.name }}</div>
+                    </div>
+                    
+                    {% if client.code %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Code" %}</div>
+                        <div class="detail-value">{{ client.code }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.tax_id %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Tax ID" %}</div>
+                        <div class="detail-value">{{ client.tax_id }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.email %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Email" %}</div>
+                        <div class="detail-value">
+                            <a href="mailto:{{ client.email }}" class="text-orange-600 hover:text-orange-700">
+                                {{ client.email }}
+                            </a>
                         </div>
                     </div>
+                    {% endif %}
+                    
+                    {% if client.phone %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Phone" %}</div>
+                        <div class="detail-value">
+                            <a href="tel:{{ client.phone }}" class="text-orange-600 hover:text-orange-700">
+                                {{ client.phone }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.mobile %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Mobile" %}</div>
+                        <div class="detail-value">
+                            <a href="tel:{{ client.mobile }}" class="text-orange-600 hover:text-orange-700">
+                                {{ client.mobile }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.website %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Website" %}</div>
+                        <div class="detail-value">
+                            <a href="{{ client.website }}" target="_blank" class="text-orange-600 hover:text-orange-700">
+                                {{ client.website }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
+
+        <!-- Address Information -->
+        {% if client.address or client.city or client.state or client.country %}
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Address Information" %}</h3>
+                <div class="detail-grid">
+                    {% if client.country %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Country" %}</div>
+                        <div class="detail-value">{{ client.country }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.state %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "State/Province" %}</div>
+                        <div class="detail-value">{{ client.state }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.city %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "City" %}</div>
+                        <div class="detail-value">{{ client.city }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.address %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Address" %}</div>
+                        <div class="detail-value">{{ client.address }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.postal_code %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Postal Code" %}</div>
+                        <div class="detail-value">{{ client.postal_code }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Commercial Information -->
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Commercial Information" %}</h3>
+                <div class="detail-grid">
+                    {% if client.sales_person %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Sales Person" %}</div>
+                        <div class="detail-value">{{ client.sales_person.nombre }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.customer_category %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Category" %}</div>
+                        <div class="detail-value">{{ client.customer_category }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.credit_limit %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Credit Limit" %}</div>
+                        <div class="detail-value">{{ client.credit_limit|floatformat:2 }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.payment_terms %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Payment Terms" %}</div>
+                        <div class="detail-value">{{ client.payment_terms }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.default_discount %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Default Discount" %}</div>
+                        <div class="detail-value">{{ client.default_discount|floatformat:2 }}%</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if client.payment_method %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Payment Method" %}</div>
+                        <div class="detail-value">{{ client.get_payment_method_display }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if client.notes %}
+                <div class="mt-4">
+                    <div class="detail-label">{% trans "Notes" %}</div>
+                    <div class="detail-value">{{ client.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Contacts -->
+        {% if contacts %}
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Contacts" %}</h3>
+                <div class="contact-list">
+                    {% for contact_relationship in contacts %}
+                    <div class="contact-item">
+                        <div class="contact-header">
+                            <div>
+                                <div class="contact-name">{{ contact_relationship.contact.get_display_name }}</div>
+                                <div class="contact-role">{{ contact_relationship.get_relationship_type_display }}</div>
+                            </div>
+                            <div class="action-buttons">
+                                <a href="{% url 'sales:contact_update' contact_relationship.contact.pk %}" class="btn-secondary text-sm">
+                                    <i class="fas fa-edit mr-1"></i>
+                                    {% trans "Edit" %}
+                                </a>
+                            </div>
+                        </div>
+                        <div class="contact-info">
+                            {% if contact_relationship.contact.email %}
+                                <div><i class="fas fa-envelope mr-2"></i>{{ contact_relationship.contact.email }}</div>
+                            {% endif %}
+                            {% if contact_relationship.contact.phone %}
+                                <div><i class="fas fa-phone mr-2"></i>{{ contact_relationship.contact.phone }}</div>
+                            {% endif %}
+                            {% if contact_relationship.contact.mobile %}
+                                <div><i class="fas fa-mobile-alt mr-2"></i>{{ contact_relationship.contact.mobile }}</div>
+                            {% endif %}
+                            {% if contact_relationship.contact.department %}
+                                <div><i class="fas fa-building mr-2"></i>{{ contact_relationship.contact.department }}</div>
+                            {% endif %}
+                            {% if contact_relationship.contact.position %}
+                                <div><i class="fas fa-briefcase mr-2"></i>{{ contact_relationship.contact.position }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-4">
+                    <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" class="btn-primary">
+                        <i class="fas fa-plus mr-2"></i>
+                        {% trans "Add Contact" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- No contacts message -->
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Contacts" %}</h3>
+                <div class="text-center py-8">
+                    <div class="text-gray-400 mb-4">
+                        <i class="fas fa-users text-4xl"></i>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">
+                        {% trans "No contacts have been added to this client yet." %}
+                    </p>
+                    <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" class="btn-primary">
+                        <i class="fas fa-plus mr-2"></i>
+                        {% trans "Add First Contact" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %} 

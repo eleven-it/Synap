@@ -1,298 +1,355 @@
-{% extends 'base.html' %}
+{% extends 'sales/sales_base.html' %}
 {% load static %}
+{% load i18n %}
 
-{% block title %}Dashboard de Ventas - Synap{% endblock %}
+{% block title %}{% trans "Sales Dashboard" %} - Synap{% endblock %}
 
-{% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
+{% block page_title %}{% trans "Sales Dashboard" %}{% endblock %}
+
+{% block page_actions %}
+<a href="{% url 'sales:client_create' %}" 
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 transform hover:scale-105 shadow-lg">
+    <i class="fas fa-user-plus mr-2"></i>
+    {% trans "New Client" %}
+</a>
+<a href="{% url 'sales:contact_create' %}" 
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-105 shadow-lg">
+    <i class="fas fa-address-book mr-2"></i>
+    {% trans "New Contact" %}
+</a>
+<a href="{% url 'sales:sales_order_create' %}" 
+   class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 transform hover:scale-105 shadow-lg">
+    <i class="fas fa-shopping-cart mr-2"></i>
+    {% trans "New Order" %}
+</a>
+{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Welcome Section -->
+    <div class="mb-8">
+        <div class="bg-gradient-to-r from-orange-400 to-orange-600 rounded-lg shadow-lg p-6 text-white">
+            <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        Dashboard de Ventas
-                    </h1>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Gestión completa del ciclo comercial
-                    </p>
+                    <h2 class="text-2xl font-bold mb-2">{% trans "Welcome to Sales Management" %}</h2>
+                    <p class="text-orange-100">{% trans "Manage your customers, contacts, and sales operations efficiently" %}</p>
                 </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'sales:client_create' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Nuevo Cliente
-                    </a>
-                    <a href="{% url 'sales:sales_order_create' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        Nuevo Pedido
-                    </a>
+                <div class="hidden md:block">
+                    <i class="fas fa-chart-line text-6xl text-orange-200"></i>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Stats Cards -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total Clientes -->
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
-                                    Total Clientes
-                                </dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                                    {{ total_clients }}
-                                </dd>
-                            </dl>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Clientes -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <div class="p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                            <i class="fas fa-users text-white text-xl"></i>
                         </div>
                     </div>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
-                    <div class="text-sm">
-                        <a href="{% url 'sales:client_list' %}" class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
-                            Ver todos
-                        </a>
+                    <div class="ml-4 flex-1">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Total Clients" %}
+                        </p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ total_clients|default:0 }}
+                        </p>
+                        <p class="text-xs text-green-600 dark:text-green-400">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            +{{ new_clients_this_month|default:0 }} {% trans "this month" %}
+                        </p>
                     </div>
                 </div>
             </div>
-
-            <!-- Total Pedidos -->
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
-                                    Total Pedidos
-                                </dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                                    {{ total_orders }}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
-                    <div class="text-sm">
-                        <a href="{% url 'sales:sales_order_list' %}" class="font-medium text-green-600 hover:text-green-500 dark:text-green-400">
-                            Ver todos
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Total Facturas -->
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
-                                    Total Facturas
-                                </dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                                    {{ total_invoices }}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
-                    <div class="text-sm">
-                        <a href="{% url 'sales:invoice_list' %}" class="font-medium text-purple-600 hover:text-purple-500 dark:text-purple-400">
-                            Ver todas
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Total Pagos -->
-            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
-                                    Total Pagos
-                                </dt>
-                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
-                                    {{ total_payments }}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
-                    <div class="text-sm">
-                        <a href="{% url 'sales:payment_list' %}" class="font-medium text-yellow-600 hover:text-yellow-500 dark:text-yellow-400">
-                            Ver todos
-                        </a>
-                    </div>
-                </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3">
+                <a href="{% url 'sales:client_list' %}" class="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 flex items-center">
+                    {% trans "View all clients" %}
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
             </div>
         </div>
 
-        <!-- Charts and Tables -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Pedidos por Estado -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Pedidos por Estado</h3>
-                </div>
-                <div class="p-6">
-                    {% if orders_by_status %}
-                        <div class="space-y-4">
-                            {% for status in orders_by_status %}
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <div class="w-3 h-3 rounded-full 
-                                        {% if status.status == 'draft' %}bg-gray-400
-                                        {% elif status.status == 'approved' %}bg-green-400
-                                        {% elif status.status == 'cancelled' %}bg-red-400
-                                        {% else %}bg-blue-400{% endif %}">
-                                    </div>
-                                    <span class="ml-3 text-sm font-medium text-gray-900 dark:text-white capitalize">
-                                        {{ status.status }}
-                                    </span>
-                                </div>
-                                <div class="text-sm text-gray-500 dark:text-gray-400">
-                                    {{ status.count }} pedidos
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay pedidos registrados</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Ventas del Mes -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Ventas del Mes Actual</h3>
-                </div>
-                <div class="p-6">
-                    <div class="text-center">
-                        <div class="text-3xl font-bold text-gray-900 dark:text-white">
-                            ${{ monthly_sales.total_amount|default:"0.00" }}
-                        </div>
-                        <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            {{ monthly_sales.total_orders|default:"0" }} pedidos
+        <!-- Total Contactos -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <div class="p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                            <i class="fas fa-address-book text-white text-xl"></i>
                         </div>
                     </div>
+                    <div class="ml-4 flex-1">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Total Contacts" %}
+                        </p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ total_contacts|default:0 }}
+                        </p>
+                        <p class="text-xs text-green-600 dark:text-green-400">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            +{{ new_contacts_this_month|default:0 }} {% trans "this month" %}
+                        </p>
+                    </div>
                 </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3">
+                <a href="{% url 'sales:contact_list' %}" class="text-sm font-medium text-purple-600 hover:text-purple-500 dark:text-purple-400 flex items-center">
+                    {% trans "View all contacts" %}
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
             </div>
         </div>
 
-        <!-- Recent Activity -->
-        <div class="mt-8">
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Actividad Reciente</h3>
-                </div>
-                <div class="p-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <!-- Pedidos Recientes -->
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">Pedidos Recientes</h4>
-                            {% if recent_orders %}
-                                <div class="space-y-3">
-                                    {% for order in recent_orders %}
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ order.number }}
-                                            </div>
-                                            <div class="text-sm text-gray-500 dark:text-gray-400">
-                                                {{ order.client.name }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                ${{ order.total }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                {{ order.state }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay pedidos recientes</p>
-                            {% endif %}
-                        </div>
-
-                        <!-- Facturas Recientes -->
-                        <div>
-                            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">Facturas Recientes</h4>
-                            {% if recent_invoices %}
-                                <div class="space-y-3">
-                                    {% for invoice in recent_invoices %}
-                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {{ invoice.number }}
-                                            </div>
-                                            <div class="text-sm text-gray-500 dark:text-gray-400">
-                                                {{ invoice.client.name }}
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                                ${{ invoice.total }}
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                                                {{ invoice.state }}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No hay facturas recientes</p>
-                            {% endif %}
+        <!-- Total Pedidos -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <div class="p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-lg">
+                            <i class="fas fa-shopping-cart text-white text-xl"></i>
                         </div>
                     </div>
+                    <div class="ml-4 flex-1">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Total Orders" %}
+                        </p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ total_orders|default:0 }}
+                        </p>
+                        <p class="text-xs text-green-600 dark:text-green-400">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            +{{ new_orders_this_month|default:0 }} {% trans "this month" %}
+                        </p>
+                    </div>
                 </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3">
+                <a href="{% url 'sales:sales_order_list' %}" class="text-sm font-medium text-green-600 hover:text-green-500 dark:text-green-400 flex items-center">
+                    {% trans "View all orders" %}
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Total Facturas -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300 transform hover:scale-105">
+            <div class="p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
+                            <i class="fas fa-file-invoice-dollar text-white text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Total Invoices" %}
+                        </p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ total_invoices|default:0 }}
+                        </p>
+                        <p class="text-xs text-green-600 dark:text-green-400">
+                            <i class="fas fa-arrow-up mr-1"></i>
+                            +{{ new_invoices_this_month|default:0 }} {% trans "this month" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3">
+                <a href="{% url 'sales:invoice_list' %}" class="text-sm font-medium text-orange-600 hover:text-orange-500 dark:text-orange-400 flex items-center">
+                    {% trans "View all invoices" %}
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mb-8">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans "Quick Actions" %}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="{% url 'sales:client_create' %}" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-user-plus text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white">{% trans "Add Client" %}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "Create new client" %}</p>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{% url 'sales:contact_create' %}" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-address-book text-purple-600 dark:text-purple-400"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white">{% trans "Add Contact" %}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "Create new contact" %}</p>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{% url 'sales:sales_order_create' %}" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-shopping-cart text-green-600 dark:text-green-400"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white">{% trans "Create Order" %}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "New sales order" %}</p>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{% url 'sales:reports_dashboard' %}" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-orange-100 dark:bg-orange-900 rounded-lg flex items-center justify-center mr-3">
+                        <i class="fas fa-chart-bar text-orange-600 dark:text-orange-400"></i>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-900 dark:text-white">{% trans "View Reports" %}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "Sales analytics" %}</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Charts and Tables -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Clientes por Categoría -->
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Clients by Category" %}</h3>
+            </div>
+            <div class="p-6">
+                {% if clients_by_category %}
+                    <div class="space-y-4">
+                        {% for category in clients_by_category %}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full 
+                                    {% if category.customer_category == 'retail' %}bg-blue-400
+                                    {% elif category.customer_category == 'wholesale' %}bg-green-400
+                                    {% elif category.customer_category == 'distributor' %}bg-purple-400
+                                    {% elif category.customer_category == 'reseller' %}bg-orange-400
+                                    {% elif category.customer_category == 'end_user' %}bg-gray-400
+                                    {% else %}bg-gray-400{% endif %}">
+                                </div>
+                                <span class="ml-3 text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                    {% if category.customer_category == 'retail' %}{% trans "Retail" %}
+                                    {% elif category.customer_category == 'wholesale' %}{% trans "Wholesale" %}
+                                    {% elif category.customer_category == 'distributor' %}{% trans "Distributor" %}
+                                    {% elif category.customer_category == 'reseller' %}{% trans "Reseller" %}
+                                    {% elif category.customer_category == 'end_user' %}{% trans "End User" %}
+                                    {% else %}{{ category.customer_category }}{% endif %}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ category.count }} {% trans "clients" %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <i class="fas fa-users text-gray-400 text-4xl mb-4"></i>
+                        <p class="text-gray-500 dark:text-gray-400">{% trans "No client data available" %}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Contactos por Rol -->
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Contacts by Role" %}</h3>
+            </div>
+            <div class="p-6">
+                {% if contacts_by_role %}
+                    <div class="space-y-4">
+                        {% for role in contacts_by_role %}
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 rounded-full 
+                                    {% if role.role == 'primary' %}bg-blue-400
+                                    {% elif role.role == 'secondary' %}bg-green-400
+                                    {% elif role.role == 'decision_maker' %}bg-purple-400
+                                    {% elif role.role == 'technical' %}bg-orange-400
+                                    {% elif role.role == 'billing' %}bg-yellow-400
+                                    {% elif role.role == 'support' %}bg-red-400
+                                    {% else %}bg-gray-400{% endif %}">
+                                </div>
+                                <span class="ml-3 text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                    {% if role.role == 'primary' %}{% trans "Primary Contact" %}
+                                    {% elif role.role == 'secondary' %}{% trans "Secondary Contact" %}
+                                    {% elif role.role == 'decision_maker' %}{% trans "Decision Maker" %}
+                                    {% elif role.role == 'technical' %}{% trans "Technical Contact" %}
+                                    {% elif role.role == 'billing' %}{% trans "Billing Contact" %}
+                                    {% elif role.role == 'support' %}{% trans "Support Contact" %}
+                                    {% else %}{{ role.role }}{% endif %}
+                                </span>
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ role.count }} {% trans "contacts" %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <i class="fas fa-address-book text-gray-400 text-4xl mb-4"></i>
+                        <p class="text-gray-500 dark:text-gray-400">{% trans "No contact data available" %}</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="mt-8">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans "Recent Activity" %}</h3>
+        <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h4 class="text-md font-medium text-gray-900 dark:text-white">{% trans "Latest Clients and Contacts" %}</h4>
+            </div>
+            <div class="p-6">
+                {% if recent_activity %}
+                    <div class="space-y-4">
+                        {% for activity in recent_activity %}
+                        <div class="flex items-center space-x-4">
+                            <div class="flex-shrink-0">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                                    <i class="fas fa-{{ activity.icon }} text-white text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ activity.title }}
+                                </p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ activity.description }}
+                                </p>
+                            </div>
+                            <div class="flex-shrink-0 text-sm text-gray-500 dark:text-gray-400">
+                                {{ activity.time_ago }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <i class="fas fa-clock text-gray-400 text-4xl mb-4"></i>
+                        <p class="text-gray-500 dark:text-gray-400">{% trans "No recent activity" %}</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

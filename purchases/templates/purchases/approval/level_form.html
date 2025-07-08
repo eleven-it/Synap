@@ -1,0 +1,181 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% if object %}{% trans "Edit Approval Level" %}{% else %}{% trans "Create Approval Level" %}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {% if object %}{% trans "Edit Approval Level" %}{% else %}{% trans "Create Approval Level" %}{% endif %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Configure approval level for workflow" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:level_list' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white shadow rounded-lg">
+            <form method="post" class="space-y-6 p-6">
+                {% csrf_token %}
+                
+                <!-- Basic Information -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Basic Information" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.workflow.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.workflow.label }}
+                            </label>
+                            {{ form.workflow }}
+                            {% if form.workflow.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.workflow.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.name.label }}
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.priority.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.priority.label }}
+                            </label>
+                            {{ form.priority }}
+                            {% if form.priority.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.priority.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Lower numbers have higher priority" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.approval_type.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.approval_type.label }}
+                            </label>
+                            {{ form.approval_type }}
+                            {% if form.approval_type.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.approval_type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Approvers -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Approvers" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label for="{{ form.approvers.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.approvers.label }}
+                            </label>
+                            {{ form.approvers }}
+                            {% if form.approvers.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.approvers.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Select specific users as approvers" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.roles.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.roles.label }}
+                            </label>
+                            {{ form.roles }}
+                            {% if form.roles.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.roles.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Select roles whose members can approve" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.groups.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.groups.label }}
+                            </label>
+                            {{ form.groups }}
+                            {% if form.groups.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.groups.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Select groups whose members can approve" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Approval Settings -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Approval Settings" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex items-center">
+                            {{ form.requires_all_approvers }}
+                            <label for="{{ form.requires_all_approvers.id_for_label }}" class="ml-2 block text-sm text-gray-900">
+                                {{ form.requires_all_approvers.label }}
+                            </label>
+                        </div>
+                        {% if form.requires_all_approvers.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.requires_all_approvers.errors.0 }}</p>
+                        {% endif %}
+
+                        <div>
+                            <label for="{{ form.max_approval_time.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.max_approval_time.label }}
+                            </label>
+                            {{ form.max_approval_time }}
+                            {% if form.max_approval_time.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.max_approval_time.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Maximum time in hours for approval (leave empty for no limit)" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                    <a href="{% url 'purchases:level_list' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% if object %}{% trans "Update Level" %}{% else %}{% trans "Create Level" %}{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const workflowSelect = document.getElementById('{{ form.workflow.id_for_label }}');
+    const priorityInput = document.getElementById('{{ form.priority.id_for_label }}');
+    
+    // Auto-fill priority based on workflow
+    workflowSelect.addEventListener('change', function() {
+        const workflowId = this.value;
+        if (workflowId) {
+            // You could make an AJAX call here to get the next available priority
+            // For now, we'll just set a default value
+            if (!priorityInput.value) {
+                priorityInput.value = '1';
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 

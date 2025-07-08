@@ -1,0 +1,283 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Manual Sync" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Manual Sync" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Manually trigger synchronization with Tiendanube" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'tiendanube:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Sync Status -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Current Sync Status" %}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 rounded-full {% if config.sync_products %}bg-green-500{% else %}bg-red-500{% endif %} flex items-center justify-center">
+                                <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-gray-900">{% trans "Products" %}</p>
+                            <p class="text-sm text-gray-500">{% if config.sync_products %}{% trans "Enabled" %}{% else %}{% trans "Disabled" %}{% endif %}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 rounded-full {% if config.sync_orders %}bg-green-500{% else %}bg-red-500{% endif %} flex items-center justify-center">
+                                <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-gray-900">{% trans "Orders" %}</p>
+                            <p class="text-sm text-gray-500">{% if config.sync_orders %}{% trans "Enabled" %}{% else %}{% trans "Disabled" %}{% endif %}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 rounded-full {% if config.sync_customers %}bg-green-500{% else %}bg-red-500{% endif %} flex items-center justify-center">
+                                <svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-gray-900">{% trans "Customers" %}</p>
+                            <p class="text-sm text-gray-500">{% if config.sync_customers %}{% trans "Enabled" %}{% else %}{% trans "Disabled" %}{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Sync Options -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Sync Options" %}</h3>
+                
+                <form method="post" id="sync-form">
+                    {% csrf_token %}
+                    
+                    <!-- Sync Type Selection -->
+                    <div class="space-y-4 mb-6">
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">{% trans "Select Sync Type" %}</label>
+                            <div class="mt-2 space-y-2">
+                                <div class="flex items-center">
+                                    <input type="checkbox" name="sync_products" id="sync_products" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if config.sync_products %}checked{% endif %}>
+                                    <label for="sync_products" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "Products" %} - {% trans "Sync product catalog and stock levels" %}
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" name="sync_orders" id="sync_orders" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if config.sync_orders %}checked{% endif %}>
+                                    <label for="sync_orders" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "Orders" %} - {% trans "Sync orders from Tiendanube" %}
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" name="sync_customers" id="sync_customers" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" {% if config.sync_customers %}checked{% endif %}>
+                                    <label for="sync_customers" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "Customers" %} - {% trans "Sync customer data" %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Direction Selection -->
+                        <div>
+                            <label class="text-sm font-medium text-gray-700">{% trans "Sync Direction" %}</label>
+                            <div class="mt-2 space-y-2">
+                                <div class="flex items-center">
+                                    <input type="radio" name="sync_direction" id="direction_to_tiendanube" value="to_tiendanube" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300" checked>
+                                    <label for="direction_to_tiendanube" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "To Tiendanube" %} - {% trans "Send data from Synap to Tiendanube" %}
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="radio" name="sync_direction" id="direction_from_tiendanube" value="from_tiendanube" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+                                    <label for="direction_from_tiendanube" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "From Tiendanube" %} - {% trans "Receive data from Tiendanube to Synap" %}
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="radio" name="sync_direction" id="direction_bidirectional" value="bidirectional" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+                                    <label for="direction_bidirectional" class="ml-2 block text-sm text-gray-900">
+                                        {% trans "Bidirectional" %} - {% trans "Sync in both directions" %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Force Full Sync -->
+                        <div class="flex items-center">
+                            <input type="checkbox" name="force_full_sync" id="force_full_sync" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="force_full_sync" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Force Full Sync" %} - {% trans "Ignore last sync timestamp and sync all data" %}
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Sync Button -->
+                    <div class="flex justify-end">
+                        <button type="submit" id="sync-button" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-medium">
+                            {% trans "Start Sync" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recent Sync History -->
+        <div class="bg-white shadow rounded-lg mt-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Recent Sync History" %}</h3>
+                
+                {% if recent_syncs %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Type" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Direction" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Status" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Started" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Duration" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for sync in recent_syncs %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ sync.get_sync_type_display }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ sync.get_direction_display }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if sync.status == 'success' %}bg-green-100 text-green-800
+                                        {% elif sync.status == 'error' %}bg-red-100 text-red-800
+                                        {% elif sync.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ sync.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ sync.created_at|timesince }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {% if sync.duration %}
+                                        {{ sync.duration|floatformat:2 }}s
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No sync history" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Manual sync history will appear here." %}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Progress Modal -->
+<div id="sync-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                <svg class="h-6 w-6 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4">{% trans "Synchronizing..." %}</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500" id="sync-status-message">
+                    {% trans "Please wait while the synchronization is in progress." %}
+                </p>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                <div class="bg-blue-600 h-2.5 rounded-full animate-pulse" style="width: 45%"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const syncForm = document.getElementById('sync-form');
+    const syncButton = document.getElementById('sync-button');
+    const syncModal = document.getElementById('sync-modal');
+    const syncStatusMessage = document.getElementById('sync-status-message');
+
+    syncForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Show modal
+        syncModal.classList.remove('hidden');
+        syncButton.disabled = true;
+        syncButton.textContent = '{% trans "Syncing..." %}';
+        
+        // Submit form
+        fetch('{% url "tiendanube:manual_sync" %}', {
+            method: 'POST',
+            body: new FormData(syncForm),
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                syncStatusMessage.textContent = '{% trans "Sync completed successfully!" %}';
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                syncStatusMessage.textContent = data.error || '{% trans "Sync failed. Please try again." %}';
+                setTimeout(() => {
+                    syncModal.classList.add('hidden');
+                    syncButton.disabled = false;
+                    syncButton.textContent = '{% trans "Start Sync" %}';
+                }, 3000);
+            }
+        })
+        .catch(error => {
+            syncStatusMessage.textContent = '{% trans "An error occurred during sync." %}';
+            setTimeout(() => {
+                syncModal.classList.add('hidden');
+                syncButton.disabled = false;
+                syncButton.textContent = '{% trans "Start Sync" %}';
+            }, 3000);
+        });
+    });
+});
+</script>
+{% endblock %} 

@@ -65,9 +65,6 @@ class PurchaseModuleIntegrationTest(TestCase):
             price=Decimal('100.00')
         )
         
-        # Crear proveedor
-        self.supplier = Supplier.objects.create(
-        
         # Crear ubicación de entrega
         self.delivery_location = DeliveryLocation.objects.create(
             empresa=self.empresa,
@@ -76,13 +73,22 @@ class PurchaseModuleIntegrationTest(TestCase):
             address="123 Test Street",
             city="Test City"
         )
+        
+        # Crear proveedor
+        self.supplier = Supplier.objects.create(
             empresa=self.empresa,
+            branch=self.branch,
             name="Proveedor Test",
             code="PROV001",
             email="proveedor@test.com",
-            credit_limit=Decimal('10000', branch=self.branch)
+            credit_limit=Decimal('10000')
+        )
+        
         # Crear flujo de aprobación
-        self.workflow = ApprovalWorkflow.objects.create(empresa=self.empresa, branch=self.branch, name="Flujo Test",
+        self.workflow = ApprovalWorkflow.objects.create(
+            empresa=self.empresa, 
+            branch=self.branch, 
+            name="Flujo Test",
             min_amount=Decimal('1000'),
             max_amount=Decimal('100000'),
             is_active=True
@@ -137,10 +143,12 @@ class CompletePurchaseWorkflowTest(PurchaseModuleIntegrationTest):
         request = PurchaseRequest.objects.get(title='Solicitud Completa')
         self.assertEqual(request.status, 'draft')
         self.assertEqual(request.lines.count(), 1)
-        self.assertEqual(request.total_amount, Decimal('1000.00')
+        self.assertEqual(request.total_amount, Decimal('1000.00'))
+        
         # 2. Enviar solicitud a aprobación
         response = self.client.post(
             reverse('purchases:request_submit', kwargs={'pk': request.pk})
+        )
         self.assertEqual(response.status_code, 302)
         
         request.refresh_from_db()
@@ -177,7 +185,8 @@ class CompletePurchaseWorkflowTest(PurchaseModuleIntegrationTest):
         
         quotation = PurchaseQuotation.objects.get(purchase_request=request)
         self.assertEqual(quotation.status, 'draft')
-        self.assertEqual(quotation.total_amount, Decimal('950.00')
+        self.assertEqual(quotation.total_amount, Decimal('950.00'))
+        
         # 5. Aprobar cotización
         quotation.status = 'approved'
         quotation.save()
@@ -202,10 +211,12 @@ class CompletePurchaseWorkflowTest(PurchaseModuleIntegrationTest):
         
         order = PurchaseOrder.objects.get(purchase_request=request)
         self.assertEqual(order.status, 'draft')
-        self.assertEqual(order.total_amount, Decimal('950.00')
+        self.assertEqual(order.total_amount, Decimal('950.00'))
+        
         # 7. Enviar orden
         response = self.client.post(
             reverse('purchases:order_send', kwargs={'pk': order.pk})
+        )
         self.assertEqual(response.status_code, 302)
         
         order.refresh_from_db()
@@ -215,6 +226,7 @@ class CompletePurchaseWorkflowTest(PurchaseModuleIntegrationTest):
         # 8. Confirmar orden
         response = self.client.post(
             reverse('purchases:order_confirm', kwargs={'pk': order.pk})
+        )
         self.assertEqual(response.status_code, 302)
         
         order.refresh_from_db()
@@ -252,7 +264,8 @@ class CompletePurchaseWorkflowTest(PurchaseModuleIntegrationTest):
         # 11. Verificar que se actualizó el inventario
         self.product_variant.refresh_from_db()
         self.assertEqual(self.product_variant.current_stock, 5)
-        self.assertEqual(self.product_variant.average_cost, Decimal('95.00')
+        self.assertEqual(self.product_variant.average_cost, Decimal('95.00'))
+        
         # 12. Crear evaluación de proveedor
         rating_data = {
             'supplier': self.supplier.pk,
@@ -611,7 +624,7 @@ class InventoryIntegrationTest(PurchaseModuleIntegrationTest):
             unit_price=Decimal('100.00')
         # Verificar stock inicial
         self.assertEqual(self.product_variant.current_stock, 0)
-        self.assertEqual(self.product_variant.average_cost, Decimal('0')
+        self.assertEqual(self.product_variant.average_cost, Decimal('0'))
         # Crear recepción
         receipt = PurchaseReceipt.objects.create(
             empresa=self.empresa,
@@ -630,14 +643,14 @@ class InventoryIntegrationTest(PurchaseModuleIntegrationTest):
         # Verificar que se actualizó el stock
         self.product_variant.refresh_from_db()
         self.assertEqual(self.product_variant.current_stock, 5)
-        self.assertEqual(self.product_variant.average_cost, Decimal('100.00')
+        self.assertEqual(self.product_variant.average_cost, Decimal('100.00'))
         # Verificar niveles de stock
         stock_levels = self.inventory_service.get_stock_levels([self.product_variant])
         
         self.assertIn(self.product_variant.id, stock_levels)
         level_data = stock_levels[self.product_variant.id]
         self.assertEqual(level_data['current_stock'], 5)
-        self.assertEqual(level_data['average_cost'], Decimal('100.00')
+        self.assertEqual(level_data['average_cost'], Decimal('100.00'))
         # Verificar disponibilidad
         availability = self.inventory_service.check_stock_availability(
             self.product_variant, 3
@@ -898,8 +911,8 @@ class DataConsistencyIntegrationTest(PurchaseModuleIntegrationTest):
         request.calculate_total()
         request.save()
         
-        self.assertEqual(request.total_amount, Decimal('1000.00')
-        self.assertEqual(line.total_amount, Decimal('1000.00')
+        self.assertEqual(request.total_amount, Decimal('1000.00'))
+        self.assertEqual(line.total_amount, Decimal('1000.00'))
         # Crear orden basada en solicitud
         order = PurchaseOrder.objects.create(
             empresa=self.empresa,

@@ -1,0 +1,441 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block page_title %}
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{% trans 'Purchase Documents' %}</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {% trans 'Manage purchase requests and orders' %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'purchases:order_create' %}" 
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                {% trans 'New Document' %}
+            </a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Filtros y búsqueda -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Filters' %}</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form method="get" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label for="document_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans 'Document Type' %}
+                        </label>
+                        <select name="document_type" id="document_type" 
+                                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-synap-500 focus:border-synap-500">
+                            <option value="">{% trans 'All Types' %}</option>
+                            <option value="request" {% if request.GET.document_type == 'request' %}selected{% endif %}>{% trans 'Purchase Request' %}</option>
+                            <option value="order" {% if request.GET.document_type == 'order' %}selected{% endif %}>{% trans 'Purchase Order' %}</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans 'Status' %}
+                        </label>
+                        <select name="status" id="status" 
+                                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-synap-500 focus:border-synap-500">
+                            <option value="">{% trans 'All Status' %}</option>
+                            <option value="draft" {% if request.GET.status == 'draft' %}selected{% endif %}>{% trans 'Draft' %}</option>
+                            <option value="submitted" {% if request.GET.status == 'submitted' %}selected{% endif %}>{% trans 'Submitted' %}</option>
+                            <option value="approved" {% if request.GET.status == 'approved' %}selected{% endif %}>{% trans 'Approved' %}</option>
+                            <option value="quotation_requested" {% if request.GET.status == 'quotation_requested' %}selected{% endif %}>{% trans 'Quotation Requested' %}</option>
+                            <option value="quotation_received" {% if request.GET.status == 'quotation_received' %}selected{% endif %}>{% trans 'Quotation Received' %}</option>
+                            <option value="order_created" {% if request.GET.status == 'order_created' %}selected{% endif %}>{% trans 'Order Created' %}</option>
+                            <option value="order_sent" {% if request.GET.status == 'order_sent' %}selected{% endif %}>{% trans 'Order Sent' %}</option>
+                            <option value="order_confirmed" {% if request.GET.status == 'order_confirmed' %}selected{% endif %}>{% trans 'Order Confirmed' %}</option>
+                            <option value="partially_received" {% if request.GET.status == 'partially_received' %}selected{% endif %}>{% trans 'Partially Received' %}</option>
+                            <option value="fully_received" {% if request.GET.status == 'fully_received' %}selected{% endif %}>{% trans 'Fully Received' %}</option>
+                            <option value="invoiced" {% if request.GET.status == 'invoiced' %}selected{% endif %}>{% trans 'Invoiced' %}</option>
+                            <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>{% trans 'Paid' %}</option>
+                            <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>{% trans 'Completed' %}</option>
+                            <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>{% trans 'Cancelled' %}</option>
+                            <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>{% trans 'Rejected' %}</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="supplier" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans 'Supplier' %}
+                        </label>
+                        <select name="supplier" id="supplier" 
+                                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-synap-500 focus:border-synap-500">
+                            <option value="">{% trans 'All Suppliers' %}</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.id }}" {% if request.GET.supplier == supplier.id|stringformat:"s" %}selected{% endif %}>
+                                {{ supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="date_range" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans 'Date Range' %}
+                        </label>
+                        <select name="date_range" id="date_range" 
+                                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-synap-500 focus:border-synap-500">
+                            <option value="">{% trans 'All Time' %}</option>
+                            <option value="today" {% if request.GET.date_range == 'today' %}selected{% endif %}>{% trans 'Today' %}</option>
+                            <option value="week" {% if request.GET.date_range == 'week' %}selected{% endif %}>{% trans 'This Week' %}</option>
+                            <option value="month" {% if request.GET.date_range == 'month' %}selected{% endif %}>{% trans 'This Month' %}</option>
+                            <option value="quarter" {% if request.GET.date_range == 'quarter' %}selected{% endif %}>{% trans 'This Quarter' %}</option>
+                            <option value="year" {% if request.GET.date_range == 'year' %}selected{% endif %}>{% trans 'This Year' %}</option>
+                        </select>
+                    </div>
+                    
+                    <div class="md:col-span-2 lg:col-span-4 flex items-end space-x-3">
+                        <button type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-synap-600 hover:bg-synap-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            {% trans 'Filter' %}
+                        </button>
+                        <a href="{% url 'purchases:order_list' %}" 
+                           class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                            {% trans 'Clear' %}
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{% trans 'Total Documents' %}</dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ total_documents }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{% trans 'Pending Approval' %}</dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ pending_approval }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{% trans 'Active Orders' %}</dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">{{ active_orders }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">{% trans 'Total Value' %}</dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">${{ total_value|floatformat:2 }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lista de documentos -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Documents' %}</h3>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">
+                            {{ page_obj.paginator.count }} {% trans 'documents' %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Document' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Type' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Supplier' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Date' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Total' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Status' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Actions' %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for document in page_obj %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10">
+                                        <div class="h-10 w-10 rounded-full bg-synap-100 dark:bg-synap-900 flex items-center justify-center">
+                                            <svg class="h-6 w-6 text-synap-600 dark:text-synap-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                            {{ document.number }}
+                                        </div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                                            {{ document.title|truncatechars:50 }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    {% if document.document_type == 'request' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                    {% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                                    {% if document.document_type == 'request' %}{% trans 'Request' %}{% else %}{% trans 'Order' %}{% endif %}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    {% if document.supplier %}
+                                        {{ document.supplier.name }}
+                                    {% else %}
+                                        <span class="text-gray-400">-</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    {{ document.document_date|date:"M d, Y" }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    ${{ document.total_amount|floatformat:2 }}
+                                </div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ document.currency }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                    {% if document.status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                                    {% elif document.status == 'submitted' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                    {% elif document.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                    {% elif document.status == 'quotation_requested' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                    {% elif document.status == 'quotation_received' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200
+                                    {% elif document.status == 'order_created' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                                    {% elif document.status == 'order_sent' %}bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200
+                                    {% elif document.status == 'order_confirmed' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200
+                                    {% elif document.status == 'partially_received' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                                    {% elif document.status == 'fully_received' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200
+                                    {% elif document.status == 'invoiced' %}bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200
+                                    {% elif document.status == 'paid' %}bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200
+                                    {% elif document.status == 'completed' %}bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100
+                                    {% elif document.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                    {% elif document.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                    {% else %}bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                                    {{ document.get_status_display_name }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div class="flex items-center space-x-2">
+                                    <a href="{% url 'purchases:order_detail' document.pk %}" 
+                                       class="text-synap-600 hover:text-synap-900 dark:text-synap-400 dark:hover:text-synap-300 transition-colors"
+                                       title="{% trans 'View Details' %}">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                        </svg>
+                                    </a>
+                                    
+                                    {% if document.status == 'draft' %}
+                                    <a href="{% url 'purchases:order_update' document.pk %}" 
+                                       class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                                       title="{% trans 'Edit' %}">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                        </svg>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <button type="button" onclick="duplicateDocument({{ document.pk }})"
+                                            class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 transition-colors"
+                                            title="{% trans 'Duplicate' %}">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </button>
+                                    
+                                    {% if document.status not in 'cancelled,completed,rejected' %}
+                                    <button type="button" onclick="cancelDocument({{ document.pk }})"
+                                            class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                                            title="{% trans 'Cancel' %}">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                {% trans 'No documents found' %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación -->
+            {% if page_obj.has_other_pages %}
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                <nav class="flex items-center justify-between">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                            {% trans 'Previous' %}
+                        </a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                            {% trans 'Next' %}
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                {% trans 'Showing' %} <span class="font-medium">{{ page_obj.start_index }}</span> {% trans 'to' %} <span class="font-medium">{{ page_obj.end_index }}</span> {% trans 'of' %} <span class="font-medium">{{ page_obj.paginator.count }}</span> {% trans 'results' %}
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                                {% if page_obj.has_previous %}
+                                <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <span class="sr-only">{% trans 'Previous' %}</span>
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                                
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                    <span class="relative inline-flex items-center px-4 py-2 border border-synap-500 bg-synap-50 dark:bg-synap-900 text-sm font-medium text-synap-600 dark:text-synap-400">
+                                        {{ num }}
+                                    </span>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <a href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                        {{ num }}
+                                    </a>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page_obj.has_next %}
+                                <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <span class="sr-only">{% trans 'Next' %}</span>
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                </a>
+                                {% endif %}
+                            </nav>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function duplicateDocument(documentId) {
+    if (confirm('{% trans "Are you sure you want to duplicate this document?" %}')) {
+        // Implementar lógica de duplicación
+        console.log('Duplicating document:', documentId);
+    }
+}
+
+function cancelDocument(documentId) {
+    if (confirm('{% trans "Are you sure you want to cancel this document?" %}')) {
+        // Implementar lógica de cancelación
+        console.log('Cancelling document:', documentId);
+    }
+}
+</script>
+{% endblock %} 

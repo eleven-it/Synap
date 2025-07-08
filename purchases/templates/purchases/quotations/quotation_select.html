@@ -1,0 +1,427 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Select Quotation" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">description</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">visibility</span>
+    <a href="{% url 'purchases:quotation_detail' quotation.pk %}">{{ quotation.quotation_number }}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">check_circle</span>
+    {% trans "Select" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Select Quotation" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Select quotation" %} "{{ quotation.quotation_number }}" {% trans "as the winning bid" %}{% endblock %}
+
+{% block purchases_actions %}
+<div class="flex space-x-3">
+    <a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+        <span class="material-icons mr-2">arrow_back</span>
+        {% trans "Cancel" %}
+    </a>
+    <button type="submit" form="select-quotation-form" class="btn-primary">
+        <span class="material-icons mr-2">check_circle</span>
+        {% trans "Select Quotation" %}
+    </button>
+</div>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-4xl mx-auto">
+    <form method="post" id="select-quotation-form" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Resumen de la Cotización -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Quotation Summary" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Quotation Number" %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ quotation.quotation_number }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Quotation Date" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.quotation_date|date:"M d, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Supplier" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.supplier.name }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Total Amount" %}
+                        </label>
+                        <p class="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                            {{ quotation.currency.symbol }}{{ quotation.total_amount|floatformat:2|default:"N/A" }}
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Status" %}
+                        </label>
+                        <span class="status-badge status-{{ quotation.status }}">
+                            {{ quotation.get_status_display }}
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Line Items" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ quotation.lines.count }} {% trans "items" %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de Selección -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Selection Details" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-6">
+                    <!-- Fecha de selección -->
+                    <div>
+                        <label for="selection_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Selection Date" %}
+                        </label>
+                        <input type="date" name="selection_date" id="selection_date" 
+                               value="{{ today|date:'Y-m-d' }}"
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               required>
+                    </div>
+
+                    <!-- Razón de selección -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            {% trans "Selection Reason" %}
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="best_price" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-green-600 dark:text-green-400 mr-2">attach_money</span>
+                                            {% trans "Best Price" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Lowest cost option" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="best_value" class="sr-only" checked>
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">star</span>
+                                            {% trans "Best Value" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Best price-quality ratio" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="best_quality" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-purple-600 dark:text-purple-400 mr-2">verified</span>
+                                            {% trans "Best Quality" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Highest quality option" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="best_delivery" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">local_shipping</span>
+                                            {% trans "Best Delivery" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Fastest delivery option" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="strategic" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-indigo-600 dark:text-indigo-400 mr-2">business</span>
+                                            {% trans "Strategic" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Strategic business reasons" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="selection_reason" value="other" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-gray-600 dark:text-gray-400 mr-2">more_horiz</span>
+                                            {% trans "Other" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Other reasons" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Comentarios de selección -->
+                    <div>
+                        <label for="selection_comments" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Selection Comments" %}
+                        </label>
+                        <textarea name="selection_comments" id="selection_comments" rows="4"
+                                  class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                  placeholder="{% trans 'Enter detailed comments about why this quotation was selected...' %}"
+                                  required></textarea>
+                    </div>
+
+                    <!-- Próximos pasos -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            {% trans "Next Steps" %}
+                        </label>
+                        <div class="space-y-3">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="create_order" id="create_order" 
+                                       class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                       checked>
+                                <label for="create_order" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                                    {% trans "Create purchase order from this quotation" %}
+                                </label>
+                            </label>
+                            
+                            <label class="flex items-center">
+                                <input type="checkbox" name="notify_supplier" id="notify_supplier" 
+                                       class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                       checked>
+                                <label for="notify_supplier" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                                    {% trans "Notify supplier of selection" %}
+                                </label>
+                            </label>
+                            
+                            <label class="flex items-center">
+                                <input type="checkbox" name="notify_team" id="notify_team" 
+                                       class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                                       checked>
+                                <label for="notify_team" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                                    {% trans "Notify team members of selection" %}
+                                </label>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Impacto de la Selección -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Selection Impact" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-green-600 dark:text-green-400 text-sm">check_circle</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Quotation Status Updated" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "The quotation status will change to 'Selected' and other quotations will be marked as 'Not Selected'." %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 text-sm">receipt</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Purchase Order Creation" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "A purchase order can be created directly from this selected quotation." %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-orange-600 dark:text-orange-400 text-sm">notifications</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Notifications Sent" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "The supplier and relevant team members will be notified of the selection." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmación -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Confirmation" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        <input type="checkbox" name="confirm_selection" id="confirm_selection" 
+                               class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                               required>
+                        <label for="confirm_selection" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                            {% trans "I confirm that I want to select this quotation" %}
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" name="confirm_accurate" id="confirm_accurate" 
+                               class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                               required>
+                        <label for="confirm_accurate" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                            {% trans "I confirm that all information provided above is accurate" %}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="flex justify-between items-center">
+            <a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+                <span class="material-icons mr-2">cancel</span>
+                {% trans "Cancel" %}
+            </a>
+            
+            <button type="submit" class="btn-primary" id="select-button" disabled>
+                <span class="material-icons mr-2">check_circle</span>
+                {% trans "Select Quotation" %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmSelectionCheckbox = document.getElementById('confirm_selection');
+    const confirmAccurateCheckbox = document.getElementById('confirm_accurate');
+    const selectButton = document.getElementById('select-button');
+    
+    function updateSelectButton() {
+        const bothChecked = confirmSelectionCheckbox.checked && confirmAccurateCheckbox.checked;
+        selectButton.disabled = !bothChecked;
+        
+        if (bothChecked) {
+            selectButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            selectButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    // Event listeners
+    confirmSelectionCheckbox.addEventListener('change', updateSelectButton);
+    confirmAccurateCheckbox.addEventListener('change', updateSelectButton);
+    
+    // Inicialización
+    updateSelectButton();
+    
+    // Confirmación antes de enviar
+    document.getElementById('select-quotation-form').addEventListener('submit', function(e) {
+        if (!confirm('{% trans "Are you sure you want to select this quotation? This will mark other quotations as not selected." %}')) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Mostrar loading state
+        selectButton.disabled = true;
+        selectButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Selecting..." %}
+        `;
+    });
+    
+    // Animaciones para las tarjetas de razón de selección
+    const reasonCards = document.querySelectorAll('input[name="selection_reason"]');
+    reasonCards.forEach(card => {
+        card.addEventListener('change', function() {
+            // Remover selección de todas las tarjetas
+            document.querySelectorAll('label[for*="selection_reason"]').forEach(label => {
+                label.classList.remove('ring-2', 'ring-orange-500', 'border-orange-500');
+            });
+            
+            // Agregar selección a la tarjeta seleccionada
+            if (this.checked) {
+                this.closest('label').classList.add('ring-2', 'ring-orange-500', 'border-orange-500');
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

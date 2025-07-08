@@ -34,11 +34,12 @@ class PurchaseReceipt(models.Model):
     
     # Estado de la recepción
     status = models.CharField(_("Status"), max_length=20, choices=[
+        ('draft', _('Draft')),
         ('pending', _('Pending Inspection')),
         ('approved', _('Approved')),
         ('rejected', _('Rejected')),
         ('returned', _('Returned to Supplier')),
-    ], default='pending')
+    ], default='draft')
     
     # Información de calidad
     quality_score = models.PositiveIntegerField(_("Quality Score"), null=True, blank=True, 
@@ -101,7 +102,7 @@ class PurchaseReceipt(models.Model):
             receipt_date__month=month
         ).count() + 1
         
-        return f"PR-{year}{month:02d}-{count:04d}"
+        return f"REC-{year}{month:02d}-{count:04d}"
     
     def approve(self, user, quality_score=None, quality_notes=""):
         """Aprueba la recepción después de la inspección"""

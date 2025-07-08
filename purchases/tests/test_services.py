@@ -59,11 +59,13 @@ class NotificationServiceTest(TestCase):
         """Probar notificación de solicitud creada"""
         request = PurchaseRequest.objects.create(
             empresa=self.empresa,
-            sucursal=self.branch,
+            branch=self.branch,
             title="Solicitud Test",
             requested_by=self.user,
-            currency=self.currency
-        , required_date=timezone.now().date() + timedelta(days=30), delivery_location=self.delivery_location
+            currency=self.currency,
+            required_date=timezone.now().date() + timedelta(days=30),
+            delivery_location=self.delivery_location
+        )
         
         self.notification_service.send_request_created_notification(request)
         

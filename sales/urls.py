@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 app_name = 'sales'
@@ -8,11 +8,22 @@ urlpatterns = [
     path('', views.sales_dashboard, name='dashboard'),
     
     # Gestión de clientes
-    path('clients/', views.client_list, name='client_list'),
-    path('clients/create/', views.client_create, name='client_create'),
-    path('clients/<int:pk>/', views.client_detail, name='client_detail'),
-    path('clients/<int:pk>/edit/', views.client_edit, name='client_edit'),
-    path('clients/<int:pk>/delete/', views.client_delete, name='client_delete'),
+    path('clients/', views.ClientListView.as_view(), name='client_list'),
+    path('clients/create/', views.ClientCreateView.as_view(), name='client_create'),
+    path('clients/<int:pk>/', views.ClientDetailView.as_view(), name='client_detail'),
+    path('clients/<int:pk>/edit/', views.ClientUpdateView.as_view(), name='client_update'),
+    path('clients/<int:pk>/delete/', views.ClientDeleteView.as_view(), name='client_delete'),
+    
+    # Gestión de contactos
+    path('contacts/', views.ContactListView.as_view(), name='contact_list'),
+    path('contacts/create/', views.ContactCreateView.as_view(), name='contact_create'),
+    path('contacts/<int:pk>/', views.ContactDetailView.as_view(), name='contact_detail'),
+    path('contacts/<int:pk>/edit/', views.ContactUpdateView.as_view(), name='contact_update'),
+    path('contacts/<int:pk>/delete/', views.ContactDeleteView.as_view(), name='contact_delete'),
+    
+    # Contactos por cliente
+    path('clients/<int:client_id>/contacts/', views.ContactListView.as_view(), name='client_contacts'),
+    path('clients/<int:client_id>/contacts/add/', views.ContactCreateView.as_view(), name='contact_create_by_client'),
     
     # Gestión de pedidos de venta
     path('orders/', views.sales_order_list, name='sales_order_list'),
@@ -22,7 +33,6 @@ urlpatterns = [
     path('orders/<int:pk>/delete/', views.sales_order_delete, name='sales_order_delete'),
     path('orders/<int:pk>/approve/', views.sales_order_approve, name='sales_order_approve'),
     path('orders/<int:pk>/cancel/', views.sales_order_cancel, name='sales_order_cancel'),
-    path('orders/<int:pk>/invoice/', views.sales_order_create_invoice, name='sales_order_create_invoice'),
     
     # Gestión de facturas
     path('invoices/', views.invoice_list, name='invoice_list'),
@@ -87,4 +97,14 @@ urlpatterns = [
     path('reports/sales-summary/', views.sales_summary_report, name='sales_summary_report'),
     path('reports/client-analysis/', views.client_analysis_report, name='client_analysis_report'),
     path('reports/product-performance/', views.product_performance_report, name='product_performance_report'),
+    
+    # URLs de autocompletado
+    # path('autocomplete/country/', views.autocomplete_country, name='autocomplete_country'),
+    # path('autocomplete/state/', views.autocomplete_state, name='autocomplete_state'),
+    path('autocomplete/city/', views.autocomplete_city, name='autocomplete_city'),
+    path('autocomplete/seller/', views.autocomplete_seller, name='autocomplete_seller'),
+    path('get-states-by-country/', views.get_states_by_country, name='get_states_by_country'),
+    
+    # APIs RESTful
+    path('api/', include('sales.api.urls')),
 ] 

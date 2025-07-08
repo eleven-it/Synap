@@ -1,0 +1,346 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Email Templates" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Email Templates" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Manage email templates for purchase notifications" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button onclick="addNewTemplate()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Add Template" %}
+                    </button>
+                    <a href="{% url 'purchases:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Template Categories -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Template Categories" %}</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('order')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Order Notifications" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "Purchase order related emails" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('approval')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Approval Notifications" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "Approval workflow emails" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('receipt')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Receipt Notifications" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "Goods receipt emails" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('supplier')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-orange-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Supplier Notifications" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "Supplier communication emails" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('alert')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-red-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "Alert Notifications" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "System alert emails" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer" onclick="filterTemplates('all')">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-8 w-8 rounded-full bg-gray-500 flex items-center justify-center">
+                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-medium text-gray-900">{% trans "All Templates" %}</h4>
+                                <p class="text-sm text-gray-500">{% trans "View all email templates" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Templates List -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Email Templates" %}</h3>
+                
+                {% if email_templates %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Template Name" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Category" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Subject" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Status" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Last Modified" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for template in email_templates %}
+                            <tr class="template-row" data-category="{{ template.category }}">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ template.name }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if template.category == 'order' %}bg-blue-100 text-blue-800
+                                        {% elif template.category == 'approval' %}bg-green-100 text-green-800
+                                        {% elif template.category == 'receipt' %}bg-purple-100 text-purple-800
+                                        {% elif template.category == 'supplier' %}bg-orange-100 text-orange-800
+                                        {% elif template.category == 'alert' %}bg-red-100 text-red-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ template.get_category_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ template.subject }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if template.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                        {% if template.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ template.updated_at|date:"M d, Y H:i" }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <button onclick="editTemplate({{ template.pk }})" class="text-blue-600 hover:text-blue-900">
+                                            {% trans "Edit" %}
+                                        </button>
+                                        <button onclick="previewTemplate({{ template.pk }})" class="text-green-600 hover:text-green-900">
+                                            {% trans "Preview" %}
+                                        </button>
+                                        <button onclick="toggleTemplate({{ template.pk }})" class="{% if template.is_active %}text-red-600 hover:text-red-900{% else %}text-green-600 hover:text-green-900{% endif %}">
+                                            {% if template.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+                                        </button>
+                                        <button onclick="deleteTemplate({{ template.pk }})" class="text-red-600 hover:text-red-900">
+                                            {% trans "Delete" %}
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No email templates" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Get started by creating your first email template." %}</p>
+                    <div class="mt-6">
+                        <button onclick="addNewTemplate()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            {% trans "Create Template" %}
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template Modal -->
+<div id="templateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg font-medium text-gray-900 mb-4" id="modalTitle">{% trans "Email Template" %}</h3>
+            
+            <form id="templateForm" method="post">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div>
+                        <label for="template_name" class="block text-sm font-medium text-gray-700">{% trans "Template Name" %}</label>
+                        <input type="text" name="name" id="template_name" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    
+                    <div>
+                        <label for="template_category" class="block text-sm font-medium text-gray-700">{% trans "Category" %}</label>
+                        <select name="category" id="template_category" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                            <option value="order">{% trans "Order Notifications" %}</option>
+                            <option value="approval">{% trans "Approval Notifications" %}</option>
+                            <option value="receipt">{% trans "Receipt Notifications" %}</option>
+                            <option value="supplier">{% trans "Supplier Notifications" %}</option>
+                            <option value="alert">{% trans "Alert Notifications" %}</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="template_subject" class="block text-sm font-medium text-gray-700">{% trans "Subject" %}</label>
+                        <input type="text" name="subject" id="template_subject" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    
+                    <div>
+                        <label for="template_content" class="block text-sm font-medium text-gray-700">{% trans "Content" %}</label>
+                        <textarea name="content" id="template_content" rows="10" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"></textarea>
+                        <p class="mt-1 text-sm text-gray-500">
+                            {% trans "Available variables" %}: {{ order_number }}, {{ supplier_name }}, {{ total_amount }}, {{ user_name }}, {{ company_name }}
+                        </p>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" name="is_active" id="template_active" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="template_active" class="ml-2 block text-sm text-gray-900">
+                            {% trans "Active" %}
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Cancel" %}
+                    </button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Save Template" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+
+function filterTemplates(category) {
+    currentFilter = category;
+    const rows = document.querySelectorAll('.template-row');
+    
+    rows.forEach(row => {
+        if (category === 'all' || row.dataset.category === category) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function addNewTemplate() {
+    document.getElementById('modalTitle').textContent = '{% trans "Add Email Template" %}';
+    document.getElementById('templateForm').reset();
+    document.getElementById('templateForm').action = '{% url "purchases:email_template_create" %}';
+    document.getElementById('templateModal').classList.remove('hidden');
+}
+
+function editTemplate(templateId) {
+    // Fetch template data and populate form
+    fetch(`/purchases/email-templates/${templateId}/`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('modalTitle').textContent = '{% trans "Edit Email Template" %}';
+            document.getElementById('template_name').value = data.name;
+            document.getElementById('template_category').value = data.category;
+            document.getElementById('template_subject').value = data.subject;
+            document.getElementById('template_content').value = data.content;
+            document.getElementById('template_active').checked = data.is_active;
+            document.getElementById('templateForm').action = `/purchases/email-templates/${templateId}/update/`;
+            document.getElementById('templateModal').classList.remove('hidden');
+        });
+}
+
+function previewTemplate(templateId) {
+    // Open preview in new window
+    window.open(`/purchases/email-templates/${templateId}/preview/`, '_blank');
+}
+
+function toggleTemplate(templateId) {
+    if (confirm('{% trans "Are you sure you want to change the template status?" %}')) {
+        fetch(`/purchases/email-templates/${templateId}/toggle/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            }
+        }).then(() => {
+            location.reload();
+        });
+    }
+}
+
+function deleteTemplate(templateId) {
+    if (confirm('{% trans "Are you sure you want to delete this template?" %}')) {
+        fetch(`/purchases/email-templates/${templateId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            }
+        }).then(() => {
+            location.reload();
+        });
+    }
+}
+
+function closeModal() {
+    document.getElementById('templateModal').classList.add('hidden');
+}
+
+// Close modal when clicking outside
+document.getElementById('templateModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+</script>
+{% endblock %} 

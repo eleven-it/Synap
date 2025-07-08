@@ -1,333 +1,294 @@
-{% extends 'core/core_app_base.html' %}
+{% extends 'purchases/purchases_base.html' %}
 {% load static %}
 {% load i18n %}
 
-{% block title %}{% trans "Purchases Dashboard" %} - Synap{% endblock %}
+{% block purchases_title %}{% trans "Purchases Dashboard" %}{% endblock %}
 
-{% block extra_css %}
-<style>
-    .metric-card {
-        @apply bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700;
-        transition: all 0.3s ease;
-    }
-    
-    .metric-card:hover {
-        @apply shadow-lg transform scale-105;
-    }
-    
-    .metric-value {
-        @apply text-3xl font-bold text-gray-900 dark:text-white;
-    }
-    
-    .metric-label {
-        @apply text-sm font-medium text-gray-500 dark:text-gray-400;
-    }
-    
-    .metric-icon {
-        @apply w-8 h-8 text-blue-600 dark:text-blue-400;
-    }
-    
-    .status-badge {
-        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
-    }
-    
-    .status-draft { @apply bg-gray-100 text-gray-800; }
-    .status-pending { @apply bg-yellow-100 text-yellow-800; }
-    .status-approved { @apply bg-green-100 text-green-800; }
-    .status-rejected { @apply bg-red-100 text-red-800; }
-    .status-converted { @apply bg-blue-100 text-blue-800; }
-    
-    .progress-bar {
-        @apply w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700;
-    }
-    
-    .progress-fill {
-        @apply bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300;
-    }
-</style>
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">dashboard</span>
+    {% trans "Dashboard" %}
+</div>
 {% endblock %}
 
-{% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Header -->
-    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-                        {% trans "Purchases Dashboard" %}
-                    </h1>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        {% trans "Manage your purchase operations and supplier relationships" %}
-                    </p>
+{% block purchases_header %}{% trans "Purchases Dashboard" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Overview of your purchasing activities and metrics" %}{% endblock %}
+
+{% block purchases_content %}
+<div class="space-y-6">
+    <!-- Métricas principales -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Solicitudes -->
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <span class="material-icons text-white text-sm">description</span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Requests" %}
+                        </p>
+                        <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            {{ requests_count|default:"0" }}
+                        </p>
+                    </div>
                 </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'purchases:request_create' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
-                        {% trans "New Request" %}
-                    </a>
-                    <a href="{% url 'purchases:supplier_create' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                        {% trans "New Supplier" %}
-                    </a>
+            </div>
+        </div>
+
+        <!-- Órdenes -->
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                            <span class="material-icons text-white text-sm">shopping_cart</span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Orders" %}
+                        </p>
+                        <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            {{ orders_count|default:"0" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proveedores -->
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
+                            <span class="material-icons text-white text-sm">business</span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Suppliers" %}
+                        </p>
+                        <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            {{ suppliers_count|default:"0" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gastos -->
+        <div class="card">
+            <div class="card-body">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                            <span class="material-icons text-white text-sm">attach_money</span>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                            {% trans "Total Spent" %}
+                        </p>
+                        <p class="text-2xl font-semibold text-gray-900 dark:text-white">
+                            ${{ total_spent|default:"0.00" }}
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Metrics Cards -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Total Requests -->
-            <div class="metric-card">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="metric-label">{% trans "Total Requests" %}</dt>
-                            <dd class="metric-value">{{ total_requests }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Pending Requests -->
-            <div class="metric-card">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="metric-label">{% trans "Pending Approval" %}</dt>
-                            <dd class="metric-value">{{ pending_requests }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Total Orders -->
-            <div class="metric-card">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="metric-label">{% trans "Total Orders" %}</dt>
-                            <dd class="metric-value">{{ total_orders }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Overdue Orders -->
-            <div class="metric-card">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="metric-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="metric-label">{% trans "Overdue Orders" %}</dt>
-                            <dd class="metric-value">{{ overdue_orders }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Recent Requests -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                        {% trans "Recent Purchase Requests" %}
-                    </h3>
-                </div>
-                <div class="p-6">
-                    {% if recent_requests %}
-                        <div class="space-y-4">
-                            {% for request in recent_requests %}
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                <div class="flex-1">
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ request.title }}
-                                    </h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                        {{ request.request_date|date:"M d, Y" }} • {{ request.requested_by.get_full_name }}
-                                    </p>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <span class="status-badge status-{{ request.status }}">
-                                        {{ request.get_status_display }}
-                                    </span>
-                                    <a href="{% url 'purchases:request_detail' request.pk %}" 
-                                       class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
-                                    </a>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <div class="mt-4">
-                            <a href="{% url 'purchases:request_list' %}" 
-                               class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                {% trans "View all requests" %} →
-                            </a>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-8">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans "No requests" %}</h3>
-                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Get started by creating a new purchase request." %}</p>
-                            <div class="mt-6">
-                                <a href="{% url 'purchases:request_create' %}" 
-                                   class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    {% trans "New Request" %}
-                                </a>
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Recent Orders -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                        {% trans "Recent Purchase Orders" %}
-                    </h3>
-                </div>
-                <div class="p-6">
-                    {% if recent_orders %}
-                        <div class="space-y-4">
-                            {% for order in recent_orders %}
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                <div class="flex-1">
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ order.order_number }}
-                                    </h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                                        {{ order.supplier.name }} • {{ order.order_date|date:"M d, Y" }}
-                                    </p>
-                                </div>
-                                <div class="flex items-center space-x-2">
-                                    <span class="status-badge status-{{ order.status }}">
-                                        {{ order.get_status_display }}
-                                    </span>
-                                    <a href="{% url 'purchases:order_detail' order.pk %}" 
-                                       class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
-                                    </a>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        <div class="mt-4">
-                            <a href="{% url 'purchases:order_list' %}" 
-                               class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                {% trans "View all orders" %} →
-                            </a>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-8">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                            </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans "No orders" %}</h3>
-                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Purchase orders will appear here once created." %}</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+    <!-- Estado de solicitudes -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="card">
+            <div class="card-header">
                 <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                    {% trans "Quick Actions" %}
+                    {% trans "Request Status" %}
                 </h3>
             </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <a href="{% url 'purchases:request_create' %}" 
-                       class="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors duration-200">
-                        <svg class="w-8 h-8 text-blue-600 dark:text-blue-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Create Request" %}</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{% trans "Start a new purchase request" %}</p>
-                        </div>
-                    </a>
-                    
-                    <a href="{% url 'purchases:supplier_create' %}" 
-                       class="flex items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors duration-200">
-                        <svg class="w-8 h-8 text-green-600 dark:text-green-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                        </svg>
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Add Supplier" %}</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{% trans "Register a new supplier" %}</p>
-                        </div>
-                    </a>
-                    
-                    <a href="{% url 'purchases:reports' %}" 
-                       class="flex items-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors duration-200">
-                        <svg class="w-8 h-8 text-purple-600 dark:text-purple-400 mr-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "View Reports" %}</h4>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{% trans "Analyze purchase data" %}</p>
-                        </div>
-                    </a>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Draft" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ draft_requests|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Pending Approval" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ pending_requests|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Approved" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ approved_requests|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Rejected" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ rejected_requests|default:"0" }}</span>
+                    </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Estado de órdenes -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Order Status" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Draft" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ draft_orders|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Sent" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ sent_orders|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Confirmed" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ confirmed_orders|default:"0" }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Received" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ received_orders|default:"0" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas y notificaciones -->
+    {% if alerts %}
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Alerts & Notifications" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="space-y-4">
+                {% for alert in alerts %}
+                <div class="flex items-start p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div class="flex-shrink-0">
+                        <span class="material-icons text-yellow-400">warning</span>
+                    </div>
+                    <div class="ml-3">
+                        <h4 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            {{ alert.title }}
+                        </h4>
+                        <p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                            {{ alert.message }}
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actividad reciente -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Recent Activity" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            {% if recent_activity %}
+                <div class="space-y-4">
+                    {% for activity in recent_activity %}
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                                <span class="material-icons text-gray-500 dark:text-gray-400 text-sm">
+                                    {{ activity.icon|default:"info" }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                {{ activity.title }}
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ activity.description }}
+                            </p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ activity.timestamp|timesince }}
+                            </p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-8">
+                    <div class="mx-auto h-12 w-12 text-gray-400">
+                        <span class="material-icons text-4xl">info</span>
+                    </div>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                        {% trans "No recent activity" %}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Start by creating a purchase request or order." %}
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Quick Actions" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <a href="{% url 'purchases:document_create' %}?type=request" class="btn-primary">
+                    <span class="material-icons mr-2">add</span>
+                    {% trans "New Request" %}
+                </a>
+                <a href="{% url 'purchases:document_create' %}?type=order" class="btn-secondary">
+                    <span class="material-icons mr-2">shopping_cart</span>
+                    {% trans "New Order" %}
+                </a>
+                <a href="{% url 'purchases:document_list' %}" class="btn-secondary">
+                    <span class="material-icons mr-2">list</span>
+                    {% trans "View Documents" %}
+                </a>
+                <a href="{% url 'purchases:supplier_create' %}" class="btn-secondary">
+                    <span class="material-icons mr-2">business</span>
+                    {% trans "New Supplier" %}
+                </a>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-    // Animaciones de entrada
-    document.addEventListener('DOMContentLoaded', function() {
-        const cards = document.querySelectorAll('.metric-card');
-        cards.forEach((card, index) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(20px)';
-            setTimeout(() => {
-                card.style.transition = 'all 0.5s ease';
-                card.style.opacity = '1';
-                card.style.transform = 'translateY(0)';
-            }, index * 100);
-        });
+// Animaciones de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
     });
+});
 </script>
 {% endblock %} 

@@ -1,0 +1,419 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Supplier Ratings" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">business</span>
+    <a href="{% url 'purchases:supplier_list' %}">{% trans "Suppliers" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">star</span>
+    {% trans "Ratings" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Supplier Ratings" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Evaluate and manage supplier performance ratings" %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:supplier_list' %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Back to Suppliers" %}
+</a>
+<a href="{% url 'purchases:rating_create' %}" class="btn-primary">
+    <span class="material-icons mr-2">add</span>
+    {% trans "New Rating" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="space-y-6">
+    <!-- Filtros y búsqueda -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Filters and Search" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="get" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label for="supplier" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Supplier" %}
+                        </label>
+                        <select name="supplier" id="supplier" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">{% trans "All Suppliers" %}</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.id }}" {% if request.GET.supplier == supplier.id|stringformat:"s" %}selected{% endif %}>
+                                {{ supplier.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="rating_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Rating Type" %}
+                        </label>
+                        <select name="rating_type" id="rating_type" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">{% trans "All Types" %}</option>
+                            <option value="quality" {% if request.GET.rating_type == 'quality' %}selected{% endif %}>{% trans "Quality" %}</option>
+                            <option value="delivery" {% if request.GET.rating_type == 'delivery' %}selected{% endif %}>{% trans "Delivery" %}</option>
+                            <option value="price" {% if request.GET.rating_type == 'price' %}selected{% endif %}>{% trans "Price" %}</option>
+                            <option value="service" {% if request.GET.rating_type == 'service' %}selected{% endif %}>{% trans "Service" %}</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="min_score" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Min Score" %}
+                        </label>
+                        <input type="number" name="min_score" id="min_score" min="1" max="5" step="0.1" 
+                               value="{{ request.GET.min_score|default:'' }}"
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               placeholder="1.0">
+                    </div>
+                    
+                    <div>
+                        <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Date From" %}
+                        </label>
+                        <input type="date" name="date_from" id="date_from" 
+                               value="{{ request.GET.date_from|default:'' }}"
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-3">
+                        <button type="submit" class="btn-primary">
+                            <span class="material-icons mr-2">search</span>
+                            {% trans "Apply Filters" %}
+                        </button>
+                        <a href="{% url 'purchases:rating_list' %}" class="btn-secondary">
+                            <span class="material-icons mr-2">clear</span>
+                            {% trans "Clear Filters" %}
+                        </a>
+                    </div>
+                    
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Showing" %} {{ page_obj.start_index }}-{{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "ratings" %}
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de Ratings -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Supplier Ratings" %}
+                </h3>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Average Score" %}:</span>
+                    <div class="flex items-center">
+                        <span class="text-lg font-bold text-orange-600 dark:text-orange-400">{{ average_score|floatformat:1 }}</span>
+                        <span class="material-icons text-orange-600 dark:text-orange-400 ml-1">star</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if ratings %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Supplier" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Rating Type" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Score" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Comments" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Rated By" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Date" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Actions" %}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for rating in ratings %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center mr-3">
+                                            <span class="material-icons text-blue-600 dark:text-blue-400 text-sm">business</span>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                                {{ rating.supplier.name }}
+                                            </div>
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ rating.supplier.code }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                        {% if rating.rating_type == 'quality' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                                        {% elif rating.rating_type == 'delivery' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300
+                                        {% elif rating.rating_type == 'price' %}bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300
+                                        {% else %}bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300{% endif %}">
+                                        {{ rating.get_rating_type_display }}
+                                    </span>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="flex items-center mr-2">
+                                            {% for i in "12345" %}
+                                            <span class="material-icons text-sm {% if forloop.counter <= rating.score %}text-yellow-400{% else %}text-gray-300 dark:text-gray-600{% endif %}">
+                                                star
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="text-sm font-medium text-gray-900 dark:text-white">
+                                            {{ rating.score }}/5
+                                        </span>
+                                    </div>
+                                </td>
+                                
+                                <td class="px-6 py-4">
+                                    <div class="text-sm text-gray-900 dark:text-white max-w-xs truncate" title="{{ rating.comments }}">
+                                        {{ rating.comments|truncatechars:50|default:"No comments" }}
+                                    </div>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-full flex items-center justify-center mr-2">
+                                            <span class="material-icons text-gray-600 dark:text-gray-400 text-sm">person</span>
+                                        </div>
+                                        <span class="text-sm text-gray-900 dark:text-white">
+                                            {{ rating.rated_by.get_full_name|default:rating.rated_by.username }}
+                                        </span>
+                                    </div>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {{ rating.created_at|date:"M d, Y" }}
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <a href="{% url 'purchases:rating_detail' rating.pk %}" 
+                                           class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 transition-colors">
+                                            <span class="material-icons text-sm">visibility</span>
+                                        </a>
+                                        <a href="{% url 'purchases:rating_update' rating.pk %}" 
+                                           class="text-orange-600 dark:text-orange-400 hover:text-orange-900 dark:hover:text-orange-300 transition-colors">
+                                            <span class="material-icons text-sm">edit</span>
+                                        </a>
+                                        <button onclick="deleteRating({{ rating.pk }})" 
+                                                class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 transition-colors">
+                                            <span class="material-icons text-sm">delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Paginación -->
+                {% if is_paginated %}
+                <div class="mt-6 flex items-center justify-between">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="btn-secondary">
+                            {% trans "Previous" %}
+                        </a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                           class="btn-secondary">
+                            {% trans "Next" %}
+                        </a>
+                        {% endif %}
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                {% trans "Showing" %} <span class="font-medium">{{ page_obj.start_index }}</span> {% trans "to" %} <span class="font-medium">{{ page_obj.end_index }}</span> {% trans "of" %} <span class="font-medium">{{ page_obj.paginator.count }}</span> {% trans "results" %}
+                            </p>
+                        </div>
+                        <div>
+                            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                                {% if page_obj.has_previous %}
+                                <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <span class="material-icons text-sm">chevron_left</span>
+                                </a>
+                                {% endif %}
+                                
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                    <span class="relative inline-flex items-center px-4 py-2 border border-orange-500 bg-orange-50 dark:bg-orange-900/20 text-sm font-medium text-orange-600 dark:text-orange-400">
+                                        {{ num }}
+                                    </span>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <a href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                        {{ num }}
+                                    </a>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page_obj.has_next %}
+                                <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                                   class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <span class="material-icons text-sm">chevron_right</span>
+                                </a>
+                                {% endif %}
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <!-- Estado vacío -->
+                <div class="text-center py-12">
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <span class="material-icons text-gray-400 text-3xl">star</span>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "No Ratings Found" %}</h3>
+                    <p class="text-gray-500 dark:text-gray-400 mb-6">
+                        {% trans "No supplier ratings match your current filters. Try adjusting your search criteria or create a new rating." %}
+                    </p>
+                    <a href="{% url 'purchases:rating_create' %}" class="btn-primary">
+                        <span class="material-icons mr-2">add</span>
+                        {% trans "Create First Rating" %}
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    {% if ratings %}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="metric-card">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-lg flex items-center justify-center">
+                        <span class="material-icons text-green-600 dark:text-green-400">star</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="metric-label">{% trans "Average Score" %}</p>
+                    <p class="metric-value">{{ average_score|floatformat:1 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg flex items-center justify-center">
+                        <span class="material-icons text-blue-600 dark:text-blue-400">business</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="metric-label">{% trans "Rated Suppliers" %}</p>
+                    <p class="metric-value">{{ rated_suppliers_count }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-lg flex items-center justify-center">
+                        <span class="material-icons text-orange-600 dark:text-orange-400">assessment</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="metric-label">{% trans "Total Ratings" %}</p>
+                    <p class="metric-value">{{ total_ratings_count }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="metric-card">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/30 dark:to-purple-800/30 rounded-lg flex items-center justify-center">
+                        <span class="material-icons text-purple-600 dark:text-purple-400">trending_up</span>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="metric-label">{% trans "This Month" %}</p>
+                    <p class="metric-value">{{ this_month_count }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function deleteRating(ratingId) {
+    PurchasesApp.confirmAction('{% trans "Are you sure you want to delete this rating? This action cannot be undone." %}', function() {
+        fetch(`/purchases/ratings/${ratingId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                PurchasesApp.showNotification('{% trans "Rating deleted successfully" %}', 'success');
+                window.location.reload();
+            } else {
+                PurchasesApp.showNotification(data.message || '{% trans "Error deleting rating" %}', 'error');
+            }
+        })
+        .catch(error => {
+            PurchasesApp.showNotification('{% trans "Network error occurred" %}', 'error');
+        });
+    });
+}
+
+// Animaciones para las métricas
+document.addEventListener('DOMContentLoaded', function() {
+    const metricCards = document.querySelectorAll('.metric-card');
+    metricCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+{% endblock %} 

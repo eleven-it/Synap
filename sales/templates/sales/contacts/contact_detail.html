@@ -1,0 +1,586 @@
+{% extends "sales/sales_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{{ contact.get_full_name }} - {% trans "Contact Details" %} - {% trans "Sales" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .detail-header {
+        @apply border-b border-gray-200 dark:border-gray-700 pb-4 mb-6;
+    }
+    
+    .contact-avatar {
+        @apply w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full 
+               flex items-center justify-center text-white font-bold text-2xl mb-4;
+    }
+    
+    .detail-title {
+        @apply text-2xl font-bold text-gray-900 dark:text-white mb-2;
+    }
+    
+    .detail-subtitle {
+        @apply text-gray-600 dark:text-gray-400;
+    }
+    
+    .detail-section {
+        @apply mb-6;
+    }
+    
+    .detail-section h3 {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    
+    .detail-section h3::before {
+        content: '';
+        @apply w-1 h-6 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full mr-3;
+    }
+    
+    .detail-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    }
+    
+    .detail-item {
+        @apply space-y-1;
+    }
+    
+    .detail-label {
+        @apply text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide;
+    }
+    
+    .detail-value {
+        @apply text-gray-900 dark:text-white font-medium;
+    }
+    
+    .detail-value.empty {
+        @apply text-gray-400 dark:text-gray-500 italic;
+    }
+    
+    .status-badge {
+        @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+    }
+    
+    .status-active {
+        @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+    }
+    
+    .status-inactive {
+        @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+    }
+    
+    .status-former {
+        @apply bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200;
+    }
+    
+    .role-badge {
+        @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+    }
+    
+    .role-primary {
+        @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
+    }
+    
+    .role-secondary {
+        @apply bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200;
+    }
+    
+    .role-decision {
+        @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200;
+    }
+    
+    .role-technical {
+        @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+    }
+    
+    .role-billing {
+        @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+    }
+    
+    .role-support {
+        @apply bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-2 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .btn-danger {
+        @apply bg-red-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-red-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .action-buttons {
+        @apply flex flex-wrap gap-3;
+    }
+    
+    .tag-list {
+        @apply flex flex-wrap gap-2;
+    }
+    
+    .tag {
+        @apply bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full text-xs;
+    }
+    
+    .contact-info-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+    }
+    
+    .contact-method {
+        @apply flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600;
+    }
+    
+    .contact-icon {
+        @apply w-10 h-10 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center mr-3;
+    }
+    
+    .contact-details {
+        @apply flex-1;
+    }
+    
+    .contact-type {
+        @apply text-sm font-medium text-gray-900 dark:text-white;
+    }
+    
+    .contact-value {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Contact Details" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Complete information about this contact" %}
+                    </p>
+                </div>
+                <div class="action-buttons">
+                    <a href="{% url 'sales:contact_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to List" %}
+                    </a>
+                    <a href="{% url 'sales:contact_update' contact.pk %}" class="btn-primary">
+                        <i class="fas fa-edit mr-2"></i>
+                        {% trans "Edit Contact" %}
+                    </a>
+                    <a href="{% url 'sales:contact_delete' contact.pk %}" class="btn-danger">
+                        <i class="fas fa-trash mr-2"></i>
+                        {% trans "Delete" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Header -->
+        <div class="detail-card">
+            <div class="detail-header">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div class="contact-avatar">
+                            {{ contact.get_initials }}
+                        </div>
+                        <div class="ml-6">
+                            <h2 class="detail-title">{{ contact.get_full_name }}</h2>
+                            <p class="detail-subtitle">
+                                {% if contact.role %}
+                                    <span class="role-badge 
+                                        {% if contact.role == 'primary' %}role-primary
+                                        {% elif contact.role == 'secondary' %}role-secondary
+                                        {% elif contact.role == 'decision_maker' %}role-decision
+                                        {% elif contact.role == 'technical' %}role-technical
+                                        {% elif contact.role == 'billing' %}role-billing
+                                        {% elif contact.role == 'support' %}role-support
+                                        {% endif %}">
+                                        {% if contact.role == 'primary' %}{% trans "Primary Contact" %}
+                                        {% elif contact.role == 'secondary' %}{% trans "Secondary Contact" %}
+                                        {% elif contact.role == 'decision_maker' %}{% trans "Decision Maker" %}
+                                        {% elif contact.role == 'technical' %}{% trans "Technical Contact" %}
+                                        {% elif contact.role == 'billing' %}{% trans "Billing Contact" %}
+                                        {% elif contact.role == 'support' %}{% trans "Support Contact" %}
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+                                • 
+                                <span class="status-badge 
+                                    {% if contact.status == 'active' %}status-active
+                                    {% elif contact.status == 'inactive' %}status-inactive
+                                    {% elif contact.status == 'former' %}status-former
+                                    {% endif %}">
+                                    {% if contact.status == 'active' %}{% trans "Active" %}
+                                    {% elif contact.status == 'inactive' %}{% trans "Inactive" %}
+                                    {% elif contact.status == 'former' %}{% trans "Former" %}
+                                    {% endif %}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "Created" %}</p>
+                        <p class="text-gray-900 dark:text-white font-medium">{{ contact.created_at|date:"M d, Y" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="contact-info-grid">
+            <!-- Basic Information -->
+            <div class="detail-card">
+                <div class="detail-section">
+                    <h3>{% trans "Basic Information" %}</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "First Name" %}</div>
+                            <div class="detail-value">{{ contact.first_name }}</div>
+                        </div>
+                        
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Last Name" %}</div>
+                            <div class="detail-value">{{ contact.last_name }}</div>
+                        </div>
+                        
+                        {% if contact.middle_name %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Middle Name" %}</div>
+                            <div class="detail-value">{{ contact.middle_name }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.birth_date %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Birth Date" %}</div>
+                            <div class="detail-value">{{ contact.birth_date|date:"M d, Y" }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.gender %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Gender" %}</div>
+                            <div class="detail-value">
+                                {% if contact.gender == 'M' %}{% trans "Male" %}
+                                {% elif contact.gender == 'F' %}{% trans "Female" %}
+                                {% elif contact.gender == 'O' %}{% trans "Other" %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.client %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Client" %}</div>
+                            <div class="detail-value">
+                                <a href="{% url 'sales:client_detail' contact.client.pk %}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.client.get_display_name }}
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Professional Information -->
+            <div class="detail-card">
+                <div class="detail-section">
+                    <h3>{% trans "Professional Information" %}</h3>
+                    <div class="detail-grid">
+                        {% if contact.position %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Position" %}</div>
+                            <div class="detail-value">{{ contact.position }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.department %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Department" %}</div>
+                            <div class="detail-value">{{ contact.department }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.company %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Company" %}</div>
+                            <div class="detail-value">{{ contact.company }}</div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.work_phone %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Work Phone" %}</div>
+                            <div class="detail-value">
+                                <a href="tel:{{ contact.work_phone }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.work_phone }}
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if contact.work_email %}
+                        <div class="detail-item">
+                            <div class="detail-label">{% trans "Work Email" %}</div>
+                            <div class="detail-value">
+                                <a href="mailto:{{ contact.work_email }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.work_email }}
+                                </a>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if contact.professional_notes %}
+                    <div class="mt-4">
+                        <div class="detail-label">{% trans "Professional Notes" %}</div>
+                        <div class="detail-value">{{ contact.professional_notes }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Methods -->
+        {% if contact.email or contact.phone or contact.mobile or contact.alternative_email or contact.alternative_phone or contact.fax or contact.skype or contact.whatsapp or contact.linkedin %}
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Contact Methods" %}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% if contact.email %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-envelope text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Email" %}</div>
+                            <div class="contact-value">
+                                <a href="mailto:{{ contact.email }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.email }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.phone %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-phone text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Phone" %}</div>
+                            <div class="contact-value">
+                                <a href="tel:{{ contact.phone }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.phone }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.mobile %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-mobile-alt text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Mobile" %}</div>
+                            <div class="contact-value">
+                                <a href="tel:{{ contact.mobile }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.mobile }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.alternative_email %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-envelope-open text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Alternative Email" %}</div>
+                            <div class="contact-value">
+                                <a href="mailto:{{ contact.alternative_email }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.alternative_email }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.alternative_phone %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-phone-square text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Alternative Phone" %}</div>
+                            <div class="contact-value">
+                                <a href="tel:{{ contact.alternative_phone }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.alternative_phone }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.fax %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fas fa-fax text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Fax" %}</div>
+                            <div class="contact-value">
+                                <a href="tel:{{ contact.fax }}" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.fax }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.skype %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fab fa-skype text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "Skype" %}</div>
+                            <div class="contact-value">{{ contact.skype }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.whatsapp %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fab fa-whatsapp text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "WhatsApp" %}</div>
+                            <div class="contact-value">
+                                <a href="https://wa.me/{{ contact.whatsapp }}" target="_blank" class="text-orange-600 hover:text-orange-700">
+                                    {{ contact.whatsapp }}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.linkedin %}
+                    <div class="contact-method">
+                        <div class="contact-icon">
+                            <i class="fab fa-linkedin text-orange-600"></i>
+                        </div>
+                        <div class="contact-details">
+                            <div class="contact-type">{% trans "LinkedIn" %}</div>
+                            <div class="contact-value">
+                                <a href="{{ contact.linkedin }}" target="_blank" class="text-orange-600 hover:text-orange-700">
+                                    {% trans "View Profile" %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Address -->
+        {% if contact.address %}
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Address" %}</h3>
+                <div class="detail-value">{{ contact.address|linebreaks }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Preferences & Settings -->
+        <div class="detail-card">
+            <div class="detail-section">
+                <h3>{% trans "Preferences & Settings" %}</h3>
+                <div class="detail-grid">
+                    {% if contact.preferred_language %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Preferred Language" %}</div>
+                        <div class="detail-value">
+                            {% if contact.preferred_language == 'es' %}{% trans "Spanish" %}
+                            {% elif contact.preferred_language == 'en' %}{% trans "English" %}
+                            {% elif contact.preferred_language == 'pt' %}{% trans "Portuguese" %}
+                            {% elif contact.preferred_language == 'fr' %}{% trans "French" %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.timezone %}
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Time Zone" %}</div>
+                        <div class="detail-value">{{ contact.timezone }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="detail-item">
+                        <div class="detail-label">{% trans "Communication Preferences" %}</div>
+                        <div class="detail-value">
+                            <div class="space-y-1">
+                                {% if contact.email_notifications %}
+                                    <div class="text-green-600">✓ {% trans "Email notifications" %}</div>
+                                {% endif %}
+                                {% if contact.sms_notifications %}
+                                    <div class="text-green-600">✓ {% trans "SMS notifications" %}</div>
+                                {% endif %}
+                                {% if contact.marketing_communications %}
+                                    <div class="text-green-600">✓ {% trans "Marketing communications" %}</div>
+                                {% endif %}
+                                {% if not contact.email_notifications and not contact.sms_notifications and not contact.marketing_communications %}
+                                    <div class="text-gray-400">{% trans "No preferences set" %}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if contact.tags %}
+                <div class="mt-4">
+                    <div class="detail-label">{% trans "Tags" %}</div>
+                    <div class="tag-list">
+                        {% for tag in contact.tags_list %}
+                            <span class="tag">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if contact.notes %}
+                <div class="mt-4">
+                    <div class="detail-label">{% trans "Notes" %}</div>
+                    <div class="detail-value">{{ contact.notes|linebreaks }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

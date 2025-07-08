@@ -1,0 +1,70 @@
+{% extends 'base_app.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Delete Contact" %} - Synap{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900 mb-4">
+                <span class="material-icons text-red-600 dark:text-red-400 text-xl">warning</span>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                {% trans "Delete Contact" %}
+            </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {% trans "Are you sure you want to delete this contact?" %}
+            </p>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                {% if contact.photo %}
+                    <img class="h-10 w-10 rounded-full object-cover" src="{{ contact.photo.url }}" alt="{{ contact.name }}">
+                {% else %}
+                    <div class="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                        <span class="text-white font-medium text-sm">{{ contact.name|first|upper }}</span>
+                    </div>
+                {% endif %}
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">{{ contact.display_name }}</p>
+                    {% if contact.email %}
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ contact.email }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning -->
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+            <div class="flex">
+                <span class="material-icons text-yellow-400 mr-3">info</span>
+                <div class="text-sm text-yellow-800 dark:text-yellow-200">
+                    <p class="font-medium">{% trans "Warning" %}</p>
+                    <p class="mt-1">
+                        {% trans "This action cannot be undone. All relationships with this contact will also be removed." %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form method="post">
+            {% csrf_token %}
+            <div class="flex justify-end space-x-3">
+                <a href="{% url 'core:contact_detail' contact.pk %}" class="btn-secondary">
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="btn-danger">
+                    <span class="material-icons mr-2">delete</span>
+                    {% trans "Delete Contact" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

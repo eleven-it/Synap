@@ -1,0 +1,306 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Delete Quotation" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">description</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">visibility</span>
+    <a href="{% url 'purchases:quotation_detail' quotation.pk %}">{{ quotation.quotation_number }}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">delete</span>
+    {% trans "Delete" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Delete Quotation" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Confirm deletion of quotation" %} "{{ quotation.quotation_number }}"{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:quotation_detail' quotation.pk %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Cancel" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card">
+        <div class="card-header">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/30 dark:to-red-800/30 rounded-full flex items-center justify-center mr-4">
+                    <span class="material-icons text-red-600 dark:text-red-400 text-2xl">warning</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Delete Quotation" %}
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "This action cannot be undone" %}
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Información de la cotización a eliminar -->
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center">
+                        <span class="material-icons text-blue-600 dark:text-blue-400">description</span>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white">{{ quotation.quotation_number }}</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ quotation.title|default:quotation.quotation_number }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Advertencias -->
+            <div class="space-y-4 mb-6">
+                <div class="flex items-start space-x-3">
+                    <span class="material-icons text-red-500 mt-0.5">error</span>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Warning" %}</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {% trans "Deleting this quotation will permanently remove all associated data including:" %}
+                        </p>
+                    </div>
+                </div>
+                
+                <ul class="ml-8 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                    <li class="flex items-center">
+                        <span class="material-icons text-red-500 text-sm mr-2">remove</span>
+                        {% trans "Quotation details and line items" %}
+                    </li>
+                    <li class="flex items-center">
+                        <span class="material-icons text-red-500 text-sm mr-2">remove</span>
+                        {% trans "Supplier responses and pricing" %}
+                    </li>
+                    <li class="flex items-center">
+                        <span class="material-icons text-red-500 text-sm mr-2">remove</span>
+                        {% trans "Evaluation and comparison data" %}
+                    </li>
+                    <li class="flex items-center">
+                        <span class="material-icons text-red-500 text-sm mr-2">remove</span>
+                        {% trans "Related purchase orders (if any)" %}
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Estadísticas de la cotización -->
+            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">{% trans "Quotation Statistics" %}</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Quotation Date" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.quotation_date|date:"M d, Y" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Status" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.get_status_display }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Deadline" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.deadline|date:"M d, Y"|default:"N/A" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Currency" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.currency.code }} ({{ quotation.currency.symbol }})</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Line Items" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.lines.count }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Created By" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ quotation.created_by.get_full_name|default:quotation.created_by.username }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulario de confirmación -->
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                
+                <div>
+                    <label for="confirmation_text" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans "Type the quotation number to confirm deletion" %}
+                    </label>
+                    <input type="text" name="confirmation_text" id="confirmation_text" 
+                           class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-red-500 focus:border-red-500"
+                           placeholder="{{ quotation.quotation_number }}"
+                           required>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Please type" %} <strong>{{ quotation.quotation_number }}</strong> {% trans "to confirm deletion" %}
+                    </p>
+                </div>
+
+                <div class="flex items-center">
+                    <input type="checkbox" name="confirm_deletion" id="confirm_deletion" 
+                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                           required>
+                    <label for="confirm_deletion" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                        {% trans "I understand that this action cannot be undone and I want to proceed with the deletion" %}
+                    </label>
+                </div>
+
+                <!-- Botones de acción -->
+                <div class="flex space-x-4">
+                    <a href="{% url 'purchases:quotation_detail' quotation.pk %}" 
+                       class="flex-1 flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200">
+                        <span class="material-icons mr-2">cancel</span>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" 
+                            class="flex-1 flex justify-center items-center px-4 py-2 border border-transparent text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            id="delete-button" disabled>
+                        <span class="material-icons mr-2">delete</span>
+                        {% trans "Delete Quotation" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Información adicional -->
+    <div class="mt-6 card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Alternative Actions" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <div class="space-y-4">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="material-icons text-blue-600 dark:text-blue-400 text-sm">edit</span>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Edit Quotation" %}</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {% trans "Instead of deleting, you can edit the quotation to update or correct any details." %}
+                        </p>
+                        <a href="{% url 'purchases:quotation_update' quotation.pk %}" 
+                           class="inline-flex items-center mt-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
+                            {% trans "Edit quotation" %}
+                            <span class="material-icons text-sm ml-1">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="material-icons text-orange-600 dark:text-orange-400 text-sm">content_copy</span>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Duplicate Quotation" %}</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {% trans "Create a copy of this quotation to preserve the information while removing the original." %}
+                        </p>
+                        <a href="{% url 'purchases:quotation_duplicate' quotation.pk %}" 
+                           class="inline-flex items-center mt-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300">
+                            {% trans "Duplicate quotation" %}
+                            <span class="material-icons text-sm ml-1">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+                
+                {% if quotation.status == 'draft' %}
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span class="material-icons text-green-600 dark:text-green-400 text-sm">archive</span>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Archive Quotation" %}</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">
+                            {% trans "Archive the quotation instead of deleting to preserve historical data." %}
+                        </p>
+                        <button onclick="archiveQuotation({{ quotation.pk }})" 
+                                class="inline-flex items-center mt-2 text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300">
+                            {% trans "Archive quotation" %}
+                            <span class="material-icons text-sm ml-1">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmationInput = document.getElementById('confirmation_text');
+    const confirmCheckbox = document.getElementById('confirm_deletion');
+    const deleteButton = document.getElementById('delete-button');
+    const quotationNumber = '{{ quotation.quotation_number }}';
+    
+    function validateForm() {
+        const textMatches = confirmationInput.value.trim() === quotationNumber;
+        const checkboxChecked = confirmCheckbox.checked;
+        
+        deleteButton.disabled = !(textMatches && checkboxChecked);
+        
+        if (textMatches && checkboxChecked) {
+            deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    confirmationInput.addEventListener('input', validateForm);
+    confirmCheckbox.addEventListener('change', validateForm);
+    
+    // Validación inicial
+    validateForm();
+    
+    // Confirmación adicional antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!confirm('{% trans "Are you absolutely sure you want to delete this quotation? This action cannot be undone." %}')) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Mostrar loading state
+        deleteButton.disabled = true;
+        deleteButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Deleting..." %}
+        `;
+    });
+});
+
+function archiveQuotation(quotationId) {
+    PurchasesApp.confirmAction('{% trans "Are you sure you want to archive this quotation? This will mark the quotation as archived but preserve all data." %}', function() {
+        fetch(`/purchases/quotations/${quotationId}/archive/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                PurchasesApp.showNotification('{% trans "Quotation archived successfully" %}', 'success');
+                window.location.href = '{% url "purchases:quotation_list" %}';
+            } else {
+                PurchasesApp.showNotification(data.message || '{% trans "Error archiving quotation" %}', 'error');
+            }
+        })
+        .catch(error => {
+            PurchasesApp.showNotification('{% trans "Network error occurred" %}', 'error');
+        });
+    });
+}
+</script>
+{% endblock %} 

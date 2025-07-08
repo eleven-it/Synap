@@ -1,0 +1,478 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block page_title %}
+    <div class="flex items-center space-x-4 relative z-20">
+        <div>
+            <span class="text-xl font-semibold text-gray-900 dark:text-white">
+                {% if document_type == 'request' %}{% trans 'Purchase Request' %}{% else %}{% trans 'Purchase Order' %}{% endif %}
+            </span>
+            <span class="ml-2">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                    {% if document %}
+                        {% if document.status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200
+                        {% elif document.status == 'submitted' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                        {% elif document.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif document.status == 'quotation_requested' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                        {% elif document.status == 'quotation_received' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200
+                        {% elif document.status == 'order_created' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                        {% elif document.status == 'order_sent' %}bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200
+                        {% elif document.status == 'order_confirmed' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200
+                        {% elif document.status == 'partially_received' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                        {% elif document.status == 'fully_received' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200
+                        {% elif document.status == 'invoiced' %}bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200
+                        {% elif document.status == 'paid' %}bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200
+                        {% elif document.status == 'completed' %}bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100
+                        {% elif document.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% elif document.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}
+                    {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                    {% if document %}
+                        {% if document.status == 'draft' %}{% trans 'Draft' %}
+                        {% elif document.status == 'submitted' %}{% trans 'Submitted' %}
+                        {% elif document.status == 'approved' %}{% trans 'Approved' %}
+                        {% elif document.status == 'quotation_requested' %}{% trans 'Quotation Requested' %}
+                        {% elif document.status == 'quotation_received' %}{% trans 'Quotation Received' %}
+                        {% elif document.status == 'order_created' %}{% trans 'Order Created' %}
+                        {% elif document.status == 'order_sent' %}{% trans 'Order Sent' %}
+                        {% elif document.status == 'order_confirmed' %}{% trans 'Order Confirmed' %}
+                        {% elif document.status == 'partially_received' %}{% trans 'Partially Received' %}
+                        {% elif document.status == 'fully_received' %}{% trans 'Fully Received' %}
+                        {% elif document.status == 'invoiced' %}{% trans 'Invoiced' %}
+                        {% elif document.status == 'paid' %}{% trans 'Paid' %}
+                        {% elif document.status == 'completed' %}{% trans 'Completed' %}
+                        {% elif document.status == 'cancelled' %}{% trans 'Cancelled' %}
+                        {% elif document.status == 'rejected' %}{% trans 'Rejected' %}
+                        {% else %}{% trans 'Draft' %}{% endif %}
+                    {% else %}{% trans 'Draft' %}{% endif %}
+                </span>
+            </span>
+        </div>
+        <span class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {% if document %}{% trans 'Editing document' %}{% else %}{% trans 'Creating new document' %}{% endif %}
+        </span>
+    </div>
+{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'purchases:order_list' %}" 
+       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {% trans 'Back' %}
+    </a>
+    <button type="button" id="preview-btn" 
+            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+        {% trans 'Preview' %}
+    </button>
+    <button type="button" id="send-email-btn" 
+            class="inline-flex items-center px-4 py-2 border border-synap-300 dark:border-synap-600 text-sm font-medium rounded-md text-synap-700 dark:text-synap-300 bg-synap-50 dark:bg-synap-900 hover:bg-synap-100 dark:hover:bg-synap-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+        </svg>
+        {% trans 'Send by email' %}
+    </button>
+    <button type="button" id="auto-taxes-btn"
+            class="inline-flex items-center px-4 py-2 border border-green-300 dark:border-green-600 text-sm font-medium rounded-md text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900 hover:bg-green-100 dark:hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+        </svg>
+        {% trans 'Auto Taxes' %}
+    </button>
+    <button type="submit" id="confirm-btn"
+            class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        {% if document %}{% trans 'Update Document' %}{% else %}{% trans 'Create Document' %}{% endif %}
+    </button>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Formulario principal -->
+    <div class="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+        <form method="post" id="document-form" class="space-y-4">
+            {% csrf_token %}
+            
+            <!-- Bloque de información principal del documento -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-3 py-1.5 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-base font-medium text-gray-900 dark:text-white">{% trans 'Document Information' %}</h3>
+                </div>
+                <div class="p-3">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-2">
+                        <!-- Columna izquierda (3/5) -->
+                        <div class="lg:col-span-3 space-y-2">
+                            <!-- Tipo de documento -->
+                            <div class="flex items-center gap-2">
+                                <label for="document_type" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Document Type' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <select name="document_type" id="document_type" required
+                                            class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                        <option value="request" {% if document_type == 'request' %}selected{% endif %}>{% trans 'Purchase Request' %}</option>
+                                        <option value="order" {% if document_type == 'order' %}selected{% endif %}>{% trans 'Purchase Order' %}</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Proveedor (solo para órdenes) -->
+                            <div class="flex items-center gap-2" id="supplier-field" style="display: {% if document_type == 'order' %}flex{% else %}none{% endif %};">
+                                <label for="supplier" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Supplier' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                        </svg>
+                                    </div>
+                                    <select name="supplier" id="supplier" 
+                                            class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                        <option value="">{% trans 'Select supplier' %}</option>
+                                        {% for supplier in suppliers %}
+                                            <option value="{{ supplier.id }}" {% if document.supplier.id == supplier.id %}selected{% endif %}>
+                                                {{ supplier.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <!-- Título/Descripción -->
+                            <div class="flex items-center gap-2">
+                                <label for="title" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Title' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                                        </svg>
+                                    </div>
+                                    <input type="text" name="title" id="title" 
+                                           value="{{ document.title|default:'' }}" required
+                                           class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                                           placeholder="{% trans 'Enter document title' %}">
+                                </div>
+                            </div>
+                            
+                            <!-- Fechas -->
+                            <div class="flex items-center gap-2">
+                                <label for="document_date" class="w-32 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Document date' %} <span class="text-red-500">*</span></label>
+                                <div class="flex-1 relative">
+                                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <input type="date" name="document_date" id="document_date" 
+                                           value="{{ document.document_date|date:'Y-m-d'|default:today }}" required
+                                           class="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Columna derecha (2/5) -->
+                        <div class="lg:col-span-2 space-y-2">
+                            <div class="flex items-center gap-2">
+                                <label for="currency" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Currency' %} <span class="text-red-500">*</span></label>
+                                <select name="currency" id="currency" required
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    {% for currency in currencies %}
+                                        <option value="{{ currency.code }}" {% if document.currency == currency.code %}selected{% endif %}>
+                                            {{ currency.code }} - {{ currency.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="priority" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Priority' %}</label>
+                                <select name="priority" id="priority"
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    <option value="low" {% if document.priority == 'low' %}selected{% endif %}>{% trans 'Low' %}</option>
+                                    <option value="medium" {% if document.priority == 'medium' %}selected{% endif %}>{% trans 'Medium' %}</option>
+                                    <option value="high" {% if document.priority == 'high' %}selected{% endif %}>{% trans 'High' %}</option>
+                                    <option value="urgent" {% if document.priority == 'urgent' %}selected{% endif %}>{% trans 'Urgent' %}</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label for="payment_terms" class="w-28 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Payment terms' %}</label>
+                                <select name="payment_terms" id="payment_terms"
+                                        class="flex-1 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                                    <option value="">{% trans 'Select terms' %}</option>
+                                    {% for term in payment_terms %}
+                                        <option value="{{ term.id }}" {% if document.payment_terms.id == term.id %}selected{% endif %}>
+                                            {{ term.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bloque de pestañas para líneas, alternativos y otra información -->
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg mt-4 text-xs">
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-4 px-3" aria-label="Tabs">
+                        <button type="button" class="tab-link border-b-2 border-synap-500 py-2 px-1 text-xs font-medium text-synap-600 dark:text-synap-400" data-tab="lines">
+                            {% trans 'Document Lines' %}
+                        </button>
+                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="alternatives">
+                            {% trans 'Alternative Products' %}
+                        </button>
+                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="other">
+                            {% trans 'Other Information' %}
+                        </button>
+                    </nav>
+                </div>
+                
+                <!-- Contenido de las pestañas -->
+                <div class="p-3">
+                    <!-- Pestaña de líneas -->
+                    <div id="lines-tab" class="tab-content">
+                        <div class="space-y-3">
+                            <!-- Botón para agregar línea -->
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Document Lines' %}</h4>
+                                <button type="button" id="add-line-btn" 
+                                        class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-synap-600 hover:bg-synap-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                    </svg>
+                                    {% trans 'Add Line' %}
+                                </button>
+                            </div>
+                            
+                            <!-- Contenedor de líneas -->
+                            <div id="lines-container" class="space-y-2">
+                                <!-- Las líneas se agregarán dinámicamente aquí -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pestaña de productos alternativos -->
+                    <div id="alternatives-tab" class="tab-content hidden">
+                        <div class="space-y-3">
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Alternative Products' %}</h4>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Specify alternative products for each line' %}</p>
+                            <!-- Contenido de alternativos -->
+                        </div>
+                    </div>
+                    
+                    <!-- Pestaña de otra información -->
+                    <div id="other-tab" class="tab-content hidden">
+                        <div class="space-y-3">
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Additional Information' %}</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label for="delivery_address" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        {% trans 'Delivery Address' %}
+                                    </label>
+                                    <textarea name="delivery_address" id="delivery_address" rows="3"
+                                              class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                                              placeholder="{% trans 'Enter delivery address' %}">{{ document.delivery_address|default:'' }}</textarea>
+                                </div>
+                                <div>
+                                    <label for="notes" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        {% trans 'Notes' %}
+                                    </label>
+                                    <textarea name="notes" id="notes" rows="3"
+                                              class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                                              placeholder="{% trans 'Enter additional notes' %}">{{ document.notes|default:'' }}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Barra fija de totales -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-6">
+                    <div class="text-center">
+                        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">{% trans 'Subtotal' %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white" id="subtotal-display">$0.00</p>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">{% trans 'Tax' %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white" id="tax-display">$0.00</p>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-xs font-medium text-gray-500 dark:text-gray-400">{% trans 'Total' %}</label>
+                        <p class="text-2xl font-bold text-orange-600 dark:text-orange-400" id="total-display">$0.00</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button type="button" id="save-draft-btn"
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                        </svg>
+                        {% trans 'Save Draft' %}
+                    </button>
+                    <button type="submit" form="document-form" id="submit-btn"
+                            class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        {% if document %}{% trans 'Update Document' %}{% else %}{% trans 'Create Document' %}{% endif %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Funcionalidad de pestañas
+document.addEventListener('DOMContentLoaded', function() {
+    const tabLinks = document.querySelectorAll('.tab-link');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabLinks.forEach(link => {
+        link.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+            
+            // Remover clases activas
+            tabLinks.forEach(l => {
+                l.classList.remove('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+                l.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            });
+            
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Activar pestaña seleccionada
+            this.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            this.classList.add('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
+            
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+        });
+    });
+    
+    // Cambio de tipo de documento
+    const documentTypeSelect = document.getElementById('document_type');
+    const supplierField = document.getElementById('supplier-field');
+    const supplierSelect = document.getElementById('supplier');
+    
+    documentTypeSelect.addEventListener('change', function() {
+        if (this.value === 'order') {
+            supplierField.style.display = 'flex';
+            supplierSelect.required = true;
+        } else {
+            supplierField.style.display = 'none';
+            supplierSelect.required = false;
+            supplierSelect.value = '';
+        }
+    });
+    
+    // Funcionalidad de líneas
+    let lineCounter = 0;
+    
+    document.getElementById('add-line-btn').addEventListener('click', function() {
+        addLine();
+    });
+    
+    function addLine() {
+        lineCounter++;
+        const lineHtml = `
+            <div class="line-item bg-gray-50 dark:bg-gray-700 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-2">
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Product' %}</label>
+                        <select name="line_${lineCounter}_product" class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors">
+                            <option value="">{% trans 'Select product' %}</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Qty' %}</label>
+                        <input type="number" name="line_${lineCounter}_quantity" min="0.01" step="0.01" 
+                               class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                               placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Price' %}</label>
+                        <input type="number" name="line_${lineCounter}_price" min="0" step="0.01" 
+                               class="w-full px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white transition-colors"
+                               placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Total' %}</label>
+                        <p class="text-xs font-semibold text-gray-900 dark:text-white line-total">$0.00</p>
+                    </div>
+                    <div class="flex items-end">
+                        <button type="button" class="remove-line-btn text-red-600 hover:text-red-800 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('lines-container').insertAdjacentHTML('beforeend', lineHtml);
+        
+        // Agregar event listeners para la nueva línea
+        const newLine = document.querySelector('.line-item:last-child');
+        const quantityInput = newLine.querySelector('input[name^="line_"][name$="_quantity"]');
+        const priceInput = newLine.querySelector('input[name^="line_"][name$="_price"]');
+        const totalElement = newLine.querySelector('.line-total');
+        const removeBtn = newLine.querySelector('.remove-line-btn');
+        
+        [quantityInput, priceInput].forEach(input => {
+            input.addEventListener('input', function() {
+                updateLineTotal(quantityInput, priceInput, totalElement);
+                updateDocumentTotals();
+            });
+        });
+        
+        removeBtn.addEventListener('click', function() {
+            newLine.remove();
+            updateDocumentTotals();
+        });
+    }
+    
+    function updateLineTotal(quantityInput, priceInput, totalElement) {
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const price = parseFloat(priceInput.value) || 0;
+        const total = quantity * price;
+        totalElement.textContent = '$' + total.toFixed(2);
+    }
+    
+    function updateDocumentTotals() {
+        const lineTotals = Array.from(document.querySelectorAll('.line-total')).map(el => {
+            return parseFloat(el.textContent.replace('$', '')) || 0;
+        });
+        
+        const subtotal = lineTotals.reduce((sum, total) => sum + total, 0);
+        const tax = subtotal * 0.16; // 16% tax rate
+        const total = subtotal + tax;
+        
+        document.getElementById('subtotal-display').textContent = '$' + subtotal.toFixed(2);
+        document.getElementById('tax-display').textContent = '$' + tax.toFixed(2);
+        document.getElementById('total-display').textContent = '$' + total.toFixed(2);
+    }
+    
+    // Agregar primera línea por defecto
+    addLine();
+});
+</script>
+{% endblock %} 

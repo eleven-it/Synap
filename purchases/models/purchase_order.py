@@ -339,4 +339,34 @@ class PurchaseOrderLine(models.Model):
     
     def can_receive(self):
         """Verifica si la línea puede recibir más productos"""
-        return self.remaining_quantity > 0 and self.status != 'cancelled' 
+        return self.remaining_quantity > 0 and self.status != 'cancelled'
+    
+    @property
+    def total_amount(self):
+        """Calcula el total de la línea (igual que el campo total, para compatibilidad de tests)"""
+        return self.total
+    
+    def receive_quantity(self, quantity, lot_number=None, expiration_date=None):
+        """Registra la recepción de una cantidad específica"""
+        from .models import PurchaseReceipt
+        
+        if quantity > self.remaining_quantity:
+            raise ValueError(_("Cannot receive more than ordered quantity"))
+        
+        # Crear registro de recepción
+        receipt = PurchaseReceipt.objects.create(
+            purchase_order_line=self,
+            quantity=quantity,
+            lot_number=lot_number,
+            expiration_date=expiration_date,
+            received_by=self.purchase_order.created_by
+        )
+        
+        # Actualizar cantidad recibida
+        self.received_quantity += quantity
+        self.save()
+        
+        # Actualizar estado de la orden
+        self.purchase_order.update_status()
+        
+        return receipt 

@@ -1,0 +1,226 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block purchases_title %}
+    {% if form.instance.pk %}{% trans "Edit Rating" %}{% else %}{% trans "New Rating" %}{% endif %}
+{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">star</span>
+    <a href="{% url 'purchases:rating_list' %}">{% trans "Ratings" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">{% if form.instance.pk %}edit{% else %}add{% endif %}</span>
+    {% if form.instance.pk %}{% trans "Edit Rating" %}{% else %}{% trans "New Rating" %}{% endif %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}
+    {% if form.instance.pk %}{% trans "Edit Rating" %}{% else %}{% trans "New Rating" %}{% endif %}
+{% endblock %}
+
+{% block purchases_subheader %}
+    {% if form.instance.pk %}
+        {% trans "Update supplier rating information" %}
+    {% else %}
+        {% trans "Create a new supplier rating" %}
+    {% endif %}
+{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:rating_list' %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Back to List" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-4xl mx-auto">
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Información básica -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Basic Information" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.supplier|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.purchase_order|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.period_start|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.period_end|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Puntuaciones -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Scores" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.quality_score|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.delivery_score|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.communication_score|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.price_score|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.service_score|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comentarios -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Comments" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.quality_comments|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.delivery_comments|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.communication_comments|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.price_comments|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.service_comments|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.general_comments|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recomendaciones -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Recommendations" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.recommendations|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.would_recommend|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="flex justify-end space-x-4">
+            <a href="{% url 'purchases:rating_list' %}" class="btn-secondary">
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" class="btn-primary">
+                <span class="material-icons mr-2">{% if form.instance.pk %}save{% else %}add{% endif %}</span>
+                {% if form.instance.pk %}{% trans "Update Rating" %}{% else %}{% trans "Create Rating" %}{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const supplierSelect = document.getElementById('id_supplier');
+    const purchaseOrderSelect = document.getElementById('id_purchase_order');
+    
+    // Cargar órdenes de compra cuando se selecciona un proveedor
+    supplierSelect.addEventListener('change', function() {
+        const supplierId = this.value;
+        if (supplierId) {
+            loadPurchaseOrders(supplierId);
+        } else {
+            purchaseOrderSelect.innerHTML = '<option value="">---------</option>';
+        }
+    });
+    
+    function loadPurchaseOrders(supplierId) {
+        fetch(`/purchases/api/suppliers/${supplierId}/orders/`)
+            .then(response => response.json())
+            .then(data => {
+                purchaseOrderSelect.innerHTML = '<option value="">---------</option>';
+                data.results.forEach(order => {
+                    const option = document.createElement('option');
+                    option.value = order.id;
+                    option.textContent = `${order.order_number} - ${order.order_date}`;
+                    purchaseOrderSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading purchase orders:', error);
+            });
+    }
+    
+    // Validación de fechas
+    const periodStartField = document.getElementById('id_period_start');
+    const periodEndField = document.getElementById('id_period_end');
+    
+    periodEndField.addEventListener('change', function() {
+        const startDate = new Date(periodStartField.value);
+        const endDate = new Date(this.value);
+        
+        if (endDate < startDate) {
+            this.classList.add('border-red-500');
+            showError(this, '{% trans "End date cannot be before start date" %}');
+        } else {
+            this.classList.remove('border-red-500');
+            removeError(this);
+        }
+    });
+});
+
+function showError(field, message) {
+    removeError(field);
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'text-red-600 text-sm mt-1';
+    errorDiv.textContent = message;
+    field.parentNode.appendChild(errorDiv);
+}
+
+function removeError(field) {
+    const errorDiv = field.parentNode.querySelector('.text-red-600');
+    if (errorDiv) {
+        errorDiv.remove();
+    }
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,217 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Return to Supplier" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Return to Supplier" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Return approved receipt to supplier" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:receipt_detail' receipt.pk %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Receipt" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Receipt Summary -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Receipt Summary" %}</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Receipt Number" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.receipt_number }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Purchase Order" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.purchase_order.order_number }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Supplier" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.purchase_order.supplier.name }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Approved Date" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.approved_date|date:"F d, Y"|default:"Not available" }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Total Items" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.items.count }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Total Amount" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.total_received|floatformat:2 }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Return Form -->
+        <div class="bg-white shadow rounded-lg">
+            <form method="post" class="space-y-6 p-6">
+                {% csrf_token %}
+                
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path>
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                            {% trans "Confirm Return to Supplier" %}
+                        </h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                {% trans "Are you sure you want to return this receipt to the supplier? This action will:" %}
+                            </p>
+                            <ul class="mt-2 text-sm text-gray-500 list-disc list-inside">
+                                <li>{% trans "Reverse inventory adjustments" %}</li>
+                                <li>{% trans "Mark the receipt as returned" %}</li>
+                                <li>{% trans "Generate return documentation" %}</li>
+                                <li>{% trans "Notify supplier of return" %}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Return Reason -->
+                <div>
+                    <label for="return_reason" class="block text-sm font-medium text-gray-700">
+                        {% trans "Return Reason" %} <span class="text-red-500">*</span>
+                    </label>
+                    <select name="return_reason" id="return_reason" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md">
+                        <option value="">{% trans "Select a reason..." %}</option>
+                        <option value="defective">{% trans "Defective items discovered" %}</option>
+                        <option value="wrong_specification">{% trans "Wrong specification" %}</option>
+                        <option value="excess_quantity">{% trans "Excess quantity received" %}</option>
+                        <option value="quality_issues">{% trans "Quality issues found" %}</option>
+                        <option value="damage_after_receipt">{% trans "Damage occurred after receipt" %}</option>
+                        <option value="customer_return">{% trans "Customer return" %}</option>
+                        <option value="other">{% trans "Other" %}</option>
+                    </select>
+                </div>
+
+                <!-- Return Notes -->
+                <div>
+                    <label for="return_notes" class="block text-sm font-medium text-gray-700">
+                        {% trans "Return Notes" %} <span class="text-red-500">*</span>
+                    </label>
+                    <textarea name="return_notes" id="return_notes" rows="4" required class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="{% trans 'Please provide detailed explanation for the return...' %}"></textarea>
+                </div>
+
+                <!-- Return Method -->
+                <div>
+                    <label for="return_method" class="block text-sm font-medium text-gray-700">
+                        {% trans "Return Method" %} <span class="text-red-500">*</span>
+                    </label>
+                    <select name="return_method" id="return_method" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm rounded-md">
+                        <option value="">{% trans "Select return method..." %}</option>
+                        <option value="pickup">{% trans "Supplier pickup" %}</option>
+                        <option value="shipping">{% trans "Shipping to supplier" %}</option>
+                        <option value="exchange">{% trans "Exchange on site" %}</option>
+                        <option value="credit">{% trans "Credit note only" %}</option>
+                    </select>
+                </div>
+
+                <!-- Items to be Returned -->
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">{% trans "Items to be Returned" %}</h4>
+                    <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                        <div class="space-y-3">
+                            {% for item in receipt.items.all %}
+                            <div class="flex items-center justify-between p-3 bg-white rounded-md border border-orange-200">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-8 w-8 rounded-full bg-orange-500 flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">{{ forloop.counter }}</span>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-gray-900">{{ item.product.name }}</p>
+                                        <p class="text-sm text-gray-500">{{ item.product.sku }}</p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-900">{{ item.received_quantity }} {% trans "units" %}</p>
+                                    <p class="text-sm text-gray-500">{{ item.total|floatformat:2 }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warning -->
+                <div class="bg-orange-50 border border-orange-200 rounded-md p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-orange-800">
+                                {% trans "Important Notice" %}
+                            </h3>
+                            <div class="mt-2 text-sm text-orange-700">
+                                <p>{% trans "Returning this receipt will reverse inventory adjustments and may affect financial records. Please ensure all information is accurate before proceeding." %}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                    <a href="{% url 'purchases:receipt_detail' receipt.pk %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Return to Supplier" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const returnReason = document.getElementById('return_reason');
+    const returnNotes = document.getElementById('return_notes');
+    
+    // Auto-fill notes based on reason
+    returnReason.addEventListener('change', function() {
+        const reason = this.value;
+        const notesMap = {
+            'defective': '{% trans "Items were found to be defective after receipt and testing." %}',
+            'wrong_specification': '{% trans "Items received do not meet the required specifications." %}',
+            'excess_quantity': '{% trans "Quantity received exceeds the ordered amount and needs to be returned." %}',
+            'quality_issues': '{% trans "Quality issues were discovered after detailed inspection." %}',
+            'damage_after_receipt': '{% trans "Items were damaged after receipt and cannot be used." %}',
+            'customer_return': '{% trans "Items are being returned due to customer requirements." %}',
+            'other': ''
+        };
+        
+        if (notesMap[reason] && !returnNotes.value) {
+            returnNotes.value = notesMap[reason];
+        }
+    });
+});
+</script>
+{% endblock %} 

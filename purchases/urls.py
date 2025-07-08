@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from . import views
 
 app_name = 'purchases'
@@ -13,17 +14,47 @@ urlpatterns = [
     path('suppliers/<int:pk>/', views.SupplierDetailView.as_view(), name='supplier_detail'),
     path('suppliers/<int:pk>/edit/', views.SupplierUpdateView.as_view(), name='supplier_update'),
     path('suppliers/<int:pk>/delete/', views.SupplierDeleteView.as_view(), name='supplier_delete'),
+    path('suppliers/<int:pk>/approve/', views.supplier_approve, name='supplier_approve'),
+    path('suppliers/<int:pk>/activate/', views.supplier_activate, name='supplier_activate'),
+    path('suppliers/<int:pk>/deactivate/', views.supplier_deactivate, name='supplier_deactivate'),
     
-    # Solicitudes de compra
-    path('requests/', views.PurchaseRequestListView.as_view(), name='request_list'),
-    path('requests/create/', views.PurchaseRequestCreateView.as_view(), name='request_create'),
-    path('requests/<int:pk>/', views.PurchaseRequestDetailView.as_view(), name='request_detail'),
-    path('requests/<int:pk>/edit/', views.PurchaseRequestUpdateView.as_view(), name='request_update'),
+    # ============================================================================
+    # URLs UNIFICADAS PARA EL FLUJO DE COMPRAS
+    # ============================================================================
+
+    # URLs unificadas para documentos de compra
+    path('documents/', views.PurchaseDocumentListView.as_view(), name='document_list'),
+    path('documents/create/', views.PurchaseDocumentCreateView.as_view(), name='document_create'),
+    path('documents/<int:pk>/', views.PurchaseDocumentDetailView.as_view(), name='document_detail'),
+    path('documents/<int:pk>/edit/', views.PurchaseDocumentUpdateView.as_view(), name='document_update'),
+    path('documents/<int:pk>/action/<str:action>/', views.PurchaseDocumentActionView.as_view(), name='document_action'),
+
+    # ============================================================================
+    # URLs DE REDIRECCIÓN PARA COMPATIBILIDAD
+    # ============================================================================
+    
+    # Redirecciones para solicitudes (compatibilidad)
+    path('requests/', RedirectView.as_view(pattern_name='purchases:document_list', permanent=False), name='request_list'),
+    path('requests/create/', RedirectView.as_view(pattern_name='purchases:document_create', permanent=False), name='request_create'),
+    path('requests/<int:pk>/', RedirectView.as_view(pattern_name='purchases:document_detail', permanent=False), name='request_detail'),
+    path('requests/<int:pk>/edit/', RedirectView.as_view(pattern_name='purchases:document_update', permanent=False), name='request_update'),
     path('requests/<int:pk>/delete/', views.PurchaseRequestDeleteView.as_view(), name='request_delete'),
     path('requests/<int:pk>/submit/', views.PurchaseRequestSubmitView.as_view(), name='request_submit'),
     path('requests/<int:pk>/approve/', views.PurchaseRequestApproveView.as_view(), name='request_approve'),
     path('requests/<int:pk>/reject/', views.PurchaseRequestRejectView.as_view(), name='request_reject'),
     path('requests/<int:pk>/convert/', views.PurchaseRequestConvertView.as_view(), name='request_convert'),
+    
+    # Redirecciones para órdenes (compatibilidad)
+    path('orders/', RedirectView.as_view(pattern_name='purchases:document_list', permanent=False), name='order_list'),
+    path('orders/create/', RedirectView.as_view(pattern_name='purchases:document_create', permanent=False), name='order_create'),
+    path('orders/<int:pk>/', RedirectView.as_view(pattern_name='purchases:document_detail', permanent=False), name='order_detail'),
+    path('orders/<int:pk>/edit/', RedirectView.as_view(pattern_name='purchases:document_update', permanent=False), name='order_update'),
+    path('orders/<int:pk>/delete/', views.PurchaseOrderDeleteView.as_view(), name='order_delete'),
+    path('orders/<int:pk>/send/', views.PurchaseOrderSendView.as_view(), name='order_send'),
+    path('orders/<int:pk>/confirm/', views.PurchaseOrderConfirmView.as_view(), name='order_confirm'),
+    path('orders/<int:pk>/cancel/', views.PurchaseOrderCancelView.as_view(), name='order_cancel'),
+    path('orders/<int:pk>/duplicate/', views.PurchaseOrderDuplicateView.as_view(), name='order_duplicate'),
+    path('orders/<int:pk>/receive/', views.PurchaseOrderReceiveView.as_view(), name='order_receive'),
     
     # Cotizaciones
     path('quotations/', views.PurchaseQuotationListView.as_view(), name='quotation_list'),
@@ -34,18 +65,6 @@ urlpatterns = [
     path('quotations/<int:pk>/evaluate/', views.PurchaseQuotationEvaluateView.as_view(), name='quotation_evaluate'),
     path('quotations/<int:pk>/select/', views.PurchaseQuotationSelectView.as_view(), name='quotation_select'),
     path('quotations/compare/', views.PurchaseQuotationCompareView.as_view(), name='quotation_compare'),
-    
-    # Órdenes de compra
-    path('orders/', views.PurchaseOrderListView.as_view(), name='order_list'),
-    path('orders/create/', views.PurchaseOrderCreateView.as_view(), name='order_create'),
-    path('orders/<int:pk>/', views.PurchaseOrderDetailView.as_view(), name='order_detail'),
-    path('orders/<int:pk>/edit/', views.PurchaseOrderUpdateView.as_view(), name='order_update'),
-    path('orders/<int:pk>/delete/', views.PurchaseOrderDeleteView.as_view(), name='order_delete'),
-    path('orders/<int:pk>/send/', views.PurchaseOrderSendView.as_view(), name='order_send'),
-    path('orders/<int:pk>/confirm/', views.PurchaseOrderConfirmView.as_view(), name='order_confirm'),
-    path('orders/<int:pk>/cancel/', views.PurchaseOrderCancelView.as_view(), name='order_cancel'),
-    path('orders/<int:pk>/duplicate/', views.PurchaseOrderDuplicateView.as_view(), name='order_duplicate'),
-    path('orders/<int:pk>/receive/', views.PurchaseOrderReceiveView.as_view(), name='order_receive'),
     
     # Recepciones
     path('receipts/', views.PurchaseReceiptListView.as_view(), name='receipt_list'),

@@ -7,111 +7,358 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.db import transaction
 from datetime import datetime, timedelta
-
-from ..models import (
-    Client, Contact, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
+from django.contrib.auth import get_user_model
+from sales.models import (
+    Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
     DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
 )
+from core.models import Contact
+from inventory.models import ProductVariant, Warehouse
 from .serializers import (
-    ClientSerializer, ContactSerializer, SalesOrderSerializer, SalesOrderLineSerializer,
+    ClientSerializer, ClientListSerializer, ClientStatsSerializer,
+    ContactSerializer, ContactListSerializer, ContactStatsSerializer,
+    UserSerializer, AutocompleteSerializer, SalesOrderSerializer, SalesOrderLineSerializer,
     PriceListSerializer, PriceListItemSerializer, PaymentTermSerializer, PaymentTermLineSerializer,
     InvoiceSerializer, InvoiceLineSerializer, PaymentSerializer, DeliveryOrderSerializer,
     DeliveryOrderLineSerializer, ReturnDeliverySerializer, CreditNoteSerializer,
     ApprovalLogSerializer, SalesOrderCreateSerializer, InvoiceCreateSerializer
 )
-from inventory.models import ProductVariant, Warehouse
+
+User = get_user_model()
 
 
 class ClientViewSet(viewsets.ModelViewSet):
-    """API para gestión de clientes"""
-    queryset = Client.objects.all().order_by('name')
-    serializer_class = ClientSerializer
+    """ViewSet para clientes"""
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['is_active', 'type', 'origin']
-    search_fields = ['name', 'vat', 'email', 'phone']
-    ordering_fields = ['name', 'credit_limit']
-    ordering = ['name']
-
-    @action(detail=True, methods=['get'])
-    def sales_summary(self, request, pk=None):
-        """Obtener resumen de ventas del cliente"""
-        client = self.get_object()
+    filterset_fields = ['client_type', 'status', 'customer_category', 'country', 'state', 'city']
+    search_fields = ['first_name', 'last_name', 'company_name', 'email', 'phone', 'tax_id']
+    ordering_fields = ['created_at', 'updated_at', 'first_name', 'last_name', 'company_name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        return Client.objects.select_related('country', 'state', 'city', 'sales_representative').prefetch_related('contacts')
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ClientListSerializer
+        return ClientSerializer
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Obtener estadísticas de clientes"""
+        queryset = self.get_queryset()
         
-        # Estadísticas de pedidos
-        orders = SalesOrder.objects.filter(client=client)
-        total_orders = orders.count()
-        total_amount = orders.aggregate(total=Sum('total'))['total'] or 0
+        # Estadísticas básicas
+        total_clients = queryset.count()
+        active_clients = queryset.filter(status='active').count()
+        individual_clients = queryset.filter(client_type='individual').count()
+        company_clients = queryset.filter(client_type='company').count()
         
-        # Estadísticas de facturas
-        invoices = Invoice.objects.filter(client=client)
-        total_invoices = invoices.count()
-        total_billed = invoices.aggregate(total=Sum('total'))['total'] or 0
+        # Clientes por categoría
+        clients_by_category = queryset.values('customer_category').annotate(
+            count=Count('id')
+        ).order_by('-count')
         
-        # Pagos
-        payments = Payment.objects.filter(client=client)
-        total_paid = payments.aggregate(total=Sum('amount'))['total'] or 0
+        # Clientes por estado
+        clients_by_status = queryset.values('status').annotate(
+            count=Count('id')
+        ).order_by('-count')
         
-        # Saldo pendiente
-        pending_balance = total_billed - total_paid
+        # Clientes recientes (último mes)
+        recent_clients = queryset.filter(
+            created_at__gte=timezone.now() - timedelta(days=30)
+        ).count()
         
-        return Response({
-            'client_id': client.id,
-            'client_name': client.name,
-            'total_orders': total_orders,
-            'total_amount_orders': total_amount,
-            'total_invoices': total_invoices,
-            'total_billed': total_billed,
-            'total_paid': total_paid,
-            'pending_balance': pending_balance,
-            'credit_limit': client.credit_limit,
-            'available_credit': client.credit_limit - pending_balance
-        })
-
-    @action(detail=True, methods=['post'])
-    def toggle_active(self, request, pk=None):
-        """Activar/desactivar cliente"""
-        client = self.get_object()
-        client.is_active = not client.is_active
-        client.save()
+        # Total de contactos
+        total_contacts = Contact.objects.count()
         
-        return Response({
-            'id': client.id,
-            'is_active': client.is_active,
-            'message': f'Cliente {"activado" if client.is_active else "desactivado"} correctamente'
-        })
+        stats = {
+            'total_clients': total_clients,
+            'active_clients': active_clients,
+            'individual_clients': individual_clients,
+            'company_clients': company_clients,
+            'clients_by_category': {item['customer_category']: item['count'] for item in clients_by_category},
+            'clients_by_status': {item['status']: item['count'] for item in clients_by_status},
+            'recent_clients': recent_clients,
+            'total_contacts': total_contacts,
+        }
+        
+        serializer = ClientStatsSerializer(stats)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def autocomplete(self, request):
+        """Autocompletado de clientes"""
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response([])
+        
+        queryset = self.get_queryset().filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(company_name__icontains=query) |
+            Q(email__icontains=query)
+        )[:10]
+        
+        results = []
+        for client in queryset:
+            results.append({
+                'id': client.id,
+                'name': client.get_display_name(),
+                'additional_info': f"{client.email or ''} - {client.get_client_type_display()}"
+            })
+        
+        serializer = AutocompleteSerializer(results, many=True)
+        return Response(serializer.data)
 
 
 class ContactViewSet(viewsets.ModelViewSet):
-    """API para gestión de contactos"""
-    queryset = Contact.objects.all().order_by('name')
-    serializer_class = ContactSerializer
+    """ViewSet para contactos"""
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['client', 'is_primary']
-    search_fields = ['name', 'email', 'phone']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['role', 'department', 'status', 'client']
+    search_fields = ['first_name', 'last_name', 'email', 'phone', 'mobile', 'position', 'company']
+    ordering_fields = ['created_at', 'updated_at', 'first_name', 'last_name']
+    ordering = ['-created_at']
+    
+    def get_queryset(self):
+        return Contact.objects.select_related('client')
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ContactListSerializer
+        return ContactSerializer
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Obtener estadísticas de contactos"""
+        queryset = self.get_queryset()
+        
+        # Estadísticas básicas
+        total_contacts = queryset.count()
+        active_contacts = queryset.filter(status='active').count()
+        primary_contacts = queryset.filter(role='primary').count()
+        
+        # Contactos por rol
+        contacts_by_role = queryset.values('role').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Contactos por departamento
+        contacts_by_department = queryset.values('department').annotate(
+            count=Count('id')
+        ).order_by('-count')
+        
+        # Contactos recientes (último mes)
+        recent_contacts = queryset.filter(
+            created_at__gte=timezone.now() - timedelta(days=30)
+        ).count()
+        
+        stats = {
+            'total_contacts': total_contacts,
+            'active_contacts': active_contacts,
+            'primary_contacts': primary_contacts,
+            'contacts_by_role': {item['role']: item['count'] for item in contacts_by_role},
+            'contacts_by_department': {item['department']: item['count'] for item in contacts_by_department},
+            'recent_contacts': recent_contacts,
+        }
+        
+        serializer = ContactStatsSerializer(stats)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def autocomplete(self, request):
+        """Autocompletado de contactos"""
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response([])
+        
+        queryset = self.get_queryset().filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query)
+        )[:10]
+        
+        results = []
+        for contact in queryset:
+            results.append({
+                'id': contact.id,
+                'name': contact.get_full_name(),
+                'additional_info': f"{contact.email or ''} - {contact.position or ''}"
+            })
+        
+        serializer = AutocompleteSerializer(results, many=True)
+        return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
-    def set_primary(self, request, pk=None):
-        """Establecer contacto como principal"""
-        contact = self.get_object()
+
+# class CountryViewSet(viewsets.ReadOnlyModelViewSet):
+#     """ViewSet para países"""
+#     permission_classes = [IsAuthenticated]
+#     serializer_class = CountrySerializer
+#     filter_backends = [filters.SearchFilter]
+#     search_fields = ['name', 'code']
+#     
+#     def get_queryset(self):
+#         return Country.objects.all()
+#     
+#     @action(detail=False, methods=['get'])
+#     def autocomplete(self, request):
+#         """Autocompletado de países"""
+#         query = request.query_params.get('q', '')
+#         if not query:
+#             return Response([])
+#         
+#         countries = Country.objects.filter(
+#             Q(name__icontains=query) |
+#             Q(name_es__icontains=query) |
+#             Q(name_en__icontains=query) |
+#             Q(name_pt__icontains=query),
+#             is_active=True
+#         )[:10]
+#         
+#         results = []
+#         for country in countries:
+#             results.append({
+#                 'id': country.id,
+#                 'name': country.name,
+#                 'code': country.code,
+#                 'phone_code': country.phone_code,
+#                 'currency_code': country.currency_code,
+#                 'timezone': country.timezone
+#             })
+#         
+#         return Response(results)
+
+
+# class StateViewSet(viewsets.ReadOnlyModelViewSet):
+#     """ViewSet para estados/provincias"""
+#     permission_classes = [IsAuthenticated]
+#     serializer_class = StateSerializer
+#     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+#     filterset_fields = ['country']
+#     search_fields = ['name', 'code']
+#     
+#     def get_queryset(self):
+#         return State.objects.select_related('country')
+#     
+#     @action(detail=False, methods=['get'])
+#     def autocomplete(self, request):
+#         """Autocompletado de estados/provincias"""
+#         query = request.query_params.get('q', '')
+#         country_id = request.query_params.get('country_id')
+#         
+#         if not query:
+#             return Response([])
+#         
+#         states = State.objects.filter(
+#             Q(name__icontains=query) |
+#             Q(name_es__icontains=query) |
+#             Q(name_en__icontains=query) |
+#             Q(name_pt__icontains=query),
+#             is_active=True
+#         )
+#         
+#         if country_id:
+#             states = states.filter(country_id=country_id)
+#         
+#         states = states.select_related('country')[:10]
+#         
+#         results = []
+#         for state in states:
+#             results.append({
+#                 'id': state.id,
+#                 'name': state.name,
+#                 'code': state.code,
+#                 'country_id': state.country.id,
+#                 'country_name': state.country.name
+#             })
+#         
+#         return Response(results)
+
+
+# class CityViewSet(viewsets.ReadOnlyModelViewSet):
+#     """ViewSet para ciudades"""
+#     permission_classes = [IsAuthenticated]
+#     serializer_class = CitySerializer
+#     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+#     filterset_fields = ['state']
+#     search_fields = ['name']
+#     
+#     def get_queryset(self):
+#         return City.objects.select_related('state')
+#     
+#     @action(detail=False, methods=['get'])
+#     def autocomplete(self, request):
+#         """Autocompletado de ciudades"""
+#         query = request.query_params.get('q', '')
+#         state_id = request.query_params.get('state_id')
+#         
+#         if not query:
+#             return Response([])
+#         
+#         cities = City.objects.filter(
+#             Q(name__icontains=query) |
+#             Q(name_es__icontains=query) |
+#             Q(name_en__icontains=query) |
+#             Q(name_pt__icontains=query),
+#             is_active=True
+#         )
+#         
+#         if state_id:
+#             cities = cities.filter(state_id=state_id)
+#         
+#         cities = cities.select_related('state')[:10]
+#         
+#         results = []
+#         for city in cities:
+#             results.append({
+#                 'id': city.id,
+#                 'name': city.name,
+#                 'state_id': city.state.id,
+#                 'state_name': city.state.name,
+#                 'country_id': city.state.country.id,
+#                 'country_name': city.state.country.name
+#             })
+#         
+#         return Response(results)
+
+
+class SalesRepresentativeViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet para representantes de ventas"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserSerializer
+    
+    def get_queryset(self):
+        # Filtrar solo usuarios que pueden ser representantes de ventas
+        return User.objects.filter(is_active=True)
+    
+    @action(detail=False, methods=['get'])
+    def autocomplete(self, request):
+        """Autocompletado de representantes de ventas"""
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response([])
         
-        # Quitar otros contactos principales del mismo cliente
-        Contact.objects.filter(
-            client=contact.client, 
-            is_primary=True
-        ).exclude(id=contact.id).update(is_primary=False)
+        queryset = self.get_queryset().filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(username__icontains=query) |
+            Q(email__icontains=query)
+        )[:10]
         
-        # Establecer este contacto como principal
-        contact.is_primary = True
-        contact.save()
+        results = []
+        for user in queryset:
+            results.append({
+                'id': user.id,
+                'name': user.get_full_name(),
+                'additional_info': f"{user.email} ({user.username})"
+            })
         
-        return Response({
-            'id': contact.id,
-            'is_primary': contact.is_primary,
-            'message': 'Contacto establecido como principal'
-        })
+        serializer = AutocompleteSerializer(results, many=True)
+        return Response(serializer.data)
 
 
 class SalesOrderViewSet(viewsets.ModelViewSet):

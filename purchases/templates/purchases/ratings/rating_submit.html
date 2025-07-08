@@ -1,0 +1,354 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Submit Rating" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">star</span>
+    <a href="{% url 'purchases:rating_list' %}">{% trans "Ratings" %}</a>
+</div>
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">visibility</span>
+    <a href="{% url 'purchases:rating_detail' rating.pk %}">{{ rating.supplier.name }}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">send</span>
+    {% trans "Submit" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Submit Rating for Review" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Submit rating for" %} {{ rating.supplier.name }} {% trans "for review and approval" %}{% endblock %}
+
+{% block purchases_actions %}
+<div class="flex space-x-3">
+    <a href="{% url 'purchases:rating_detail' rating.pk %}" class="btn-secondary">
+        <span class="material-icons mr-2">arrow_back</span>
+        {% trans "Cancel" %}
+    </a>
+    <button type="submit" form="submit-rating-form" class="btn-primary">
+        <span class="material-icons mr-2">send</span>
+        {% trans "Submit for Review" %}
+    </button>
+</div>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-4xl mx-auto">
+    <form method="post" id="submit-rating-form" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Resumen del Rating -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Rating Summary" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Supplier" %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ rating.supplier.name }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Evaluation Period" %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ rating.period_start|date:"M d, Y" }} - {{ rating.period_end|date:"M d, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Overall Score" %}
+                        </label>
+                        <div class="flex items-center">
+                            <div class="flex items-center mr-2">
+                                {% for i in "12345" %}
+                                <span class="material-icons text-sm {% if forloop.counter <= rating.overall_score %}text-yellow-400{% else %}text-gray-300 dark:text-gray-600{% endif %}">
+                                    star
+                                </span>
+                                {% endfor %}
+                            </div>
+                            <span class="text-lg font-semibold text-gray-900 dark:text-white">{{ rating.overall_score|floatformat:1 }}/5.0</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans "Status" %}
+                        </label>
+                        <span class="status-badge status-{{ rating.status }}">
+                            {{ rating.get_status_display }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalles de Envío -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Submission Details" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-6">
+                    <!-- Fecha de envío -->
+                    <div>
+                        <label for="submission_date" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Submission Date" %}
+                        </label>
+                        <input type="date" name="submission_date" id="submission_date" 
+                               value="{{ today|date:'Y-m-d' }}"
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               required>
+                    </div>
+
+                    <!-- Revisores -->
+                    <div>
+                        <label for="reviewers" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Reviewers" %}
+                        </label>
+                        <select name="reviewers" id="reviewers" multiple
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                            {% for user in available_reviewers %}
+                            <option value="{{ user.pk }}" {% if user.pk in selected_reviewers %}selected{% endif %}>
+                                {{ user.get_full_name|default:user.username }} ({{ user.email }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Select one or more reviewers. Hold Ctrl/Cmd to select multiple." %}
+                        </p>
+                    </div>
+
+                    <!-- Prioridad -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            {% trans "Review Priority" %}
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="priority" value="low" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-green-600 dark:text-green-400 mr-2">low_priority</span>
+                                            {% trans "Low" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Review within 5 days" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="priority" value="medium" class="sr-only" checked>
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">priority_high</span>
+                                            {% trans "Medium" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Review within 3 days" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                            
+                            <label class="relative flex cursor-pointer rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-4 shadow-sm focus:outline-none">
+                                <input type="radio" name="priority" value="high" class="sr-only">
+                                <span class="flex flex-1">
+                                    <span class="flex flex-col">
+                                        <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                                            <span class="material-icons text-red-600 dark:text-red-400 mr-2">urgent</span>
+                                            {% trans "High" %}
+                                        </span>
+                                        <span class="mt-1 flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                            {% trans "Review within 1 day" %}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="pointer-events-none absolute -inset-px rounded-lg border-2" aria-hidden="true"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Notas de envío -->
+                    <div>
+                        <label for="submission_notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Submission Notes" %}
+                        </label>
+                        <textarea name="submission_notes" id="submission_notes" rows="4"
+                                  class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                  placeholder="{% trans 'Enter any notes for the reviewers...' %}"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Flujo de Revisión -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Review Process" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/30 dark:to-blue-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 text-sm">send</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Submission" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "The rating will be submitted for review and marked as 'Pending Review'." %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-orange-900/30 dark:to-orange-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-orange-600 dark:text-orange-400 text-sm">notifications</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Notifications" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "Selected reviewers will receive email notifications about the pending review." %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/30 dark:to-green-800/30 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span class="material-icons text-green-600 dark:text-green-400 text-sm">check_circle</span>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">{% trans "Approval" %}</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                {% trans "Once approved, the rating will be published and visible to relevant stakeholders." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirmación -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Confirmation" %}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        <input type="checkbox" name="confirm_submission" id="confirm_submission" 
+                               class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                               required>
+                        <label for="confirm_submission" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                            {% trans "I confirm that I want to submit this rating for review" %}
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <input type="checkbox" name="confirm_accurate" id="confirm_accurate" 
+                               class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                               required>
+                        <label for="confirm_accurate" class="ml-2 block text-sm text-gray-900 dark:text-white">
+                            {% trans "I confirm that all information provided above is accurate" %}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="flex justify-between items-center">
+            <a href="{% url 'purchases:rating_detail' rating.pk %}" class="btn-secondary">
+                <span class="material-icons mr-2">cancel</span>
+                {% trans "Cancel" %}
+            </a>
+            
+            <button type="submit" class="btn-primary" id="submit-button" disabled>
+                <span class="material-icons mr-2">send</span>
+                {% trans "Submit for Review" %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmSubmissionCheckbox = document.getElementById('confirm_submission');
+    const confirmAccurateCheckbox = document.getElementById('confirm_accurate');
+    const submitButton = document.getElementById('submit-button');
+    
+    function updateSubmitButton() {
+        const bothChecked = confirmSubmissionCheckbox.checked && confirmAccurateCheckbox.checked;
+        submitButton.disabled = !bothChecked;
+        
+        if (bothChecked) {
+            submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+    
+    // Event listeners
+    confirmSubmissionCheckbox.addEventListener('change', updateSubmitButton);
+    confirmAccurateCheckbox.addEventListener('change', updateSubmitButton);
+    
+    // Inicialización
+    updateSubmitButton();
+    
+    // Confirmación antes de enviar
+    document.getElementById('submit-rating-form').addEventListener('submit', function(e) {
+        if (!confirm('{% trans "Are you sure you want to submit this rating for review?" %}')) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Mostrar loading state
+        submitButton.disabled = true;
+        submitButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Submitting..." %}
+        `;
+    });
+    
+    // Animaciones para las tarjetas de prioridad
+    const priorityCards = document.querySelectorAll('input[name="priority"]');
+    priorityCards.forEach(card => {
+        card.addEventListener('change', function() {
+            // Remover selección de todas las tarjetas
+            document.querySelectorAll('label[for*="priority"]').forEach(label => {
+                label.classList.remove('ring-2', 'ring-orange-500', 'border-orange-500');
+            });
+            
+            // Agregar selección a la tarjeta seleccionada
+            if (this.checked) {
+                this.closest('label').classList.add('ring-2', 'ring-orange-500', 'border-orange-500');
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

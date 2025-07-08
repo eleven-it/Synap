@@ -2,43 +2,198 @@ from rest_framework import serializers
 from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
-from ..models import (
-    Client, Contact, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
-    PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
-    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
-)
+from sales.models import Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem, PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment, DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
 from inventory.models import ProductVariant, Warehouse
+from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
+from core.models import Contact, ContactRelationship
+
+User = get_user_model()
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer para usuarios (vendedores)"""
+    full_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'email']
+    
+    def get_full_name(self, obj):
+        return obj.get_full_name()
 
 
 class ContactSerializer(serializers.ModelSerializer):
-    """Serializer para contactos de clientes"""
+    """Serializer para contactos universales"""
+    display_name = serializers.SerializerMethodField()
+    full_address = serializers.SerializerMethodField()
     
     class Meta:
         model = Contact
         fields = [
-            'id', 'client', 'name', 'email', 'phone', 'is_primary'
+            'id', 'name', 'type', 'first_name', 'last_name', 'company_name', 
+            'position', 'department', 'email', 'phone', 'mobile', 'fax', 
+            'website', 'address', 'postal_code', 'city', 'state', 'country',
+            'latitude', 'longitude', 'notes', 'tags', 'photo', 'is_active', 
+            'is_primary', 'display_name', 'full_address', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_display_name(self, obj):
+        return obj.display_name
+    
+    def get_full_address(self, obj):
+        return obj.full_address
+    
+    def validate_email(self, value):
+        """Validar que el email sea único si se proporciona"""
+        if value:
+            contact_id = self.instance.id if self.instance else None
+            if Contact.objects.filter(email=value).exclude(id=contact_id).exists():
+                raise serializers.ValidationError("Este email ya está registrado.")
+        return value
+    
+    def validate_phone(self, value):
+        """Validar formato de teléfono"""
+        if value and not value.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
+            raise serializers.ValidationError("El número de teléfono debe contener solo dígitos, espacios, guiones y paréntesis.")
+        return value
 
 
 class ClientSerializer(serializers.ModelSerializer):
-    """Serializer para clientes con contactos anidados"""
+    """Serializer para clientes"""
+    sales_person_name = serializers.CharField(source='sales_person.get_full_name', read_only=True)
+    display_name = serializers.SerializerMethodField()
     contacts = ContactSerializer(many=True, read_only=True)
-    primary_contact = serializers.SerializerMethodField()
+    contacts_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Client
         fields = [
-            'id', 'name', 'vat', 'email', 'phone', 'type', 'origin',
-            'tiendanube_customer_id', 'from_ecommerce', 'credit_limit',
-            'is_active', 'contacts', 'primary_contact'
+            'id', 'name', 'code', 'tax_id', 'address', 'city', 'state', 'postal_code', 'country',
+            'contact_person', 'email', 'phone', 'mobile', 'website', 'notes', 'is_active',
+            'credit_limit', 'payment_terms', 'customer_category', 'fiscal_conditions',
+            'default_price_list', 'sales_person', 'sales_person_name', 'default_delivery_location',
+            'invoice_delivery_method', 'payment_method', 'default_discount',
+            'is_customer', 'is_prospect', 'is_vip', 'display_name', 'contacts', 'contacts_count',
+            'created_at', 'updated_at'
         ]
-        read_only_fields = ['id']
+        read_only_fields = ['created_at', 'updated_at']
     
-    def get_primary_contact(self, obj):
-        """Obtener el contacto principal del cliente"""
-        primary = obj.contacts.filter(is_primary=True).first()
-        return ContactSerializer(primary).data if primary else None
+    def get_display_name(self, obj):
+        return str(obj)
+    
+    def get_contacts_count(self, obj):
+        return obj.get_contacts().count()
+    
+    def validate_email(self, value):
+        """Validar que el email sea único si se proporciona"""
+        if value:
+            client_id = self.instance.id if self.instance else None
+            if Client.objects.filter(email=value).exclude(id=client_id).exists():
+                raise serializers.ValidationError("Este email ya está registrado.")
+        return value
+    
+    def validate_tax_id(self, value):
+        """Validar formato de VAT/Tax ID"""
+        if value:
+            # Implementar validación específica por país si es necesario
+            if len(value) < 3:
+                raise serializers.ValidationError("El ID fiscal debe tener al menos 3 caracteres.")
+        return value
+    
+    def validate_phone(self, value):
+        """Validar formato de teléfono"""
+        if value and not value.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
+            raise serializers.ValidationError("El número de teléfono debe contener solo dígitos, espacios, guiones y paréntesis.")
+        return value
+    
+    def validate(self, data):
+        """Validaciones adicionales"""
+        client_type = data.get('client_type')
+        
+        if client_type == 'individual':
+            if not data.get('first_name') or not data.get('last_name'):
+                raise serializers.ValidationError("Para clientes individuales, el nombre y apellido son obligatorios.")
+            if data.get('company_name'):
+                raise serializers.ValidationError("Los clientes individuales no pueden tener nombre de empresa.")
+        
+        elif client_type == 'company':
+            if not data.get('company_name'):
+                raise serializers.ValidationError("Para empresas, el nombre de la empresa es obligatorio.")
+            if data.get('first_name') or data.get('last_name'):
+                raise serializers.ValidationError("Las empresas no pueden tener nombre y apellido individuales.")
+        
+        return data
+
+
+class ClientListSerializer(serializers.ModelSerializer):
+    """Serializer simplificado para listar clientes"""
+    display_name = serializers.SerializerMethodField()
+    sales_representative_name = serializers.CharField(source='sales_representative.get_full_name', read_only=True)
+    contacts_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Client
+        fields = [
+            'id', 'client_type', 'display_name', 'email', 'phone', 'country', 
+            'city', 'customer_category', 'status', 'sales_representative_name',
+            'contacts_count', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_display_name(self, obj):
+        return obj.get_display_name()
+    
+    def get_contacts_count(self, obj):
+        return obj.contacts.count()
+
+
+class ContactListSerializer(serializers.ModelSerializer):
+    """Serializer simplificado para listar contactos"""
+    display_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Contact
+        fields = [
+            'id', 'name', 'type', 'first_name', 'last_name', 'company_name', 
+            'position', 'department', 'email', 'phone', 'mobile', 'display_name', 
+            'is_active', 'is_primary', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_display_name(self, obj):
+        return obj.display_name
+
+
+class ClientStatsSerializer(serializers.Serializer):
+    """Serializer para estadísticas de clientes"""
+    total_clients = serializers.IntegerField()
+    active_clients = serializers.IntegerField()
+    individual_clients = serializers.IntegerField()
+    company_clients = serializers.IntegerField()
+    clients_by_category = serializers.DictField()
+    clients_by_status = serializers.DictField()
+    recent_clients = serializers.IntegerField()
+    total_contacts = serializers.IntegerField()
+
+
+class ContactStatsSerializer(serializers.Serializer):
+    """Serializer para estadísticas de contactos"""
+    total_contacts = serializers.IntegerField()
+    active_contacts = serializers.IntegerField()
+    primary_contacts = serializers.IntegerField()
+    contacts_by_role = serializers.DictField()
+    contacts_by_department = serializers.DictField()
+    recent_contacts = serializers.IntegerField()
+
+
+class AutocompleteSerializer(serializers.Serializer):
+    """Serializer para autocompletado"""
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    code = serializers.CharField(required=False)
+    additional_info = serializers.CharField(required=False)
 
 
 class PriceListItemSerializer(serializers.ModelSerializer):

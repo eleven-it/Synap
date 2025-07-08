@@ -1,0 +1,270 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Purchase Settings" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{% trans "Purchase Settings" %}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Configure purchase system preferences and defaults" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:dashboard' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to Dashboard" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" class="space-y-8">
+            {% csrf_token %}
+            
+            <!-- General Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "General Settings" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="default_currency" class="block text-sm font-medium text-gray-700">
+                                {% trans "Default Currency" %}
+                            </label>
+                            <select name="default_currency" id="default_currency" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                {% for currency in currencies %}
+                                    <option value="{{ currency.pk }}" {% if settings.default_currency == currency %}selected{% endif %}>
+                                        {{ currency.code }} - {{ currency.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="default_tax_rate" class="block text-sm font-medium text-gray-700">
+                                {% trans "Default Tax Rate (%)" %}
+                            </label>
+                            <input type="number" name="default_tax_rate" id="default_tax_rate" value="{{ settings.default_tax_rate|default:0 }}" step="0.01" min="0" max="100" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        
+                        <div>
+                            <label for="order_prefix" class="block text-sm font-medium text-gray-700">
+                                {% trans "Order Number Prefix" %}
+                            </label>
+                            <input type="text" name="order_prefix" id="order_prefix" value="{{ settings.order_prefix|default:'PO' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="PO">
+                        </div>
+                        
+                        <div>
+                            <label for="next_order_number" class="block text-sm font-medium text-gray-700">
+                                {% trans "Next Order Number" %}
+                            </label>
+                            <input type="number" name="next_order_number" id="next_order_number" value="{{ settings.next_order_number|default:1 }}" min="1" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Approval Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Approval Settings" %}</h3>
+                    
+                    <div class="space-y-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" name="require_approval" id="require_approval" {% if settings.require_approval %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="require_approval" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Require approval for all purchase orders" %}
+                            </label>
+                        </div>
+                        
+                        <div>
+                            <label for="approval_threshold" class="block text-sm font-medium text-gray-700">
+                                {% trans "Approval Threshold Amount" %}
+                            </label>
+                            <input type="number" name="approval_threshold" id="approval_threshold" value="{{ settings.approval_threshold|default:0 }}" step="0.01" min="0" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Orders above this amount require approval" %}</p>
+                        </div>
+                        
+                        <div>
+                            <label for="default_approver" class="block text-sm font-medium text-gray-700">
+                                {% trans "Default Approver" %}
+                            </label>
+                            <select name="default_approver" id="default_approver" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="">{% trans "Select approver..." %}</option>
+                                {% for user in approvers %}
+                                    <option value="{{ user.pk }}" {% if settings.default_approver == user %}selected{% endif %}>
+                                        {{ user.get_full_name|default:user.username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notification Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Notification Settings" %}</h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <input type="checkbox" name="email_notifications" id="email_notifications" {% if settings.email_notifications %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="email_notifications" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Enable email notifications" %}
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <input type="checkbox" name="low_stock_alerts" id="low_stock_alerts" {% if settings.low_stock_alerts %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="low_stock_alerts" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Send low stock alerts" %}
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <input type="checkbox" name="order_status_updates" id="order_status_updates" {% if settings.order_status_updates %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="order_status_updates" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Notify on order status changes" %}
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <input type="checkbox" name="approval_notifications" id="approval_notifications" {% if settings.approval_notifications %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="approval_notifications" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Notify approvers of pending orders" %}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Inventory Settings" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="default_min_stock" class="block text-sm font-medium text-gray-700">
+                                {% trans "Default Minimum Stock Level" %}
+                            </label>
+                            <input type="number" name="default_min_stock" id="default_min_stock" value="{{ settings.default_min_stock|default:10 }}" min="0" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        
+                        <div>
+                            <label for="default_max_stock" class="block text-sm font-medium text-gray-700">
+                                {% trans "Default Maximum Stock Level" %}
+                            </label>
+                            <input type="number" name="default_max_stock" id="default_max_stock" value="{{ settings.default_max_stock|default:100 }}" min="0" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        
+                        <div>
+                            <label for="reorder_point" class="block text-sm font-medium text-gray-700">
+                                {% trans "Reorder Point (%)" %}
+                            </label>
+                            <input type="number" name="reorder_point" id="reorder_point" value="{{ settings.reorder_point|default:20 }}" step="1" min="0" max="100" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Percentage of max stock to trigger reorder" %}</p>
+                        </div>
+                        
+                        <div>
+                            <label for="auto_create_orders" class="block text-sm font-medium text-gray-700">
+                                {% trans "Auto-create orders" %}
+                            </label>
+                            <select name="auto_create_orders" id="auto_create_orders" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="never" {% if settings.auto_create_orders == 'never' %}selected{% endif %}>{% trans "Never" %}</option>
+                                <option value="low_stock" {% if settings.auto_create_orders == 'low_stock' %}selected{% endif %}>{% trans "When stock is low" %}</option>
+                                <option value="out_of_stock" {% if settings.auto_create_orders == 'out_of_stock' %}selected{% endif %}>{% trans "When out of stock" %}</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Integration Settings -->
+            <div class="bg-white shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">{% trans "Integration Settings" %}</h3>
+                    
+                    <div class="space-y-6">
+                        <div class="flex items-center">
+                            <input type="checkbox" name="sync_with_inventory" id="sync_with_inventory" {% if settings.sync_with_inventory %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="sync_with_inventory" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Sync with inventory system" %}
+                            </label>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <input type="checkbox" name="sync_with_accounting" id="sync_with_accounting" {% if settings.sync_with_accounting %}checked{% endif %} class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="sync_with_accounting" class="ml-2 block text-sm text-gray-900">
+                                {% trans "Sync with accounting system" %}
+                            </label>
+                        </div>
+                        
+                        <div>
+                            <label for="webhook_url" class="block text-sm font-medium text-gray-700">
+                                {% trans "Webhook URL" %}
+                            </label>
+                            <input type="url" name="webhook_url" id="webhook_url" value="{{ settings.webhook_url|default:'' }}" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="https://example.com/webhook">
+                            <p class="mt-1 text-sm text-gray-500">{% trans "URL to send purchase events to external systems" %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex justify-end space-x-3">
+                <a href="{% url 'purchases:dashboard' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                    {% trans "Save Settings" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-update order number preview
+    const orderPrefix = document.getElementById('order_prefix');
+    const nextOrderNumber = document.getElementById('next_order_number');
+    
+    function updateOrderPreview() {
+        const prefix = orderPrefix.value || 'PO';
+        const number = nextOrderNumber.value || '1';
+        // You could add a preview element here if needed
+    }
+    
+    orderPrefix.addEventListener('input', updateOrderPreview);
+    nextOrderNumber.addEventListener('input', updateOrderPreview);
+    
+    // Form validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const approvalThreshold = document.getElementById('approval_threshold').value;
+        const defaultMinStock = document.getElementById('default_min_stock').value;
+        const defaultMaxStock = document.getElementById('default_max_stock').value;
+        
+        if (parseFloat(defaultMinStock) >= parseFloat(defaultMaxStock)) {
+            e.preventDefault();
+            alert('{% trans "Minimum stock level must be less than maximum stock level" %}');
+            return false;
+        }
+        
+        if (parseFloat(approvalThreshold) < 0) {
+            e.preventDefault();
+            alert('{% trans "Approval threshold cannot be negative" %}');
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %} 

@@ -39,7 +39,6 @@ INSTALLED_APPS = [
     'login',
     'clientes',
     'dashboard',
-    'proveedores',
     'inventory',
     'tiendanube',
     'django_celery_beat',

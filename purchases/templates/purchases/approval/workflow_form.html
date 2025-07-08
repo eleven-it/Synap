@@ -1,0 +1,118 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% if object %}{% trans "Edit Approval Workflow" %}{% else %}{% trans "Create Approval Workflow" %}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {% if object %}{% trans "Edit Approval Workflow" %}{% else %}{% trans "Create Approval Workflow" %}{% endif %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Configure approval workflow for purchase requests" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'purchases:workflow_list' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white shadow rounded-lg">
+            <form method="post" class="space-y-6 p-6">
+                {% csrf_token %}
+                
+                <!-- Basic Information -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Basic Information" %}</h3>
+                    
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.name.label }}
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.description.label }}
+                            </label>
+                            {{ form.description }}
+                            {% if form.description.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.description.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Amount Range -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Amount Range" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.min_amount.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.min_amount.label }}
+                            </label>
+                            {{ form.min_amount }}
+                            {% if form.min_amount.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.min_amount.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Minimum amount to trigger this workflow" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.max_amount.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.max_amount.label }}
+                            </label>
+                            {{ form.max_amount }}
+                            {% if form.max_amount.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.max_amount.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Maximum amount for this workflow (leave empty for no limit)" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Approval Settings -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Approval Settings" %}</h3>
+                    
+                    <div class="flex items-center">
+                        {{ form.requires_all_approvals }}
+                        <label for="{{ form.requires_all_approvals.id_for_label }}" class="ml-2 block text-sm text-gray-900">
+                            {{ form.requires_all_approvals.label }}
+                        </label>
+                    </div>
+                    {% if form.requires_all_approvals.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.requires_all_approvals.errors.0 }}</p>
+                    {% endif %}
+                    <p class="mt-1 text-sm text-gray-500">{% trans "If checked, all approvers at each level must approve. If unchecked, only one approval is required per level." %}</p>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                    <a href="{% url 'purchases:workflow_list' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% if object %}{% trans "Update Workflow" %}{% else %}{% trans "Create Workflow" %}{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

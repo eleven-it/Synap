@@ -1,0 +1,534 @@
+{% extends "sales/sales_base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}{% trans "Edit Contact" %}{% else %}{% trans "New Contact" %}{% endif %} - {% trans "Sales" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .form-section h3 {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    
+    .form-section h3::before {
+        content: '';
+        @apply w-1 h-6 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full mr-3;
+    }
+    
+    .form-row {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+    }
+    
+    .form-group {
+        @apply space-y-2;
+    }
+    
+    .form-label {
+        @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+    }
+    
+    .form-input {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .form-input:focus {
+        @apply transform scale-[1.02] shadow-lg;
+    }
+    
+    .form-select {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .form-textarea {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200 resize-none;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-6 py-3 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-6 py-3 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .required-field::after {
+        content: ' *';
+        @apply text-red-500;
+    }
+    
+    .autocomplete-container {
+        @apply relative;
+    }
+    
+    .autocomplete-results {
+        @apply absolute z-50 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 
+               rounded-lg shadow-lg max-h-60 overflow-y-auto;
+    }
+    
+    .autocomplete-item {
+        @apply px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer 
+               border-b border-gray-200 dark:border-gray-600 last:border-b-0;
+    }
+    
+    .autocomplete-item.selected {
+        @apply bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200;
+    }
+    
+    .progress-bar {
+        @apply fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600 z-50;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.3s ease;
+    }
+    
+    .progress-bar.active {
+        transform: scaleX(1);
+    }
+    
+    .form-tabs {
+        @apply flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1;
+    }
+    
+    .form-tab {
+        @apply flex-1 text-center py-2 px-4 rounded-md text-sm font-medium transition-all duration-200;
+    }
+    
+    .form-tab.active {
+        @apply bg-white dark:bg-gray-600 text-orange-600 dark:text-orange-400 shadow-sm;
+    }
+    
+    .form-tab:not(.active) {
+        @apply text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white;
+    }
+    
+    .tab-content {
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+        animation: fadeInUp 0.3s ease;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Progress Bar -->
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% if object %}
+                            {% trans "Edit Contact" %}
+                        {% else %}
+                            {% trans "New Contact" %}
+                        {% endif %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% if object %}
+                            {% trans "Update contact information and settings" %}
+                        {% else %}
+                            {% trans "Create a new contact with complete information" %}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'sales:contact_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form method="post" id="contactForm" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Form Tabs -->
+            <div class="form-tabs">
+                <button type="button" class="form-tab active" data-tab="basic">
+                    <i class="fas fa-user mr-2"></i>
+                    {% trans "Basic Info" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="contact">
+                    <i class="fas fa-address-book mr-2"></i>
+                    {% trans "Contact Info" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="professional">
+                    <i class="fas fa-briefcase mr-2"></i>
+                    {% trans "Professional" %}
+                </button>
+                <button type="button" class="form-tab" data-tab="settings">
+                    <i class="fas fa-cog mr-2"></i>
+                    {% trans "Settings" %}
+                </button>
+            </div>
+
+            <!-- Basic Info Tab -->
+            <div class="tab-content active" id="basic-tab">
+                <div class="form-section">
+                    <h3>{% trans "Basic Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label required-field">{% trans "First Name" %}</label>
+                            <input type="text" name="first_name" value="{{ form.first_name.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter first name' %}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required-field">{% trans "Last Name" %}</label>
+                            <input type="text" name="last_name" value="{{ form.last_name.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter last name' %}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Middle Name" %}</label>
+                            <input type="text" name="middle_name" value="{{ form.middle_name.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter middle name' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Email" %}</label>
+                            <input type="email" name="email" value="{{ form.email.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter email address' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Phone" %}</label>
+                            <input type="tel" name="phone" value="{{ form.phone.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter phone number' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Mobile" %}</label>
+                            <input type="tel" name="mobile" value="{{ form.mobile.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter mobile number' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Birth Date" %}</label>
+                            <input type="date" name="birth_date" value="{{ form.birth_date.value|default:'' }}" 
+                                   class="form-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Gender" %}</label>
+                            <select name="gender" class="form-select">
+                                <option value="">{% trans "Select gender" %}</option>
+                                <option value="M" {% if form.gender.value == 'M' %}selected{% endif %}>{% trans "Male" %}</option>
+                                <option value="F" {% if form.gender.value == 'F' %}selected{% endif %}>{% trans "Female" %}</option>
+                                <option value="O" {% if form.gender.value == 'O' %}selected{% endif %}>{% trans "Other" %}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Client" %}</label>
+                            <div class="autocomplete-container">
+                                <input type="text" id="clientSearch" class="form-input" 
+                                       placeholder="{% trans 'Search client' %}" autocomplete="off">
+                                <input type="hidden" name="client" id="clientId" value="{{ form.client.value|default:'' }}">
+                                <div class="autocomplete-results" id="clientResults" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Info Tab -->
+            <div class="tab-content" id="contact-tab">
+                <div class="form-section">
+                    <h3>{% trans "Contact Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Alternative Email" %}</label>
+                            <input type="email" name="alternative_email" value="{{ form.alternative_email.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter alternative email' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Alternative Phone" %}</label>
+                            <input type="tel" name="alternative_phone" value="{{ form.alternative_phone.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter alternative phone' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Fax" %}</label>
+                            <input type="tel" name="fax" value="{{ form.fax.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter fax number' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Skype" %}</label>
+                            <input type="text" name="skype" value="{{ form.skype.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter Skype username' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "WhatsApp" %}</label>
+                            <input type="tel" name="whatsapp" value="{{ form.whatsapp.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter WhatsApp number' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "LinkedIn" %}</label>
+                            <input type="url" name="linkedin" value="{{ form.linkedin.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter LinkedIn profile URL' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">{% trans "Address" %}</label>
+                        <textarea name="address" rows="3" class="form-textarea" 
+                                  placeholder="{% trans 'Enter full address' %}">{{ form.address.value|default:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Professional Tab -->
+            <div class="tab-content" id="professional-tab">
+                <div class="form-section">
+                    <h3>{% trans "Professional Information" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Position" %}</label>
+                            <input type="text" name="position" value="{{ form.position.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter job position' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Department" %}</label>
+                            <input type="text" name="department" value="{{ form.department.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter department' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Role" %}</label>
+                            <select name="role" class="form-select">
+                                <option value="">{% trans "Select role" %}</option>
+                                <option value="primary" {% if form.role.value == 'primary' %}selected{% endif %}>{% trans "Primary Contact" %}</option>
+                                <option value="secondary" {% if form.role.value == 'secondary' %}selected{% endif %}>{% trans "Secondary Contact" %}</option>
+                                <option value="decision_maker" {% if form.role.value == 'decision_maker' %}selected{% endif %}>{% trans "Decision Maker" %}</option>
+                                <option value="technical" {% if form.role.value == 'technical' %}selected{% endif %}>{% trans "Technical Contact" %}</option>
+                                <option value="billing" {% if form.role.value == 'billing' %}selected{% endif %}>{% trans "Billing Contact" %}</option>
+                                <option value="support" {% if form.role.value == 'support' %}selected{% endif %}>{% trans "Support Contact" %}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Company" %}</label>
+                            <input type="text" name="company" value="{{ form.company.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter company name' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Work Phone" %}</label>
+                            <input type="tel" name="work_phone" value="{{ form.work_phone.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter work phone' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Work Email" %}</label>
+                            <input type="email" name="work_email" value="{{ form.work_email.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter work email' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">{% trans "Professional Notes" %}</label>
+                        <textarea name="professional_notes" rows="4" class="form-textarea" 
+                                  placeholder="{% trans 'Enter professional notes or additional information' %}">{{ form.professional_notes.value|default:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="settings-tab">
+                <div class="form-section">
+                    <h3>{% trans "Preferences & Settings" %}</h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Preferred Language" %}</label>
+                            <select name="preferred_language" class="form-select">
+                                <option value="">{% trans "Select language" %}</option>
+                                <option value="es" {% if form.preferred_language.value == 'es' %}selected{% endif %}>{% trans "Spanish" %}</option>
+                                <option value="en" {% if form.preferred_language.value == 'en' %}selected{% endif %}>{% trans "English" %}</option>
+                                <option value="pt" {% if form.preferred_language.value == 'pt' %}selected{% endif %}>{% trans "Portuguese" %}</option>
+                                <option value="fr" {% if form.preferred_language.value == 'fr' %}selected{% endif %}>{% trans "French" %}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Time Zone" %}</label>
+                            <select name="timezone" class="form-select">
+                                <option value="">{% trans "Select timezone" %}</option>
+                                <option value="America/New_York" {% if form.timezone.value == 'America/New_York' %}selected{% endif %}>{% trans "Eastern Time" %}</option>
+                                <option value="America/Chicago" {% if form.timezone.value == 'America/Chicago' %}selected{% endif %}>{% trans "Central Time" %}</option>
+                                <option value="America/Denver" {% if form.timezone.value == 'America/Denver' %}selected{% endif %}>{% trans "Mountain Time" %}</option>
+                                <option value="America/Los_Angeles" {% if form.timezone.value == 'America/Los_Angeles' %}selected{% endif %}>{% trans "Pacific Time" %}</option>
+                                <option value="America/Mexico_City" {% if form.timezone.value == 'America/Mexico_City' %}selected{% endif %}>{% trans "Mexico City" %}</option>
+                                <option value="America/Sao_Paulo" {% if form.timezone.value == 'America/Sao_Paulo' %}selected{% endif %}>{% trans "São Paulo" %}</option>
+                                <option value="Europe/Madrid" {% if form.timezone.value == 'Europe/Madrid' %}selected{% endif %}>{% trans "Madrid" %}</option>
+                                <option value="Europe/London" {% if form.timezone.value == 'Europe/London' %}selected{% endif %}>{% trans "London" %}</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Status" %}</label>
+                            <select name="status" class="form-select">
+                                <option value="active" {% if form.status.value == 'active' %}selected{% endif %}>{% trans "Active" %}</option>
+                                <option value="inactive" {% if form.status.value == 'inactive' %}selected{% endif %}>{% trans "Inactive" %}</option>
+                                <option value="former" {% if form.status.value == 'former' %}selected{% endif %}>{% trans "Former" %}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Communication Preferences" %}</label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="email_notifications" value="1" 
+                                           {% if form.email_notifications.value %}checked{% endif %} 
+                                           class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Email notifications" %}</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="sms_notifications" value="1" 
+                                           {% if form.sms_notifications.value %}checked{% endif %} 
+                                           class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "SMS notifications" %}</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="marketing_communications" value="1" 
+                                           {% if form.marketing_communications.value %}checked{% endif %} 
+                                           class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans "Marketing communications" %}</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Tags" %}</label>
+                            <input type="text" name="tags" value="{{ form.tags.value|default:'' }}" 
+                                   class="form-input" placeholder="{% trans 'Enter tags separated by commas' %}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">{% trans "Notes" %}</label>
+                            <textarea name="notes" rows="3" class="form-textarea" 
+                                      placeholder="{% trans 'Enter additional notes' %}">{{ form.notes.value|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <a href="{% url 'sales:contact_list' %}" class="btn-secondary">
+                    <i class="fas fa-times mr-2"></i>
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save mr-2"></i>
+                    {% if object %}
+                        {% trans "Update Contact" %}
+                    {% else %}
+                        {% trans "Create Contact" %}
+                    {% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Tab functionality
+    const tabs = document.querySelectorAll('.form-tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.dataset.tab;
+            
+            // Update active tab
+            tabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            // Update active content
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === `${targetTab}-tab`) {
+                    content.classList.add('active');
+                }
+            });
+        });
+    });
+    
+    // Form progress bar
+    const form = document.getElementById('contactForm');
+    const progressBar = document.getElementById('progressBar');
+    
+    form.addEventListener('input', () => {
+        progressBar.classList.add('active');
+        setTimeout(() => {
+            progressBar.classList.remove('active');
+        }, 300);
+    });
+    
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Saving..." %}';
+    });
+    
+    // Autocomplete functionality will be added in the next step
+});
+</script>
+{% endblock %} 

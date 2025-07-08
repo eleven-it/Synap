@@ -1,0 +1,449 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block purchases_title %}{% if form.instance.pk %}{% trans "Edit Quotation" %}{% else %}{% trans "New Quotation" %}{% endif %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">receipt</span>
+    <a href="{% url 'purchases:quotation_list' %}">{% trans "Quotations" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">{% if form.instance.pk %}edit{% else %}add{% endif %}</span>
+    {% if form.instance.pk %}{% trans "Edit Quotation" %}{% else %}{% trans "New Quotation" %}{% endif %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% if form.instance.pk %}{% trans "Edit Quotation" %}{% else %}{% trans "New Quotation" %}{% endif %}{% endblock %}
+
+{% block purchases_subheader %}{% if form.instance.pk %}{% trans "Update quotation details" %}{% else %}{% trans "Create a new quotation" %}{% endif %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:quotation_list' %}" class="btn-secondary">
+    <span class="material-icons mr-2">arrow_back</span>
+    {% trans "Back to List" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="max-w-6xl mx-auto">
+    <form method="post" id="quotation-form">
+        {% csrf_token %}
+        
+        <!-- Pestañas de Navegación -->
+        <div class="mb-6">
+            <nav class="flex space-x-4 border-b border-gray-200 dark:border-gray-700">
+                <button type="button" class="tab-button active" data-tab="basic">
+                    <span class="material-icons text-sm mr-2">info</span>
+                    {% trans "Basic Info" %}
+                </button>
+                <button type="button" class="tab-button" data-tab="lines">
+                    <span class="material-icons text-sm mr-2">list</span>
+                    {% trans "Items" %}
+                    <span id="lines-count" class="ml-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-medium px-2 py-1 rounded-full">0</span>
+                </button>
+                <button type="button" class="tab-button" data-tab="terms">
+                    <span class="material-icons text-sm mr-2">description</span>
+                    {% trans "Terms" %}
+                </button>
+                <button type="button" class="tab-button" data-tab="review">
+                    <span class="material-icons text-sm mr-2">preview</span>
+                    {% trans "Review" %}
+                </button>
+            </nav>
+        </div>
+
+        <!-- Pestaña: Información Básica -->
+        <div id="tab-basic" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Basic Information" %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            {{ form.purchase_request|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.supplier|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.currency|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.valid_until|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.delivery_time|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.payment_terms|as_crispy_field }}
+                        </div>
+                        <div class="md:col-span-2">
+                            {{ form.notes|as_crispy_field }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Líneas de Producto -->
+        <div id="tab-lines" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Quotation Items" %}
+                        </h3>
+                        <button type="button" id="add-line" class="btn-primary">
+                            <span class="material-icons mr-2">add</span>
+                            {% trans "Add Item" %}
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="lines-container">
+                        <!-- Las líneas se agregarán dinámicamente aquí -->
+                    </div>
+                    
+                    <!-- Resumen de líneas -->
+                    <div class="mt-6 p-6 bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-xl border border-orange-200 dark:border-orange-800">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div class="flex items-center">
+                                <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">inventory</span>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Total Items" %}:</span>
+                                <span id="total-items" class="font-medium text-gray-900 dark:text-white ml-1">0</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">shopping_cart</span>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Total Quantity" %}:</span>
+                                <span id="total-quantity" class="font-medium text-gray-900 dark:text-white ml-1">0</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">attach_money</span>
+                                <span class="text-gray-500 dark:text-gray-400">{% trans "Total Amount" %}:</span>
+                                <span id="total-amount" class="font-medium text-gray-900 dark:text-white ml-1">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Términos y Condiciones -->
+        <div id="tab-terms" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Terms and Conditions" %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Delivery Terms" %}
+                            </label>
+                            <textarea name="delivery_terms" rows="3" 
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Specify delivery terms and conditions...' %}">{{ form.instance.delivery_terms|default:'' }}</textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Payment Terms" %}
+                            </label>
+                            <textarea name="payment_terms" rows="3" 
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Specify payment terms and conditions...' %}">{{ form.instance.payment_terms|default:'' }}</textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Warranty Terms" %}
+                            </label>
+                            <textarea name="warranty_terms" rows="3" 
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Specify warranty terms and conditions...' %}">{{ form.instance.warranty_terms|default:'' }}</textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Additional Terms" %}
+                            </label>
+                            <textarea name="additional_terms" rows="4" 
+                                      class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                                      placeholder="{% trans 'Any additional terms or special conditions...' %}">{{ form.instance.additional_terms|default:'' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña: Revisión -->
+        <div id="tab-review" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Review Quotation" %}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div id="review-content">
+                        <!-- El contenido de revisión se generará dinámicamente -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botones de Navegación -->
+        <div class="flex justify-between mt-8">
+            <button type="button" id="prev-tab" class="btn-secondary" style="display: none;">
+                <span class="material-icons mr-2">arrow_back</span>
+                {% trans "Previous" %}
+            </button>
+            
+            <div class="flex space-x-4">
+                <button type="button" id="next-tab" class="btn-primary">
+                    {% trans "Next" %}
+                    <span class="material-icons ml-2">arrow_forward</span>
+                </button>
+                
+                <button type="submit" id="submit-form" class="btn-primary" style="display: none;">
+                    <span class="material-icons mr-2">save</span>
+                    {% if form.instance.pk %}{% trans "Update Quotation" %}{% else %}{% trans "Create Quotation" %}{% endif %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentTab = 0;
+    const tabs = ['basic', 'lines', 'terms', 'review'];
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const prevBtn = document.getElementById('prev-tab');
+    const nextBtn = document.getElementById('next-tab');
+    const submitBtn = document.getElementById('submit-form');
+    
+    // Inicializar líneas si existen
+    let lineCount = 0;
+    updateLineCount();
+    
+    function showTab(index) {
+        // Ocultar todas las pestañas
+        tabContents.forEach(content => content.classList.remove('active'));
+        tabButtons.forEach(button => button.classList.remove('active'));
+        
+        // Mostrar pestaña actual
+        tabContents[index].classList.add('active');
+        tabButtons[index].classList.add('active');
+        
+        // Actualizar botones
+        prevBtn.style.display = index > 0 ? 'block' : 'none';
+        nextBtn.style.display = index < tabs.length - 1 ? 'block' : 'none';
+        submitBtn.style.display = index === tabs.length - 1 ? 'block' : 'none';
+        
+        // Generar contenido de revisión si es la última pestaña
+        if (index === tabs.length - 1) {
+            generateReviewContent();
+        }
+    }
+    
+    function generateReviewContent() {
+        const reviewContent = document.getElementById('review-content');
+        const formData = new FormData(document.getElementById('quotation-form'));
+        
+        let html = `
+            <div class="space-y-6">
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-2">{% trans "Basic Information" %}</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Purchase Request" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${formData.get('purchase_request') || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Supplier" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${formData.get('supplier') || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Valid Until" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${formData.get('valid_until') || 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500 dark:text-gray-400">{% trans "Delivery Time" %}:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">${formData.get('delivery_time') || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <h4 class="font-medium text-gray-900 dark:text-white mb-2">{% trans "Items Summary" %}</h4>
+                    <div class="text-sm">
+                        <span class="text-gray-500 dark:text-gray-400">{% trans "Total Items" %}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">${lineCount}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        reviewContent.innerHTML = html;
+    }
+    
+    function updateLineCount() {
+        document.getElementById('lines-count').textContent = lineCount;
+        document.getElementById('total-items').textContent = lineCount;
+    }
+    
+    // Event listeners para navegación
+    tabButtons.forEach((button, index) => {
+        button.addEventListener('click', () => {
+            if (validateCurrentTab()) {
+                currentTab = index;
+                showTab(currentTab);
+            }
+        });
+    });
+    
+    prevBtn.addEventListener('click', () => {
+        if (currentTab > 0) {
+            currentTab--;
+            showTab(currentTab);
+        }
+    });
+    
+    nextBtn.addEventListener('click', () => {
+        if (validateCurrentTab() && currentTab < tabs.length - 1) {
+            currentTab++;
+            showTab(currentTab);
+        }
+    });
+    
+    function validateCurrentTab() {
+        const currentTabContent = document.getElementById(`tab-${tabs[currentTab]}`);
+        const requiredFields = currentTabContent.querySelectorAll('[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('border-red-500', 'focus:ring-red-500');
+                isValid = false;
+            } else {
+                field.classList.remove('border-red-500', 'focus:ring-red-500');
+            }
+        });
+        
+        if (!isValid) {
+            PurchasesApp.showNotification('{% trans "Please fill in all required fields" %}', 'error');
+        }
+        
+        return isValid;
+    }
+    
+    // Agregar línea de producto
+    document.getElementById('add-line').addEventListener('click', function() {
+        const container = document.getElementById('lines-container');
+        const lineIndex = lineCount;
+        
+        const lineHtml = `
+            <div class="line-item" data-line="${lineIndex}">
+                <div class="flex justify-between items-start mb-4">
+                    <h4 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Item" %} ${lineIndex + 1}</h4>
+                    <button type="button" class="remove-line" onclick="removeLine(${lineIndex})">
+                        <span class="material-icons">delete</span>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Product Name" %}</label>
+                        <input type="text" name="lines[${lineIndex}][product_name]" required 
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Quantity" %}</label>
+                        <input type="number" name="lines[${lineIndex}][quantity]" min="1" required 
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               onchange="updateTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Unit Price" %}</label>
+                        <input type="number" name="lines[${lineIndex}][unit_price]" min="0" step="0.01" required 
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               onchange="updateTotals()">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Discount %" %}</label>
+                        <input type="number" name="lines[${lineIndex}][discount]" min="0" max="100" step="0.01" 
+                               class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"
+                               onchange="updateTotals()">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Description" %}</label>
+                    <textarea name="lines[${lineIndex}][description]" rows="2" 
+                              class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-orange-500 focus:border-orange-500"></textarea>
+                </div>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', lineHtml);
+        lineCount++;
+        updateLineCount();
+    });
+    
+    // Validación del formulario
+    document.getElementById('quotation-form').addEventListener('submit', function(e) {
+        if (!validateCurrentTab()) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Mostrar loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Processing..." %}
+        `;
+    });
+});
+
+function removeLine(lineIndex) {
+    const line = document.querySelector(`[data-line="${lineIndex}"]`);
+    if (line) {
+        line.remove();
+        lineCount--;
+        updateLineCount();
+        updateTotals();
+    }
+}
+
+function updateTotals() {
+    let totalQuantity = 0;
+    let totalAmount = 0;
+    
+    document.querySelectorAll('.line-item').forEach(line => {
+        const quantity = parseFloat(line.querySelector('input[name*="[quantity]"]').value) || 0;
+        const unitPrice = parseFloat(line.querySelector('input[name*="[unit_price]"]').value) || 0;
+        const discount = parseFloat(line.querySelector('input[name*="[discount]"]').value) || 0;
+        
+        const lineTotal = quantity * unitPrice * (1 - discount / 100);
+        
+        totalQuantity += quantity;
+        totalAmount += lineTotal;
+    });
+    
+    document.getElementById('total-quantity').textContent = totalQuantity;
+    document.getElementById('total-amount').textContent = '$' + totalAmount.toFixed(2);
+}
+</script>
+{% endblock %} 

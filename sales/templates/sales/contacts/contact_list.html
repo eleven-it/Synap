@@ -1,0 +1,468 @@
+{% extends "sales/sales_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Contacts" %} - {% trans "Sales" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6;
+    }
+    
+    .stat-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .stat-value {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .stat-label {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .filters-section {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .filter-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4;
+    }
+    
+    .filter-group {
+        @apply space-y-2;
+    }
+    
+    .filter-label {
+        @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+    }
+    
+    .filter-input {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .filter-select {
+        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .contacts-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6;
+    }
+    
+    .contact-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 
+               p-6 hover:shadow-lg transition-all duration-200 transform hover:scale-[1.02];
+    }
+    
+    .contact-header {
+        @apply flex items-start justify-between mb-4;
+    }
+    
+    .contact-avatar {
+        @apply w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full 
+               flex items-center justify-center text-white font-semibold text-lg;
+    }
+    
+    .contact-info {
+        @apply flex-1 ml-4;
+    }
+    
+    .contact-name {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-1;
+    }
+    
+    .contact-role {
+        @apply text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .contact-client {
+        @apply text-xs text-orange-600 dark:text-orange-400 font-medium;
+    }
+    
+    .contact-actions {
+        @apply flex space-x-2;
+    }
+    
+    .btn-icon {
+        @apply w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all duration-200;
+    }
+    
+    .btn-edit {
+        @apply bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-400 dark:hover:bg-blue-800;
+    }
+    
+    .btn-delete {
+        @apply bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900 dark:text-red-400 dark:hover:bg-red-800;
+    }
+    
+    .contact-details {
+        @apply space-y-2 text-sm text-gray-600 dark:text-gray-400;
+    }
+    
+    .contact-detail {
+        @apply flex items-center;
+    }
+    
+    .contact-detail i {
+        @apply w-4 mr-2 text-gray-400;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-2 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .empty-state {
+        @apply text-center py-12;
+    }
+    
+    .empty-icon {
+        @apply w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4;
+    }
+    
+    .empty-title {
+        @apply text-lg font-medium text-gray-900 dark:text-white mb-2;
+    }
+    
+    .empty-text {
+        @apply text-gray-600 dark:text-gray-400 mb-6;
+    }
+    
+    .search-box {
+        @apply relative;
+    }
+    
+    .search-input {
+        @apply w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
+               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
+               dark:bg-gray-700 dark:text-white transition-all duration-200;
+    }
+    
+    .search-icon {
+        @apply absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400;
+    }
+    
+    .pagination {
+        @apply flex items-center justify-between mt-8;
+    }
+    
+    .pagination-info {
+        @apply text-sm text-gray-700 dark:text-gray-300;
+    }
+    
+    .pagination-links {
+        @apply flex space-x-2;
+    }
+    
+    .page-link {
+        @apply px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm 
+               hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200;
+    }
+    
+    .page-link.active {
+        @apply bg-orange-500 text-white border-orange-500;
+    }
+    
+    .page-link.disabled {
+        @apply text-gray-400 cursor-not-allowed hover:bg-transparent;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Contacts" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Manage your client contacts and their information" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'sales:contact_create' %}" class="btn-primary">
+                        <i class="fas fa-plus mr-2"></i>
+                        {% trans "New Contact" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_contacts }}</div>
+                <div class="stat-label">{% trans "Total Contacts" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ active_contacts }}</div>
+                <div class="stat-label">{% trans "Active Contacts" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ primary_contacts }}</div>
+                <div class="stat-label">{% trans "Primary Contacts" %}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ recent_contacts }}</div>
+                <div class="stat-label">{% trans "Added This Month" %}</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters-section">
+            <form method="get" id="filtersForm">
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label class="filter-label">{% trans "Search" %}</label>
+                        <div class="search-box">
+                            <i class="fas fa-search search-icon"></i>
+                            <input type="text" name="search" value="{{ request.GET.search }}" 
+                                   class="search-input" placeholder="{% trans 'Search contacts...' %}">
+                        </div>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">{% trans "Client" %}</label>
+                        <select name="client" class="filter-select">
+                            <option value="">{% trans "All Clients" %}</option>
+                            {% for client in clients %}
+                                <option value="{{ client.id }}" {% if request.GET.client == client.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ client.get_display_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">{% trans "Role" %}</label>
+                        <select name="role" class="filter-select">
+                            <option value="">{% trans "All Roles" %}</option>
+                            <option value="primary" {% if request.GET.role == 'primary' %}selected{% endif %}>{% trans "Primary Contact" %}</option>
+                            <option value="secondary" {% if request.GET.role == 'secondary' %}selected{% endif %}>{% trans "Secondary Contact" %}</option>
+                            <option value="decision_maker" {% if request.GET.role == 'decision_maker' %}selected{% endif %}>{% trans "Decision Maker" %}</option>
+                            <option value="technical" {% if request.GET.role == 'technical' %}selected{% endif %}>{% trans "Technical Contact" %}</option>
+                            <option value="billing" {% if request.GET.role == 'billing' %}selected{% endif %}>{% trans "Billing Contact" %}</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">{% trans "Department" %}</label>
+                        <select name="department" class="filter-select">
+                            <option value="">{% trans "All Departments" %}</option>
+                            {% for dept in departments %}
+                                <option value="{{ dept }}" {% if request.GET.department == dept %}selected{% endif %}>
+                                    {{ dept }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        {% trans "Showing" %} {{ contacts.start_index }}-{{ contacts.end_index }} {% trans "of" %} {{ contacts.paginator.count }} {% trans "contacts" %}
+                    </div>
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="clearFilters()" class="btn-secondary">
+                            <i class="fas fa-times mr-2"></i>
+                            {% trans "Clear Filters" %}
+                        </button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-filter mr-2"></i>
+                            {% trans "Apply Filters" %}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Contacts Grid -->
+        {% if contacts %}
+        <div class="contacts-grid">
+            {% for contact in contacts %}
+            <div class="contact-card">
+                <div class="contact-header">
+                    <div class="contact-avatar">
+                        {{ contact.get_initials }}
+                    </div>
+                    <div class="contact-info">
+                        <div class="contact-name">{{ contact.get_full_name }}</div>
+                        <div class="contact-role">{{ contact.role|default:_("No role specified") }}</div>
+                        {% if contact.client %}
+                            <div class="contact-client">{{ contact.client.get_display_name }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="contact-actions">
+                        <a href="{% url 'sales:contact_detail' contact.pk %}" class="btn-icon btn-edit" title="{% trans 'View Details' %}">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{% url 'sales:contact_update' contact.pk %}" class="btn-icon btn-edit" title="{% trans 'Edit Contact' %}">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="{% url 'sales:contact_delete' contact.pk %}" class="btn-icon btn-delete" title="{% trans 'Delete Contact' %}">
+                            <i class="fas fa-trash"></i>
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="contact-details">
+                    {% if contact.email %}
+                    <div class="contact-detail">
+                        <i class="fas fa-envelope"></i>
+                        <a href="mailto:{{ contact.email }}" class="text-orange-600 hover:text-orange-700">
+                            {{ contact.email }}
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.phone %}
+                    <div class="contact-detail">
+                        <i class="fas fa-phone"></i>
+                        <a href="tel:{{ contact.phone }}" class="text-orange-600 hover:text-orange-700">
+                            {{ contact.phone }}
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.mobile %}
+                    <div class="contact-detail">
+                        <i class="fas fa-mobile-alt"></i>
+                        <a href="tel:{{ contact.mobile }}" class="text-orange-600 hover:text-orange-700">
+                            {{ contact.mobile }}
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.department %}
+                    <div class="contact-detail">
+                        <i class="fas fa-building"></i>
+                        {{ contact.department }}
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact.position %}
+                    <div class="contact-detail">
+                        <i class="fas fa-briefcase"></i>
+                        {{ contact.position }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if contacts.has_other_pages %}
+        <div class="pagination">
+            <div class="pagination-info">
+                {% trans "Showing" %} {{ contacts.start_index }}-{{ contacts.end_index }} {% trans "of" %} {{ contacts.paginator.count }} {% trans "contacts" %}
+            </div>
+            <div class="pagination-links">
+                {% if contacts.has_previous %}
+                    <a href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                    <a href="?page={{ contacts.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                {% else %}
+                    <span class="page-link disabled">
+                        <i class="fas fa-angle-double-left"></i>
+                    </span>
+                    <span class="page-link disabled">
+                        <i class="fas fa-angle-left"></i>
+                    </span>
+                {% endif %}
+                
+                {% for num in contacts.paginator.page_range %}
+                    {% if contacts.number == num %}
+                        <span class="page-link active">{{ num }}</span>
+                    {% elif num > contacts.number|add:'-3' and num < contacts.number|add:'3' %}
+                        <a href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                            {{ num }}
+                        </a>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if contacts.has_next %}
+                    <a href="?page={{ contacts.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                    <a href="?page={{ contacts.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="page-link">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                {% else %}
+                    <span class="page-link disabled">
+                        <i class="fas fa-angle-right"></i>
+                    </span>
+                    <span class="page-link disabled">
+                        <i class="fas fa-angle-double-right"></i>
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-users text-gray-400 text-2xl"></i>
+            </div>
+            <h3 class="empty-title">{% trans "No contacts found" %}</h3>
+            <p class="empty-text">
+                {% trans "Get started by creating your first contact or adjust your search filters." %}
+            </p>
+            <a href="{% url 'sales:contact_create' %}" class="btn-primary">
+                <i class="fas fa-plus mr-2"></i>
+                {% trans "Create First Contact" %}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit form on filter changes
+    const filterSelects = document.querySelectorAll('.filter-select');
+    filterSelects.forEach(select => {
+        select.addEventListener('change', () => {
+            document.getElementById('filtersForm').submit();
+        });
+    });
+    
+    // Search with debounce
+    const searchInput = document.querySelector('input[name="search"]');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            document.getElementById('filtersForm').submit();
+        }, 500);
+    });
+});
+
+function clearFilters() {
+    window.location.href = '{% url "sales:contact_list" %}';
+}
+</script>
+{% endblock %} 

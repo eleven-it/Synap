@@ -1,0 +1,470 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block page_title %}
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {% if document.document_type == 'request' %}{% trans 'Purchase Request' %}{% else %}{% trans 'Purchase Order' %}{% endif %}
+                    {{ document.number }}
+                </h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {% if document.document_type == 'request' %}
+                        {% trans 'Requested by' %} {{ document.requested_by.get_full_name|default:document.requested_by.username }}
+                    {% else %}
+                        {% trans 'Created by' %} {{ document.created_by.get_full_name|default:document.created_by.username }}
+                    {% endif %}
+                    {% trans 'on' %} {{ document.created_at|date:"M d, Y" }}
+                </p>
+            </div>
+        </div>
+        <div class="flex flex-col items-end space-y-2">
+            <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
+                {% if document.status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                {% elif document.status == 'submitted' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                {% elif document.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                {% elif document.status == 'quotation_requested' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                {% elif document.status == 'quotation_received' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200
+                {% elif document.status == 'order_created' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                {% elif document.status == 'order_sent' %}bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200
+                {% elif document.status == 'order_confirmed' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200
+                {% elif document.status == 'partially_received' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                {% elif document.status == 'fully_received' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200
+                {% elif document.status == 'invoiced' %}bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200
+                {% elif document.status == 'paid' %}bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200
+                {% elif document.status == 'completed' %}bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100
+                {% elif document.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                {% elif document.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                {% else %}bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                {% if document.status == 'draft' %}{% trans 'Draft' %}
+                {% elif document.status == 'submitted' %}{% trans 'Submitted' %}
+                {% elif document.status == 'approved' %}{% trans 'Approved' %}
+                {% elif document.status == 'quotation_requested' %}{% trans 'Quotation Requested' %}
+                {% elif document.status == 'quotation_received' %}{% trans 'Quotation Received' %}
+                {% elif document.status == 'order_created' %}{% trans 'Order Created' %}
+                {% elif document.status == 'order_sent' %}{% trans 'Order Sent' %}
+                {% elif document.status == 'order_confirmed' %}{% trans 'Order Confirmed' %}
+                {% elif document.status == 'partially_received' %}{% trans 'Partially Received' %}
+                {% elif document.status == 'fully_received' %}{% trans 'Fully Received' %}
+                {% elif document.status == 'invoiced' %}{% trans 'Invoiced' %}
+                {% elif document.status == 'paid' %}{% trans 'Paid' %}
+                {% elif document.status == 'completed' %}{% trans 'Completed' %}
+                {% elif document.status == 'cancelled' %}{% trans 'Cancelled' %}
+                {% elif document.status == 'rejected' %}{% trans 'Rejected' %}
+                {% else %}{% trans 'Draft' %}{% endif %}
+            </span>
+            <span class="text-xs text-gray-500 dark:text-gray-400">{{ document.get_status_display_name }}</span>
+        </div>
+    </div>
+{% endblock %}
+
+{% block page_actions %}
+    <a href="{% url 'purchases:order_list' %}" 
+       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        {% trans 'Back to List' %}
+    </a>
+    
+    <!-- Acciones según el estado -->
+    {% if document.status == 'draft' %}
+        <a href="{% url 'purchases:order_update' document.pk %}" 
+           class="inline-flex items-center px-4 py-2 border border-synap-300 dark:border-synap-600 text-sm font-medium rounded-md text-synap-700 dark:text-synap-300 bg-synap-50 dark:bg-synap-900 hover:bg-synap-100 dark:hover:bg-synap-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+            {% trans 'Edit' %}
+        </a>
+        <button type="button" onclick="submitDocument()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+            </svg>
+            {% trans 'Submit for Approval' %}
+        </button>
+    {% elif document.status == 'approved' %}
+        <button type="button" onclick="requestQuotation()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-400 to-blue-600 hover:from-blue-500 hover:to-blue-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            {% trans 'Request Quotation' %}
+        </button>
+        <button type="button" onclick="createOrder()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            {% trans 'Create Order' %}
+        </button>
+    {% elif document.status == 'order_sent' %}
+        <button type="button" onclick="confirmOrder()"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-green-400 to-green-600 hover:from-green-500 hover:to-green-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            {% trans 'Confirm Order' %}
+        </button>
+    {% elif document.status == 'order_confirmed' %}
+        <a href="{% url 'purchases:receipt_create' %}?order={{ document.pk }}" 
+           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+            {% trans 'Receive Items' %}
+        </a>
+    {% endif %}
+    
+    <!-- Acción de cancelar siempre disponible -->
+    {% if document.status not in 'cancelled,completed,rejected' %}
+        <button type="button" onclick="cancelDocument()"
+                class="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-600 text-sm font-medium rounded-md text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900 hover:bg-red-100 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            {% trans 'Cancel' %}
+        </button>
+    {% endif %}
+{% endblock %}
+
+{% block purchases_content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- Información principal -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Document Information' %}</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Document Number' %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ document.number }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Title' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.title }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Status' %}
+                        </label>
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                            {% if document.status == 'draft' %}bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200
+                            {% elif document.status == 'submitted' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                            {% elif document.status == 'approved' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                            {% elif document.status == 'quotation_requested' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                            {% elif document.status == 'quotation_received' %}bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200
+                            {% elif document.status == 'order_created' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                            {% elif document.status == 'order_sent' %}bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200
+                            {% elif document.status == 'order_confirmed' %}bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200
+                            {% elif document.status == 'partially_received' %}bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200
+                            {% elif document.status == 'fully_received' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200
+                            {% elif document.status == 'invoiced' %}bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200
+                            {% elif document.status == 'paid' %}bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200
+                            {% elif document.status == 'completed' %}bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100
+                            {% elif document.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                            {% elif document.status == 'rejected' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                            {% else %}bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                            {{ document.get_status_display_name }}
+                        </span>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Document Date' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.document_date|date:"M d, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Currency' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.currency }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Priority' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.get_priority_display }}</p>
+                    </div>
+                    
+                    {% if document.document_type == 'order' and document.supplier %}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Supplier' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.supplier.name }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if document.expected_delivery_date %}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Expected Delivery' %}
+                        </label>
+                        <p class="text-gray-900 dark:text-white">{{ document.expected_delivery_date|date:"M d, Y" }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Líneas del documento -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Document Lines' %}</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Product' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Description' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Quantity' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Unit Price' %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Total' %}
+                            </th>
+                            {% if document.document_type == 'order' %}
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans 'Received' %}
+                            </th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for line in document.lines.all %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ line.product_variant.product.name }}
+                                </div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400">
+                                    {{ line.product_variant.sku }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    {{ line.description|default:"-" }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    {{ line.quantity }} {{ line.unit_of_measure.name }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    ${{ line.unit_price }}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    ${{ line.total_amount }}
+                                </div>
+                            </td>
+                            {% if document.document_type == 'order' %}
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900 dark:text-white">
+                                    {{ line.received_quantity|default:"0" }} / {{ line.quantity }}
+                                </div>
+                                {% if line.received_quantity %}
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
+                                    <div class="bg-green-600 h-2 rounded-full" style="width: {{ line.receipt_progress }}%"></div>
+                                </div>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if document.document_type == 'order' %}6{% else %}5{% endif %}" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                {% trans 'No lines found' %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Totales -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Totals' %}</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Subtotal' %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            ${{ document.subtotal|default:"0.00" }}
+                        </p>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Tax' %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            ${{ document.tax_amount|default:"0.00" }}
+                        </p>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Discount' %}
+                        </label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            ${{ document.discount_amount|default:"0.00" }}
+                        </p>
+                    </div>
+                    <div class="text-center">
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+                            {% trans 'Total' %}
+                        </label>
+                        <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                            ${{ document.total_amount|default:"0.00" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información adicional -->
+        {% if document.notes or document.delivery_address %}
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Additional Information' %}</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% if document.notes %}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                            {% trans 'Notes' %}
+                        </label>
+                        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ document.notes }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if document.delivery_address %}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                            {% trans 'Delivery Address' %}
+                        </label>
+                        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ document.delivery_address }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Historial de estados -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans 'Status History' %}</h3>
+            </div>
+            <div class="px-6 py-4">
+                <div class="flow-root">
+                    <ul class="-mb-8">
+                        {% for log in document.approval_logs.all %}
+                        <li>
+                            <div class="relative pb-8">
+                                {% if not forloop.last %}
+                                <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
+                                {% endif %}
+                                <div class="relative flex space-x-3">
+                                    <div>
+                                        <span class="h-8 w-8 rounded-full bg-synap-500 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
+                                            <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                                        <div>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                {% trans 'Status changed to' %} <span class="font-medium text-gray-900 dark:text-white">{{ log.get_status_display }}</span>
+                                            </p>
+                                            {% if log.reason %}
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ log.reason }}</p>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-right text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                                            <time datetime="{{ log.created_at|date:'c' }}">{{ log.created_at|date:"M d, Y H:i" }}</time>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {% empty %}
+                        <li class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
+                            {% trans 'No status history available' %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function submitDocument() {
+    if (confirm('{% trans "Are you sure you want to submit this document for approval?" %}')) {
+        // Implementar lógica de envío
+        console.log('Submitting document...');
+    }
+}
+
+function requestQuotation() {
+    if (confirm('{% trans "Are you sure you want to request quotations for this document?" %}')) {
+        // Implementar lógica de solicitud de cotización
+        console.log('Requesting quotation...');
+    }
+}
+
+function createOrder() {
+    if (confirm('{% trans "Are you sure you want to create a purchase order from this document?" %}')) {
+        // Implementar lógica de creación de orden
+        console.log('Creating order...');
+    }
+}
+
+function confirmOrder() {
+    if (confirm('{% trans "Are you sure you want to confirm this order?" %}')) {
+        // Implementar lógica de confirmación
+        console.log('Confirming order...');
+    }
+}
+
+function cancelDocument() {
+    if (confirm('{% trans "Are you sure you want to cancel this document?" %}')) {
+        // Implementar lógica de cancelación
+        console.log('Cancelling document...');
+    }
+}
+</script>
+{% endblock %} 

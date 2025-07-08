@@ -1,0 +1,314 @@
+{% extends 'purchases/purchases_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block purchases_title %}{% trans "Suppliers" %}{% endblock %}
+
+{% block purchases_breadcrumb %}
+<div class="purchases-breadcrumb-item">
+    <span class="material-icons text-sm">business</span>
+    <a href="{% url 'purchases:supplier_list' %}">{% trans "Suppliers" %}</a>
+</div>
+<div class="purchases-breadcrumb-item active">
+    <span class="material-icons text-sm">list</span>
+    {% trans "All Suppliers" %}
+</div>
+{% endblock %}
+
+{% block purchases_header %}{% trans "Suppliers" %}{% endblock %}
+
+{% block purchases_subheader %}{% trans "Manage your supplier relationships and information" %}{% endblock %}
+
+{% block purchases_actions %}
+<a href="{% url 'purchases:supplier_create' %}" class="btn-primary">
+    <span class="material-icons mr-2">add</span>
+    {% trans "New Supplier" %}
+</a>
+{% endblock %}
+
+{% block purchases_content %}
+<div class="space-y-6">
+    <!-- Filtros y búsqueda -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                {% trans "Search & Filters" %}
+            </h3>
+        </div>
+        <div class="card-body">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label for="search" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Search" %}
+                    </label>
+                    <input type="text" name="search" id="search" 
+                           value="{{ request.GET.search }}"
+                           class="form-input w-full"
+                           placeholder="{% trans 'Search by name, code, email...' %}">
+                </div>
+                <div>
+                    <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Status" %}
+                    </label>
+                    <select name="status" id="status" class="form-select w-full">
+                        <option value="">{% trans "All Status" %}</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>
+                            {% trans "Active" %}
+                        </option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>
+                            {% trans "Inactive" %}
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Category" %}
+                    </label>
+                    <select name="category" id="category" class="form-select w-full">
+                        <option value="">{% trans "All Categories" %}</option>
+                        <!-- Opciones de categorías -->
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="btn-primary w-full">
+                        <span class="material-icons mr-2">search</span>
+                        {% trans "Search" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Lista de proveedores -->
+    <div class="card">
+        <div class="card-header">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Suppliers" %}
+                </h3>
+                <div class="flex space-x-2">
+                    <button class="btn-secondary" onclick="exportSuppliers()">
+                        <span class="material-icons mr-2">download</span>
+                        {% trans "Export" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if suppliers %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Supplier" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Primary Contact" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Additional Contacts" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Status" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Rating" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {% trans "Actions" %}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for supplier in suppliers %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-200">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0 h-10 w-10">
+                                            <div class="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                                                <span class="text-white font-medium text-sm">
+                                                    {{ supplier.name|first|upper }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                                {{ supplier.name }}
+                                            </div>
+                                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                                {{ supplier.code }}
+                                            </div>
+                                            {% if supplier.supplier_category %}
+                                                <div class="text-xs text-gray-400 dark:text-gray-500">
+                                                    {{ supplier.supplier_category }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% with primary_contact=supplier.get_contacts.filter.relationship_type='primary'|first %}
+                                        {% if primary_contact %}
+                                            <div class="text-sm text-gray-900 dark:text-white">
+                                                {{ primary_contact.full_name }}
+                                            </div>
+                                            {% if primary_contact.position %}
+                                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                                    {{ primary_contact.position }}
+                                                </div>
+                                            {% endif %}
+                                            {% if primary_contact.email %}
+                                                <div class="text-xs text-blue-600 dark:text-blue-400">
+                                                    {{ primary_contact.email }}
+                                                </div>
+                                            {% endif %}
+                                        {% elif supplier.contact_person %}
+                                            <div class="text-sm text-gray-900 dark:text-white">
+                                                {{ supplier.contact_person }}
+                                            </div>
+                                            {% if supplier.email %}
+                                                <div class="text-xs text-blue-600 dark:text-blue-400">
+                                                    {{ supplier.email }}
+                                                </div>
+                                            {% endif %}
+                                        {% else %}
+                                            <div class="text-sm text-gray-400 dark:text-gray-500">
+                                                {% trans "No primary contact" %}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% with contacts_count=supplier.get_contacts.count %}
+                                        {% if contacts_count > 1 %}
+                                            <div class="flex items-center">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                                    <span class="material-icons text-xs mr-1">people</span>
+                                                    {{ contacts_count|add:"-1" }} {% trans "additional" %}
+                                                </span>
+                                            </div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                {% trans "View all contacts" %}
+                                            </div>
+                                        {% elif contacts_count == 1 %}
+                                            <div class="text-sm text-gray-400 dark:text-gray-500">
+                                                {% trans "Only primary contact" %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-sm text-gray-400 dark:text-gray-500">
+                                                {% trans "No contacts" %}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if supplier.is_active %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                            <span class="w-2 h-2 bg-green-400 rounded-full mr-1"></span>
+                                            {% trans "Active" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                            <span class="w-2 h-2 bg-red-400 rounded-full mr-1"></span>
+                                            {% trans "Inactive" %}
+                                        </span>
+                                    {% endif %}
+                                    {% if supplier.is_approved %}
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                                <span class="material-icons text-xs mr-1">verified</span>
+                                                {% trans "Approved" %}
+                                            </span>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="flex items-center">
+                                            {% for i in "12345" %}
+                                                <span class="material-icons text-sm {% if forloop.counter <= supplier.rating %}text-yellow-400{% else %}text-gray-300{% endif %}">
+                                                    star
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                            {{ supplier.rating|default:"0" }}/5
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <a href="{% url 'purchases:supplier_detail' supplier.pk %}" 
+                                           class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                           title="{% trans 'View details' %}">
+                                            <span class="material-icons text-sm">visibility</span>
+                                        </a>
+                                        <a href="{% url 'purchases:supplier_update' supplier.pk %}" 
+                                           class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                           title="{% trans 'Edit supplier' %}">
+                                            <span class="material-icons text-sm">edit</span>
+                                        </a>
+                                        <a href="{% url 'purchases:supplier_delete' supplier.pk %}" 
+                                           class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                           title="{% trans 'Delete supplier' %}">
+                                            <span class="material-icons text-sm">delete</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginación -->
+                {% if is_paginated %}
+                <div class="mt-6 flex items-center justify-between">
+                    <div class="text-sm text-gray-700 dark:text-gray-300">
+                        {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+                    </div>
+                    <div class="flex space-x-2">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}" class="btn-secondary">
+                                {% trans "Previous" %}
+                            </a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="btn-secondary">
+                                {% trans "Next" %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="mx-auto h-12 w-12 text-gray-400">
+                        <span class="material-icons text-4xl">business</span>
+                    </div>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                        {% trans "No suppliers found" %}
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Get started by creating a new supplier." %}
+                    </p>
+                    <div class="mt-6">
+                        <a href="{% url 'purchases:supplier_create' %}" class="btn-primary">
+                            <span class="material-icons mr-2">add</span>
+                            {% trans "New Supplier" %}
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function exportSuppliers() {
+    // Implementar exportación de proveedores
+    console.log('Exporting suppliers...');
+}
+</script>
+{% endblock %} 

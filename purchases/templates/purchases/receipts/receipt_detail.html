@@ -1,0 +1,225 @@
+{% extends "purchases/purchases_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Receipt Details" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{{ receipt.receipt_number }}</h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Purchase receipt details" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    {% if receipt.status == 'pending' %}
+                    <a href="{% url 'purchases:receipt_approve' receipt.pk %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Approve" %}
+                    </a>
+                    <a href="{% url 'purchases:receipt_reject' receipt.pk %}" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Reject" %}
+                    </a>
+                    {% endif %}
+                    {% if receipt.status == 'approved' %}
+                    <a href="{% url 'purchases:receipt_return' receipt.pk %}" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Return to Supplier" %}
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'purchases:receipt_list' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Receipt Information -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Receipt Information" %}</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Status" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                {% if receipt.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                {% elif receipt.status == 'approved' %}bg-green-100 text-green-800
+                                {% elif receipt.status == 'rejected' %}bg-red-100 text-red-800
+                                {% elif receipt.status == 'returned' %}bg-orange-100 text-orange-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ receipt.get_status_display }}
+                            </span>
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Received Date" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.received_date|date:"F d, Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Purchase Order" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">
+                            <a href="{% url 'purchases:order_detail' receipt.purchase_order.pk %}" class="text-blue-600 hover:text-blue-900">
+                                {{ receipt.purchase_order.order_number }}
+                            </a>
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Supplier" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">
+                            <a href="{% url 'purchases:supplier_detail' receipt.purchase_order.supplier.pk %}" class="text-blue-600 hover:text-blue-900">
+                                {{ receipt.purchase_order.supplier.name }}
+                            </a>
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Total Received" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.total_received|floatformat:2 }}</p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-500">{% trans "Received By" %}</h4>
+                        <p class="mt-1 text-sm text-gray-900">{{ receipt.received_by.get_full_name|default:receipt.received_by.username }}</p>
+                    </div>
+                </div>
+                
+                {% if receipt.notes %}
+                <div class="mt-6">
+                    <h4 class="text-sm font-medium text-gray-500">{% trans "Notes" %}</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ receipt.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Received Items -->
+        <div class="bg-white shadow rounded-lg mb-6">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Received Items" %}</h3>
+                
+                {% if receipt.items.all %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Product" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "SKU" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Ordered Qty" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Received Qty" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Unit Price" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Total" %}</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Status" %}</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for item in receipt.items.all %}
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {{ item.product.name }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ item.product.sku }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ item.ordered_quantity }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ item.received_quantity }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ item.unit_price|floatformat:2 }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ item.total|floatformat:2 }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if item.status == 'complete' %}bg-green-100 text-green-800
+                                        {% elif item.status == 'partial' %}bg-yellow-100 text-yellow-800
+                                        {% elif item.status == 'missing' %}bg-red-100 text-red-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ item.get_status_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No received items" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "No items have been received for this receipt." %}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Approval History -->
+        {% if receipt.approval_history.all %}
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Approval History" %}</h3>
+                
+                <div class="flow-root">
+                    <ul class="-mb-8">
+                        {% for history in receipt.approval_history.all %}
+                        <li>
+                            <div class="relative pb-8">
+                                {% if not forloop.last %}
+                                <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                {% endif %}
+                                <div class="relative flex space-x-3">
+                                    <div>
+                                        <span class="h-8 w-8 rounded-full 
+                                            {% if history.action == 'approved' %}bg-green-500
+                                            {% elif history.action == 'rejected' %}bg-red-500
+                                            {% elif history.action == 'returned' %}bg-orange-500
+                                            {% else %}bg-gray-500{% endif %} flex items-center justify-center ring-8 ring-white">
+                                            <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                {% if history.action == 'approved' %}
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                {% elif history.action == 'rejected' %}
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                {% else %}
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                {% endif %}
+                                            </svg>
+                                        </span>
+                                    </div>
+                                    <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                                        <div>
+                                            <p class="text-sm text-gray-500">
+                                                {% trans "Receipt" %} <span class="font-medium text-gray-900">{{ history.get_action_display|lower }}</span>
+                                                {% if history.notes %}
+                                                <span class="text-gray-500"> - {{ history.notes }}</span>
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                        <div class="text-right text-sm whitespace-nowrap text-gray-500">
+                                            <time datetime="{{ history.created_at|date:'c' }}">{{ history.created_at|timesince }}</time>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

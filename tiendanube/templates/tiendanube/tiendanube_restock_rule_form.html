@@ -1,0 +1,250 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% if object %}{% trans "Edit Restock Rule" %}{% else %}{% trans "Create Restock Rule" %}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {% if object %}{% trans "Edit Restock Rule" %}{% else %}{% trans "Create Restock Rule" %}{% endif %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500">{% trans "Configure automatic restocking rules for Tiendanube products" %}</p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'tiendanube:restock_rule_list' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Back to List" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white shadow rounded-lg">
+            <form method="post" class="space-y-6 p-6">
+                {% csrf_token %}
+                
+                <!-- Basic Information -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Basic Information" %}</h3>
+                    
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.name.label }}
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.rule_type.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.rule_type.label }}
+                            </label>
+                            {{ form.rule_type }}
+                            {% if form.rule_type.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.rule_type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.action_type.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.action_type.label }}
+                            </label>
+                            {{ form.action_type }}
+                            {% if form.action_type.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.action_type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Threshold and Quantity -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Restock Parameters" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.threshold.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.threshold.label }}
+                            </label>
+                            {{ form.threshold }}
+                            {% if form.threshold.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.threshold.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Minimum stock level to trigger restock" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.restock_quantity.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.restock_quantity.label }}
+                            </label>
+                            {{ form.restock_quantity }}
+                            {% if form.restock_quantity.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.restock_quantity.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Quantity to restock when threshold is reached" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scope -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Scope" %}</h3>
+                    
+                    <div class="grid grid-cols-1 gap-6">
+                        <div id="product-scope" class="{% if form.rule_type.value != 'product' %}hidden{% endif %}">
+                            <label for="{{ form.product.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.product.label }}
+                            </label>
+                            {{ form.product }}
+                            {% if form.product.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.product.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div id="category-scope" class="{% if form.rule_type.value != 'category' %}hidden{% endif %}">
+                            <label for="{{ form.category.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.category.label }}
+                            </label>
+                            {{ form.category }}
+                            {% if form.category.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.category.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transfer Settings -->
+                <div id="transfer-settings" class="{% if form.action_type.value != 'transfer' %}hidden{% endif %}">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Transfer Settings" %}</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.source_warehouse.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.source_warehouse.label }}
+                            </label>
+                            {{ form.source_warehouse }}
+                            {% if form.source_warehouse.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.source_warehouse.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <label for="{{ form.destination_warehouse.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.destination_warehouse.label }}
+                            </label>
+                            {{ form.destination_warehouse }}
+                            {% if form.destination_warehouse.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.destination_warehouse.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Notifications" %}</h3>
+                    
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label for="{{ form.notify_email.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.notify_email.label }}
+                            </label>
+                            {{ form.notify_email }}
+                            {% if form.notify_email.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.notify_email.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Email address for restock notifications" %}</p>
+                        </div>
+
+                        <div>
+                            <label for="{{ form.notify_users.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                                {{ form.notify_users.label }}
+                            </label>
+                            {{ form.notify_users }}
+                            {% if form.notify_users.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.notify_users.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500">{% trans "Users to notify about restock events" %}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div>
+                    <div class="flex items-center">
+                        {{ form.is_active }}
+                        <label for="{{ form.is_active.id_for_label }}" class="ml-2 block text-sm text-gray-900">
+                            {{ form.is_active.label }}
+                        </label>
+                    </div>
+                    {% if form.is_active.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.is_active.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Form Actions -->
+                <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+                    <a href="{% url 'tiendanube:restock_rule_list' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                        {% if object %}{% trans "Update Rule" %}{% else %}{% trans "Create Rule" %}{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ruleTypeSelect = document.getElementById('{{ form.rule_type.id_for_label }}');
+    const actionTypeSelect = document.getElementById('{{ form.action_type.id_for_label }}');
+    const productScope = document.getElementById('product-scope');
+    const categoryScope = document.getElementById('category-scope');
+    const transferSettings = document.getElementById('transfer-settings');
+
+    function updateScopeVisibility() {
+        const ruleType = ruleTypeSelect.value;
+        
+        if (ruleType === 'product') {
+            productScope.classList.remove('hidden');
+            categoryScope.classList.add('hidden');
+        } else if (ruleType === 'category') {
+            productScope.classList.add('hidden');
+            categoryScope.classList.remove('hidden');
+        } else {
+            productScope.classList.add('hidden');
+            categoryScope.classList.add('hidden');
+        }
+    }
+
+    function updateActionVisibility() {
+        const actionType = actionTypeSelect.value;
+        
+        if (actionType === 'transfer') {
+            transferSettings.classList.remove('hidden');
+        } else {
+            transferSettings.classList.add('hidden');
+        }
+    }
+
+    ruleTypeSelect.addEventListener('change', updateScopeVisibility);
+    actionTypeSelect.addEventListener('change', updateActionVisibility);
+    
+    // Initialize visibility
+    updateScopeVisibility();
+    updateActionVisibility();
+});
+</script>
+{% endblock %} 

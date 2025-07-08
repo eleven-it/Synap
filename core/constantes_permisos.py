@@ -148,6 +148,10 @@ PERMISOS_POR_MODULO = {
         ("configuracion.empresa", "Configurar datos de empresa"),
         ("configuracion.moneda", "Configurar monedas"),
         ("configuracion.uom", "Configurar unidades de medida"),
+        ("core.ver_contact", "Ver contactos universales"),
+        ("core.crear_contact", "Crear contactos universales"),
+        ("core.editar_contact", "Editar contactos universales"),
+        ("core.eliminar_contact", "Eliminar contactos universales"),
         ("administrar.usuarios", "Administrar usuarios"),
         ("administrar.roles", "Administrar roles"),
         ("administrar.permisos", "Administrar permisos"),
@@ -177,6 +181,7 @@ ROLES_PREDEFINIDOS = {
         "permisos": [
             "clientes.*", "proveedores.*", "inventory.*", 
             "sales.*", "purchases.*", "compras.*", "reportes.*",
+            "core.ver_contact", "core.crear_contact", "core.editar_contact",
             "usuarios.ver", "usuarios.editar", "usuarios.perfil",
             "configuracion.general", "configuracion.empresa"
         ]
