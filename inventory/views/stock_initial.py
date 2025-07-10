@@ -52,13 +52,24 @@ def stock_initial_edit(request, draft_id):
     draft = get_object_or_404(InitialStockDraft, id=draft_id)
     if not user_can_edit_draft(request.user, draft):
         return render(request, 'core/403.html')
-    # Filtros y lógica de productos
-    products_qs = Product.objects.filter(type__in=['consumable', 'stockable', 'combo'])
+    
+    # Filtrar por empresa activa del usuario para evitar acceso cruzado
+    empresa = request.user.empresa_activa
+    if not empresa:
+        return render(request, 'core/403.html')
+    
+    # Filtros y lógica de productos - SOLO de la empresa del usuario
+    products_qs = Product.objects.filter(
+        empresa=empresa,
+        type__in=['consumable', 'stockable', 'combo']
+    )
+    
     search = request.GET.get('search', '').strip()
     category = request.GET.get('category', '')
     subcategory = request.GET.get('subcategory', '')
     brand = request.GET.get('brand', '')
     ptype = request.GET.get('ptype', '')
+    
     if search:
         products_qs = products_qs.filter(Q(name__icontains=search) | Q(sku__icontains=search) | Q(description__icontains=search))
     if category:
@@ -69,13 +80,16 @@ def stock_initial_edit(request, draft_id):
         products_qs = products_qs.filter(brand_id=brand)
     if ptype:
         products_qs = products_qs.filter(type=ptype)
+    
     products_qs = products_qs.select_related('brand', 'subcategory', 'subcategory__category')
     page_number = request.GET.get('page', 1)
     paginator = Paginator(products_qs.order_by('sku'), 25)
     page_obj = paginator.get_page(page_number)
-    categories = Category.objects.filter(is_active=True)
-    subcategories = Subcategory.objects.filter(is_active=True)
-    brands = Brand.objects.filter(is_active=True)
+    
+    # Filtrar categorías, subcategorías y marcas por empresa
+    categories = Category.objects.filter(empresa=empresa, is_active=True)
+    subcategories = Subcategory.objects.filter(empresa=empresa, is_active=True)
+    brands = Brand.objects.filter(empresa=empresa, is_active=True)
     excel_form = InitialStockDraftExcelForm()
     # Guardar productos editados
     if request.method == 'POST' and 'guardar_productos' in request.POST:

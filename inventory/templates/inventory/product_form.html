@@ -216,6 +216,17 @@
                                         {{ form.is_published|add_class:'h-4 w-4 text-synap-600 border-gray-300 dark:border-gray-600 rounded focus:ring-2 focus:ring-synap-500' }}
                                         <label for="id_is_published" class="ml-2 text-xs font-medium text-gray-700 dark:text-gray-300">{% trans "Published" %}</label>
                                     </div>
+                                    
+                                    <!-- Campo Tags -->
+                                    <div class="mt-4">
+                                        <label for="id_tags" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            {% trans "Tags" %}
+                                        </label>
+                                        {{ form.tags|add_class:'w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-synap-500 focus:border-synap-500 dark:bg-gray-700 dark:text-white' }}
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            {% trans "Separate tags with commas (e.g., tiendanube, destacado, oferta)" %}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>

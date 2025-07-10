@@ -2,184 +2,146 @@
 {% load i18n %}
 
 {% block page_title %}{% trans "Module Management" %}{% endblock %}
-
 {% block admin_title %}{% trans "Module Management" %}{% endblock %}
-
 {% block admin_subtitle %}{% trans "Activate, deactivate and configure system modules" %}{% endblock %}
 
-{% block quick_actions %}
-<a href="{% url 'core:module_validation' %}" class="btn-sm btn-secondary-sm">
-    <i class="fas fa-check-circle mr-1"></i>
-    {% trans "Validate" %}
-</a>
-<a href="{% url 'core:module_dependencies' %}" class="btn-sm btn-secondary-sm">
-    <i class="fas fa-project-diagram mr-1"></i>
-    {% trans "Dependencies" %}
-</a>
-{% endblock %}
-
 {% block admin_content %}
-<!-- Bulk Actions -->
-<div class="bulk-actions">
-    <div class="bulk-actions-header">
-        <h3 class="bulk-actions-title">{% trans "Bulk Actions" %}</h3>
-    </div>
-    <form method="post" action="{% url 'core:module_bulk_action' %}" class="bulk-actions-form">
-        {% csrf_token %}
-        <div class="checkbox-group">
-            <input type="checkbox" id="select-all" class="checkbox-input">
-            <label for="select-all" class="text-sm text-gray-700 dark:text-gray-300">
-                {% trans "Select All" %}
-            </label>
-        </div>
-        <select name="action" class="select-input">
-            <option value="">{% trans "Choose Action" %}</option>
-            <option value="activate">{% trans "Activate Selected" %}</option>
-            <option value="deactivate">{% trans "Deactivate Selected" %}</option>
-        </select>
-        <button type="submit" class="btn-primary">
-            <i class="fas fa-play mr-2"></i>
-            {% trans "Execute" %}
-        </button>
-    </form>
-</div>
-
-<!-- Module List -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    {% for module in modules %}
-    <div class="module-card">
-        <div class="module-header">
-            <div>
-                <h3 class="module-title">{{ module.display_name }}</h3>
-                <p class="text-sm text-gray-500">{{ module.name }}</p>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+    {# Tarjeta especial para Modules Management, siempre visible #}
+    <div class="bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-2xl shadow-lg p-6 flex flex-col border-2 border-indigo-400 animate-fade-in">
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-indigo-500 flex items-center justify-center text-white text-2xl font-bold">
+                    <span class="material-icons">settings</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-indigo-900">{% trans "Modules Management" %}</h3>
+                    <p class="text-xs text-indigo-700 font-mono">core.module_admin</p>
+                </div>
             </div>
-            <div class="flex items-center space-x-2">
+            <span class="inline-block px-2 py-1 rounded-full bg-indigo-600 text-white text-xs font-semibold" title="{% trans 'Always active' %}">{% trans "System" %}</span>
+        </div>
+        <p class="text-indigo-800 text-sm mb-4">{% trans "This module allows you to manage, activate and configure all other modules in the system. It is always active and cannot be disabled." %}</p>
+        <div class="flex flex-wrap gap-4 mb-4">
+            <div class="flex flex-col text-xs text-indigo-700">
+                <span class="font-semibold">{% trans "Version" %}</span>
+                <span class="text-indigo-900">1.0</span>
+            </div>
+            <div class="flex flex-col text-xs text-indigo-700">
+                <span class="font-semibold">{% trans "Author" %}</span>
+                <span class="text-indigo-900">Synap Team</span>
+            </div>
+        </div>
+        <div class="flex items-center justify-between mt-4">
+            <a href="{% url 'core:module_list' %}" class="text-indigo-700 hover:text-indigo-900 text-sm font-semibold flex items-center gap-1 transition">
+                <span class="material-icons text-base">dashboard_customize</span>
+                {% trans "Go to Management" %}
+            </a>
+            <span class="inline-block px-3 py-1 rounded-full bg-green-400 text-white text-xs font-bold shadow">{% trans "Active" %}</span>
+        </div>
+    </div>
+    {# Tarjetas de módulos normales #}
+    {% for module in modules %}
+    <div class="bg-white rounded-2xl shadow-lg p-6 flex flex-col transition hover:shadow-2xl hover:-translate-y-1 border border-gray-100 group">
+        <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-100 to-indigo-200 flex items-center justify-center text-indigo-500 text-2xl font-bold">
+                    <span class="material-icons">apps</span>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900 group-hover:text-indigo-700 transition">{{ module.display_name }}</h3>
+                    <p class="text-xs text-gray-400 font-mono">{{ module.name }}</p>
+                </div>
+            </div>
+            <div>
                 {% if module.is_core %}
-                <span class="module-status status-core">{% trans "Core" %}</span>
+                <span class="inline-block px-2 py-1 rounded-full bg-gray-900 text-white text-xs font-semibold" title="{% trans 'Core module' %}">{% trans "Core" %}</span>
                 {% elif module.is_required %}
-                <span class="module-status status-required">{% trans "Required" %}</span>
-                {% elif module.is_active %}
-                <span class="module-status status-active">{% trans "Active" %}</span>
-                {% else %}
-                <span class="module-status status-inactive">{% trans "Inactive" %}</span>
+                <span class="inline-block px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold" title="{% trans 'Required module' %}">{% trans "Required" %}</span>
                 {% endif %}
             </div>
         </div>
-
-        <p class="module-description">{{ module.description }}</p>
-
-        <div class="module-meta">
-            <div class="meta-item">
-                <div class="meta-label">{% trans "Version" %}</div>
-                <div class="meta-value">{{ module.version }}</div>
+        <p class="text-gray-600 text-sm mb-4 line-clamp-3">{{ module.description }}</p>
+        <div class="flex flex-wrap gap-4 mb-4">
+            <div class="flex flex-col text-xs text-gray-500">
+                <span class="font-semibold">{% trans "Version" %}</span>
+                <span class="text-gray-800">{{ module.version }}</span>
             </div>
-            <div class="meta-item">
-                <div class="meta-label">{% trans "Author" %}</div>
-                <div class="meta-value">{{ module.author|default:"Synap Team" }}</div>
+            <div class="flex flex-col text-xs text-gray-500">
+                <span class="font-semibold">{% trans "Author" %}</span>
+                <span class="text-gray-800">{{ module.author|default:"Synap Team" }}</span>
             </div>
-            <div class="meta-item">
-                <div class="meta-label">{% trans "Created" %}</div>
-                <div class="meta-value">{{ module.created_at|date:"M d, Y" }}</div>
-            </div>
-            <div class="meta-item">
-                <div class="meta-label">{% trans "Updated" %}</div>
-                <div class="meta-value">{{ module.updated_at|date:"M d, Y" }}</div>
+            <div class="flex flex-col text-xs text-gray-500">
+                <span class="font-semibold">{% trans "Updated" %}</span>
+                <span class="text-gray-800">{{ module.updated_at|date:"M d, Y" }}</span>
             </div>
         </div>
-
-        <!-- Dependencies -->
         {% if module.dependencies %}
-        <div class="dependencies-section">
-            <div class="dependencies-title">{% trans "Dependencies" %}</div>
-            <div class="dependency-tags">
+        <div class="mb-2">
+            <span class="text-xs font-semibold text-gray-500 uppercase">{% trans "Dependencies" %}:</span>
+            <div class="flex flex-wrap gap-2 mt-1">
                 {% for dep in module.dependencies %}
-                <span class="dependency-tag {% if dep in module.missing_dependencies %}missing{% else %}active{% endif %}">
-                    {{ dep }}
-                </span>
+                <span class="px-2 py-1 rounded bg-gray-100 text-xs text-gray-700 {% if dep in module.missing_dependencies %}border border-red-400 bg-red-50 text-red-600{% endif %}">{{ dep }}</span>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
-
-        <!-- Dependents -->
         {% if module.dependents %}
-        <div class="dependencies-section">
-            <div class="dependencies-title">{% trans "Dependents" %}</div>
-            <div class="dependency-tags">
+        <div class="mb-2">
+            <span class="text-xs font-semibold text-gray-500 uppercase">{% trans "Dependents" %}:</span>
+            <div class="flex flex-wrap gap-2 mt-1">
                 {% for dep in module.dependents %}
-                <span class="dependency-tag">{{ dep }}</span>
+                <span class="px-2 py-1 rounded bg-gray-50 text-xs text-gray-500">{{ dep }}</span>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
-
-        <!-- Actions -->
-        <div class="module-actions">
-            <a href="{% url 'core:module_detail' module.pk %}" class="btn-secondary">
-                <i class="fas fa-eye mr-2"></i>
+        <div class="flex items-center justify-between mt-4">
+            <a href="{% url 'core:module_detail' module.pk %}" class="text-indigo-600 hover:text-indigo-900 text-sm font-semibold flex items-center gap-1 transition">
+                <span class="material-icons text-base">info</span>
                 {% trans "Details" %}
             </a>
-            
-            {% if module.is_active %}
-                {% if module.can_deactivate %}
-                <form method="post" action="{% url 'core:module_toggle' module.name %}" class="inline">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="deactivate">
-                    <button type="submit" class="btn-danger">
-                        <i class="fas fa-power-off mr-2"></i>
-                        {% trans "Deactivate" %}
-                    </button>
-                </form>
-                {% else %}
-                <button class="btn-disabled" disabled>
-                    <i class="fas fa-lock mr-2"></i>
-                    {% trans "Cannot Deactivate" %}
+            <!-- Switch de activación -->
+            <form method="post" action="{% url 'core:module_toggle' module.name %}" class="flex items-center gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="{% if module.is_active %}deactivate{% else %}activate{% endif %}">
+                <button type="submit" class="relative focus:outline-none group/switch">
+                    <span class="sr-only">{% if module.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}</span>
+                    <span class="w-12 h-6 flex items-center rounded-full p-1 transition-all duration-300
+                        {% if module.is_active %}bg-green-400{% else %}bg-red-400{% endif %}">
+                        <span class="dot w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300
+                            {% if module.is_active %}translate-x-6{% else %}translate-x-0{% endif %}"></span>
+                    </span>
                 </button>
-                {% endif %}
-            {% else %}
-                {% if module.can_activate %}
-                <form method="post" action="{% url 'core:module_toggle' module.name %}" class="inline">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="activate">
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-play mr-2"></i>
-                        {% trans "Activate" %}
-                    </button>
-                </form>
-                {% else %}
-                <button class="btn-disabled" disabled>
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    {% trans "Cannot Activate" %}
-                </button>
-                {% endif %}
-            {% endif %}
+            </form>
         </div>
     </div>
     {% endfor %}
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Select all functionality
-    const selectAllCheckbox = document.getElementById('select-all');
-    const moduleCheckboxes = document.querySelectorAll('input[name="modules"]');
-    
-    selectAllCheckbox.addEventListener('change', function() {
-        moduleCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
-        });
-    });
-    
-    // Update select all when individual checkboxes change
-    moduleCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const allChecked = Array.from(moduleCheckboxes).every(cb => cb.checked);
-            const someChecked = Array.from(moduleCheckboxes).some(cb => cb.checked);
-            
-            selectAllCheckbox.checked = allChecked;
-            selectAllCheckbox.indeterminate = someChecked && !allChecked;
-        });
-    });
-});
-</script>
+<style>
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dot {
+  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.10);
+}
+button.group\/switch:hover .dot {
+  box-shadow: 0 4px 12px 0 rgba(34,197,94,0.25), 0 2px 8px 0 rgba(0,0,0,0.10);
+  scale: 1.08;
+}
+button.group\/switch:active .dot {
+  scale: 0.95;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-fade-in {
+  animation: fade-in 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+</style>
 {% endblock %} 

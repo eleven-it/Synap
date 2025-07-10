@@ -55,7 +55,7 @@ class URLRegistry:
         for module_name, module_urls in self.module_urls.items():
             if module_urls:
                 url_patterns.append(
-                    path(f'{module_name}/', include(f'{module_name}.urls'))
+                    path(f'{module_name}/', include((f'{module_name}.urls', module_name), namespace=module_name))
                 )
         
         return url_patterns

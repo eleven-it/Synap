@@ -29,12 +29,23 @@ urlpatterns = [
     path('restock/rules/create/', views.TiendaNubeRestockRuleCreateView.as_view(), name='restock_rule_create'),
     path('restock/rules/<int:pk>/edit/', views.TiendaNubeRestockRuleUpdateView.as_view(), name='restock_rule_update'),
     path('restock/rules/<int:pk>/delete/', views.TiendaNubeRestockRuleDeleteView.as_view(), name='restock_rule_delete'),
+    path('restock/rules/<int:pk>/', views.TiendaNubeRestockRuleDetailView.as_view(), name='restock_rule_detail'),
     # Restock Logs
     path('restock/logs/', views.TiendaNubeRestockLogListView.as_view(), name='restock_log_list'),
+    path('restock/logs/<int:pk>/', views.TiendaNubeRestockLogDetailView.as_view(), name='restock_log_detail'),
+    # Product Restock Policies
+    path('restock/policies/', views.TiendaNubeProductRestockPolicyListView.as_view(), name='product_restock_policy_list'),
+    path('restock/policies/create/', views.TiendaNubeProductRestockPolicyCreateView.as_view(), name='product_restock_policy_create'),
+    path('restock/policies/bulk-create/', views.TiendaNubeProductRestockPolicyBulkCreateView.as_view(), name='product_restock_policy_bulk_create'),
+    path('restock/policies/<int:pk>/edit/', views.TiendaNubeProductRestockPolicyUpdateView.as_view(), name='product_restock_policy_update'),
+    path('restock/policies/<int:pk>/delete/', views.TiendaNubeProductRestockPolicyDeleteView.as_view(), name='product_restock_policy_delete'),
+    path('restock/policies/<int:pk>/', views.TiendaNubeProductRestockPolicyDetailView.as_view(), name='product_restock_policy_detail'),
+    path('restock/policies/<int:pk>/execute/', views.TiendaNubeProductRestockPolicyExecuteView.as_view(), name='product_restock_policy_execute'),
+    # Sync Management
+    path('sync/manual/', views.TiendaNubeManualSyncView.as_view(), name='manual_sync'),
+    path('sync/products/', views.TiendaNubeSyncProductsView.as_view(), name='sync_products'),
+    path('sync/customers/', views.TiendaNubeSyncCustomersView.as_view(), name='sync_customers'),
+    path('sync/all-stock/', views.TiendaNubeSyncAllStockView.as_view(), name='sync_all_stock'),
     # Reports
     path('reports/', views.TiendaNubeReportsView.as_view(), name='reports'),
-    # Manual Sync
-    path('sync/manual/', views.TiendaNubeManualSyncView.as_view(), name='manual_sync'),
-    # Webhooks
-    path('webhook/', views.TiendaNubeWebhookView.as_view(), name='webhook'),
 ] 

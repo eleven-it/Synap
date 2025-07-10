@@ -3327,69 +3327,69 @@ msgstr ""
 
 #: inventory/templates/inventory/stock_dashboard.html:7
 msgid "Inventory Dashboard"
-msgstr ""
+msgstr "Dashboard de Inventario"
 
 #: inventory/templates/inventory/stock_dashboard.html:8
 msgid ""
 "Welcome to the inventory dashboard. Here you can see the current stock "
 "status by product and location."
-msgstr ""
+msgstr "Bienvenido al dashboard de inventario. Aquí puedes ver el estado actual del stock por producto y ubicación."
 
 #: inventory/templates/inventory/stock_dashboard.html:12
 msgid "Total Products"
-msgstr ""
+msgstr "Total de Productos"
 
 #: inventory/templates/inventory/stock_dashboard.html:16
 msgid "Total Locations"
-msgstr ""
+msgstr "Total de Ubicaciones"
 
 #: inventory/templates/inventory/stock_dashboard.html:20
 msgid "Total Stock Movements"
-msgstr ""
+msgstr "Total de Movimientos de Stock"
 
 #: inventory/templates/inventory/stock_dashboard.html:26
 msgid "Stock by Product & Location"
-msgstr ""
+msgstr "Stock por Producto y Ubicación"
 
 #: inventory/templates/inventory/stock_dashboard.html:34
 msgid "Available Stock"
-msgstr ""
+msgstr "Stock Disponible"
 
 #: inventory/templates/inventory/stock_dashboard.html:35
 #: sales/templates/sales/orders/sales_order_detail.html:114
 msgid "Reserved"
-msgstr ""
+msgstr "Reservado"
 
 #: inventory/templates/inventory/stock_dashboard.html:36
 #: sales/templates/sales/orders/sales_order_detail.html:160
 #: sales/templates/sales/orders/sales_order_form.html:298
 msgid "Total"
-msgstr ""
+msgstr "Total"
 
 #: inventory/templates/inventory/stock_dashboard.html:51
 msgid "No stock registered."
-msgstr ""
+msgstr "No hay stock registrado."
 
 #: inventory/templates/inventory/stock_dashboard.html:61
 msgid "You do not have permission to view the inventory dashboard."
-msgstr ""
+msgstr "No tienes permisos para ver el dashboard de inventario."
 
 #: inventory/templates/inventory/stock_initial_drafts copy.html:5
 #: inventory/templates/inventory/stock_initial_drafts.html:5
 msgid "Initial stock drafts"
-msgstr ""
+msgstr "Borradores de stock inicial"
 
 #: inventory/templates/inventory/stock_initial_drafts copy.html:9
 #: inventory/templates/inventory/stock_initial_drafts.html:9
 msgid "ID"
-msgstr ""
+msgstr "ID"
 
 #: inventory/templates/inventory/stock_initial_drafts copy.html:9
 #: inventory/templates/inventory/stock_initial_drafts.html:9
 #: inventory/templates/inventory/stock_initial_wizard copy.html:43
 #: inventory/templates/inventory/stock_initial_wizard.html:43
 msgid "Comment"
-msgstr ""
+msgstr "Comentario"
 
 #: inventory/templates/inventory/stock_initial_drafts copy.html:9
 #: inventory/templates/inventory/stock_initial_drafts.html:9
@@ -4526,5 +4526,17 @@ msgstr ""
 #: tiendanube/models.py:93
 msgid "TiendaNube Product Mappings"
 msgstr ""
+
+#: theme/templates/partials/navbar.html:95
+msgid "Active Branch"
+msgstr "Sucursal Activa"
+
+#: theme/templates/partials/navbar.html:96
+msgid "Select the branch to work with"
+msgstr "Selecciona la sucursal para trabajar"
+
+#: theme/templates/partials/navbar.html:115
+msgid "No branches available"
+msgstr "No hay sucursales disponibles"
 
 

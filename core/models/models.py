@@ -116,6 +116,10 @@ class UsuarioExtendido(AbstractBaseUser, PermissionsMixin):
     roles = models.ManyToManyField(Rol, blank=True)
     permisos_extra = models.ManyToManyField(Permiso, blank=True, related_name="usuarios_con_permiso_directo")
 
+    # NUEVO: Sucursales asignadas y sucursal default
+    branches = models.ManyToManyField('Branch', blank=True, related_name='usuarios', verbose_name=_('Branches assigned'))
+    default_branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='usuarios_default', verbose_name=_('Default branch'))
+
     # 🔐 Requerido por Django Admin y middleware
     is_active = models.BooleanField(default=True, db_index=True)
     is_staff = models.BooleanField(default=False)
@@ -213,26 +217,46 @@ class UsuarioExtendido(AbstractBaseUser, PermissionsMixin):
     def empresa_activa(self):
         from core.models import Empresa
         request = getattr(self, '_request', None)
-        if request and 'empresa_id' in request.session:
+        if request and hasattr(request, 'session') and request.session and 'empresa_id' in request.session:
             try:
                 return Empresa.objects.get(id=request.session['empresa_id'])
             except Empresa.DoesNotExist:
                 return None
-        # Fallback: primera empresa a la que tiene acceso (ajustar según lógica de permisos)
         return Empresa.objects.first()
 
     @property
     def branch_activa(self):
-        from core.models import Branch
+        from django.utils.functional import SimpleLazyObject
         request = getattr(self, '_request', None)
-        if request and 'branch_id' in request.session:
-            try:
-                return Branch.objects.get(id=request.session['branch_id'])
-            except Branch.DoesNotExist:
-                return None
-        # Fallback: primera sucursal de la empresa activa
-        empresa = self.empresa_activa
-        return empresa.branches.first() if empresa else None
+        if request and hasattr(request, 'session') and request.session:
+            branch_id = request.session.get('branch_activa_id')
+            if branch_id:
+                try:
+                    return self.branches.get(id=branch_id)
+                except Branch.DoesNotExist:
+                    pass
+        return self.default_branch
+
+    def set_branch_activa(self, branch, request=None):
+        if request and hasattr(request, 'session') and request.session:
+            if branch and branch in self.branches.all():
+                request.session['branch_activa_id'] = branch.id
+            else:
+                request.session['branch_activa_id'] = None
+
+    def set_default_branch(self, branch):
+        """
+        Establece la sucursal default del usuario (debe estar asignada).
+        """
+        if branch and branch in self.branches.all():
+            self.default_branch = branch
+            self.save(update_fields=['default_branch'])
+
+    def get_sucursales_disponibles(self):
+        """
+        Devuelve las sucursales a las que el usuario tiene acceso.
+        """
+        return self.branches.all()
 
 
 class Branch(models.Model):
@@ -337,6 +361,9 @@ class Contact(models.Model):
     - Empleados (core.UsuarioExtendido)
     - Otros contactos
     """
+    
+    # Relación con empresa (multiempresa)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='contacts', verbose_name=_('Company'), null=True, blank=True)
     
     # Información básica del contacto
     name = models.CharField(_('Name'), max_length=255)
@@ -672,6 +699,9 @@ class BusinessEntity(ContactableMixin, models.Model):
     Modelo base abstracto para entidades comerciales (clientes y proveedores)
     Contiene toda la funcionalidad común entre clientes y proveedores
     """
+    
+    # Relación con empresa (multiempresa)
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='business_entities', verbose_name=_('Company'), null=True, blank=True)
     
     # Información básica
     name = models.CharField(_("Name"), max_length=255)

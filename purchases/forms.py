@@ -32,9 +32,9 @@ class SupplierForm(forms.ModelForm):
             }),
             'tax_id': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': _('Enter tax ID or VAT number'),
+                'placeholder': _('Enter tax ID...'),
                 'pattern': '[A-Z0-9\-\.]+',
-                'title': _('Enter a valid tax ID or VAT number')
+                'title': _('Enter a valid tax ID')
             }),
             'contact_person': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -129,7 +129,7 @@ class SupplierForm(forms.ModelForm):
         labels = {
             'name': _('Supplier Name'),
             'code': _('Supplier Code'),
-            'tax_id': _('Tax ID / VAT'),
+            'tax_id': _('Tax ID'),
             'contact_person': _('Contact Person'),
             'email': _('Email Address'),
             'phone': _('Phone Number'),
@@ -154,7 +154,7 @@ class SupplierForm(forms.ModelForm):
         help_texts = {
             'name': _('Enter the complete name of the supplier company'),
             'code': _('Internal code to identify this supplier'),
-            'tax_id': _('Enter the tax identification number or VAT number'),
+            'tax_id': _('Enter the tax identification number'),
             'contact_person': _('Primary contact person name'),
             'email': _('Primary email address for communications'),
             'phone': _('Primary phone number for contact'),

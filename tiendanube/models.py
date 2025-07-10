@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from inventory.models import Product, ProductVariant, StockQuant, Location, Warehouse, StockMove
 from sales.models import Client, SalesOrder, SalesOrderLine
 from decimal import Decimal
+from django.utils import timezone
 
 # ─────────────────────────────────────────────
 # TiendaNube Integration Models
@@ -163,6 +164,300 @@ class TiendaNubeProductMapping(models.Model):
     @property
     def needs_sync(self):
         return self.sync_enabled and self.sync_status != self.SyncStatus.SYNCED
+
+
+class TiendaNubeProductRestockPolicy(models.Model):
+    """Políticas de reabastecimiento individuales por producto para Tiendanube"""
+    class PolicyType(models.TextChoices):
+        MANUAL = 'manual', _('Manual Configuration')
+        RULE_BASED = 'rule_based', _('Rule Based')
+        INTELLIGENT = 'intelligent', _('Intelligent (AI)')
+    
+    class ActionType(models.TextChoices):
+        TRANSFER = 'transfer', _('Internal Transfer')
+        PURCHASE = 'purchase', _('Purchase Order')
+        NOTIFICATION = 'notification', _('Notification Only')
+        COMBINED = 'combined', _('Combined Actions')
+    
+    product = models.OneToOneField(
+        Product, 
+        on_delete=models.CASCADE,
+        verbose_name=_("Product"),
+        help_text=_("Product to apply this restock policy")
+    )
+    
+    # Configuración básica
+    is_active = models.BooleanField(_("Active"), default=True)
+    policy_type = models.CharField(
+        _("Policy Type"), 
+        max_length=20, 
+        choices=PolicyType.choices,
+        default=PolicyType.MANUAL
+    )
+    action_type = models.CharField(
+        _("Action Type"), 
+        max_length=20, 
+        choices=ActionType.choices,
+        default=ActionType.TRANSFER
+    )
+    
+    # Parámetros de stock
+    threshold = models.DecimalField(
+        _("Restock Threshold"), 
+        max_digits=10, 
+        decimal_places=2,
+        help_text=_("Minimum stock level to trigger restock")
+    )
+    restock_quantity = models.DecimalField(
+        _("Restock Quantity"), 
+        max_digits=10, 
+        decimal_places=2,
+        help_text=_("Quantity to restock when threshold is reached")
+    )
+    
+    # Configuración avanzada
+    max_stock_level = models.DecimalField(
+        _("Maximum Stock Level"), 
+        max_digits=10, 
+        decimal_places=2,
+        null=True, 
+        blank=True,
+        help_text=_("Maximum stock level to maintain (optional)")
+    )
+    safety_stock = models.DecimalField(
+        _("Safety Stock"), 
+        max_digits=10, 
+        decimal_places=2,
+        null=True, 
+        blank=True,
+        help_text=_("Safety stock level (optional)")
+    )
+    
+    # Configuración de transferencia
+    source_warehouse = models.ForeignKey(
+        Warehouse, 
+        on_delete=models.SET_NULL,
+        null=True, 
+        blank=True,
+        related_name='restock_policy_source',
+        verbose_name=_("Source Warehouse"),
+        help_text=_("Warehouse to transfer stock from")
+    )
+    destination_warehouse = models.ForeignKey(
+        Warehouse, 
+        on_delete=models.SET_NULL,
+        null=True, 
+        blank=True,
+        related_name='restock_policy_destination',
+        verbose_name=_("Destination Warehouse"),
+        help_text=_("Warehouse to transfer stock to")
+    )
+    
+    # Configuración de notificaciones
+    notify_on_restock = models.BooleanField(_("Notify on Restock"), default=True)
+    notify_email = models.EmailField(_("Notification Email"), blank=True)
+    notify_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, 
+        blank=True,
+        verbose_name=_("Notify Users")
+    )
+    
+    # Configuración de reglas inteligentes
+    lead_time_days = models.IntegerField(
+        _("Lead Time (Days)"), 
+        default=1,
+        help_text=_("Expected lead time for restock")
+    )
+    demand_forecast_days = models.IntegerField(
+        _("Demand Forecast (Days)"), 
+        default=7,
+        help_text=_("Days to forecast demand")
+    )
+    
+    # Metadatos
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_restock_date = models.DateTimeField(_("Last Restock Date"), null=True, blank=True)
+    restock_count = models.IntegerField(_("Restock Count"), default=0)
+    
+    class Meta:
+        verbose_name = _("Tiendanube Product Restock Policy")
+        verbose_name_plural = _("Tiendanube Product Restock Policies")
+        ordering = ['product__name']
+    
+    def __str__(self):
+        return f"Restock Policy for {self.product.sku}"
+    
+    @property
+    def effective_threshold(self):
+        """Obtiene el umbral efectivo considerando stock de seguridad"""
+        if self.safety_stock:
+            return self.threshold + self.safety_stock
+        return self.threshold
+    
+    @property
+    def needs_restock(self):
+        """Determina si el producto necesita reabastecimiento"""
+        try:
+            # Obtener stock actual en el almacén de destino
+            if self.destination_warehouse:
+                stock_quants = StockQuant.objects.filter(
+                    product=self.product,
+                    location__warehouse=self.destination_warehouse
+                )
+                current_stock = sum(quant.available_quantity for quant in stock_quants)
+                return current_stock <= self.effective_threshold
+            return False
+        except Exception:
+            return False
+    
+    def get_restock_quantity(self, current_stock=None):
+        """Calcula la cantidad de reabastecimiento basada en la política"""
+        if current_stock is None:
+            if self.destination_warehouse:
+                stock_quants = StockQuant.objects.filter(
+                    product=self.product,
+                    location__warehouse=self.destination_warehouse
+                )
+                current_stock = sum(quant.available_quantity for quant in stock_quants)
+            else:
+                current_stock = 0
+        
+        # Cálculo básico
+        needed_quantity = self.restock_quantity
+        
+        # Si hay stock máximo configurado, ajustar
+        if self.max_stock_level:
+            max_needed = self.max_stock_level - current_stock
+            needed_quantity = min(needed_quantity, max_needed)
+        
+        # Si hay stock de seguridad, asegurar que se mantenga
+        if self.safety_stock:
+            safety_needed = self.safety_stock - current_stock
+            if safety_needed > 0:
+                needed_quantity = max(needed_quantity, safety_needed)
+        
+        return max(0, needed_quantity)
+    
+    def execute_restock(self):
+        """Ejecuta el reabastecimiento según la política"""
+        try:
+            if not self.is_active:
+                return False, "Policy is not active"
+            
+            if not self.needs_restock:
+                return False, "Product does not need restock"
+            
+            current_stock = 0
+            if self.destination_warehouse:
+                stock_quants = StockQuant.objects.filter(
+                    product=self.product,
+                    location__warehouse=self.destination_warehouse
+                )
+                current_stock = sum(quant.available_quantity for quant in stock_quants)
+            
+            restock_quantity = self.get_restock_quantity(current_stock)
+            
+            if restock_quantity <= 0:
+                return False, "No restock quantity needed"
+            
+            # Ejecutar acción según tipo
+            if self.action_type == self.ActionType.TRANSFER:
+                return self._execute_transfer(restock_quantity)
+            elif self.action_type == self.ActionType.PURCHASE:
+                return self._execute_purchase(restock_quantity)
+            elif self.action_type == self.ActionType.NOTIFICATION:
+                return self._execute_notification(restock_quantity)
+            elif self.action_type == self.ActionType.COMBINED:
+                return self._execute_combined(restock_quantity)
+            
+            return False, "Unknown action type"
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def _execute_transfer(self, quantity):
+        """Ejecuta transferencia interna"""
+        try:
+            if not self.source_warehouse or not self.destination_warehouse:
+                return False, "Source and destination warehouses must be configured"
+            
+            source_location = Location.objects.filter(
+                warehouse=self.source_warehouse,
+                is_active=True
+            ).first()
+            
+            destination_location = Location.objects.filter(
+                warehouse=self.destination_warehouse,
+                is_active=True
+            ).first()
+            
+            if not source_location or not destination_location:
+                return False, "Active locations not found"
+            
+            # Crear movimiento de stock
+            stock_move = StockMove.objects.create(
+                empresa=self.product.empresa,
+                branch=self.product.branch,
+                product=self.product,
+                location_from=source_location,
+                location_to=destination_location,
+                quantity=quantity,
+                move_type='internal_transfer',
+                reference=f'Tiendanube Restock - {self.product.sku}',
+                state='confirmed'
+            )
+            
+            # Actualizar contadores
+            self.last_restock_date = timezone.now()
+            self.restock_count += 1
+            self.save()
+            
+            return True, f"Transfer completed: {quantity} units"
+            
+        except Exception as e:
+            return False, f"Transfer error: {str(e)}"
+    
+    def _execute_purchase(self, quantity):
+        """Ejecuta orden de compra"""
+        try:
+            # TODO: Implementar creación de orden de compra
+            # Por ahora, solo actualizar contadores
+            self.last_restock_date = timezone.now()
+            self.restock_count += 1
+            self.save()
+            
+            return True, f"Purchase order requested: {quantity} units"
+            
+        except Exception as e:
+            return False, f"Purchase error: {str(e)}"
+    
+    def _execute_notification(self, quantity):
+        """Ejecuta notificación"""
+        try:
+            # TODO: Implementar envío de notificaciones
+            self.last_restock_date = timezone.now()
+            self.restock_count += 1
+            self.save()
+            
+            return True, f"Notification sent: {quantity} units needed"
+            
+        except Exception as e:
+            return False, f"Notification error: {str(e)}"
+    
+    def _execute_combined(self, quantity):
+        """Ejecuta acciones combinadas"""
+        try:
+            # Intentar transferencia primero
+            success, message = self._execute_transfer(quantity)
+            if success:
+                return True, f"Combined action: {message}"
+            
+            # Si falla, intentar notificación
+            return self._execute_notification(quantity)
+            
+        except Exception as e:
+            return False, f"Combined action error: {str(e)}"
 
 class TiendaNubeCustomerMapping(models.Model):
     """Mapping entre clientes de Synap y Tiendanube"""

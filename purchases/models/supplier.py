@@ -14,6 +14,20 @@ class Supplier(BusinessEntity):
     Hereda de BusinessEntity para funcionalidad común
     """
     
+    # Tipo de proveedor
+    type = models.CharField(
+        max_length=16,
+        choices=[
+            ('individual', _('Individual')),
+            ('company', _('Company')),
+        ],
+        default='company',
+        verbose_name=_('Supplier Type')
+    )
+    
+    # Número de documento de identidad (DNI, CUIT, etc.)
+    document_number = models.CharField(_("Document Number"), max_length=50, blank=True, help_text=_("DNI, CUIT, or other identification document"))
+    
     # Relaciones con empresa y sucursal
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='suppliers', verbose_name=_('Company'))
     branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='suppliers', verbose_name=_('Branch'))

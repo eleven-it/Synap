@@ -110,6 +110,62 @@
                 </div>
             </div>
 
+            <!-- Warehouse Configuration -->
+            <div class="mt-8 border-t pt-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Warehouse Configuration</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="{{ form.tiendanube_warehouse.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Tiendanube Warehouse *
+                        </label>
+                        {{ form.tiendanube_warehouse }}
+                        {% if form.tiendanube_warehouse.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.tiendanube_warehouse.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Select the warehouse dedicated to Tiendanube stock management</p>
+                    </div>
+                    
+                    <div>
+                        <label for="{{ form.auto_restock.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Auto Restock
+                        </label>
+                        <div class="flex items-center">
+                            {{ form.auto_restock }}
+                            <label for="{{ form.auto_restock.id_for_label }}" class="ml-2 text-sm text-gray-700">
+                                Enable automatic restocking
+                            </label>
+                        </div>
+                        {% if form.auto_restock.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.auto_restock.errors|first }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div>
+                        <label for="{{ form.restock_threshold.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Restock Threshold
+                        </label>
+                        {{ form.restock_threshold }}
+                        {% if form.restock_threshold.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.restock_threshold.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Minimum stock level to trigger auto restock</p>
+                    </div>
+                    
+                    <div>
+                        <label for="{{ form.restock_quantity.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                            Restock Quantity
+                        </label>
+                        {{ form.restock_quantity }}
+                        {% if form.restock_quantity.errors %}
+                            <p class="text-red-500 text-sm mt-1">{{ form.restock_quantity.errors|first }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1">Quantity to restock when threshold is reached</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Sync Options -->
             <div class="mt-8 border-t pt-6">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4">Sync Options</h3>

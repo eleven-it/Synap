@@ -75,7 +75,7 @@ class SalesOrderLineStates:
 
 # --- VALIDADORES Y UTILIDADES ---
 class VATValidator:
-    """Validador de números de identificación fiscal por país"""
+    """Validador de números de identificación fiscal (Tax ID) por país"""
     
     @staticmethod
     def validate_argentina_cuit(cuit):
@@ -124,26 +124,26 @@ class VATValidator:
         return ein.isdigit()
     
     @staticmethod
-    def validate_vat(vat, country_code):
-        """Validar VAT según el país"""
-        if not vat or not country_code:
+    def validate_tax_id(tax_id, country_code):
+        """Validar Tax ID según el país"""
+        if not tax_id or not country_code:
             return False
         
         country_code = country_code.upper()
         
         if country_code == 'AR':
-            return VATValidator.validate_argentina_cuit(vat)
+            return VATValidator.validate_argentina_cuit(tax_id)
         elif country_code == 'BR':
-            return VATValidator.validate_brazil_cnpj(vat)
+            return VATValidator.validate_brazil_cnpj(tax_id)
         elif country_code == 'MX':
-            return VATValidator.validate_mexico_rfc(vat)
+            return VATValidator.validate_mexico_rfc(tax_id)
         elif country_code == 'ES':
-            return VATValidator.validate_spain_nif(vat)
+            return VATValidator.validate_spain_nif(tax_id)
         elif country_code == 'US':
-            return VATValidator.validate_usa_ein(vat)
+            return VATValidator.validate_usa_ein(tax_id)
         
         # Para otros países, validación básica
-        return len(vat) >= 5
+        return len(tax_id) >= 5
 
 # --- CLIENTES Y CONTACTOS ACTUALIZADOS ---
 class Client(BusinessEntity):
@@ -151,6 +151,31 @@ class Client(BusinessEntity):
     Cliente específico con funcionalidad de ventas
     Hereda de BusinessEntity para funcionalidad común
     """
+    
+    # Tipo de cliente
+    type = models.CharField(
+        max_length=16,
+        choices=[
+            ('individual', _('Individual')),
+            ('company', _('Company')),
+        ],
+        default='individual',
+        verbose_name=_('Client Type')
+    )
+    
+    # Número de documento de identidad (DNI, CUIT, etc.)
+    document_number = models.CharField(_("Document Number"), max_length=50, blank=True, help_text=_("DNI, CUIT, or other identification document"))
+    
+    # Alias para compatibilidad con código existente (VAT = Tax ID)
+    @property
+    def vat(self):
+        """Alias para tax_id - mantener compatibilidad"""
+        return self.tax_id
+    
+    @vat.setter
+    def vat(self, value):
+        """Setter para vat - mantener compatibilidad"""
+        self.tax_id = value
     
     # Información específica de cliente
     credit_limit = models.DecimalField(_("Credit Limit"), max_digits=15, decimal_places=2, null=True, blank=True)
@@ -228,7 +253,7 @@ class Client(BusinessEntity):
             if self.default_discount < 0 or self.default_discount > 100:
                 raise ValidationError(_('Default discount must be between 0 and 100.'))
         
-        # Validar VAT según el país (si se implementa)
+        # Validar Tax ID según el país (si se implementa)
         if self.tax_id and self.country:
             # Aquí se podría agregar validación específica por país
             pass

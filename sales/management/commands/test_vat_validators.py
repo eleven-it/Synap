@@ -3,7 +3,7 @@ from sales.models import VATValidator
 
 
 class Command(BaseCommand):
-    help = 'Probar validadores de VAT por país'
+    help = 'Probar validadores de Tax ID por país'
 
     def handle(self, *args, **options):
         self.stdout.write('Probando validadores de VAT...')

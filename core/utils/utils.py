@@ -180,6 +180,12 @@ APPS_MENU = [
                         "url": "tiendanube:config_list",
                         "icon": "settings",
                         "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Configuration Wizard"),
+                        "url": "tiendanube:config_wizard",
+                        "icon": "wizard",
+                        "permission": "tiendanube.access"
                     }
                 ]
             },
@@ -193,9 +199,90 @@ APPS_MENU = [
                         "permission": "tiendanube.access"
                     },
                     {
+                        "label": _("Manual Sync"),
+                        "url": "tiendanube:manual_sync",
+                        "icon": "sync",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Sync Products"),
+                        "url": "tiendanube:sync_products",
+                        "icon": "inventory",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Sync All Products"),
+                        "url": "tiendanube:sync_products",
+                        "icon": "sync_alt",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Sync All Stock"),
+                        "url": "tiendanube:sync_all_stock",
+                        "icon": "local_shipping",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Sync Customers"),
+                        "url": "tiendanube:sync_customers",
+                        "icon": "people",
+                        "permission": "tiendanube.access"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Mappings"),
+                "items": [
+                    {
                         "label": _("Product Mapping"),
                         "url": "tiendanube:mapping_list",
                         "icon": "link",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Customer Mapping"),
+                        "url": "tiendanube:customer_mapping_list",
+                        "icon": "person",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Order Mapping"),
+                        "url": "tiendanube:order_mapping_list",
+                        "icon": "receipt",
+                        "permission": "tiendanube.access"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Restock Management"),
+                "items": [
+                    {
+                        "label": _("Product Restock Policies"),
+                        "url": "tiendanube:product_restock_policy_list",
+                        "icon": "policy",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Restock Rules"),
+                        "url": "tiendanube:restock_rule_list",
+                        "icon": "rule",
+                        "permission": "tiendanube.access"
+                    },
+                    {
+                        "label": _("Restock Logs"),
+                        "url": "tiendanube:restock_log_list",
+                        "icon": "history",
+                        "permission": "tiendanube.access"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Reports & Analytics"),
+                "items": [
+                    {
+                        "label": _("Reports"),
+                        "url": "tiendanube:reports",
+                        "icon": "analytics",
                         "permission": "tiendanube.access"
                     }
                 ]
@@ -434,6 +521,12 @@ APPS_MENU = [
                         "url": "core:uom_list",
                         "icon": "straighten",
                         "permission": "configuracion.uom"
+                    },
+                    {
+                        "label": _("Empresas"),
+                        "url": "core:empresa_listar",
+                        "icon": "business",
+                        "permission": "configuracion.sistema"
                     }
                 ]
             },
@@ -464,20 +557,31 @@ APPS_MENU = [
                         "permission": "configuracion.sistema"
                     },
                     {
-                        "label": _("Empresas"),
-                        "url": "core:empresa_listar",
-                        "icon": "business",
-                        "permission": "configuracion.sistema"
-                    },
-                    {
                         "label": _("CDN Wizard"),
                         "url": "core:cdn_wizard",
                         "icon": "cloud",
+                        "permission": "configuracion.sistema"
+                    },
+                    {
+                        "label": _("Hooks & Events"),
+                        "url": "core:hook_dashboard",
+                        "icon": "event",
                         "permission": "configuracion.sistema"
                     }
                 ]
             }
         ]
+    },
+    {
+        "id": "module_management",
+        "nombre": _("Module Management"),
+        "permiso": "core.change_moduleconfig",
+        "url": "core:module_list",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1'/></svg>""",
+        "orden": 100,
+        "color": "indigo",
+        "superuser_only": True,
+        "submenus": []
     },
 ]
 
@@ -588,6 +692,7 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Di
                     
                     # Usar reverse para generar la URL correcta
                     url = reverse(item["url"])
+                    print(f"Successfully resolved URL '{item['url']}' to '{url}'")
                 except NoReverseMatch:
                     # Si no se puede resolver la URL, usar una URL por defecto
                     print(f"Warning: Could not resolve URL '{item.get('url', '')}' for item: {item}")
@@ -626,6 +731,9 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[st
 
     apps_filtradas = []
     for app in APPS_MENU:
+        # Si la app es solo para superusuarios y el usuario no lo es, saltar
+        if app.get("superuser_only") and not user.is_superuser:
+            continue
         if "*" in permisos_usuario or app["permiso"] in permisos_usuario:
             app_copy = app.copy()
             

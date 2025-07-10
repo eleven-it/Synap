@@ -48,7 +48,7 @@ class ClientForm(forms.ModelForm):
             }),
             'tax_id': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': _('Enter VAT/Tax ID...')
+                'placeholder': _('Enter Tax ID...')
             }),
             'address': forms.Textarea(attrs={
                 'class': 'form-textarea',

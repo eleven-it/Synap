@@ -21,23 +21,25 @@ class DependencyManager:
                 'optional': config.get('optional_dependencies', [])
             }
     
-    def get_dependency_tree(self, module_name):
-        """Obtiene el árbol de dependencias de un módulo"""
+    def get_dependency_tree(self, module_name, visited=None):
+        """Obtiene el árbol de dependencias de un módulo, evitando recursión infinita por ciclos"""
+        if visited is None:
+            visited = set()
+        if module_name in visited:
+            return {'module': module_name, 'dependencies': 'circular', 'optional_dependencies': 'circular'}
+        visited.add(module_name)
         tree = {
             'module': module_name,
             'dependencies': [],
             'optional_dependencies': []
         }
-        
         if module_name in self.dependencies:
             # Dependencias requeridas
             for dep in self.dependencies[module_name]['required']:
-                tree['dependencies'].append(self.get_dependency_tree(dep))
-            
+                tree['dependencies'].append(self.get_dependency_tree(dep, visited.copy()))
             # Dependencias opcionales
             for dep in self.dependencies[module_name]['optional']:
-                tree['optional_dependencies'].append(self.get_dependency_tree(dep))
-        
+                tree['optional_dependencies'].append(self.get_dependency_tree(dep, visited.copy()))
         return tree
     
     def get_all_dependencies(self, module_name):

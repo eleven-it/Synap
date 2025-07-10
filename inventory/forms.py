@@ -16,7 +16,7 @@ class ProductForm(forms.ModelForm):
             'name', 'sku', 'description', 'category', 'brand', 'subcategory',
             'handle', 'price', 'sale_price', 'cost_price', 'profit_margin', 'price_currency', 'uom', 'tracking',
             'weight_kg', 'volume_m3', 'width_cm', 'height_cm', 'depth_cm', 'is_dangerous', 'barcode',
-            'video_url', 'product_kind', 'is_published'
+            'video_url', 'product_kind', 'is_published', 'tags'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
@@ -43,6 +43,7 @@ class ProductForm(forms.ModelForm):
             'video_url': forms.URLInput(attrs={'class': 'form-input'}),
             'product_kind': forms.Select(attrs={'class': 'form-select'}),
             'is_published': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'tags': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'tiendanube, destacado, oferta'}),
         }
 
     def __init__(self, *args, **kwargs):

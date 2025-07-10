@@ -5,31 +5,145 @@
 {% if puede_inventory_ver_dashboard %}
 <div class="max-w-7xl mx-auto">
   <h1 class="text-2xl font-bold text-gray-800 mb-6">📦 {% trans "Inventory Dashboard" %}</h1>
-  <p class="text-gray-600 mb-8">{% trans "Welcome to the inventory dashboard. Here you can see the current stock status by product and location." %}</p>
+  
+  <!-- Información del filtro actual -->
+  {% if filtered_by_branch %}
+    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+      <div class="flex">
+        <div class="flex-shrink-0">
+          <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <div class="ml-3">
+          <p class="text-sm text-blue-700">
+            {% if current_branch_name %}
+              {% trans "Showing stock for branch" %}: <strong>{{ current_branch_name }}</strong>
+            {% else %}
+              {% trans "Showing stock for selected branch" %}
+            {% endif %}
+            {% if show_all_branches %}
+              <span class="ml-2 text-blue-600">({% trans "All branches" %})</span>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+  <!-- Filtros -->
+  <div class="bg-white rounded-xl shadow p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">🔍 {% trans "Filters" %}</h2>
+    
+    <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <!-- Filtro por Sucursal -->
+      <div>
+        <label for="branch" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Branch" %}</label>
+        <select name="branch" id="branch" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">{% trans "All branches" %}</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {% if current_branch_id == branch.id|stringformat:"s" %}selected{% endif %}>
+              {{ branch.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Filtro por Producto -->
+      <div>
+        <label for="product" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Product" %}</label>
+        <select name="product" id="product" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">{% trans "All products" %}</option>
+          {% for product in products %}
+            <option value="{{ product.id }}" {% if current_product_id == product.id|stringformat:"s" %}selected{% endif %}>
+              {{ product.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Filtro por Almacén -->
+      <div>
+        <label for="warehouse" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Warehouse" %}</label>
+        <select name="warehouse" id="warehouse" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">{% trans "All warehouses" %}</option>
+          {% for warehouse in warehouses %}
+            <option value="{{ warehouse.id }}" {% if current_warehouse_id == warehouse.id|stringformat:"s" %}selected{% endif %}>
+              {{ warehouse.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Filtro por Ubicación -->
+      <div>
+        <label for="location" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Location" %}</label>
+        <select name="location" id="location" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">{% trans "All locations" %}</option>
+          {% for location in locations %}
+            <option value="{{ location.id }}" {% if current_location_id == location.id|stringformat:"s" %}selected{% endif %}>
+              {{ location.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Botones de acción -->
+      <div class="md:col-span-2 lg:col-span-4 flex flex-wrap gap-2">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md transition duration-200">
+          🔍 {% trans "Apply Filters" %}
+        </button>
+        <a href="{% url 'inventory:stock_dashboard' %}" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition duration-200">
+          🔄 {% trans "Clear Filters" %}
+        </a>
+        <button type="button" id="show-all-branches" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition duration-200">
+          {% if show_all_branches %}
+            📍 {% trans "Show Active Branch Only" %}
+          {% else %}
+            🌐 {% trans "Show All Branches" %}
+          {% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Estadísticas -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-purple-700 mb-2">{% trans "Total Products" %}</h2>
-      <p class="text-3xl font-bold text-gray-800">{{ quants|length }}</p>
+      <p class="text-3xl font-bold text-gray-800">{{ total_products }}</p>
     </div>
     <div class="bg-white rounded-xl shadow p-6">
       <h2 class="text-lg font-semibold text-purple-700 mb-2">{% trans "Total Locations" %}</h2>
       <p class="text-3xl font-bold text-gray-800">{{ total_locations }}</p>
     </div>
     <div class="bg-white rounded-xl shadow p-6">
-      <h2 class="text-lg font-semibold text-purple-700 mb-2">{% trans "Total Stock Movements" %}</h2>
-      <p class="text-3xl font-bold text-gray-800">-</p>
+      <h2 class="text-lg font-semibold text-purple-700 mb-2">{% trans "Available Stock" %}</h2>
+      <p class="text-3xl font-bold text-green-600">{{ total_available|floatformat:0 }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-6">
+      <h2 class="text-lg font-semibold text-purple-700 mb-2">{% trans "Reserved Stock" %}</h2>
+      <p class="text-3xl font-bold text-yellow-600">{{ total_reserved|floatformat:0 }}</p>
     </div>
   </div>
 
+  <!-- Tabla de Stock -->
   <div class="bg-white rounded-xl shadow p-6">
-    <h2 class="text-xl font-semibold text-purple-700 mb-4">{% trans "Stock by Product & Location" %}</h2>
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-semibold text-purple-700">{% trans "Stock by Product & Location" %}</h2>
+      <div class="text-sm text-gray-500">
+        {{ quants|length }} {% trans "records found" %}
+      </div>
+    </div>
+    
     <div class="overflow-x-auto">
       <table class="min-w-full text-sm text-gray-900">
         <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b border-gray-200">
           <tr>
             <th class="px-4 py-3">{% trans "SKU" %}</th>
             <th class="px-4 py-3">{% trans "Product" %}</th>
+            <th class="px-4 py-3">{% trans "Branch" %}</th>
+            <th class="px-4 py-3">{% trans "Warehouse" %}</th>
             <th class="px-4 py-3">{% trans "Location" %}</th>
             <th class="px-4 py-3 text-right">{% trans "Available Stock" %}</th>
             <th class="px-4 py-3 text-right">{% trans "Reserved" %}</th>
@@ -39,16 +153,28 @@
         <tbody>
           {% for quant in quants %}
           <tr class="border-t border-gray-100 hover:bg-gray-50 transition">
-            <td class="px-4 py-2">{{ quant.product.sku }}</td>
+            <td class="px-4 py-2 font-mono text-sm">{{ quant.product.sku|default:"-" }}</td>
             <td class="px-4 py-2">{{ quant.product.name }}</td>
+            <td class="px-4 py-2">
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {{ quant.branch.name }}
+              </span>
+            </td>
+            <td class="px-4 py-2">{{ quant.location.warehouse.name|default:"-" }}</td>
             <td class="px-4 py-2">{{ quant.location.name }}</td>
-            <td class="px-4 py-2 text-right">{{ quant.quantity|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right font-semibold text-green-600">{{ quant.available_quantity|floatformat:2 }}</td>
             <td class="px-4 py-2 text-right text-yellow-600">{{ quant.reserved_quantity|floatformat:2 }}</td>
-            <td class="px-4 py-2 text-right font-semibold">{{ quant.disponible|floatformat:2 }}</td>
+            <td class="px-4 py-2 text-right font-semibold">{{ quant.quantity|floatformat:2 }}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="text-center p-6 text-gray-500">{% trans "No stock registered." %}</td>
+            <td colspan="8" class="text-center p-6 text-gray-500">
+              {% if filtered_by_branch %}
+                {% trans "No stock found with the current filters." %}
+              {% else %}
+                {% trans "No stock registered." %}
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -56,6 +182,37 @@
     </div>
   </div>
 </div>
+
+<!-- JavaScript para funcionalidad dinámica -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Botón para mostrar todas las sucursales
+    const showAllBranchesBtn = document.getElementById('show-all-branches');
+    if (showAllBranchesBtn) {
+        showAllBranchesBtn.addEventListener('click', function() {
+            const url = new URL(window.location);
+            const currentShowAll = url.searchParams.get('show_all_branches') === 'true';
+            url.searchParams.set('show_all_branches', (!currentShowAll).toString());
+            window.location.href = url.toString();
+        });
+    }
+
+    // Auto-submit del formulario cuando cambian los filtros principales
+    const filters = ['branch', 'product', 'warehouse', 'location'];
+    filters.forEach(filterId => {
+        const element = document.getElementById(filterId);
+        if (element) {
+            element.addEventListener('change', function() {
+                // Solo auto-submit si hay un valor seleccionado
+                if (this.value) {
+                    this.closest('form').submit();
+                }
+            });
+        }
+    });
+});
+</script>
+
 {% else %}
 <div class="p-6 text-center text-red-600 font-semibold">
   ⚠️ {% trans "You do not have permission to view the inventory dashboard." %}

@@ -46,21 +46,12 @@
                                 <h3 class="text-base font-bold text-gray-900 dark:text-gray-100 text-center leading-tight">{{ empresa.nombre }}</h3>
                                 <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-0.5">{{ empresa.identificador_fiscal }}</p>
                                 <div class="mt-2 flex items-center justify-center">
-                                    {% if empresa.activa %}
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 gap-x-1">
-                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-                                            </svg>
-                                            {% trans 'Activa' %}
-                                        </span>
-                                    {% else %}
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 gap-x-1">
-                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-                                            </svg>
-                                            {% trans 'Inactiva' %}
-                                        </span>
-                                    {% endif %}
+                                    <span id="estado-empresa-{{ empresa.id }}" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if empresa.activa %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %} gap-x-1 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <span class="estado-texto">{% if empresa.activa %}{% trans 'Activa' %}{% else %}{% trans 'Inactiva' %}{% endif %}</span>
+                                    </span>
                                 </div>
                             </div>
 
@@ -102,20 +93,25 @@
                                     {% endif %}
                                 </div>
                                 <div class="flex flex-col sm:flex-row items-center justify-between mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 gap-y-2">
-                                    <span class="text-xs text-gray-500 dark:text-gray-400 w-full sm:w-auto mb-2 sm:mb-0">{% trans 'Creada' %}</span>
-                                    <div class="flex gap-x-2 w-full sm:w-auto justify-end">
-                                        <a href="{% url 'core:empresa_editar' empresa_id=empresa.id %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5">
+                                    <div class="flex gap-x-2 w-full sm:w-auto justify-end items-center">
+                                        <a href="{% url 'core:empresa_editar' empresa_id=empresa.id %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="Editar empresa">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                             </svg>
-                                            <span>{% trans 'Editar' %}</span>
+                                            <span class="sr-only">Editar</span>
                                         </a>
-                                        <button onclick="confirmarEliminacion({{ empresa.id }}, '{{ empresa.nombre }}')" class="btn-danger flex items-center gap-x-1 px-3 py-1.5">
+                                        <a href="{% url 'core:branch_list' empresa_id=empresa.id %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="Ver sucursales">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                                             </svg>
-                                            <span>{% trans 'Eliminar' %}</span>
-                                        </button>
+                                            <span class="sr-only">Sucursales</span>
+                                        </a>
+                                        <!-- Switch de activación -->
+                                        <label class="relative inline-flex items-center cursor-pointer ml-2" title="Activar/desactivar empresa">
+                                          <input type="checkbox" class="sr-only peer" data-empresa-id="{{ empresa.id }}" {% if empresa.activa %}checked{% endif %} onchange="toggleEmpresaActiva(this)">
+                                          <div class="w-10 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-500 rounded-full peer dark:bg-gray-700 peer-checked:bg-green-400 transition-colors"></div>
+                                          <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white border border-gray-300 rounded-full shadow-md transition-transform duration-200 peer-checked:translate-x-5"></div>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -149,6 +145,12 @@
         </div>
     </div>
 </div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-6 right-6 z-50 space-y-2"></div>
+
+<!-- CSRF Token para AJAX -->
+{% csrf_token %}
 
 <style>
 .btn-primary {
@@ -196,6 +198,42 @@ function confirmarEliminacion(empresaId, empresaNombre) {
     if (confirm(`¿Estás seguro de que deseas eliminar la empresa "${empresaNombre}"? Esta acción no se puede deshacer.`)) {
         window.location.href = `/core/empresa/${empresaId}/eliminar/`;
     }
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-2 rounded-lg shadow-lg text-white font-medium flex items-center gap-2 animate-fade-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+    toast.innerHTML = `<span class="material-icons">${type === 'success' ? 'check_circle' : 'error'}</span> ${message}`;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+
+function toggleEmpresaActiva(checkbox) {
+    const empresaId = checkbox.getAttribute('data-empresa-id');
+    const activa = checkbox.checked;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch(`/core/empresas/${empresaId}/editar/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: `activa=${activa ? 'on' : ''}&csrfmiddlewaretoken=${csrfToken}`
+    })
+    .then(response => response.ok ? response.text() : Promise.reject(response))
+    .then(() => {
+        showToast(activa ? 'Empresa activada' : 'Empresa desactivada', 'success');
+        // Actualizar badge de estado
+        const badge = document.getElementById(`estado-empresa-${empresaId}`);
+        if (badge) {
+            badge.className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium gap-x-1 transition-colors ${activa ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`;
+            badge.querySelector('.estado-texto').textContent = activa ? 'Activa' : 'Inactiva';
+        }
+    })
+    .catch(() => {
+        showToast('Error al actualizar el estado', 'error');
+        checkbox.checked = !activa;
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function() {

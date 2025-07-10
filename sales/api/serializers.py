@@ -95,7 +95,7 @@ class ClientSerializer(serializers.ModelSerializer):
         return value
     
     def validate_tax_id(self, value):
-        """Validar formato de VAT/Tax ID"""
+        """Validar formato de Tax ID"""
         if value:
             # Implementar validación específica por país si es necesario
             if len(value) < 3:

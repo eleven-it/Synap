@@ -16,12 +16,22 @@
                     {% if empresa %}{% trans 'Editar Empresa' %}{% else %}{% trans 'Nueva Empresa' %}{% endif %}
                 </h1>
             </div>
-            <button type="submit" form="empresa-form" class="btn-primary">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                </svg>
-                {% if empresa %}{% trans 'Guardar' %}{% else %}{% trans 'Crear' %}{% endif %}
-            </button>
+            <div class="flex items-center gap-x-2">
+                {% if empresa %}
+                <a href="{% url 'core:branch_list' empresa_id=empresa.id %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <span>{% trans 'Ver Sucursales' %}</span>
+                </a>
+                {% endif %}
+                <button type="submit" form="empresa-form" class="btn-primary">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {% if empresa %}{% trans 'Guardar' %}{% else %}{% trans 'Crear' %}{% endif %}
+                </button>
+            </div>
         </div>
     </div>
 
@@ -220,6 +230,7 @@
                                     {% endif %}
                                 </div>
                                 
+                                {% if empresa %}
                                 <div class="flex items-center">
                                     <input type="checkbox" name="activa" id="activa" 
                                            class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded" 
@@ -231,6 +242,7 @@
                                         <p class="text-xs text-red-600 ml-4">{{ form.activa.errors.0 }}</p>
                                     {% endif %}
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -239,6 +251,9 @@
         </div>
     </div>
 </div>
+
+<!-- Toast container (si no existe ya) -->
+<div id="toast-container" class="fixed top-6 right-6 z-50 space-y-2"></div>
 
 <style>
 .form-input {
@@ -292,5 +307,48 @@ fileInput.addEventListener('change', (e) => {
         // You can add preview functionality here
     }
 });
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-2 rounded-lg shadow-lg text-white font-medium flex items-center gap-2 animate-fade-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+    toast.innerHTML = `<span class=\"material-icons\">${type === 'success' ? 'check_circle' : 'error'}</span> ${message}`;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+
+function toggleEmpresaActivaForm(checkbox, empresaId) {
+    const activa = checkbox.checked;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch(`/core/empresas/${empresaId}/editar/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: `activa=${activa ? 'on' : ''}&csrfmiddlewaretoken=${csrfToken}`
+    })
+    .then(response => response.ok ? response.text() : Promise.reject(response))
+    .then(() => {
+        showToast(activa ? 'Empresa activada' : 'Empresa desactivada', 'success');
+        // Actualizar badge de estado
+        const badge = document.getElementById(`estado-empresa-${empresaId}`);
+        if (badge) {
+            badge.className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium gap-x-1 transition-colors ml-2 ${activa ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`;
+            badge.querySelector('.estado-texto').textContent = activa ? 'Activa' : 'Inactiva';
+        }
+    })
+    .catch(() => {
+        showToast('Error al actualizar el estado', 'error');
+        checkbox.checked = !activa;
+    });
+}
 </script>
+
+<style>
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.3s ease; }
+</style>
 {% endblock %} 

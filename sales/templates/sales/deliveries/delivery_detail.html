@@ -101,10 +101,10 @@
                                 </a>
                             </dd>
                         </div>
-                        {% if delivery.client.vat %}
+                        {% if delivery.client.tax_id %}
                         <div class="flex justify-between">
-                            <dt class="text-sm text-gray-500 dark:text-gray-400">VAT:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.client.vat }}</dd>
+                            <dt class="text-sm text-gray-500 dark:text-gray-400">Tax ID:</dt>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ delivery.client.tax_id }}</dd>
                         </div>
                         {% endif %}
                         {% if delivery.client.email %}

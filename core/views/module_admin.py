@@ -43,6 +43,10 @@ class ModuleListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         context['summary'] = module_manager.get_modules_summary()
         context['module_summary'] = module_manager.get_modules_summary()
         
+        # Variable para mostrar la tarjeta especial solo a administradores
+        user = self.request.user
+        context['is_admin_user'] = user.is_superuser or user.groups.filter(name__iexact='administrador').exists()
+        
         return context
 
 

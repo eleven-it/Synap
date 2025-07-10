@@ -189,6 +189,9 @@ class Product(models.Model):
     fiscal_position = models.ForeignKey('accounting.FiscalPosition', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_('Fiscal Position'))
     tax_category = models.CharField(_('Tax Category'), max_length=50, blank=True, help_text=_('Category for tax calculation (e.g., standard, reduced, zero)'))
 
+    # Tags para categorización y sincronización
+    tags = models.CharField(_('Tags'), max_length=255, blank=True, help_text=_('Comma-separated tags for categorization and sync control'))
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

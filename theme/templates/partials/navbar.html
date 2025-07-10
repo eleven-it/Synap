@@ -1,19 +1,16 @@
 {% load i18n %}
 {% load static %}
 {% load menu_tags %}
+{% csrf_token %}
 
+<!-- Fuente principal -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Estilos unificados y optimizados -->
 <style>
   body, .font-inter { font-family: 'Inter', sans-serif; }
-  .menu-app-item { transition: color 0.2s, border-bottom 0.2s; }
-  .menu-app-item:hover { color: #6366f1; border-bottom: 2px solid #6366f1; }
-  .dropdown-menu { display: none; position: absolute; left: 0; top: 100%; min-width: 180px; background: #fff; box-shadow: 0 8px 32px rgba(60,60,100,0.08); border-radius: 0.5rem; z-index: 50; padding: 0.5rem 0; }
-  .menu-app:hover .dropdown-menu, .menu-app:focus-within .dropdown-menu { display: block; animation: fadeIn 0.2s; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none; } }
-  @keyframes gradient-move {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 100% 50%; }
-  }
+
+  /* Animaciones y estilo visual */
   .synap-animated {
     background: linear-gradient(90deg, #a855f7, #3b82f6, #f472b6, #a855f7);
     background-size: 200% 200%;
@@ -24,331 +21,226 @@
     letter-spacing: 0.04em;
     filter: drop-shadow(0 1px 6px #a855f7cc);
   }
-  .animate-gradient-move {
-    animation: gradient-move 2.5s linear infinite alternate;
+  @keyframes gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
   }
-  /* Microinteracción para el switch dark mode */
-  #dark-mode-switch:checked + span .dot {
-    transform: translateX(16px);
-    background: #1e293b;
-  }
-  #dark-mode-switch + span .dot {
-    transform: translateX(0);
-  }
-  /* Animación para el menú hamburguesa */
-  .mobile-menu {
-    display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100vw;
-    background: #fff;
-    z-index: 100;
-    box-shadow: 0 8px 32px rgba(60,60,100,0.08);
-    border-radius: 0 0 1rem 1rem;
-    animation: fadeIn 0.2s;
-  }
-  .mobile-menu.open {
-    display: block;
-  }
-  @media (min-width: 768px) {
-    .mobile-menu { display: none !important; }
+
+  /* Dropdown animado */
+  .dropdown-fade {
+    transition: all 0.2s ease-in-out;
+    animation: fade-slide-down 0.25s ease;
   }
   @keyframes fade-slide-down {
-    0% { opacity: 0; transform: translateY(-16px); }
-    100% { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
-  .animate-fade-slide-down {
-    animation: fade-slide-down 0.25s cubic-bezier(0.4,0,0.2,1);
-  }
-  .dropdown-bg {
-    box-shadow: 0 8px 32px 0 rgba(60,60,60,0.10), 0 1.5px 0 0 #eee;
-    border-radius: 0 0 24px 24px;
-  }
-  /* Estilos para módulos dinámicos */
-  .module-menu-item {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-    border-radius: 8px;
-    color: #374151;
-    font-size: 14px;
-    font-weight: 500;
+
+  /* Tarjetas de menú */
+  .app-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
     transition: all 0.2s ease;
-    text-decoration: none;
-    margin: 2px 0;
-    position: relative;
+    border: 1px solid #f1f5f9;
   }
-  .module-menu-item:hover {
-    background: #f3f4f6;
-    color: #1f2937;
-    transform: translateX(4px);
+  .app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-color: #e2e8f0;
   }
-  .module-menu-item.active {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-    color: white;
-  }
-  .module-icon {
-    width: 20px;
-    height: 20px;
-    margin-right: 12px;
+  .app-menu-item {
     display: flex;
     align-items: center;
-    justify-content: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #475569;
+    font-size: 14px;
+    transition: all 0.15s ease;
+    text-decoration: none;
   }
-  .module-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    z-index: 50;
-    min-width: 280px;
-    margin-top: 8px;
+  .app-menu-item:hover {
+    background: #f8fafc;
+    color: #1e293b;
+    transform: translateX(2px);
   }
 </style>
 
-<div class="flex w-full items-center justify-between px-4 sm:px-8 h-16 bg-white font-inter relative border-b border-gray-200">
-  <!-- Logo imagen a la izquierda -->
+<!-- NAVBAR PRINCIPAL -->
+<div class="flex items-center justify-between w-full h-20 px-6 bg-white border-b border-gray-200 font-inter relative shadow-sm">
+  <!-- Logo -->
   <a href="/" class="flex items-center">
     {% if empresa_activa and empresa_activa.logo %}
-      <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="h-12 w-auto mr-2"/>
+      <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="h-12 w-auto mr-2" />
     {% else %}
-      <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo Synap" class="h-12 w-auto mr-2"/>
+      <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo Synap" class="h-12 w-auto mr-2" />
     {% endif %}
   </a>
-  
-  <!-- Menú horizontal dinámico basado en módulos activos -->
-  <nav class="hidden md:flex items-center font-inter text-base font-normal tracking-wide relative"
-    x-data="{
-      openApp: null,
-      closeTimeout: null,
-      openMenu(id) {
-        clearTimeout(this.closeTimeout);
-        this.openApp = id;
-      },
-      scheduleClose() {
-        this.closeTimeout = setTimeout(() => { this.openApp = null }, 200);
+
+  <!-- Menú horizontal (desktop) -->
+  <nav class="hidden md:flex items-center gap-6 text-sm font-medium" x-data="{ openApp: null, closeTimeout: null, openMenu(id) { clearTimeout(this.closeTimeout); this.openApp = id }, scheduleClose() { this.closeTimeout = setTimeout(() => this.openApp = null, 200) } }">
+    {% get_dynamic_menu as modules %}
+    {% for module in modules %}
+      <div class="relative" @mouseenter="openMenu('{{ module.id }}')" @mouseleave="scheduleClose()">
+        <a href="{{ module.url }}" class="flex items-center gap-1 text-gray-700 hover:text-indigo-600">
+          {{ module.nombre }}
+          {% if module.submenus %}<span class="material-icons text-xs">expand_more</span>{% endif %}
+        </a>
+        {% if module.submenus %}
+        <template x-if="openApp === '{{ module.id }}'">
+          <div class="fixed left-0 top-20 w-full z-50 bg-[#f9fbfd] px-12 py-10 dropdown-fade shadow-xl border-t border-gray-200 rounded-b-xl">
+            <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {% for submenu in module.submenus %}
+                <div class="app-card">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase mb-2">{{ submenu.seccion }}</h3>
+                  <div class="space-y-1">
+                    {% for item in submenu.items %}
+                      <a href="{{ item.url }}" class="app-menu-item">
+                        <span class="material-icons text-base mr-2">{{ item.icon }}</span>
+                        {{ item.label }}
+                      </a>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="mt-8 text-center">
+              <a href="{{ module.url }}" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow text-sm font-semibold transition">
+                <span class="material-icons mr-2">apps</span>
+                {% trans "Go to" %} {{ module.nombre }} {% trans "Dashboard" %}
+              </a>
+            </div>
+          </div>
+        </template>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </nav>
+
+  <!-- Controles derecha -->
+  <div class="ml-auto flex items-center gap-4" x-data="{ 
+    branchDropdownOpen: false,
+    activeBranch: null,
+    availableBranches: [],
+    loading: false,
+    
+    async loadBranches() {
+      this.loading = true;
+      try {
+        const response = await fetch('/core/api/branches/');
+        if (response.ok) {
+          this.availableBranches = await response.json();
+          // Establecer la sucursal activa desde la sesión o default
+          this.activeBranch = this.availableBranches.find(b => b.id === {{ request.user.branch_activa.id|default:'null' }}) || 
+                             this.availableBranches.find(b => b.id === {{ request.user.default_branch.id|default:'null' }}) ||
+                             this.availableBranches[0];
+        }
+      } catch (error) {
+        console.error('Error loading branches:', error);
+      } finally {
+        this.loading = false;
       }
-    }">
+    },
     
-    <!-- Dashboard principal -->
-    <div class="relative mr-6">
-      <a href="{% url 'core:dashboard' %}" class="group text-[#222] transition py-1.5 focus:outline-none flex items-center gap-2">
-        <span class="material-icons text-lg">dashboard</span>
-        <span style="text-decoration: none;">{% trans "Dashboard" %}</span>
-      </a>
-    </div>
+    async changeBranch(branchId) {
+      try {
+        const response = await fetch(`/api/user/${request.user.id}/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            default_branch_id: branchId
+          })
+        });
+        
+        if (response.ok) {
+          this.activeBranch = this.availableBranches.find(b => b.id === branchId);
+          this.branchDropdownOpen = false;
+          // Recargar la página para aplicar los cambios
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error changing branch:', error);
+      }
+    }
+  }" x-init="loadBranches()">
     
-    <!-- Módulos dinámicos usando template tags -->
-    {% get_dynamic_menu as dynamic_modules %}
-    {% for module in dynamic_modules %}
-      {% is_module_active module.id as is_active %}
-      <div class="relative"
-           @mouseenter="openMenu('{{ module.id }}')"
-           @mouseleave="scheduleClose()">
+    <!-- Empresa -->
+    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm">
+      <span class="material-icons text-base mr-1">business</span>
+      {{ empresa_activa.nombre }}
+    </span>
+    
+    <!-- Sucursal activa con dropdown -->
+    <div class="relative">
+      <button 
+        @click="branchDropdownOpen = !branchDropdownOpen"
+        class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm hover:bg-blue-200 transition-colors duration-200"
+        :disabled="loading"
+      >
+        <span class="material-icons text-base mr-1">location_on</span>
+        <span x-text="loading ? 'Cargando...' : (activeBranch ? activeBranch.name : 'Sin sucursal')" class="truncate max-w-[8rem]"></span>
+        <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
+      </button>
+      
+      <!-- Dropdown de sucursales -->
+      <div 
+        x-show="branchDropdownOpen" 
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        @click.away="branchDropdownOpen = false"
+        class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+      >
+        <div class="p-3 border-b border-gray-100">
+          <h3 class="text-sm font-semibold text-gray-900">{% trans "Active Branch" %}</h3>
+          <p class="text-xs text-gray-500 mt-1">{% trans "Select the branch to work with" %}</p>
+        </div>
         
-        <a href="{{ module.url }}" class="group text-[#222] transition py-1.5 focus:outline-none flex items-center gap-2">
-          <div class="module-icon">
-            {{ module.icono_svg|safe }}
-          </div>
-          <span style="text-decoration: none;" class="{% if is_active %}font-semibold{% endif %}">
-            {{ module.nombre }}
-            {% if module.submenus %}
-              <span class="material-icons text-xs align-middle ml-1 transition-transform duration-200" 
-                    style="vertical-align: middle;" 
-                    :class="openApp === '{{ module.id }}' ? 'rotate-180' : ''">
-                expand_more
-              </span>
-            {% endif %}
-          </span>
-        </a>
-        
-        {% if module.submenus %}
-          <template x-if="openApp === '{{ module.id }}'">
-            <div
-              x-show="openApp"
-              x-transition:enter="transition ease-out duration-150"
-              x-transition:enter-start="opacity-0 translate-y-4"
-              x-transition:enter-end="opacity-100 translate-y-0"
-              x-transition:leave="transition ease-in duration-100"
-              x-transition:leave-start="opacity-100 translate-y-0"
-              x-transition:leave-end="opacity-0 translate-y-4"
-              class="module-dropdown"
-              @mouseenter="clearTimeout(closeTimeout)"
-              @mouseleave="scheduleClose()"
+        <div class="max-h-48 overflow-y-auto">
+          <template x-for="branch in availableBranches" :key="branch.id">
+            <button
+              @click="changeBranch(branch.id)"
+              class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 transition-colors duration-150"
+              :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'"
             >
-              {% render_module_dropdown module %}
-            </div>
+              <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600' : 'text-gray-400'">
+                location_on
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium" x-text="branch.name"></div>
+                <div class="text-xs text-gray-500" x-text="branch.city || ''"></div>
+              </div>
+              <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 text-sm">check</span>
+            </button>
           </template>
-        {% endif %}
-      </div>
-    {% endfor %}
-    
-    <!-- Configuración del sistema (siempre visible para admins) -->
-    {% if user.is_admin %}
-      <div class="relative ml-6">
-        <a href="{% url 'core:module_list' %}" class="group text-[#222] transition py-1.5 focus:outline-none flex items-center gap-2">
-          <span class="material-icons text-lg">settings</span>
-          <span style="text-decoration: none;">{% trans "System" %}</span>
-        </a>
-      </div>
-    {% endif %}
-  </nav>
-  
-  <!-- Botón hamburguesa para mobile -->
-  <button id="hamburger-btn" class="md:hidden flex items-center p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 ml-2" aria-label="Abrir menú">
-    <svg class="w-7 h-7 text-gray-700 dark:text-gray-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-  </button>
-  
-  <!-- Controles a la derecha: badges y secundarios -->
-  <div class="ml-auto flex items-center gap-4">
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
-      <span class="material-icons text-base mr-1">business</span>
-      <span class="truncate max-w-[7rem]">{{ empresa_activa.nombre }}</span>
-    </span>
-    <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
-      <span class="material-icons text-base">location_on</span>
-    </span>
-    <button id="user-menu-btn" class="flex items-center justify-center w-8 h-8 rounded-full bg-purple-400 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 text-white font-bold text-base select-none" aria-label="Menú de usuario">
-      <span class="material-icons text-lg">person</span>
-    </button>
-    <label for="dark-mode-switch" class="ml-2 flex items-center cursor-pointer select-none">
-      <input id="dark-mode-switch" type="checkbox" class="sr-only">
-      <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
-        <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
-      </span>
-      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">{% trans "Dark" %}</span>
-    </label>
-  </div>
-</div>
-
-<!-- Menú mobile actualizado con módulos dinámicos -->
-<div id="mobile-menu" class="mobile-menu md:hidden absolute left-0 top-16 w-full bg-white shadow-xl z-50 rounded-b-xl border-t border-gray-200 hidden">
-  <nav class="flex flex-col py-4 px-6 font-inter text-base font-normal tracking-wide">
-    
-    <!-- Dashboard principal -->
-    <div class="mb-4">
-      <a href="{% url 'core:dashboard' %}" class="block text-[#222] hover:underline underline-offset-4 transition py-2 focus:outline-none flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100">
-          <span class="material-icons text-blue-600">dashboard</span>
         </div>
-        <span class="font-medium">{% trans "Dashboard" %}</span>
-      </a>
+        
+        <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 text-sm">
+          {% trans "No branches available" %}
+        </div>
+      </div>
     </div>
     
-    <!-- Módulos dinámicos -->
-    {% for module in dynamic_modules %}
-      {% is_module_active module.id as is_active %}
-      <div class="mb-4">
-        <a href="{{ module.url }}" class="block text-[#222] hover:underline underline-offset-4 transition py-2 focus:outline-none flex items-center gap-2" onclick="this.nextElementSibling?.classList.toggle('hidden')">
-          <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg, {{ module.color }}50 0%, {{ module.color }}20 100%);">
-            {{ module.icono_svg|safe }}
-          </div>
-          <span class="font-medium {% if is_active %}text-blue-600{% endif %}">{{ module.nombre }}</span>
-          {% if module.submenus %}
-            <span class="material-icons text-xs ml-auto">expand_more</span>
-          {% endif %}
-        </a>
-        
-        {% if module.submenus %}
-        <div class="hidden pl-10 mt-2 space-y-4">
-          {% for submenu in module.submenus %}
-            <div class="space-y-2">
-              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">{{ submenu.seccion }}</h4>
-              <div class="space-y-1">
-                {% for item in submenu.items %}
-                  <a href="{{ item.url }}" class="flex items-center text-sm text-gray-600 hover:text-gray-900 transition py-1 px-2 rounded">
-                    <span class="material-icons text-base mr-2">{{ item.icon }}</span>
-                    {{ item.label }}
-                  </a>
-                {% endfor %}
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </div>
-    {% endfor %}
-    
-    <!-- Configuración del sistema (mobile) -->
-    {% if user.is_admin %}
-      <div class="mb-4">
-        <a href="{% url 'core:module_list' %}" class="block text-[#222] hover:underline underline-offset-4 transition py-2 focus:outline-none flex items-center gap-2">
-          <div class="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100">
-            <span class="material-icons text-gray-600">settings</span>
-          </div>
-          <span class="font-medium">{% trans "System" %}</span>
-        </a>
-      </div>
-    {% endif %}
-  </nav>
-  
-  <div class="flex items-center gap-3 mt-4 px-6 pb-4">
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm font-semibold">
-      <span class="material-icons text-base mr-1">business</span>
-      <span class="truncate max-w-[7rem]">{{ empresa_activa.nombre }}</span>
-    </span>
-    <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold">
-      <span class="material-icons text-base">location_on</span>
-    </span>
-    <button id="user-menu-btn-mobile" class="flex items-center justify-center w-8 h-8 rounded-full bg-purple-400 hover:bg-pink-500 focus:outline-none focus:ring-2 focus:ring-purple-300 transition-all duration-200 text-white font-bold text-base select-none" aria-label="Menú de usuario">
-      <span class="material-icons text-lg">person</span>
+    <!-- Usuario -->
+    <button class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center">
+      <span class="material-icons">person</span>
     </button>
-    <label for="dark-mode-switch-mobile" class="ml-2 flex items-center cursor-pointer select-none">
-      <input id="dark-mode-switch-mobile" type="checkbox" class="sr-only">
-      <span class="w-9 h-5 flex items-center bg-gray-300 dark:bg-gray-700 rounded-full p-1 transition-colors duration-200">
-        <span class="dot w-4 h-4 bg-white dark:bg-gray-900 rounded-full shadow-md transform transition-transform duration-200"></span>
+    
+    <!-- Dark mode -->
+    <label class="ml-2 flex items-center cursor-pointer">
+      <input id="dark-mode-switch" type="checkbox" class="sr-only">
+      <span class="w-9 h-5 flex items-center bg-gray-300 rounded-full p-1">
+        <span class="dot w-4 h-4 bg-white rounded-full shadow transform transition"></span>
       </span>
-      <span class="ml-2 text-xs text-gray-500 dark:text-gray-300">{% trans "Dark" %}</span>
     </label>
   </div>
 </div>
 
-<script>
-// Lógica para dropdowns accesibles y animados (desktop y mobile)
-document.addEventListener('DOMContentLoaded', function() {
-  // --- Menú hamburguesa responsivo ---
-  const hamburgerBtn = document.getElementById('hamburger-btn');
-  const mobileMenu = document.getElementById('mobile-menu');
-  hamburgerBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    mobileMenu.classList.toggle('open');
-  });
-  // Cierra el menú mobile al hacer click fuera
-  document.addEventListener('click', function(e) {
-    if (!mobileMenu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
-      mobileMenu.classList.remove('open');
-    }
-  });
-  
-  // --- Dark mode sync entre switches ---
-  const darkSwitch = document.getElementById('dark-mode-switch');
-  const darkSwitchMobile = document.getElementById('dark-mode-switch-mobile');
-  
-  function syncDarkMode(checked) {
-    const html = document.documentElement;
-    if (checked) {
-      html.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      html.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }
-  
-  if (darkSwitch) {
-    darkSwitch.addEventListener('change', function() {
-      syncDarkMode(this.checked);
-      if (darkSwitchMobile) darkSwitchMobile.checked = this.checked;
-    });
-  }
-  
-  if (darkSwitchMobile) {
-    darkSwitchMobile.addEventListener('change', function() {
-      syncDarkMode(this.checked);
-      if (darkSwitch) darkSwitch.checked = this.checked;
-    });
-  }
-});
-</script>
-<!-- Alpine.js para dropdowns -->
-<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script> 
+<!-- Alpine.js -->
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

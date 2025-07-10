@@ -16,6 +16,7 @@ from django import forms
 from core.models import Branch
 from core.utils.utils import require_empresa_activa
 from django.views.decorators.http import require_POST
+from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +286,17 @@ def empresa_crear_view(request):
 def empresa_editar_view(request, empresa_id):
     empresa = get_object_or_404(Empresa, id=empresa_id)
     if request.method == 'POST':
+        # Si solo se envía el campo 'activa', actualizar directamente
+        if 'activa' in request.POST and len(request.POST) == 2:  # activa + csrf
+            empresa.activa = request.POST.get('activa') == 'on'
+            empresa.save()
+            return HttpResponse('OK')  # Respuesta simple para AJAX
+        elif 'activa' in request.POST and len(request.POST) == 3:  # activa + csrf + csrfmiddlewaretoken
+            empresa.activa = request.POST.get('activa') == 'on'
+            empresa.save()
+            return HttpResponse('OK')  # Respuesta simple para AJAX
+        
+        # Si se envían más campos, usar el formulario completo
         form = EmpresaForm(request.POST, request.FILES, instance=empresa)
         if form.is_valid():
             form.save()

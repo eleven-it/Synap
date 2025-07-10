@@ -118,10 +118,9 @@ class ModuleContextMiddleware:
         # Agregar información de módulos activos al contexto
         if hasattr(request, 'resolver_match') and request.resolver_match:
             current_module = self.get_current_module(request.path_info)
-            
             if current_module:
-                # Agregar información del módulo actual al contexto
-                if hasattr(response, 'context_data'):
+                # Solo agregar si context_data existe y no es None
+                if hasattr(response, 'context_data') and response.context_data is not None:
                     response.context_data['current_module'] = current_module
                     response.context_data['module_config'] = MODULE_CONFIGS.get(current_module, {})
         

@@ -2,7 +2,7 @@ from django.db.models.signals import m2m_changed, post_save, pre_delete
 from django.dispatch import receiver
 from django.core.cache import cache
 from django.utils import timezone
-from .models import UsuarioExtendido, Rol, Permiso
+from .models import UsuarioExtendido, Rol, Permiso, Branch
 from .utils import registrar_actividad_usuario, limpiar_cache_usuario
 import logging
 
@@ -179,3 +179,16 @@ def limpiar_cache_configuracion(sender, instance, **kwargs):
     cache.delete('currency_config')
     cache.delete('uom_config')
     logger.info("Cache de configuración del sistema limpiado")
+
+
+@receiver(post_save, sender=Branch)
+def asignar_branch_a_administradores(sender, instance, created, **kwargs):
+    """Asigna automáticamente la sucursal a todos los usuarios con rol administrador al crear una nueva sucursal."""
+    if created:
+        administradores = UsuarioExtendido.objects.filter(roles__nombre__iexact="administrador", is_active=True).distinct()
+        for admin in administradores:
+            admin.branches.add(instance)
+            # Si el admin no tiene default_branch, se la asigna
+            if not admin.default_branch:
+                admin.default_branch = instance
+                admin.save(update_fields=["default_branch"])

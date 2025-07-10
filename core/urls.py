@@ -22,6 +22,7 @@ urlpatterns = [
 
     # API Endpoints
     path('api/users/<int:user_id>/', views_api.UserDetailApiView.as_view(), name='api_user_detail'),
+    path('api/branches/', views_api.BranchListApiView.as_view(), name='api_branch_list'),
     path('api/permissions/', views_api.PermissionListApiView.as_view(), name='api_permission_list'),
     path('api/roles/', views_api.RoleListCreateApiView.as_view(), name='api_role_list_create'),
     path('api/roles/<int:rol_id>/', views_api.RoleDetailApiView.as_view(), name='api_role_detail'),

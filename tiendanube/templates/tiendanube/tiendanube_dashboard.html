@@ -530,16 +530,22 @@
             <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Manual Synchronization" %}</h3>
             <div class="space-y-3">
                 <button class="sync-modal-btn w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="products">
-                    {% trans "Sync Products" %}
+                    {% trans "Sync Pending Products" %}
                 </button>
-                <button class="sync-modal-btn w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="customers">
+                <button class="sync-modal-btn w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="all_products">
+                    {% trans "Sync All Tiendanube Products" %}
+                </button>
+                <button class="sync-modal-btn w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="customers">
                     {% trans "Sync Customers" %}
                 </button>
                 <button class="sync-modal-btn w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="orders">
                     {% trans "Sync Orders" %}
                 </button>
                 <button class="sync-modal-btn w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="stock">
-                    {% trans "Sync Stock" %}
+                    {% trans "Sync Pending Stock" %}
+                </button>
+                <button class="sync-modal-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="all_stock">
+                    {% trans "Sync All Tiendanube Stock" %}
                 </button>
                 <button class="sync-modal-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="restock">
                     {% trans "Check Restock" %}

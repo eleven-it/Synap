@@ -104,7 +104,7 @@ def client_list(request):
     if search:
         clients = clients.filter(
             Q(name__icontains=search) |
-            Q(vat__icontains=search) |
+            Q(tax_id__icontains=search) |
             Q(email__icontains=search)
         )
     
@@ -127,7 +127,7 @@ def client_create(request):
     if request.method == 'POST':
         # Lógica para crear cliente
         name = request.POST.get('name')
-        vat = request.POST.get('vat')
+        tax_id = request.POST.get('tax_id')
         email = request.POST.get('email')
         phone = request.POST.get('phone')
         type = request.POST.get('type')
@@ -139,7 +139,7 @@ def client_create(request):
         try:
             client = Client.objects.create(
                 name=name,
-                vat=vat,
+                tax_id=tax_id,
                 email=email,
                 phone=phone,
                 type=type,
@@ -211,7 +211,7 @@ def client_edit(request, pk):
     if request.method == 'POST':
         # Lógica para actualizar cliente
         client.name = request.POST.get('name')
-        client.vat = request.POST.get('vat')
+        client.tax_id = request.POST.get('tax_id')
         client.email = request.POST.get('email')
         client.phone = request.POST.get('phone')
         client.type = request.POST.get('type')

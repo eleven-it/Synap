@@ -1,31 +1,35 @@
-from .models import (
-    TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping,
-    TiendaNubeCustomerMapping, TiendaNubeOrderMapping, TiendaNubeRestockRule,
-    TiendaNubeRestockLog
-)
-from inventory.models import Product, ProductVariant, StockQuant, Location, Warehouse, StockMove
-from sales.models import Client, SalesOrder, SalesOrderLine, SalesOrderStates
-from core.models import SystemConfiguration, Branch, Empresa
-from django.contrib.auth import get_user_model
-from django.db import transaction
-from django.utils import timezone
-from django.conf import settings
-import logging
 import requests
+import logging
+import json
 import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from django.utils import timezone
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from core.models import Contact
+from .models import TiendaNubeConfig, TiendaNubeProductMapping, TiendaNubeCustomerMapping, TiendaNubeOrderMapping, TiendaNubeSyncLog
+from inventory.models import Product, ProductVariant, StockQuant, Location, Warehouse
+from sales.models import Client, SalesOrder, SalesOrderLine
+from core.models import Empresa, Branch, SystemConfiguration
 
-User = get_user_model()
 logger = logging.getLogger(__name__)
 
 def get_site_url():
-    # Busca la configuración activa con clave 'main.site.url' o 'site.url'
-    config = SystemConfiguration.objects.filter(key__in=['main.site.url', 'site.url'], is_active=True).first()
-    if config and config.value:
-        return config.value.rstrip('/')
-    # Fallback a settings
-    return getattr(settings, 'SITE_URL', '').rstrip('/')
+    """Obtiene la URL del sitio desde la configuración del sistema"""
+    try:
+        # Busca la configuración activa con clave 'main.site.url' o 'site.url'
+        config = SystemConfiguration.objects.filter(key__in=['main.site.url', 'site.url'], is_active=True).first()
+        if config and config.value:
+            return config.value.rstrip('/')
+        # Fallback a settings
+        return getattr(settings, 'SITE_URL', '').rstrip('/')
+    except:
+        return getattr(settings, 'SITE_URL', '').rstrip('/')
+
+class TiendaNubeValidationError(Exception):
+    """Excepción personalizada para errores de validación de Tiendanube"""
+    pass
 
 class TiendaNubeService:
     """
@@ -53,6 +57,190 @@ class TiendaNubeService:
                 "Content-Type": "application/json",
                 "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
             }
+
+    def validate_product_data(self, product, operation_type="create"):
+        """
+        Valida los datos del producto antes de sincronizar con Tiendanube.
+        
+        Args:
+            product: Producto de Synap a validar
+            operation_type: "create" o "update"
+            
+        Returns:
+            dict: Datos validados del producto
+            list: Lista de errores de validación
+        """
+        errors = []
+        warnings = []
+        
+        # Log de inicio de validación
+        logger.info(f"🔍 Iniciando validación de producto {product.sku} para operación: {operation_type}")
+        
+        # Validar campos obligatorios según documentación de Tiendanube
+        if not product.name or len(product.name.strip()) == 0:
+            errors.append("El nombre del producto es obligatorio")
+        elif len(product.name) > 255:
+            errors.append("El nombre del producto no puede exceder 255 caracteres")
+        
+        if not product.sku or len(product.sku.strip()) == 0:
+            errors.append("El SKU del producto es obligatorio")
+        elif len(product.sku) > 100:
+            errors.append("El SKU del producto no puede exceder 100 caracteres")
+        
+        # Validar precio
+        if not product.price or product.price <= 0:
+            errors.append("El precio del producto debe ser mayor a 0")
+        elif product.price > 999999.99:
+            errors.append("El precio del producto no puede exceder 999,999.99")
+        
+        # Validar descripción
+        if product.description and len(product.description) > 1000:
+            warnings.append("La descripción del producto es muy larga (máximo 1000 caracteres recomendado)")
+        
+        # Validar handle (URL slug)
+        if product.handle and len(product.handle) > 255:
+            errors.append("El handle del producto no puede exceder 255 caracteres")
+        
+        # Validar variantes si existen
+        tiene_variantes = hasattr(product, 'variants') and product.variants.exists()
+        if tiene_variantes:
+            logger.info(f"📦 Producto {product.sku} tiene {product.variants.count()} variantes")
+            for i, variante in enumerate(product.variants.all()):
+                if not variante.sku or len(variante.sku.strip()) == 0:
+                    errors.append(f"La variante {i+1} debe tener un SKU válido")
+                if not variante.price or variante.price <= 0:
+                    errors.append(f"La variante {i+1} debe tener un precio mayor a 0")
+                if variante.price > 999999.99:
+                    errors.append(f"El precio de la variante {i+1} no puede exceder 999,999.99")
+        
+        # Validar imágenes
+        if hasattr(product, 'images') and product.images.exists():
+            logger.info(f"🖼️ Producto {product.sku} tiene {product.images.count()} imágenes")
+            for i, img in enumerate(product.images.all()):
+                if not img.image:
+                    warnings.append(f"La imagen {i+1} no tiene archivo válido")
+        
+        # Validar empresa y sucursal
+        if not product.empresa:
+            errors.append("El producto debe estar asociado a una empresa")
+        if not product.branch:
+            errors.append("El producto debe estar asociado a una sucursal")
+        
+        # Validar moneda
+        if not product.price_currency:
+            warnings.append("El producto no tiene moneda configurada, se usará la moneda por defecto")
+        
+        # Construir datos del producto para Tiendanube
+        product_data = {
+            "name": product.name.strip(),
+            "description": product.description.strip() if product.description else "",
+            "sku": product.sku.strip(),
+            "handle": product.handle.strip() if product.handle else None,
+            "published": product.is_published,
+        }
+        
+        # Agregar precio según tipo de producto
+        if tiene_variantes:
+            variants_list = []
+            for variante in product.variants.all():
+                variant_data = {
+                    "name": variante.name if hasattr(variante, 'name') else f"{product.name} - {variante.sku}",
+                    "sku": variante.sku.strip(),
+                    "price": float(variante.price),
+                }
+                variants_list.append(variant_data)
+            product_data["variants"] = variants_list
+            logger.info(f"💰 Producto con variantes - {len(variants_list)} variantes configuradas")
+        else:
+            product_data["price"] = float(product.price)
+            logger.info(f"💰 Producto simple - Precio: ${product.price}")
+        
+        # Agregar imágenes
+        images = []
+        site_url = get_site_url()
+        if hasattr(product, 'images') and product.images.exists():
+            for img in product.images.all():
+                if img.image:
+                    if site_url:
+                        image_url = site_url + img.image.url
+                    else:
+                        image_url = img.image.url
+                    images.append({"src": image_url})
+            
+            if images:
+                product_data["images"] = images
+                logger.info(f"🖼️ {len(images)} imágenes configuradas para el producto")
+        
+        # Log de resultado de validación
+        if errors:
+            logger.error(f"❌ Validación fallida para producto {product.sku}: {errors}")
+        elif warnings:
+            logger.warning(f"⚠️ Validación exitosa con advertencias para producto {product.sku}: {warnings}")
+        else:
+            logger.info(f"✅ Validación exitosa para producto {product.sku}")
+        
+        return product_data, errors, warnings
+
+    def log_api_response(self, operation, url, request_data, response, product_sku=None):
+        """
+        Registra detalladamente las respuestas de la API de Tiendanube.
+        
+        Args:
+            operation: Tipo de operación (create, update, delete, etc.)
+            url: URL de la API
+            request_data: Datos enviados a la API
+            response: Respuesta de la API
+            product_sku: SKU del producto (opcional)
+        """
+        log_data = {
+            "operation": operation,
+            "url": url,
+            "product_sku": product_sku,
+            "request_data": request_data,
+            "response_status": response.status_code,
+            "response_headers": dict(response.headers),
+            "timestamp": timezone.now().isoformat()
+        }
+        
+        try:
+            response_json = response.json()
+            log_data["response_data"] = response_json
+        except:
+            log_data["response_text"] = response.text
+        
+        # Log detallado según el status code
+        if response.status_code in [200, 201]:
+            logger.info(f"✅ API {operation} exitosa para producto {product_sku}")
+            logger.debug(f"📊 Respuesta API: {json.dumps(log_data, indent=2)}")
+        elif response.status_code == 400:
+            logger.error(f"❌ Error 400 - Datos inválidos en {operation} para producto {product_sku}")
+            logger.error(f"📊 Detalles del error: {json.dumps(log_data, indent=2)}")
+        elif response.status_code == 401:
+            logger.error(f"❌ Error 401 - No autorizado en {operation} para producto {product_sku}")
+            logger.error(f"🔑 Verificar token de acceso")
+        elif response.status_code == 403:
+            logger.error(f"❌ Error 403 - Prohibido en {operation} para producto {product_sku}")
+            logger.error(f"🚫 Verificar permisos de la aplicación")
+        elif response.status_code == 404:
+            logger.error(f"❌ Error 404 - No encontrado en {operation} para producto {product_sku}")
+        elif response.status_code >= 500:
+            logger.error(f"❌ Error del servidor ({response.status_code}) en {operation} para producto {product_sku}")
+            logger.error(f"🛠️ Error del servidor de Tiendanube: {json.dumps(log_data, indent=2)}")
+        else:
+            logger.warning(f"⚠️ Respuesta inesperada ({response.status_code}) en {operation} para producto {product_sku}")
+            logger.warning(f"📊 Respuesta completa: {json.dumps(log_data, indent=2)}")
+        
+        # Guardar en base de datos
+        try:
+            TiendaNubeSyncLog.objects.create(
+                config=self.config,
+                sync_type='product',
+                status='success' if response.status_code in [200, 201] else 'error',
+                message=f"API {operation} - Status: {response.status_code}",
+                details=log_data
+            )
+        except Exception as e:
+            logger.error(f"Error guardando log en base de datos: {str(e)}")
 
     # ----------------------
     # Sync Status & Dashboard
@@ -214,6 +402,28 @@ class TiendaNubeService:
         if email:
             try:
                 customer = Client.objects.get(email=email)
+                # --- Contact universal ---
+                contact = Contact.objects.filter(email=email).first()
+                if not contact and document:
+                    contact = Contact.objects.filter(notes__icontains=document).first()
+                if not contact:
+                    contact = Contact.objects.create(
+                        name=customer_data.get('name', 'Cliente Tiendanube'),
+                        email=email,
+                        phone=customer_data.get('phone', ''),
+                        address=customer_data.get('address', ''),
+                        city=customer_data.get('city', ''),
+                        state=customer_data.get('state', ''),
+                        country=customer_data.get('country', 'Argentina'),
+                        notes=document
+                    )
+                # Agregar tag tiendanube si no existe
+                if contact and 'tiendanube' not in (contact.tags or '').lower():
+                    current_tags = contact.tags or ''
+                    contact.tags = f"{current_tags},tiendanube".strip(',')
+                    contact.save()
+                if not customer.has_contact(contact, relationship_type='primary'):
+                    customer.add_contact_relationship(contact, relationship_type='primary')
                 return customer
             except Client.DoesNotExist:
                 pass
@@ -221,6 +431,27 @@ class TiendaNubeService:
         if document:
             try:
                 customer = Client.objects.get(document_number=document)
+                contact = Contact.objects.filter(notes__icontains=document).first()
+                if not contact and email:
+                    contact = Contact.objects.filter(email=email).first()
+                if not contact:
+                    contact = Contact.objects.create(
+                        name=customer_data.get('name', 'Cliente Tiendanube'),
+                        email=email,
+                        phone=customer_data.get('phone', ''),
+                        address=customer_data.get('address', ''),
+                        city=customer_data.get('city', ''),
+                        state=customer_data.get('state', ''),
+                        country=customer_data.get('country', 'Argentina'),
+                        notes=document
+                    )
+                # Agregar tag tiendanube si no existe
+                if contact and 'tiendanube' not in (contact.tags or '').lower():
+                    current_tags = contact.tags or ''
+                    contact.tags = f"{current_tags},tiendanube".strip(',')
+                    contact.save()
+                if not customer.has_contact(contact, relationship_type='primary'):
+                    customer.add_contact_relationship(contact, relationship_type='primary')
                 return customer
             except Client.DoesNotExist:
                 pass
@@ -234,7 +465,32 @@ class TiendaNubeService:
                 type='individual' if not document else 'company',
                 credit_limit=Decimal('0.00')
             )
-            
+            # --- Contact universal ---
+            contact = None
+            if email:
+                contact = Contact.objects.filter(email=email).first()
+            if not contact and document:
+                contact = Contact.objects.filter(notes__icontains=document).first()
+            if not contact:
+                contact = Contact.objects.create(
+                    name=customer_data.get('name', 'Cliente Tiendanube'),
+                    email=email,
+                    phone=customer_data.get('phone', ''),
+                    address=customer_data.get('address', ''),
+                    city=customer_data.get('city', ''),
+                    state=customer_data.get('state', ''),
+                    country=customer_data.get('country', 'Argentina'),
+                    notes=document,
+                    tags='tiendanube'  # Nuevo cliente con tag tiendanube
+                )
+            else:
+                # Contact existente - agregar tag tiendanube
+                if 'tiendanube' not in (contact.tags or '').lower():
+                    current_tags = contact.tags or ''
+                    contact.tags = f"{current_tags},tiendanube".strip(',')
+                    contact.save()
+            if not customer.has_contact(contact, relationship_type='primary'):
+                customer.add_contact_relationship(contact, relationship_type='primary')
             # Crear mapping del cliente
             TiendaNubeCustomerMapping.objects.create(
                 client=customer,
@@ -357,7 +613,34 @@ class TiendaNubeService:
                                 type='individual' if not customer_data.get('document') else 'company',
                                 credit_limit=Decimal('0.00')
                             )
-                        
+                        # --- Contact universal ---
+                        contact = None
+                        # Buscar Contact por email o documento
+                        if email:
+                            contact = Contact.objects.filter(email=email).first()
+                        if not contact and customer_data.get('document', ''):
+                            contact = Contact.objects.filter(notes__icontains=customer_data.get('document', '')).first()
+                        if not contact:
+                            contact = Contact.objects.create(
+                                name=customer_data.get('name', 'Cliente Tiendanube'),
+                                email=email,
+                                phone=customer_data.get('phone', ''),
+                                address=customer_data.get('address', ''),
+                                city=customer_data.get('city', ''),
+                                state=customer_data.get('state', ''),
+                                country=customer_data.get('country', 'Argentina'),
+                                notes=customer_data.get('document', ''),
+                                tags='tiendanube'  # Nuevo contacto con tag tiendanube
+                            )
+                        else:
+                            # Contact existente - agregar tag tiendanube si no existe
+                            if 'tiendanube' not in (contact.tags or '').lower():
+                                current_tags = contact.tags or ''
+                                contact.tags = f"{current_tags},tiendanube".strip(',')
+                                contact.save()
+                        # Vincular como contacto primario si no existe relación
+                        if not existing_customer.has_contact(contact, relationship_type='primary'):
+                            existing_customer.add_contact_relationship(contact, relationship_type='primary')
                         # Crear mapping
                         TiendaNubeCustomerMapping.objects.create(
                             client=existing_customer,
@@ -383,8 +666,13 @@ class TiendaNubeService:
         return success_count, failed_count
 
     def sync_customer_to_tiendanube(self, client):
-        """Sincroniza cliente desde Synap hacia Tiendanube."""
+        """Sincroniza cliente desde Synap hacia Tiendanube (solo clientes con tag tiendanube)."""
         try:
+            # Verificar que el cliente tenga tag tiendanube
+            primary_contact = client.get_primary_contact_object()
+            if not primary_contact or 'tiendanube' not in (primary_contact.tags or '').lower():
+                return True, "Cliente no marcado para sincronización con Tiendanube"
+            
             # Verificar si ya existe mapping
             mapping, created = TiendaNubeCustomerMapping.objects.get_or_create(
                 client=client,
@@ -394,12 +682,25 @@ class TiendaNubeService:
             if not created and mapping.sync_status == TiendaNubeCustomerMapping.SyncStatus.SYNCED:
                 return True, "Cliente ya sincronizado"
             
-            # Preparar datos del cliente
-            customer_data = {
-                'name': client.name,
-                'email': client.email,
-                'document': client.document_number or '',
-            }
+            # --- Obtener datos del Contact primario ---
+            if primary_contact:
+                # Usar datos del Contact primario
+                customer_data = {
+                    'name': primary_contact.display_name,
+                    'email': primary_contact.email or client.email,
+                    'document': primary_contact.notes or client.document_number or '',
+                    'phone': primary_contact.phone or client.phone or '',
+                    'address': primary_contact.full_address or client.get_full_address() or '',
+                }
+            else:
+                # Usar datos del cliente (fallback)
+                customer_data = {
+                    'name': client.name,
+                    'email': client.email,
+                    'document': client.document_number or '',
+                    'phone': client.phone or '',
+                    'address': client.get_full_address() or '',
+                }
             
             if created:
                 # Crear nuevo cliente en Tiendanube
@@ -411,8 +712,8 @@ class TiendaNubeService:
             if response.status_code in [200, 201]:
                 customer_response = response.json()
                 mapping.tiendanube_id = customer_response['id']
-                mapping.tiendanube_email = client.email
-                mapping.tiendanube_document = client.document_number or ''
+                mapping.tiendanube_email = customer_data['email']
+                mapping.tiendanube_document = customer_data['document']
                 mapping.sync_status = TiendaNubeCustomerMapping.SyncStatus.SYNCED
                 mapping.save()
                 
@@ -430,16 +731,67 @@ class TiendaNubeService:
             self.log_sync('customer', 'error', f'Error sincronizando cliente {client.name}: {str(e)}')
             return False, str(e)
 
+    def sync_all_customers_to_tiendanube(self, limit=100, offset=0):
+        """Sincroniza todos los clientes con tag tiendanube hacia Tiendanube."""
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        try:
+            # Obtener clientes que tienen contactos con tag tiendanube
+            contacts_with_tiendanube = Contact.objects.filter(
+                tags__icontains='tiendanube',
+                is_active=True
+            )
+            
+            # Obtener clientes relacionados con estos contactos
+            client_ids = set()
+            for contact in contacts_with_tiendanube:
+                for relationship in contact.relationships.filter(
+                    content_type__model='client',
+                    is_active=True
+                ):
+                    client_ids.add(relationship.object_id)
+            
+            # Sincronizar clientes
+            clients = Client.objects.filter(id__in=list(client_ids)[offset:offset+limit])
+            
+            for client in clients:
+                try:
+                    success, message = self.sync_customer_to_tiendanube(client)
+                    if success:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        errors.append(f"Error sincronizando {client.name}: {message}")
+                except Exception as e:
+                    failed_count += 1
+                    errors.append(f"Error procesando {client.name}: {str(e)}")
+            
+            status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
+            self.log_sync('customer', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+            
+        except Exception as e:
+            self.log_sync('customer', 'error', f"Error general en sincronización de clientes: {str(e)}")
+            return 0, 1
+        
+        return success_count, failed_count
+
     # ----------------------
     # Stock Management Methods
     # ----------------------
     def sync_stock_to_tiendanube(self, product=None):
-        """Sincroniza stock desde Synap hacia Tiendanube."""
+        """Sincroniza stock desde Synap hacia Tiendanube (solo productos con tag tiendanube)."""
         success_count = 0
         failed_count = 0
         
         try:
             if product:
+                # Verificar que el producto tenga tag tiendanube
+                if not product.tags or 'tiendanube' not in product.tags.lower():
+                    logger.info(f"Producto {product.sku} no tiene tag tiendanube, saltando sincronización de stock")
+                    return 0, 0
+                
                 # Sincronizar producto específico
                 success, error = self._sync_single_product_stock(product)
                 if success:
@@ -447,10 +799,11 @@ class TiendaNubeService:
                 else:
                     failed_count += 1
             else:
-                # Sincronizar todos los productos mapeados
+                # Sincronizar solo productos con tag tiendanube y mapeados
                 mappings = TiendaNubeProductMapping.objects.filter(
                     sync_enabled=True,
-                    sync_stock=True
+                    sync_stock=True,
+                    product__tags__icontains='tiendanube'  # Solo productos con tag tiendanube
                 )
                 
                 for mapping in mappings:
@@ -469,13 +822,19 @@ class TiendaNubeService:
             return 0, 1
 
     def _sync_single_product_stock(self, product):
-        """Sincroniza stock de un producto específico."""
+        """Sincroniza stock de un producto específico (solo si tiene tag tiendanube)."""
         try:
+            # Verificar que el producto tenga tag tiendanube
+            if not product.tags or 'tiendanube' not in product.tags.lower():
+                logger.info(f"[STOCK] Producto {product.sku} no tiene tag tiendanube, no sincronizar")
+                return True, "Producto no tiene tag tiendanube, no sincronizar"
+            
             mapping = TiendaNubeProductMapping.objects.get(product=product)
             
             # Obtener stock disponible en el almacén de Tiendanube
             tiendanube_warehouse = self.config.tiendanube_warehouse if self.config else None
             if not tiendanube_warehouse:
+                logger.error(f"[STOCK] No hay almacén de Tiendanube configurado para producto {product.sku}")
                 return False, "No hay almacén de Tiendanube configurado"
             
             # Calcular stock disponible
@@ -483,8 +842,8 @@ class TiendaNubeService:
                 product=product,
                 location__warehouse=tiendanube_warehouse
             )
-            
             available_stock = sum(quant.available_quantity for quant in stock_quants)
+            logger.info(f"[STOCK] Stock calculado para {product.sku}: {available_stock} unidades en almacén {tiendanube_warehouse}")
             
             # Actualizar stock en Tiendanube
             if mapping.tiendanube_variant_id:
@@ -492,42 +851,46 @@ class TiendaNubeService:
                 stock_data = {
                     'stock': int(available_stock)
                 }
+                url = f"{self.BASE_URL}/products/{mapping.tiendanube_id}/variants/{mapping.tiendanube_variant_id}/stock"
+                logger.info(f"[STOCK] Enviando stock a variante: URL={url} DATA={stock_data}")
                 response = requests.put(
-                    f"{self.BASE_URL}/products/{mapping.tiendanube_id}/variants/{mapping.tiendanube_variant_id}/stock",
+                    url,
                     headers=self.headers,
                     json=stock_data
                 )
+                self.log_api_response("update_variant_stock", url, stock_data, response, product.sku)
             else:
                 # Producto simple
                 stock_data = {
                     'stock': int(available_stock)
                 }
+                url = f"{self.BASE_URL}/products/{mapping.tiendanube_id}/stock"
+                logger.info(f"[STOCK] Enviando stock a producto simple: URL={url} DATA={stock_data}")
                 response = requests.put(
-                    f"{self.BASE_URL}/products/{mapping.tiendanube_id}/stock",
+                    url,
                     headers=self.headers,
                     json=stock_data
                 )
+                self.log_api_response("update_product_stock", url, stock_data, response, product.sku)
             
-            if response.status_code == 200:
-                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED
-                mapping.save()
+            if response.status_code in [200, 201]:
+                logger.info(f"[STOCK] Stock actualizado correctamente para {product.sku} (status {response.status_code})")
                 return True, None
             else:
-                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.ERROR
-                mapping.error_message = f"Error {response.status_code}: {response.text}"
-                mapping.save()
+                logger.error(f"[STOCK] Error actualizando stock para {product.sku}: {response.status_code} - {response.text}")
                 return False, f"Error {response.status_code}: {response.text}"
-                
         except TiendaNubeProductMapping.DoesNotExist:
-            return False, "Producto no mapeado con Tiendanube"
+            logger.error(f"[STOCK] Producto {product.sku} no tiene mapping con Tiendanube para stock")
+            return False, "No mapping"
         except Exception as e:
+            logger.error(f"[STOCK] Error general sincronizando stock para {product.sku}: {str(e)}")
             return False, str(e)
 
     # ----------------------
     # Restock Management Methods
     # ----------------------
     def check_and_restock_products(self):
-        """Verifica stock y ejecuta reabastecimiento automático."""
+        """Verifica stock y ejecuta reabastecimiento automático (solo productos con tag tiendanube)."""
         success_count = 0
         failed_count = 0
         
@@ -555,7 +918,7 @@ class TiendaNubeService:
             return 0, 1
 
     def _get_products_needing_restock(self):
-        """Obtiene productos que necesitan reabastecimiento."""
+        """Obtiene productos que necesitan reabastecimiento (solo productos con tag tiendanube)."""
         products_needing_restock = []
         
         # Obtener almacén de Tiendanube
@@ -563,10 +926,11 @@ class TiendaNubeService:
         if not tiendanube_warehouse:
             return products_needing_restock
         
-        # Obtener todos los productos mapeados con Tiendanube
+        # Obtener solo productos mapeados con Tiendanube que tengan tag tiendanube
         mappings = TiendaNubeProductMapping.objects.filter(
             sync_enabled=True,
-            restock_enabled=True
+            restock_enabled=True,
+            product__tags__icontains='tiendanube'  # Solo productos con tag tiendanube
         )
         
         for mapping in mappings:
@@ -586,6 +950,111 @@ class TiendaNubeService:
                 products_needing_restock.append((product, current_stock))
         
         return products_needing_restock
+
+    def sync_all_stock_to_tiendanube(self, limit=100, offset=0):
+        """Sincroniza stock de todos los productos con tag tiendanube hacia Tiendanube."""
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        try:
+            # Obtener productos con tag tiendanube
+            products_with_tiendanube = Product.objects.filter(
+                tags__icontains='tiendanube',
+                is_published=True  # Solo productos publicados
+            )[offset:offset+limit]
+            
+            for product in products_with_tiendanube:
+                try:
+                    # Verificar si tiene mapping
+                    mapping = TiendaNubeProductMapping.objects.filter(product=product).first()
+                    
+                    if mapping:
+                        # Sincronizar stock de producto existente
+                        success, error = self._sync_single_product_stock(product)
+                        if success:
+                            success_count += 1
+                        else:
+                            failed_count += 1
+                            errors.append(f"Error sincronizando stock de {product.sku}: {error}")
+                    else:
+                        # Producto con tag tiendanube pero sin mapping - crear mapping primero
+                        logger.info(f"Producto {product.sku} tiene tag tiendanube pero no mapping, creando...")
+                        
+                        # Crear producto en Tiendanube primero
+                        tiene_variantes = hasattr(product, 'variants') and product.variants.exists()
+                        product_data = {
+                            "name": product.name,
+                            "description": product.description,
+                            "sku": product.sku,
+                            "handle": product.handle,
+                            "published": product.is_published,
+                        }
+                        if tiene_variantes:
+                            variants_list = []
+                            for variante in product.variants.all():
+                                variants_list.append({
+                                    "name": variante.name,
+                                    "sku": variante.sku,
+                                    "price": float(variante.price),
+                                })
+                            product_data["variants"] = variants_list
+                        else:
+                            product_data["price"] = float(product.price)
+                        
+                        # Agregar imágenes
+                        images = []
+                        site_url = get_site_url()
+                        for img in product.images.all():
+                            if site_url:
+                                image_url = site_url + img.image.url
+                            else:
+                                image_url = img.image.url
+                            images.append({"src": image_url})
+                        
+                        if images:
+                            product_data["images"] = images
+                        
+                        response = self.create_product(product_data)
+                        
+                        if response:
+                            # Crear mapping
+                            mapping = TiendaNubeProductMapping.objects.create(
+                                product=product,
+                                tiendanube_id=response['id'],
+                                tiendanube_handle=response.get('handle', ''),
+                                sync_status=TiendaNubeProductMapping.SyncStatus.SYNCED,
+                                sync_enabled=True,
+                                sync_stock=True  # Habilitar sincronización de stock
+                            )
+                            # Actualizar producto con tiendanube_id
+                            product.tiendanube_id = response['id']
+                            product.tiendanube_url = response.get('permalink', '')
+                            product.save(update_fields=['tiendanube_id', 'tiendanube_url'])
+                            
+                            # Ahora sincronizar stock
+                            success, error = self._sync_single_product_stock(product)
+                            if success:
+                                success_count += 1
+                            else:
+                                failed_count += 1
+                                errors.append(f"Error sincronizando stock de {product.sku}: {error}")
+                        else:
+                            failed_count += 1
+                            errors.append(f"Error creando producto {product.sku} en Tiendanube")
+                            
+                except Exception as e:
+                    failed_count += 1
+                    errors.append(f"Error procesando producto {product.sku}: {str(e)}")
+            
+            status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
+            self.log_sync('stock', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+            
+        except Exception as e:
+            self.log_sync('stock', 'error', f"Error general en sincronización de stock: {str(e)}")
+            return 0, 1
+        
+        return success_count, failed_count
 
     def _execute_restock_for_product(self, product, current_stock):
         """Ejecuta reabastecimiento para un producto específico."""
@@ -743,85 +1212,368 @@ class TiendaNubeService:
     # Product Sync Methods (Enhanced)
     # ----------------------
     def sync_products_from_tiendanube(self, limit=100, offset=0):
-        """Sincroniza productos locales pendientes hacia TiendaNube."""
+        """Sincroniza productos locales pendientes hacia TiendaNube (solo productos con tag tiendanube)."""
         from .models import TiendaNubeProductMapping
         success_count = 0
         failed_count = 0
         errors = []
-        productos_pendientes = Product.objects.filter(tiendanube_id__isnull=True).all()[offset:offset+limit]
+        
+        logger.info(f"🚀 Iniciando sincronización de productos hacia Tiendanube (limit: {limit}, offset: {offset})")
+        
+        # Filtrar solo productos con tag tiendanube
+        productos_pendientes = Product.objects.filter(
+            tiendanube_id__isnull=True,
+            tags__icontains='tiendanube'
+        ).all()[offset:offset+limit]
+        
+        logger.info(f"📦 Encontrados {productos_pendientes.count()} productos pendientes de sincronización")
+        
         for producto in productos_pendientes:
             try:
-                tiene_variantes = hasattr(producto, 'variants') and producto.variants.exists()
-                product_data = {
-                    "name": producto.name,
-                    "description": producto.description,
-                    "sku": producto.sku,
-                    "handle": producto.handle,
-                    "published": producto.is_published,
-                }
-                if tiene_variantes:
-                    variants_list = []
-                    for variante in producto.variants.all():
-                        variants_list.append({
-                            "name": variante.name,
-                            "sku": variante.sku,
-                            "price": float(variante.price),
-                        })
-                    product_data["variants"] = variants_list
-                else:
-                    product_data["price"] = float(producto.price)
-                # --- NUEVA LÓGICA DE IMÁGENES ---
-                images = []
-                site_url = get_site_url()
-                for img in producto.images.all():
-                    if site_url:
-                        image_url = site_url + img.image.url
-                    else:
-                        image_url = img.image.url
-                    try:
-                        resp = requests.head(image_url, timeout=5)
-                        if resp.status_code == 200:
-                            images.append({"src": image_url})
-                        else:
-                            logger.warning(f"Imagen no accesible (status {resp.status_code}): {image_url}")
-                    except Exception as e:
-                        logger.warning(f"Error accediendo a la imagen: {image_url} - {str(e)}")
-                if images:
-                    product_data["images"] = images
-                # --- FIN NUEVA LÓGICA DE IMÁGENES ---
+                logger.info(f"🔄 Procesando producto: {producto.sku} - {producto.name}")
+                
+                # Validar datos del producto antes de sincronizar
+                product_data, validation_errors, validation_warnings = self.validate_product_data(producto, "create")
+                
+                if validation_errors:
+                    error_msg = f"Error de validación en producto {producto.sku}: {', '.join(validation_errors)}"
+                    logger.error(f"❌ {error_msg}")
+                    errors.append(error_msg)
+                    failed_count += 1
+                    continue
+                
+                if validation_warnings:
+                    logger.warning(f"⚠️ Advertencias en producto {producto.sku}: {', '.join(validation_warnings)}")
+                
+                # Crear producto en Tiendanube
                 response = self.create_product(product_data)
-                if response and response.get("id"):
-                    tiendanube_id = response["id"]
-                    producto.tiendanube_id = tiendanube_id
-                    producto.tiendanube_url = response.get("permalink", "")
-                    producto.save()
-                    mapping, created = TiendaNubeProductMapping.objects.get_or_create(product=producto, defaults={
-                        "tiendanube_id": tiendanube_id,
-                        "tiendanube_handle": producto.handle,
-                        "sync_status": TiendaNubeProductMapping.SyncStatus.SYNCED,
-                        "sync_enabled": True
-                    })
-                    if not created:
-                        mapping.tiendanube_id = tiendanube_id
-                        mapping.tiendanube_handle = producto.handle
-                        mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED
-                        mapping.error_message = ""
-                        mapping.save()
+                
+                if response:
+                    # Crear mapping
+                    TiendaNubeProductMapping.objects.create(
+                        product=producto,
+                        tiendanube_id=response['id'],
+                        tiendanube_handle=response.get('handle', ''),
+                        sync_status=TiendaNubeProductMapping.SyncStatus.SYNCED,
+                        sync_enabled=True
+                    )
+                    # Actualizar producto con tiendanube_id
+                    producto.tiendanube_id = response['id']
+                    producto.tiendanube_url = response.get('permalink', '')
+                    producto.save(update_fields=['tiendanube_id', 'tiendanube_url'])
+                    
+                    logger.info(f"✅ Producto {producto.sku} sincronizado exitosamente (TN ID: {response['id']})")
                     success_count += 1
                 else:
-                    msg = f"Error creando producto {producto.sku}: {response}"
-                    producto.tiendanube_id = None
-                    producto.tiendanube_url = ""
-                    producto.save()
+                    error_msg = f"Error creando producto {producto.sku} en Tiendanube"
+                    logger.error(f"❌ {error_msg}")
+                    errors.append(error_msg)
                     failed_count += 1
-                    errors.append(msg)
+                    
             except Exception as e:
-                msg = f"Excepción creando producto {producto.sku}: {str(e)}"
+                error_msg = f"Error procesando producto {producto.sku}: {str(e)}"
+                logger.error(f"❌ {error_msg}")
+                errors.append(error_msg)
                 failed_count += 1
-                errors.append(msg)
+        
         status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
         self.log_sync('product', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+        
+        logger.info(f"🏁 Sincronización completada: {success_count} exitosos, {failed_count} fallidos")
         return success_count, failed_count
+
+    def sync_all_products_to_tiendanube(self, limit=100, offset=0):
+        """Sincroniza todos los productos con tag tiendanube hacia Tiendanube."""
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        logger.info(f"🚀 Iniciando sincronización completa de productos hacia Tiendanube (limit: {limit}, offset: {offset})")
+        
+        try:
+            # Obtener productos con tag tiendanube
+            products_with_tiendanube = Product.objects.filter(
+                tags__icontains='tiendanube',
+                is_published=True  # Solo productos publicados
+            )[offset:offset+limit]
+            
+            logger.info(f"📦 Encontrados {products_with_tiendanube.count()} productos con tag tiendanube")
+            
+            for producto in products_with_tiendanube:
+                try:
+                    logger.info(f"🔄 Procesando producto: {producto.sku} - {producto.name}")
+                    
+                    # Verificar si ya tiene mapping
+                    mapping = TiendaNubeProductMapping.objects.filter(product=producto).first()
+                    
+                    if mapping:
+                        # Actualizar producto existente
+                        logger.info(f"🔄 Actualizando producto existente: {producto.sku} (TN ID: {mapping.tiendanube_id})")
+                        
+                        # Validar datos del producto antes de actualizar
+                        product_data, validation_errors, validation_warnings = self.validate_product_data(producto, "update")
+                        
+                        if validation_errors:
+                            error_msg = f"Error de validación en producto {producto.sku}: {', '.join(validation_errors)}"
+                            logger.error(f"❌ {error_msg}")
+                            errors.append(error_msg)
+                            failed_count += 1
+                            continue
+                        
+                        if validation_warnings:
+                            logger.warning(f"⚠️ Advertencias en producto {producto.sku}: {', '.join(validation_warnings)}")
+                        
+                        success = self.sync_product_update(producto)
+                        if success:
+                            success_count += 1
+                            logger.info(f"✅ Producto {producto.sku} actualizado exitosamente")
+                        else:
+                            failed_count += 1
+                            errors.append(f"Error actualizando producto {producto.sku}")
+                            logger.error(f"❌ Error actualizando producto {producto.sku}")
+                    else:
+                        # Crear nuevo producto en Tiendanube
+                        logger.info(f"🆕 Creando nuevo producto: {producto.sku}")
+                        
+                        # Validar datos del producto antes de crear
+                        product_data, validation_errors, validation_warnings = self.validate_product_data(producto, "create")
+                        
+                        if validation_errors:
+                            error_msg = f"Error de validación en producto {producto.sku}: {', '.join(validation_errors)}"
+                            logger.error(f"❌ {error_msg}")
+                            errors.append(error_msg)
+                            failed_count += 1
+                            continue
+                        
+                        if validation_warnings:
+                            logger.warning(f"⚠️ Advertencias en producto {producto.sku}: {', '.join(validation_warnings)}")
+                        
+                        response = self.create_product(product_data)
+                        
+                        if response:
+                            # Crear mapping
+                            TiendaNubeProductMapping.objects.create(
+                                product=producto,
+                                tiendanube_id=response['id'],
+                                tiendanube_handle=response.get('handle', ''),
+                                sync_status=TiendaNubeProductMapping.SyncStatus.SYNCED,
+                                sync_enabled=True
+                            )
+                            # Actualizar producto con tiendanube_id
+                            producto.tiendanube_id = response['id']
+                            producto.tiendanube_url = response.get('permalink', '')
+                            producto.save(update_fields=['tiendanube_id', 'tiendanube_url'])
+                            
+                            logger.info(f"✅ Producto {producto.sku} creado exitosamente (TN ID: {response['id']})")
+                            success_count += 1
+                        else:
+                            failed_count += 1
+                            errors.append(f"Error creando producto {producto.sku} en Tiendanube")
+                            logger.error(f"❌ Error creando producto {producto.sku} en Tiendanube")
+                            
+                except Exception as e:
+                    error_msg = f"Error procesando producto {producto.sku}: {str(e)}"
+                    logger.error(f"❌ {error_msg}")
+                    errors.append(error_msg)
+                    failed_count += 1
+            
+            status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
+            self.log_sync('product', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+            
+        except Exception as e:
+            error_msg = f"Error general en sincronización de productos: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.log_sync('product', 'error', error_msg)
+            return 0, 1
+        
+        logger.info(f"🏁 Sincronización completa finalizada: {success_count} exitosos, {failed_count} fallidos")
+        return success_count, failed_count
+
+    def sync_pending_products_to_tiendanube(self):
+        """Sincroniza productos pendientes con tag tiendanube hacia Tiendanube."""
+        success_count = 0
+        failed_count = 0
+        errors = []
+        
+        try:
+            # Obtener productos con tag tiendanube que necesitan sincronización
+            products_to_sync = Product.objects.filter(
+                tags__icontains='tiendanube',
+                is_published=True
+            ).exclude(
+                tiendanubeproductmapping__sync_status=TiendaNubeProductMapping.SyncStatus.SYNCED
+            )
+            
+            logger.info(f"🔄 Sincronizando {products_to_sync.count()} productos pendientes...")
+            
+            for product in products_to_sync:
+                try:
+                    # Verificar si ya tiene mapping
+                    mapping = TiendaNubeProductMapping.objects.filter(product=product).first()
+                    
+                    if mapping:
+                        # Producto ya existe en Tiendanube, actualizar
+                        success = self.sync_product_update(product)
+                        if success:
+                            success_count += 1
+                        else:
+                            failed_count += 1
+                            errors.append(f"Error actualizando producto {product.sku}")
+                    else:
+                        # Producto nuevo, crear en Tiendanube
+                        product_data, validation_errors, validation_warnings = self.validate_product_data(product, "create")
+                        
+                        if validation_errors:
+                            failed_count += 1
+                            errors.append(f"Error de validación en {product.sku}: {', '.join(validation_errors)}")
+                            continue
+                        
+                        response = self.create_product(product_data)
+                        
+                        if response:
+                            # Crear mapping
+                            TiendaNubeProductMapping.objects.create(
+                                product=product,
+                                tiendanube_id=response['id'],
+                                tiendanube_handle=response.get('handle', ''),
+                                sync_status=TiendaNubeProductMapping.SyncStatus.SYNCED,
+                                sync_enabled=True
+                            )
+                            # Actualizar producto con tiendanube_id
+                            product.tiendanube_id = response['id']
+                            product.tiendanube_url = response.get('permalink', '')
+                            product.save(update_fields=['tiendanube_id', 'tiendanube_url'])
+                            
+                            logger.info(f"✅ Producto {product.sku} sincronizado exitosamente (TN ID: {response['id']})")
+                            success_count += 1
+                        else:
+                            error_msg = f"Error creando producto {product.sku} en Tiendanube"
+                            logger.error(f"❌ {error_msg}")
+                            errors.append(error_msg)
+                            failed_count += 1
+                            
+                except Exception as e:
+                    error_msg = f"Error procesando producto {product.sku}: {str(e)}"
+                    logger.error(f"❌ {error_msg}")
+                    errors.append(error_msg)
+                    failed_count += 1
+            
+            status = 'success' if failed_count == 0 else ('partial' if success_count > 0 else 'error')
+            self.log_sync('product', status, f'Sincronizados: {success_count}, Fallidos: {failed_count}', {"errors": errors})
+            
+        except Exception as e:
+            error_msg = f"Error general en sincronización de productos pendientes: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.log_sync('product', 'error', error_msg)
+            return 0, 1
+        
+        logger.info(f"🏁 Sincronización de productos pendientes finalizada: {success_count} exitosos, {failed_count} fallidos")
+        return success_count, failed_count
+
+    def sync_product_update(self, producto):
+        """Sync product update to Tiendanube (solo productos con tag tiendanube)."""
+        try:
+            # Verificar que el producto tenga tag tiendanube
+            if not producto.tags or 'tiendanube' not in producto.tags.lower():
+                logger.info(f"ℹ️ Producto {producto.sku} no tiene tag tiendanube, saltando actualización")
+                return True  # No es un producto de Tiendanube, no sincronizar
+            
+            mapping = TiendaNubeProductMapping.objects.get(product=producto)
+            
+            logger.info(f"🔄 Actualizando producto {producto.sku} (TN ID: {mapping.tiendanube_id})")
+            
+            # Validar datos del producto antes de actualizar
+            product_data, validation_errors, validation_warnings = self.validate_product_data(producto, "update")
+            
+            if validation_errors:
+                logger.error(f"❌ Error de validación en producto {producto.sku}: {', '.join(validation_errors)}")
+                return False
+            
+            if validation_warnings:
+                logger.warning(f"⚠️ Advertencias en producto {producto.sku}: {', '.join(validation_warnings)}")
+            
+            response = self.update_product(mapping.tiendanube_id, product_data)
+            
+            if response:
+                # Actualizar precio usando endpoint de variantes
+                price_success = self.update_product_price(producto)
+                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED if price_success else TiendaNubeProductMapping.SyncStatus.ERROR
+                mapping.error_message = "" if price_success else "Error actualizando precio"
+                mapping.save()
+                if price_success:
+                    logger.info(f"✅ Producto {producto.sku} actualizado exitosamente en Tiendanube (incluyendo precio)")
+                else:
+                    logger.error(f"❌ Producto {producto.sku} actualizado pero error en precio en Tiendanube")
+                return price_success
+            else:
+                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.ERROR
+                mapping.error_message = "Error updating product"
+                mapping.save()
+                logger.error(f"❌ Error actualizando producto {producto.sku} en Tiendanube")
+                return False
+                
+        except TiendaNubeProductMapping.DoesNotExist:
+            logger.error(f"❌ Producto {producto.sku} no tiene mapping con Tiendanube")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error actualizando producto {producto.sku}: {str(e)}")
+            return False
+
+    def update_product_price(self, producto):
+        """
+        Actualiza el precio del producto en Tiendanube usando el endpoint de variantes.
+        Si el producto no tiene variantes, crea una variante si es necesario.
+        """
+        try:
+            mapping = TiendaNubeProductMapping.objects.get(product=producto)
+            product_id = mapping.tiendanube_id
+            logger.info(f"🔄 Actualizando precio para producto {producto.sku} (TN ID: {product_id})")
+
+            # Obtener variantes desde Tiendanube
+            url_variants = f"{self.BASE_URL}/products/{product_id}/variants"
+            response = requests.get(url_variants, headers=self.headers)
+            if response.status_code != 200:
+                logger.error(f"❌ No se pudieron obtener variantes para producto {producto.sku}: {response.text}")
+                return False
+            variants = response.json()
+
+            if not variants:
+                # Producto simple sin variantes, crear variante
+                logger.info(f"ℹ️ Producto {producto.sku} no tiene variantes en Tiendanube, creando variante...")
+                variant_data = {
+                    "name": producto.name,
+                    "sku": producto.sku,
+                    "price": float(producto.price),
+                }
+                url_create_variant = f"{self.BASE_URL}/products/{product_id}/variants"
+                resp_create = requests.post(url_create_variant, headers=self.headers, json=variant_data)
+                self.log_api_response("create_variant", url_create_variant, variant_data, resp_create, producto.sku)
+                if resp_create.status_code in [200, 201]:
+                    logger.info(f"✅ Variante creada y precio actualizado para producto {producto.sku}")
+                    return True
+                else:
+                    logger.error(f"❌ Error creando variante para producto {producto.sku}: {resp_create.text}")
+                    return False
+            else:
+                # Actualizar precio de cada variante
+                for variant in variants:
+                    variant_id = variant['id']
+                    price_data = {"price": float(producto.price)}
+                    url_update = f"{self.BASE_URL}/products/{product_id}/variants/{variant_id}"
+                    resp_update = requests.put(url_update, headers=self.headers, json=price_data)
+                    self.log_api_response("update_variant_price", url_update, price_data, resp_update, producto.sku)
+                    if resp_update.status_code in [200, 201]:
+                        logger.info(f"✅ Precio actualizado para variante {variant_id} de producto {producto.sku}")
+                    else:
+                        logger.error(f"❌ Error actualizando precio de variante {variant_id} para producto {producto.sku}: {resp_update.text}")
+                        return False
+                return True
+        except TiendaNubeProductMapping.DoesNotExist:
+            logger.error(f"❌ Producto {producto.sku} no tiene mapping con Tiendanube para actualizar precio")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error actualizando precio en Tiendanube para producto {producto.sku}: {str(e)}")
+            return False
 
     # ----------------------
     # Webhook Methods (Enhanced)
@@ -949,6 +1701,7 @@ class TiendaNubeService:
                 is_published=product_data.get('published', True),
                 tiendanube_id=tiendanube_id,
                 tiendanube_url=product_data.get('permalink', ''),
+                tags='tiendanube',  # Nuevo producto con tag tiendanube
                 # Usar primera empresa y sucursal disponibles
                 empresa=Empresa.objects.first(),
                 branch=Branch.objects.first()
@@ -981,6 +1734,12 @@ class TiendaNubeService:
             product.price = Decimal(str(product_data.get('price', product.price)))
             product.is_published = product_data.get('published', product.is_published)
             product.tiendanube_url = product_data.get('permalink', product.tiendanube_url)
+            
+            # Agregar tag tiendanube si no existe
+            if not product.tags or 'tiendanube' not in product.tags.lower():
+                current_tags = product.tags or ''
+                product.tags = f"{current_tags},tiendanube".strip(',')
+            
             product.save()
             
             # Actualizar mapping
@@ -1038,13 +1797,40 @@ class TiendaNubeService:
                 type='individual' if not customer_data.get('document') else 'company',
                 credit_limit=Decimal('0.00')
             )
-            
+            # --- Contact universal ---
+            contact = None
+            email = customer_data.get('email', '')
+            document = customer_data.get('document', '')
+            if email:
+                contact = Contact.objects.filter(email=email).first()
+            if not contact and document:
+                contact = Contact.objects.filter(notes__icontains=document).first()
+            if not contact:
+                contact = Contact.objects.create(
+                    name=customer_data.get('name', 'Cliente Tiendanube'),
+                    email=email,
+                    phone=customer_data.get('phone', ''),
+                    address=customer_data.get('address', ''),
+                    city=customer_data.get('city', ''),
+                    state=customer_data.get('state', ''),
+                    country=customer_data.get('country', 'Argentina'),
+                    notes=document,
+                    tags='tiendanube'  # Nuevo contacto con tag tiendanube
+                )
+            else:
+                # Contact existente - agregar tag tiendanube si no existe
+                if 'tiendanube' not in (contact.tags or '').lower():
+                    current_tags = contact.tags or ''
+                    contact.tags = f"{current_tags},tiendanube".strip(',')
+                    contact.save()
+            if not customer.has_contact(contact, relationship_type='primary'):
+                customer.add_contact_relationship(contact, relationship_type='primary')
             # Crear mapping
             TiendaNubeCustomerMapping.objects.create(
                 client=customer,
                 tiendanube_id=tiendanube_id,
-                tiendanube_email=customer.email,
-                tiendanube_document=customer.document_number,
+                tiendanube_email=email,
+                tiendanube_document=customer_data.get('document', ''),
                 sync_status=TiendaNubeCustomerMapping.SyncStatus.SYNCED
             )
             
@@ -1060,11 +1846,37 @@ class TiendaNubeService:
             mapping = TiendaNubeCustomerMapping.objects.get(tiendanube_id=tiendanube_id)
             customer = mapping.client
             
-            # Actualizar campos básicos
+            # Actualizar campos básicos del cliente
             customer.name = customer_data.get('name', customer.name)
             customer.email = customer_data.get('email', customer.email)
             customer.document_number = customer_data.get('document', customer.document_number)
             customer.save()
+            
+            # --- Actualizar Contact primario ---
+            primary_contact = customer.get_primary_contact_object()
+            if primary_contact:
+                # Actualizar Contact existente
+                primary_contact.name = customer_data.get('name', primary_contact.name)
+                primary_contact.email = customer_data.get('email', primary_contact.email)
+                primary_contact.phone = customer_data.get('phone', primary_contact.phone)
+                primary_contact.address = customer_data.get('address', primary_contact.address)
+                primary_contact.notes = customer_data.get('document', primary_contact.notes)
+                # Agregar tag tiendanube si no existe
+                if 'tiendanube' not in (primary_contact.tags or '').lower():
+                    current_tags = primary_contact.tags or ''
+                    primary_contact.tags = f"{current_tags},tiendanube".strip(',')
+                primary_contact.save()
+            else:
+                # Crear nuevo Contact si no existe
+                contact = Contact.objects.create(
+                    name=customer_data.get('name', 'Cliente Tiendanube'),
+                    email=customer_data.get('email', ''),
+                    phone=customer_data.get('phone', ''),
+                    address=customer_data.get('address', ''),
+                    notes=customer_data.get('document', ''),
+                    tags='tiendanube'  # Nuevo contacto con tag tiendanube
+                )
+                customer.add_contact_relationship(contact, relationship_type='primary')
             
             # Actualizar mapping
             mapping.sync_status = TiendaNubeCustomerMapping.SyncStatus.SYNCED
@@ -1111,62 +1923,58 @@ class TiendaNubeService:
         return self.handle_response(response)
 
     def create_product(self, product_data):
-        """Create product in TiendaNube."""
+        """Create product in Tiendanube with detailed validation and logging."""
         url = f"{self.BASE_URL}/products"
-        response = requests.post(url, headers=self.headers, json=product_data)
-        return self.handle_response(response)
+        
+        # Log de inicio de creación
+        product_sku = product_data.get('sku', 'Unknown')
+        logger.info(f"🚀 Iniciando creación de producto {product_sku} en Tiendanube")
+        logger.debug(f"📤 Datos a enviar: {json.dumps(product_data, indent=2)}")
+        
+        try:
+            response = requests.post(url, headers=self.headers, json=product_data)
+            
+            # Log detallado de la respuesta
+            self.log_api_response("create", url, product_data, response, product_sku)
+            
+            if response.status_code in [200, 201]:
+                result = response.json()
+                logger.info(f"✅ Producto {product_sku} creado exitosamente en Tiendanube (ID: {result.get('id')})")
+                return result
+            else:
+                logger.error(f"❌ Error creando producto {product_sku} en Tiendanube")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción creando producto {product_sku}: {str(e)}")
+            return None
 
     def update_product(self, tiendanube_id, product_data):
-        """Update product in TiendaNube."""
+        """Update product in Tiendanube with detailed validation and logging."""
         url = f"{self.BASE_URL}/products/{tiendanube_id}"
-        response = requests.put(url, headers=self.headers, json=product_data)
-        return self.handle_response(response)
-
-    def sync_product_update(self, producto):
-        """Sync product update to TiendaNube."""
+        
+        # Log de inicio de actualización
+        product_sku = product_data.get('sku', 'Unknown')
+        logger.info(f"🔄 Iniciando actualización de producto {product_sku} (TN ID: {tiendanube_id})")
+        logger.debug(f"📤 Datos a enviar: {json.dumps(product_data, indent=2)}")
+        
         try:
-            mapping = TiendaNubeProductMapping.objects.get(product=producto)
+            response = requests.put(url, headers=self.headers, json=product_data)
             
-            product_data = {
-                "name": producto.name,
-                "description": producto.description,
-                "published": producto.is_published,
-            }
+            # Log detallado de la respuesta
+            self.log_api_response("update", url, product_data, response, product_sku)
             
-            if not producto.variants.exists():
-                product_data["price"] = float(producto.price)
-            
-            # Sync images
-            images = []
-            site_url = get_site_url()
-            for img in producto.images.all():
-                if site_url:
-                    image_url = site_url + img.image.url
-                else:
-                    image_url = img.image.url
-                images.append({"src": image_url})
-            
-            if images:
-                product_data["images"] = images
-            
-            response = self.update_product(mapping.tiendanube_id, product_data)
-            
-            if response:
-                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.SYNCED
-                mapping.error_message = ""
-                mapping.save()
-                return True
+            if response.status_code in [200, 201]:
+                result = response.json()
+                logger.info(f"✅ Producto {product_sku} actualizado exitosamente en Tiendanube")
+                return result
             else:
-                mapping.sync_status = TiendaNubeProductMapping.SyncStatus.ERROR
-                mapping.error_message = "Error updating product"
-                mapping.save()
-                return False
+                logger.error(f"❌ Error actualizando producto {product_sku} en Tiendanube")
+                return None
                 
-        except TiendaNubeProductMapping.DoesNotExist:
-            return False
         except Exception as e:
-            logger.error(f"Error syncing product update: {str(e)}")
-            return False
+            logger.error(f"❌ Excepción actualizando producto {product_sku}: {str(e)}")
+            return None
 
     def delete_product(self, tiendanube_id):
         """Delete product from TiendaNube."""
@@ -1241,13 +2049,12 @@ class TiendaNubeService:
         return self.BASE_URL
 
     def handle_response(self, response):
-        """Handle API response."""
+        """Handle API response with detailed logging."""
         if response.status_code in [200, 201]:
             try:
                 return response.json()
             except:
-                return response.text
+                return {"success": True, "message": response.text}
         else:
-            error_msg = self.handle_error(response)
-            logger.error(f"API Error: {error_msg}")
+            logger.error(f"API Error: {response.status_code} - {response.text}")
             return None 
