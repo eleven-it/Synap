@@ -305,42 +305,92 @@ class TPV {
 
     updatePaymentFields(method) {
         const extraFields = document.getElementById('payment-extra-fields');
+        const cloverFields = document.getElementById('clover-fields');
         if (!extraFields) return;
+
+        // Ocultar campos de Clover por defecto
+        if (cloverFields) {
+            cloverFields.style.display = 'none';
+        }
 
         let fields = '';
         
-        switch (method) {
-            case 'cash':
-                fields = `
-                    <div>
-                        <label for="cash-received" class="block text-gray-700 dark:text-gray-200 mb-1">Cash received</label>
-                        <input type="number" id="cash-received" step="0.01" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                    </div>
-                    <div id="change-display" class="text-lg font-semibold text-green-600 dark:text-green-400"></div>
-                `;
-                break;
-            case 'card':
-                fields = `
-                    <div>
-                        <label for="card-number" class="block text-gray-700 dark:text-gray-200 mb-1">Card number (last 4 digits)</label>
-                        <input type="text" id="card-number" maxlength="4" placeholder="1234" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                    </div>
-                `;
-                break;
-            case 'transfer':
-                fields = `
-                    <div>
-                        <label for="transfer-reference" class="block text-gray-700 dark:text-gray-200 mb-1">Transfer reference</label>
-                        <input type="text" id="transfer-reference" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                    </div>
-                `;
-                break;
+        // Obtener información del método seleccionado
+        const paymentMethodSelect = document.getElementById('payment-method');
+        const selectedOption = paymentMethodSelect ? paymentMethodSelect.options[paymentMethodSelect.selectedIndex] : null;
+        const processor = selectedOption ? selectedOption.dataset.processor : '';
+        const paymentType = selectedOption ? selectedOption.dataset.type : '';
+        
+        // Si es Clover, mostrar campos específicos
+        if (processor === 'clover') {
+            if (cloverFields) {
+                cloverFields.style.display = 'block';
+                
+                // Mostrar campos según el tipo de pago
+                const installmentsField = document.getElementById('clover-installments');
+                const referenceField = document.getElementById('clover-reference');
+                
+                if (installmentsField) {
+                    installmentsField.style.display = paymentType === 'card' ? 'block' : 'none';
+                }
+                
+                if (referenceField) {
+                    referenceField.style.display = ['cash', 'check', 'bank_transfer'].includes(paymentType) ? 'block' : 'none';
+                }
+            }
+        } else {
+            // Campos para métodos no-Clover
+            switch (method) {
+                case 'CASH':
+                    fields = `
+                        <div>
+                            <label for="cash-received" class="block text-gray-700 dark:text-gray-200 mb-1">Cash received</label>
+                            <input type="number" id="cash-received" step="0.01" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div id="change-display" class="text-lg font-semibold text-green-600 dark:text-green-400"></div>
+                    `;
+                    break;
+                case 'CREDIT_CARD':
+                case 'DEBIT_CARD':
+                    fields = `
+                        <div>
+                            <label for="card-number" class="block text-gray-700 dark:text-gray-200 mb-1">Card number (last 4 digits)</label>
+                            <input type="text" id="card-number" maxlength="4" placeholder="1234" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label for="card-installments" class="block text-gray-700 dark:text-gray-200 mb-1">Installments</label>
+                            <select id="card-installments" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                <option value="1">1 installment</option>
+                                <option value="3">3 installments</option>
+                                <option value="6">6 installments</option>
+                                <option value="12">12 installments</option>
+                            </select>
+                        </div>
+                    `;
+                    break;
+                case 'BANK_TRANSFER':
+                    fields = `
+                        <div>
+                            <label for="transfer-reference" class="block text-gray-700 dark:text-gray-200 mb-1">Transfer reference</label>
+                            <input type="text" id="transfer-reference" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                    `;
+                    break;
+                case 'CHECK':
+                    fields = `
+                        <div>
+                            <label for="check-number" class="block text-gray-700 dark:text-gray-200 mb-1">Check number</label>
+                            <input type="text" id="check-number" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                        </div>
+                    `;
+                    break;
+            }
         }
         
         extraFields.innerHTML = fields;
         
         // Bind events for new fields
-        if (method === 'cash') {
+        if (method === 'CASH') {
             const cashReceived = document.getElementById('cash-received');
             if (cashReceived) {
                 cashReceived.addEventListener('input', () => {
@@ -373,10 +423,25 @@ class TPV {
 
     async processPayment() {
         const paymentMethod = document.getElementById('payment-method');
-        const method = paymentMethod ? paymentMethod.value : 'cash';
+        const method = paymentMethod ? paymentMethod.value : '';
         
-        // Validaciones básicas
-        if (method === 'cash') {
+        if (!method) {
+            this.showToast('Please select a payment method', 'error');
+            return;
+        }
+        
+        // Obtener información del método seleccionado
+        const selectedOption = paymentMethod ? paymentMethod.options[paymentMethod.selectedIndex] : null;
+        const processor = selectedOption ? selectedOption.dataset.processor : '';
+        
+        // Validaciones específicas por método
+        if (processor === 'clover') {
+            const cloverDevice = document.getElementById('clover-device');
+            if (!cloverDevice || !cloverDevice.value) {
+                this.showToast('Please select a Clover device', 'error');
+                return;
+            }
+        } else if (method === 'CASH') {
             const cashReceived = document.getElementById('cash-received');
             const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
             if (!cashReceived || parseFloat(cashReceived.value) < total) {
@@ -393,7 +458,7 @@ class TPV {
                 extra_data: this.getPaymentExtraData(method)
             };
 
-            const response = await fetch('/sales/api/tpv/process-payment/', {
+            const response = await fetch('/sales/tpv/process-payment/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -420,19 +485,45 @@ class TPV {
     getPaymentExtraData(method) {
         const data = {};
         
-        switch (method) {
-            case 'cash':
-                const cashReceived = document.getElementById('cash-received');
-                if (cashReceived) data.cash_received = parseFloat(cashReceived.value);
-                break;
-            case 'card':
-                const cardNumber = document.getElementById('card-number');
-                if (cardNumber) data.card_number = cardNumber.value;
-                break;
-            case 'transfer':
-                const transferRef = document.getElementById('transfer-reference');
-                if (transferRef) data.transfer_reference = transferRef.value;
-                break;
+        // Obtener información del método seleccionado
+        const paymentMethodSelect = document.getElementById('payment-method');
+        const selectedOption = paymentMethodSelect ? paymentMethodSelect.options[paymentMethodSelect.selectedIndex] : null;
+        const processor = selectedOption ? selectedOption.dataset.processor : '';
+        
+        // Si es Clover, obtener datos específicos
+        if (processor === 'clover') {
+            const cloverDevice = document.getElementById('clover-device');
+            const cloverInstallments = document.getElementById('clover-installments-select');
+            const cloverReference = document.getElementById('clover-reference-input');
+            
+            if (cloverDevice) data.clover_device_id = cloverDevice.value;
+            if (cloverInstallments) data.installments = parseInt(cloverInstallments.value);
+            if (cloverReference) data.reference = cloverReference.value;
+            
+            data.processor = 'clover';
+        } else {
+            // Datos para métodos no-Clover
+            switch (method) {
+                case 'CASH':
+                    const cashReceived = document.getElementById('cash-received');
+                    if (cashReceived) data.cash_received = parseFloat(cashReceived.value);
+                    break;
+                case 'CREDIT_CARD':
+                case 'DEBIT_CARD':
+                    const cardNumber = document.getElementById('card-number');
+                    const cardInstallments = document.getElementById('card-installments');
+                    if (cardNumber) data.card_number = cardNumber.value;
+                    if (cardInstallments) data.installments = parseInt(cardInstallments.value);
+                    break;
+                case 'BANK_TRANSFER':
+                    const transferRef = document.getElementById('transfer-reference');
+                    if (transferRef) data.transfer_reference = transferRef.value;
+                    break;
+                case 'CHECK':
+                    const checkNumber = document.getElementById('check-number');
+                    if (checkNumber) data.check_number = checkNumber.value;
+                    break;
+            }
         }
         
         return data;

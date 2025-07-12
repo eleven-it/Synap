@@ -95,11 +95,43 @@
         <div>
           <label for="payment-method" class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Payment method' %}</label>
           <select id="payment-method" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-            <option value="cash">{% trans 'Cash' %}</option>
-            <option value="card">{% trans 'Card' %}</option>
-            <option value="transfer">{% trans 'Transfer' %}</option>
-            <option value="other">{% trans 'Other' %}</option>
+            <option value="">{% trans 'Select payment method' %}</option>
+            {% for method in payment_methods %}
+              <option value="{{ method.code }}" data-processor="{{ method.processor_name }}" data-type="{{ method.payment_type }}">
+                {{ method.name }}
+              </option>
+            {% endfor %}
           </select>
+        </div>
+        
+        <!-- Campos específicos para Clover -->
+        <div id="clover-fields" class="space-y-3" style="display: none;">
+          <div>
+            <label for="clover-device" class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Clover Device' %}</label>
+            <select id="clover-device" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="">{% trans 'Select device' %}</option>
+              {% for device in clover_devices %}
+                <option value="{{ device.id }}" data-device-id="{{ device.device_id }}">
+                  {{ device.name }} ({{ device.model }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <div id="clover-installments" style="display: none;">
+            <label for="clover-installments-select" class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Installments' %}</label>
+            <select id="clover-installments-select" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+              <option value="1">1 {% trans 'installment' %}</option>
+              <option value="3">3 {% trans 'installments' %}</option>
+              <option value="6">6 {% trans 'installments' %}</option>
+              <option value="12">12 {% trans 'installments' %}</option>
+            </select>
+          </div>
+          
+          <div id="clover-reference" style="display: none;">
+            <label for="clover-reference-input" class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Reference' %}</label>
+            <input type="text" id="clover-reference-input" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="{% trans 'Enter reference' %}">
+          </div>
         </div>
         <div id="payment-extra-fields"></div>
         <div class="flex gap-2 mt-6">

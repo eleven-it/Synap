@@ -1,0 +1,430 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if object %}
+        {% trans "Edit Clover Device" %}
+    {% else %}
+        {% trans "Add Clover Device" %}
+    {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+    }
+    
+    .form-section.dark {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    
+    .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+    }
+    
+    .step {
+        display: flex;
+        align-items: center;
+        margin: 0 1rem;
+    }
+    
+    .step-number {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        margin-right: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    
+    .step.active .step-number {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+    
+    .step.completed .step-number {
+        background: #10b981;
+        color: white;
+    }
+    
+    .step.pending .step-number {
+        background: #e5e7eb;
+        color: #6b7280;
+    }
+    
+    .step-text {
+        font-weight: 500;
+        color: #374151;
+    }
+    
+    .step.active .step-text {
+        color: #10b981;
+    }
+    
+    .step.completed .step-text {
+        color: #10b981;
+    }
+    
+    .step.pending .step-text {
+        color: #6b7280;
+    }
+    
+    .form-step {
+        display: none;
+    }
+    
+    .form-step.active {
+        display: block;
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #10b981, #059669);
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-secondary {
+        background: #6b7280;
+        border: none;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .btn-secondary:hover {
+        background: #4b5563;
+    }
+    
+    .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(135deg, #10b981, #059669);
+        transition: width 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {% if object %}
+                {% trans "Edit Clover Device" %}
+            {% else %}
+                {% trans "Add Clover Device" %}
+            {% endif %}
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400">
+            {% trans "Configure your Clover payment terminal settings" %}
+        </p>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 33%"></div>
+    </div>
+
+    <!-- Step Indicators -->
+    <div class="step-indicator">
+        <div class="step active" id="step1">
+            <div class="step-number">1</div>
+            <div class="step-text">{% trans "Basic Info" %}</div>
+        </div>
+        <div class="step pending" id="step2">
+            <div class="step-number">2</div>
+            <div class="step-text">{% trans "Configuration" %}</div>
+        </div>
+        <div class="step pending" id="step3">
+            <div class="step-number">3</div>
+            <div class="step-text">{% trans "Review" %}</div>
+        </div>
+    </div>
+
+    <form method="post" id="deviceForm" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Step 1: Basic Information -->
+        <div class="form-step active" id="step1Content">
+            <div class="form-section p-6">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    {% trans "Basic Information" %}
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.name|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.device_id|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.model|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.branch|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.description|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Configuration -->
+        <div class="form-step" id="step2Content">
+            <div class="form-section p-6">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    {% trans "Device Configuration" %}
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.status|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.device_type|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.api_key|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.merchant_id|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.webhook_url|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Review -->
+        <div class="form-step" id="step3Content">
+            <div class="form-section p-6">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    {% trans "Review Configuration" %}
+                </h2>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h3 class="font-medium text-gray-900 dark:text-white mb-2">{% trans "Device Details" %}</h3>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Name" %}:</span> <span id="reviewName" class="font-medium"></span></div>
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Device ID" %}:</span> <span id="reviewDeviceId" class="font-medium"></span></div>
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Model" %}:</span> <span id="reviewModel" class="font-medium"></span></div>
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Branch" %}:</span> <span id="reviewBranch" class="font-medium"></span></div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                            <h3 class="font-medium text-gray-900 dark:text-white mb-2">{% trans "Configuration" %}</h3>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Status" %}:</span> <span id="reviewStatus" class="font-medium"></span></div>
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Type" %}:</span> <span id="reviewType" class="font-medium"></span></div>
+                                <div><span class="text-gray-600 dark:text-gray-400">{% trans "Merchant ID" %}:</span> <span id="reviewMerchantId" class="font-medium"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 dark:bg-blue-900 p-4 rounded-lg">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-info-circle text-blue-400"></i>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm text-blue-700 dark:text-blue-300">
+                                    {% trans "Please review all information before saving. You can go back to previous steps to make changes." %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="flex justify-between items-center pt-6">
+            <button type="button" id="prevBtn" onclick="previousStep()" 
+                    class="btn-secondary hidden">
+                <i class="fas fa-arrow-left mr-2"></i>
+                {% trans "Previous" %}
+            </button>
+            
+            <div class="flex space-x-4">
+                <button type="button" id="nextBtn" onclick="nextStep()" 
+                        class="btn-primary">
+                    {% trans "Next" %}
+                    <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+                
+                <button type="submit" id="submitBtn" 
+                        class="btn-primary hidden">
+                    <i class="fas fa-save mr-2"></i>
+                    {% if object %}
+                        {% trans "Update Device" %}
+                    {% else %}
+                        {% trans "Create Device" %}
+                    {% endif %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentStep = 1;
+const totalSteps = 3;
+
+function updateProgress() {
+    const progress = (currentStep / totalSteps) * 100;
+    document.getElementById('progressFill').style.width = progress + '%';
+}
+
+function updateStepIndicators() {
+    for (let i = 1; i <= totalSteps; i++) {
+        const step = document.getElementById(`step${i}`);
+        const stepContent = document.getElementById(`step${i}Content`);
+        
+        if (i < currentStep) {
+            step.className = 'step completed';
+            stepContent.className = 'form-step';
+        } else if (i === currentStep) {
+            step.className = 'step active';
+            stepContent.className = 'form-step active';
+        } else {
+            step.className = 'step pending';
+            stepContent.className = 'form-step';
+        }
+    }
+}
+
+function updateButtons() {
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    if (currentStep === 1) {
+        prevBtn.classList.add('hidden');
+    } else {
+        prevBtn.classList.remove('hidden');
+    }
+    
+    if (currentStep === totalSteps) {
+        nextBtn.classList.add('hidden');
+        submitBtn.classList.remove('hidden');
+    } else {
+        nextBtn.classList.remove('hidden');
+        submitBtn.classList.add('hidden');
+    }
+}
+
+function nextStep() {
+    if (currentStep < totalSteps) {
+        currentStep++;
+        updateStepIndicators();
+        updateButtons();
+        updateProgress();
+        
+        if (currentStep === totalSteps) {
+            populateReview();
+        }
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        updateStepIndicators();
+        updateButtons();
+        updateProgress();
+    }
+}
+
+function populateReview() {
+    // Populate review fields with form values
+    document.getElementById('reviewName').textContent = document.getElementById('id_name').value || '{% trans "Not specified" %}';
+    document.getElementById('reviewDeviceId').textContent = document.getElementById('id_device_id').value || '{% trans "Not specified" %}';
+    document.getElementById('reviewModel').textContent = document.getElementById('id_model').value || '{% trans "Not specified" %}';
+    
+    const branchSelect = document.getElementById('id_branch');
+    const branchText = branchSelect.options[branchSelect.selectedIndex]?.text || '{% trans "Not specified" %}';
+    document.getElementById('reviewBranch').textContent = branchText;
+    
+    const statusSelect = document.getElementById('id_status');
+    const statusText = statusSelect.options[statusSelect.selectedIndex]?.text || '{% trans "Not specified" %}';
+    document.getElementById('reviewStatus').textContent = statusText;
+    
+    const typeSelect = document.getElementById('id_device_type');
+    const typeText = typeSelect.options[typeSelect.selectedIndex]?.text || '{% trans "Not specified" %}';
+    document.getElementById('reviewType').textContent = typeText;
+    
+    document.getElementById('reviewMerchantId').textContent = document.getElementById('id_merchant_id').value || '{% trans "Not specified" %}';
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateStepIndicators();
+    updateButtons();
+    updateProgress();
+});
+
+// Form validation
+document.getElementById('deviceForm').addEventListener('submit', function(e) {
+    const requiredFields = ['id_name', 'id_device_id', 'id_branch'];
+    let isValid = true;
+    
+    requiredFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (!field.value.trim()) {
+            field.classList.add('border-red-500');
+            isValid = false;
+        } else {
+            field.classList.remove('border-red-500');
+        }
+    });
+    
+    if (!isValid) {
+        e.preventDefault();
+        alert('{% trans "Please fill in all required fields" %}');
+        return false;
+    }
+});
+</script>
+{% endblock %} 

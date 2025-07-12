@@ -151,6 +151,7 @@ urlpatterns = [
     path('tpv/session/<int:session_id>/sale/save/', tpv_views.tpv_sale_save, name='tpv_sale_save'),
     path('tpv/reports/', tpv_views.tpv_reports, name='tpv_reports'),
     path('tpv/sale/<int:sale_id>/summary/', tpv_views.TPVSaleSummaryView.as_view(), name='tpv_sale_summary'),
+    path('tpv/process-payment/', tpv_views.tpv_process_payment, name='tpv_process_payment'),
 
     # Vistas de medios de pago
     path('payment-methods/', views.payment_method_list, name='payment_method_list'),

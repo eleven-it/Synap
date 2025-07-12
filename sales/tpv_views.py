@@ -70,11 +70,30 @@ def tpv_main(request):
                 opening_amount=Decimal('0.00')
             )
         
+        # Obtener métodos de pago disponibles para la sucursal
+        from sales.models import PaymentMethod
+        payment_methods = PaymentMethod.objects.filter(
+            empresa=empresa,
+            branches=branch,
+            is_active=True
+        ).order_by('order', 'name')
+        
+        # Obtener dispositivos Clover disponibles si hay métodos Clover
+        clover_devices = []
+        if payment_methods.filter(processor_name='clover').exists():
+            from clover.models import CloverDevice
+            clover_devices = CloverDevice.objects.filter(
+                branch=branch,
+                status='active'
+            ).order_by('name')
+        
         context = {
             'empresa': empresa,
             'branch': branch,
             'session': session,
             'terminals': terminals,
+            'payment_methods': payment_methods,
+            'clover_devices': clover_devices,
             'inventory_available': INVENTORY_AVAILABLE,
             'accounting_available': ACCOUNTING_AVAILABLE,
         }
@@ -701,4 +720,242 @@ class TPVSaleSummaryView(LoginRequiredMixin, View):
             })
         except POSSale.DoesNotExist:
             messages.error(request, _('Sale not found'))
-            return redirect('tpv_dashboard') 
+            return redirect('tpv_dashboard')
+
+
+@login_required
+def tpv_process_payment(request):
+    """Procesar pago del TPV con soporte para múltiples métodos incluyendo Clover"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'})
+    
+    try:
+        # Obtener empresa y sucursal
+        from core.models import Empresa, Branch
+        empresa = Empresa.objects.filter(activa=True).first()
+        branch = Branch.objects.filter(active=True).first()
+        
+        if not empresa or not branch:
+            return JsonResponse({'success': False, 'error': 'No se pudo determinar la empresa o sucursal'})
+        
+        # Obtener datos del pago
+        data = json.loads(request.body)
+        items = data.get('items', [])
+        payment_method_code = data.get('payment_method')
+        total = Decimal(data.get('total', 0))
+        extra_data = data.get('extra_data', {})
+        
+        if not items or not payment_method_code:
+            return JsonResponse({'success': False, 'error': 'Datos de pago incompletos'})
+        
+        # Obtener método de pago
+        from sales.models import PaymentMethod
+        payment_method = PaymentMethod.objects.filter(
+            empresa=empresa,
+            code=payment_method_code,
+            is_active=True
+        ).first()
+        
+        if not payment_method:
+            return JsonResponse({'success': False, 'error': 'Método de pago no válido'})
+        
+        # Obtener sesión activa
+        session = POSSession.objects.filter(
+            operator=request.user,
+            pos_terminal__branch=branch,
+            state='open'
+        ).first()
+        
+        if not session:
+            return JsonResponse({'success': False, 'error': 'No hay sesión TPV activa'})
+        
+        # Crear venta
+        sale = POSSale.objects.create(
+            session=session,
+            operator=request.user,
+            empresa=empresa,
+            branch=branch,
+            currency='ARS',
+            state='completed'
+        )
+        
+        # Crear líneas de venta
+        total_subtotal = Decimal('0.00')
+        total_tax = Decimal('0.00')
+        
+        for item in items:
+            if INVENTORY_AVAILABLE:
+                product_variant = get_object_or_404(ProductVariant, id=item['id'])
+                
+                quantity = Decimal(item['quantity'])
+                unit_price = Decimal(item['price'])
+                line_total = quantity * unit_price
+                tax_amount = line_total * Decimal('0.21')  # 21% IVA
+                
+                line = POSSaleLine.objects.create(
+                    sale=sale,
+                    product_variant=product_variant,
+                    empresa=empresa,
+                    branch=branch,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    subtotal=line_total,
+                    tax_percentage=Decimal('21.00'),
+                    tax_amount=tax_amount,
+                    discount_percentage=Decimal('0.00'),
+                    discount_amount=Decimal('0.00')
+                )
+                
+                total_subtotal += line_total
+                total_tax += tax_amount
+        
+        # Actualizar totales de la venta
+        sale.subtotal = total_subtotal
+        sale.total_tax = total_tax
+        sale.total = total_subtotal + total_tax
+        sale.save()
+        
+        # Procesar pago según el método
+        if payment_method.processor_name == 'clover':
+            # Procesar pago con Clover
+            clover_result = process_clover_payment(sale, payment_method, extra_data)
+            if not clover_result['success']:
+                return JsonResponse(clover_result)
+        else:
+            # Procesar pago estándar
+            payment = POSPayment.objects.create(
+                sale=sale,
+                empresa=empresa,
+                branch=branch,
+                payment_method=payment_method.code.lower(),
+                amount=total,
+                reference=extra_data.get('reference', ''),
+                card_type=extra_data.get('card_type', ''),
+                card_number=extra_data.get('card_number', ''),
+                installments=extra_data.get('installments', 1),
+                check_number=extra_data.get('check_number', ''),
+                notes=f"Pago procesado por {payment_method.name}"
+            )
+        
+        # Crear asiento contable si está disponible
+        if ACCOUNTING_AVAILABLE:
+            try:
+                from accounting.models import Journal, JournalEntry, JournalEntryLine, ChartOfAccounts
+                
+                journal = Journal.objects.filter(empresa=empresa, journal_type='sale').first()
+                if journal:
+                    # Obtener cuentas contables
+                    sales_account = ChartOfAccounts.objects.filter(
+                        empresa=empresa,
+                        code__icontains='4001-TPV'
+                    ).first()
+                    
+                    cash_account = ChartOfAccounts.objects.filter(
+                        empresa=empresa,
+                        code__icontains='1101-TPV'
+                    ).first()
+                    
+                    if sales_account and cash_account:
+                        # Crear asiento contable
+                        journal_entry = JournalEntry.objects.create(
+                            empresa=empresa,
+                            journal=journal,
+                            number=f"TPV-{sale.id}-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+                            date=sale.created_at.date(),
+                            reference=f"Venta TPV {sale.id}",
+                            narration=f"Venta TPV - {sale.total}",
+                            state='posted',
+                            created_by=request.user,
+                            posted_by=request.user,
+                            posted_at=timezone.now(),
+                            origin_model='sales.POSSale',
+                            origin_id=sale.id
+                        )
+                        
+                        # Crear líneas del asiento
+                        JournalEntryLine.objects.create(
+                            entry=journal_entry,
+                            account=sales_account,
+                            debit=sale.total,
+                            credit=Decimal('0.00'),
+                            name="Venta TPV"
+                        )
+                        
+                        JournalEntryLine.objects.create(
+                            entry=journal_entry,
+                            account=cash_account,
+                            debit=Decimal('0.00'),
+                            credit=sale.total,
+                            name="Caja TPV"
+                        )
+            except Exception as e:
+                # Log error pero no fallar la venta
+                print(f"Error al crear asiento contable: {e}")
+        
+        return JsonResponse({
+            'success': True,
+            'sale_id': sale.id,
+            'sale_number': sale.number,
+            'total': float(sale.total),
+            'payment_method': payment_method.name,
+            'redirect_url': f'/sales/tpv/sale/{sale.id}/summary/'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def process_clover_payment(sale, payment_method, extra_data):
+    """Procesar pago específico con Clover"""
+    try:
+        from clover.models import CloverDevice, CloverTransaction
+        
+        device_id = extra_data.get('clover_device_id')
+        if not device_id:
+            return {'success': False, 'error': 'Dispositivo Clover no especificado'}
+        
+        # Obtener dispositivo Clover
+        device = CloverDevice.objects.filter(
+            id=device_id,
+            status='active'
+        ).first()
+        
+        if not device:
+            return {'success': False, 'error': 'Dispositivo Clover no válido o inactivo'}
+        
+        # Crear transacción Clover
+        transaction = CloverTransaction.objects.create(
+            device=device,
+            sale=sale,
+            amount=sale.total,
+            currency='ARS',
+            payment_type=payment_method.payment_type,
+            installments=extra_data.get('installments', 1),
+            reference=extra_data.get('reference', ''),
+            status='pending'
+        )
+        
+        # Aquí se integraría con la API real de Clover
+        # Por ahora simulamos el procesamiento
+        import uuid
+        transaction.transaction_id = f"CLV-{uuid.uuid4().hex[:16].upper()}"
+        transaction.status = 'completed'
+        transaction.processed_at = timezone.now()
+        transaction.save()
+        
+        # Crear pago POS estándar
+        from sales.models import POSPayment
+        POSPayment.objects.create(
+            sale=sale,
+            empresa=sale.empresa,
+            branch=sale.branch,
+            payment_method=payment_method.code.lower(),
+            amount=sale.total,
+            reference=transaction.transaction_id,
+            notes=f"Pago Clover - Dispositivo: {device.name}, Transacción: {transaction.transaction_id}"
+        )
+        
+        return {'success': True, 'transaction_id': transaction.transaction_id}
+        
+    except Exception as e:
+        return {'success': False, 'error': f'Error procesando pago Clover: {str(e)}'} 

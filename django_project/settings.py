@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'purchases',
     'reports',
     'mercadopago',
+    'clover',
 ]
 
 MIDDLEWARE = [
