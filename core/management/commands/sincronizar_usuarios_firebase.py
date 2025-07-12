@@ -121,6 +121,12 @@ class Command(BaseCommand):
                 print(f"⚠️ Usuario {uid} omitido (sin email)")
                 continue
 
+            # Verificar conflicto de email
+            usuario_email = UsuarioExtendido.objects.filter(email=email).first()
+            if usuario_email and usuario_email.uid != uid:
+                print(f"⚠️ Conflicto: el email {email} ya existe con otro UID ({usuario_email.uid}). Usuario omitido.")
+                continue
+
             usuario, creado = UsuarioExtendido.objects.get_or_create(uid=uid, defaults={
                 "email": email,
                 "nombre": nombre,

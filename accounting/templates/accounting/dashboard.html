@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base.html" %}
 {% load i18n %}
 {% load static %}
 
@@ -168,7 +168,7 @@
                         <div class="flex items-center">
                             <div class="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
                             <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                {{ group.tax_id__tax_group__name|default:"No Group" }}
+                                {{ group.tax__tax_group__name|default:"No Group" }}
                             </span>
                         </div>
                         <div class="text-right">
@@ -200,10 +200,10 @@
                             <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
                             <div>
                                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    {{ tax.tax_id__name }}
+                                    {{ tax.tax__name }}
                                 </span>
                                 <div class="text-xs text-gray-500 dark:text-gray-400">
-                                    {{ tax.tax_id__tax_group__name|default:"No Group" }}
+                                    {{ tax.tax__tax_group__name|default:"No Group" }}
                                 </div>
                             </div>
                         </div>
@@ -247,19 +247,19 @@
                             <div class="flex items-center justify-between">
                                 <div>
                                     <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                        {{ tax_line.tax_id.name }}
+                                        {{ tax_line.tax.name }}
                                     </p>
                                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                                        {{ tax_line.tax_id.tax_group.name|default:"No Group" }} • 
+                                        {{ tax_line.tax.tax_group.name|default:"No Group" }} • 
                                         {{ tax_line.created_at|date:"M d, Y H:i" }}
                                     </p>
                                 </div>
                                 <div class="text-right">
                                     <p class="text-sm font-semibold text-gray-900 dark:text-white">
-                                        ${{ tax_line.amount|floatformat:2 }}
+                                        ${{ tax_line.tax_amount|floatformat:2 }}
                                     </p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                                        Base: ${{ tax_line.base|floatformat:2 }}
+                                        Base: ${{ tax_line.base_amount|floatformat:2 }}
                                     </p>
                                 </div>
                             </div>
@@ -275,7 +275,24 @@
         </div>
 
         <!-- Quick Actions -->
-        <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
+            <a href="{% url 'accounting:account_list' %}" 
+               class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow duration-200">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Chart of Accounts" %}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "Manage your chart of accounts" %}</p>
+                    </div>
+                </div>
+            </a>
+
             <a href="{% url 'accounting:tax_group_list' %}" 
                class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow duration-200">
                 <div class="flex items-center">
@@ -310,7 +327,7 @@
                 </div>
             </a>
 
-            <a href="{% url 'accounting:tax_report' %}" 
+            <a href="{% url 'accounting:fiscal_position_list' %}" 
                class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow duration-200">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
@@ -321,8 +338,8 @@
                         </div>
                     </div>
                     <div class="ml-4">
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Reports" %}</h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "View tax reports and analytics" %}</p>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">{% trans "Fiscal Positions" %}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "Manage fiscal positions and jurisdictions" %}</p>
                     </div>
                 </div>
             </a>

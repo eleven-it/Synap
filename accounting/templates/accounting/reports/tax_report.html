@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block title %}{% trans "Tax Report" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* Animación de entrada */
+  .fade-in { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(30px);} to { opacity: 1; transform: none; } }
+  /* Confetti para celebración */
+  .confetti { pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 50; }
+  /* Barra de progreso animada */
+  .progress-bar-animated { transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+  /* Toasts */
+  .toast { position: fixed; top: 2rem; right: 2rem; z-index: 100; min-width: 220px; }
+  /* Dark mode */
+  html.dark .report-card, html.dark .tax-summary-card, html.dark .tax-breakdown { background: #18181b !important; color: #f4f4f5 !important; }
+  html.dark .tax-table { background: #18181b !important; }
+  html.dark .tax-table td { border-color: #27272a !important; }
+  html.dark .tax-table tr:hover { background: rgba(6, 182, 212, 0.1) !important; }
+  html.dark .export-btn { color: #18181b !important; }
+  html.dark .tax-summary-title { color: #f4f4f5 !important; }
+  html.dark .tax-summary-label { color: #a1a1aa !important; }
+  html.dark .tax-rate { color: #a1a1aa !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tax-report-container min-h-screen bg-gradient-to-br from-cyan-400 to-cyan-700 py-8">
+  <div class="container mx-auto px-2 md:px-4 fade-in">
+    <!-- Barra de progreso animada -->
+    <div class="w-full mb-4">
+      <div class="h-2 bg-cyan-200 rounded-full overflow-hidden">
+        <div id="progressBar" class="progress-bar-animated h-2 bg-gradient-to-r from-cyan-400 to-cyan-600" style="width: 100%"></div>
+      </div>
+    </div>
+    <div class="report-card bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-2xl shadow-2xl border border-white/20 overflow-hidden fade-in">
+      <!-- Header -->
+      <div class="report-header bg-gradient-to-br from-cyan-400 to-cyan-700 text-white p-8 text-center relative overflow-hidden">
+        <h1 class="report-title text-3xl md:text-4xl font-bold mb-2 relative z-10 flex items-center justify-center gap-2">
+          <i class="fas fa-receipt"></i>
+          {% trans "Tax Report" %}
+        </h1>
+        <p class="report-subtitle text-lg opacity-90 relative z-10">
+          {% trans "For the period" %} {{ start_date|date:"F j, Y" }} {% trans "to" %} {{ end_date|date:"F j, Y" }}
+        </p>
+        <div class="absolute inset-0 z-0 pointer-events-none" style="background: radial-gradient(circle,rgba(255,255,255,0.12) 0%,transparent 70%);"></div>
+      </div>
+      <!-- Filtros -->
+      <div class="filters-section bg-white/10 dark:bg-zinc-800/40 p-6 border-b border-white/20">
+        <form method="get" class="flex flex-wrap gap-4 items-end" id="reportFilterForm">
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Start Date" %}</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-cyan-400 dark:focus:ring-cyan-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "End Date" %}</label>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-cyan-400 dark:focus:ring-cyan-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Tax Type" %}</label>
+            <select name="tax_type" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-cyan-400 dark:focus:ring-cyan-500 focus:ring-opacity-50">
+              <option value="">{% trans "All Tax Types" %}</option>
+              {% for tax_type in tax_types %}
+                <option value="{{ tax_type.0 }}" {% if tax_type.0 == selected_tax_type %}selected{% endif %}>{{ tax_type.1 }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Company" %}</label>
+            <select name="empresa" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-cyan-400 dark:focus:ring-cyan-500 focus:ring-opacity-50">
+              {% for emp in empresas %}
+                <option value="{{ emp.id }}" {% if emp.id == selected_empresa %}selected{% endif %}>{{ emp.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="bg-gradient-to-r from-cyan-400 to-cyan-600 text-white px-6 py-2 rounded-lg font-semibold shadow hover:scale-105 hover:shadow-lg transition-all flex items-center gap-2">
+            <i class="fas fa-search"></i>
+            {% trans "Generate Report" %}
+          </button>
+        </form>
+      </div>
+      <!-- Spinner de carga -->
+      <div class="loading-spinner text-center py-8 hidden" id="loadingSpinner">
+        <div class="spinner mx-auto mb-4 border-4 border-zinc-200 border-t-cyan-400 rounded-full w-10 h-10 animate-spin"></div>
+        <p class="mt-2 text-zinc-600 dark:text-zinc-300">{% trans "Generating report..." %}</p>
+      </div>
+      <!-- Contenido del reporte -->
+      <div id="reportContent" class="p-6 fade-in">
+        <!-- Tarjetas resumen de impuestos -->
+        <div class="tax-summary-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div class="tax-summary-card bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow hover:scale-105 hover:shadow-lg transition-all">
+            <div class="tax-summary-header flex items-center gap-4 mb-6">
+              <div class="tax-summary-icon w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white bg-gradient-to-r from-cyan-400 to-cyan-600">
+                <i class="fas fa-calculator"></i>
+              </div>
+              <div class="tax-summary-title text-lg font-semibold text-zinc-700 dark:text-zinc-100">{% trans "Total Tax Collected" %}</div>
+            </div>
+            <div class="tax-summary-value text-3xl font-bold text-cyan-500 mb-2">${{ total_tax_collected|floatformat:2 }}</div>
+            <div class="tax-summary-label uppercase tracking-wide text-xs text-zinc-500 dark:text-zinc-300">{% trans "Taxes collected from sales" %}</div>
+          </div>
+          <div class="tax-summary-card bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow hover:scale-105 hover:shadow-lg transition-all">
+            <div class="tax-summary-header flex items-center gap-4 mb-6">
+              <div class="tax-summary-icon w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white bg-gradient-to-r from-green-400 to-green-600">
+                <i class="fas fa-arrow-down"></i>
+              </div>
+              <div class="tax-summary-title text-lg font-semibold text-zinc-700 dark:text-zinc-100">{% trans "Total Tax Paid" %}</div>
+            </div>
+            <div class="tax-summary-value text-3xl font-bold text-green-500 mb-2">${{ total_tax_paid|floatformat:2 }}</div>
+            <div class="tax-summary-label uppercase tracking-wide text-xs text-zinc-500 dark:text-zinc-300">{% trans "Taxes paid on purchases" %}</div>
+          </div>
+          <div class="tax-summary-card bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow hover:scale-105 hover:shadow-lg transition-all">
+            <div class="tax-summary-header flex items-center gap-4 mb-6">
+              <div class="tax-summary-icon w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white bg-gradient-to-r from-orange-400 to-orange-600">
+                <i class="fas fa-balance-scale"></i>
+              </div>
+              <div class="tax-summary-title text-lg font-semibold text-zinc-700 dark:text-zinc-100">{% trans "Net Tax Liability" %}</div>
+            </div>
+            <div class="tax-summary-value text-3xl font-bold text-orange-500 mb-2">${{ net_tax_liability|floatformat:2 }}</div>
+            <div class="tax-summary-label uppercase tracking-wide text-xs text-zinc-500 dark:text-zinc-300">{% trans "Tax to be paid to authorities" %}</div>
+          </div>
+          <div class="tax-summary-card bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow hover:scale-105 hover:shadow-lg transition-all">
+            <div class="tax-summary-header flex items-center gap-4 mb-6">
+              <div class="tax-summary-icon w-12 h-12 rounded-xl flex items-center justify-center text-xl text-white bg-gradient-to-r from-purple-400 to-purple-600">
+                <i class="fas fa-chart-pie"></i>
+              </div>
+              <div class="tax-summary-title text-lg font-semibold text-zinc-700 dark:text-zinc-100">{% trans "Tax Rate Distribution" %}</div>
+            </div>
+            <div class="tax-summary-value text-3xl font-bold text-purple-500 mb-2">{{ tax_rates_count }}</div>
+            <div class="tax-summary-label uppercase tracking-wide text-xs text-zinc-500 dark:text-zinc-300">{% trans "Different tax rates used" %}</div>
+          </div>
+        </div>
+        <!-- Desglose de impuestos por tasa -->
+        <div class="tax-breakdown bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow mb-8">
+          <h3 class="text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-percentage text-cyan-500"></i>
+            {% trans "Tax Breakdown by Rate" %}
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="tax-table w-full border-collapse bg-white dark:bg-zinc-900 rounded-xl overflow-hidden shadow">
+              <thead>
+                <tr class="bg-gradient-to-r from-cyan-400 to-cyan-600 text-white">
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Tax Rate" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Tax Name" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Base Amount" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Tax Amount" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Transactions" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for tax_summary in tax_summary_by_rate %}
+                <tr class="hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-all">
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700">
+                    <span class="tax-rate font-semibold text-zinc-600 dark:text-zinc-300">{{ tax_summary.rate }}%</span>
+                  </td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100">{{ tax_summary.tax_name }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-right font-bold text-green-600 dark:text-green-400">${{ tax_summary.base_amount|floatformat:2 }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-right font-bold text-green-600 dark:text-green-400">${{ tax_summary.tax_amount|floatformat:2 }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100">{{ tax_summary.transaction_count }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr class="bg-gradient-to-r from-cyan-400 to-cyan-600 text-white font-bold">
+                  <td class="p-4" colspan="2">{% trans "TOTALS" %}</td>
+                  <td class="p-4 text-right">${{ total_base_amount|floatformat:2 }}</td>
+                  <td class="p-4 text-right">${{ total_tax_amount|floatformat:2 }}</td>
+                  <td class="p-4">{{ total_transactions }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+        <!-- Tendencia mensual de impuestos -->
+        <div class="tax-breakdown bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow mb-8">
+          <h3 class="text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-chart-line text-cyan-500"></i>
+            {% trans "Monthly Tax Trend" %}
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="tax-table w-full border-collapse bg-white dark:bg-zinc-900 rounded-xl overflow-hidden shadow">
+              <thead>
+                <tr class="bg-gradient-to-r from-cyan-400 to-cyan-600 text-white">
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Month" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Tax Collected" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Tax Paid" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Net Liability" %}</th>
+                  <th class="p-4 text-left font-semibold text-sm uppercase tracking-wide">{% trans "Transactions" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for monthly in monthly_trend %}
+                <tr class="hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-all">
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100">{{ monthly.month|date:"F Y" }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-right font-bold text-green-600 dark:text-green-400">${{ monthly.tax_collected|floatformat:2 }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-right font-bold text-green-600 dark:text-green-400">${{ monthly.tax_paid|floatformat:2 }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-right font-bold text-green-600 dark:text-green-400">${{ monthly.net_liability|floatformat:2 }}</td>
+                  <td class="p-4 border-b border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100">{{ monthly.transaction_count }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Botones de exportación -->
+        <div class="export-buttons flex flex-wrap justify-center gap-4 mt-8">
+          <button class="export-btn bg-gradient-to-r from-red-400 to-red-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToPDF()">
+            <i class="fas fa-file-pdf"></i>
+            {% trans "Export PDF" %}
+          </button>
+          <button class="export-btn bg-gradient-to-r from-green-400 to-green-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i>
+            {% trans "Export Excel" %}
+          </button>
+          <button class="export-btn bg-gradient-to-r from-blue-400 to-blue-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="printReport()">
+            <i class="fas fa-print"></i>
+            {% trans "Print Report" %}
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Toast de feedback -->
+    <div id="toast" class="toast hidden"></div>
+    <!-- Confetti animado -->
+    <canvas id="confetti" class="confetti hidden"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Spinner y animación de carga
+const form = document.getElementById('reportFilterForm');
+form.addEventListener('submit', function() {
+  document.getElementById('loadingSpinner').classList.remove('hidden');
+  document.getElementById('reportContent').classList.add('hidden');
+});
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.getElementById('loadingSpinner').classList.add('hidden');
+    document.getElementById('reportContent').classList.remove('hidden');
+  }, 800);
+});
+// Toasts de feedback
+function showToast(msg, type='success') {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = `<div class="px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 ${type==='success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'} animate-bounceIn">` +
+    (type==='success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>') +
+    `<span>${msg}</span></div>`;
+  toast.classList.remove('hidden');
+  setTimeout(()=>toast.classList.add('hidden'), 3000);
+}
+// Exportar PDF/Excel/Imprimir
+function exportToPDF() { showToast('{% trans "PDF export functionality will be implemented" %}'); }
+function exportToExcel() { showToast('{% trans "Excel export functionality will be implemented" %}'); }
+function printReport() { window.print(); showToast('{% trans "Printing..." %}'); }
+// Confetti animado al completar (ejemplo: si hay un parámetro ?celebrate=1)
+function launchConfetti() {
+  const canvas = document.getElementById('confetti');
+  if (!canvas) return;
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  let pieces = Array.from({length: 120},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height/2,s:Math.random()*8+4,d:Math.random()*2*Math.PI,c:`hsl(${Math.random()*360},90%,60%)`,v:Math.random()*2+1}));
+  canvas.classList.remove('hidden');
+  let frame=0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const p of pieces) {
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.s,0,2*Math.PI);
+      ctx.fillStyle=p.c; ctx.fill();
+      p.y+=p.v; p.x+=Math.sin(frame/10+p.d)*2;
+      if(p.y>canvas.height) p.y=-10;
+    }
+    frame++;
+    if(frame<180) requestAnimationFrame(draw); else canvas.classList.add('hidden');
+  }
+  draw();
+}
+if(window.location.search.includes('celebrate=1')) setTimeout(launchConfetti, 1200);
+// Microinteracciones: focus ring animado
+const inputs = document.querySelectorAll('input, select');
+inputs.forEach(el=>{
+  el.addEventListener('focus',()=>el.classList.add('ring-2','ring-cyan-400','dark:ring-cyan-500','ring-opacity-70'));
+  el.addEventListener('blur',()=>el.classList.remove('ring-2','ring-cyan-400','dark:ring-cyan-500','ring-opacity-70'));
+});
+</script>
+{% endblock %} 

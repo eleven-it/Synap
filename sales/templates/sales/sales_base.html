@@ -90,93 +90,20 @@
                     </svg>
                 </button>
             </div>
-            
-            <!-- Sidebar Navigation -->
+            <!-- Sidebar Navigation (dinámico) -->
             <nav class="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-                <!-- Dashboard -->
+              {% for group in current_sidebar_items %}
                 <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Overview" %}</div>
-                    <a href="{% url 'sales:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                        <i class="fas fa-tachometer-alt nav-icon"></i>
-                        {% trans "Dashboard" %}
+                  <div class="nav-group-title">{{ group.seccion }}</div>
+                  {% for item in group.items %}
+                    <a href="{{ item.url }}" class="nav-item {% if request.path == item.url %}active{% endif %}">
+                      <i class="fas {{ item.icon }} nav-icon"></i>
+                      {{ item.label }}
                     </a>
+                  {% endfor %}
                 </div>
-                
-                <!-- Customer Management -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Customer Management" %}</div>
-                    <a href="{% url 'sales:client_list' %}" class="nav-item {% if 'client' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-users nav-icon"></i>
-                        {% trans "Clients" %}
-                    </a>
-                    <a href="{% url 'sales:contact_list' %}" class="nav-item {% if 'contact' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-address-book nav-icon"></i>
-                        {% trans "Contacts" %}
-                    </a>
-                </div>
-                
-                <!-- Sales Operations -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Sales Operations" %}</div>
-                    <a href="{% url 'sales:sales_order_list' %}" class="nav-item {% if 'sales_order' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-shopping-cart nav-icon"></i>
-                        {% trans "Sales Orders" %}
-                    </a>
-                    <a href="{% url 'sales:invoice_list' %}" class="nav-item {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-file-invoice-dollar nav-icon"></i>
-                        {% trans "Invoices" %}
-                    </a>
-                    <a href="{% url 'sales:payment_list' %}" class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-credit-card nav-icon"></i>
-                        {% trans "Payments" %}
-                    </a>
-                </div>
-                
-                <!-- Logistics -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Logistics" %}</div>
-                    <a href="{% url 'sales:delivery_order_list' %}" class="nav-item {% if 'delivery_order' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-truck nav-icon"></i>
-                        {% trans "Deliveries" %}
-                    </a>
-                    <a href="{% url 'sales:return_delivery_list' %}" class="nav-item {% if 'return_delivery' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-undo nav-icon"></i>
-                        {% trans "Returns" %}
-                    </a>
-                </div>
-                
-                <!-- Financial -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Financial" %}</div>
-                    <a href="{% url 'sales:credit_note_list' %}" class="nav-item {% if 'credit_note' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-sticky-note nav-icon"></i>
-                        {% trans "Credit Notes" %}
-                    </a>
-                </div>
-                
-                <!-- Configuration -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Configuration" %}</div>
-                    <a href="{% url 'sales:price_list_list' %}" class="nav-item {% if 'price_list' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-tags nav-icon"></i>
-                        {% trans "Price Lists" %}
-                    </a>
-                    <a href="{% url 'sales:payment_term_list' %}" class="nav-item {% if 'payment_term' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-calendar-alt nav-icon"></i>
-                        {% trans "Payment Terms" %}
-                    </a>
-                </div>
-                
-                <!-- Reports -->
-                <div class="nav-group">
-                    <div class="nav-group-title">{% trans "Reports" %}</div>
-                    <a href="{% url 'sales:reports_dashboard' %}" class="nav-item {% if 'reports' in request.resolver_match.url_name %}active{% endif %}">
-                        <i class="fas fa-chart-bar nav-icon"></i>
-                        {% trans "Reports" %}
-                    </a>
-                </div>
+              {% endfor %}
             </nav>
-            
             <!-- Sidebar Footer -->
             <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                 <div class="flex items-center justify-between">

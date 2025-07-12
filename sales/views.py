@@ -13,20 +13,23 @@ from django.urls import reverse_lazy, reverse
 from django.core.paginator import Paginator
 from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
+from django.db import models
 
 from .models import (
     Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
-    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
+    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog,
+    POSSession, POSTerminal, POSSale, POSPayment, POSPromotion,
+    PaymentMethod, PaymentProcessor
 )
-from core.models import Contact, ContactRelationship
 from .api.serializers import (
     ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
     PaymentSerializer, DeliveryOrderSerializer
 )
 from core.models import Currency
 from inventory.models import ProductVariant
-from .forms import ClientForm, ContactForm, ClientSearchForm
+from .forms import ClientForm, ClientSearchForm, PaymentMethodForm, PaymentProcessorForm
+from core.models import UsuarioExtendido
 
 
 
@@ -899,21 +902,15 @@ class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         context['search'] = self.request.GET.get('search', '')
         context['type_filter'] = self.request.GET.get('type', '')
-        context['country_filter'] = self.request.GET.get('country', '')
-        context['state_filter'] = self.request.GET.get('state', '')
         context['is_customer_filter'] = self.request.GET.get('is_customer', '')
-        context['is_supplier_filter'] = self.request.GET.get('is_supplier', '')
         context['is_active_filter'] = self.request.GET.get('is_active', '')
-        context['assigned_seller_filter'] = self.request.GET.get('assigned_seller', '')
         context['total_clients'] = self.get_queryset().count()
         context['active_clients'] = self.get_queryset().filter(is_active=True).count()
         context['customer_clients'] = self.get_queryset().filter(is_customer=True).count()
         context['supplier_clients'] = 0  # Los clientes no son proveedores, eso está en el módulo de compras
-        
-        # Agregar search_form al contexto
         from .forms import ClientSearchForm
+        # Solo pasar los campos válidos
         context['search_form'] = ClientSearchForm(self.request.GET)
-        
         return context
 
 
@@ -926,21 +923,17 @@ class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
         # Obtener contactos usando el sistema de relaciones genéricas
-        context['contacts'] = self.object.get_contacts(active_only=True)
-        context['primary_contact'] = self.object.get_primary_contact_object()
-        
+        # TODO: Implement when Contact model is available
+        # context['contacts'] = self.object.get_contacts(active_only=True)
+        # context['primary_contact'] = self.object.get_primary_contact_object()
         # Obtener pedidos recientes
         context['orders'] = self.object.orders.all().order_by('-created_at')[:10]
-        
         # Estadísticas del cliente
         context['total_orders'] = self.object.orders.count()
-        
         # Obtener facturas y pagos usando consultas directas
         context['total_invoices'] = Invoice.objects.filter(client=self.object).count()
         context['total_payments'] = Payment.objects.filter(client=self.object).count()
-        
         return context
 
 
@@ -1004,116 +997,26 @@ class ClientDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
         return super().delete(request, *args, **kwargs)
 
 
-class ContactListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
-    """Vista para listar contactos de un cliente"""
-    model = Contact
-    template_name = 'sales/contacts/contact_list.html'
-    context_object_name = 'contacts'
-    permission_required = 'sales.view_contact'
-    
-    def get_queryset(self):
-        client_id = self.kwargs.get('client_id')
-        if client_id:
-            # Obtener contactos a través de relaciones genéricas
-            from django.contrib.contenttypes.models import ContentType
-            from core.models import ContactRelationship
-            
-            client = get_object_or_404(Client, pk=client_id)
-            content_type = ContentType.objects.get_for_model(Client)
-            
-            return ContactRelationship.objects.filter(
-                content_type=content_type,
-                object_id=client_id,
-                is_active=True
-            ).select_related('contact', 'contact__country', 'contact__state').order_by('relationship_type', 'contact__name')
-        
-        # Si no hay client_id, mostrar todos los contactos
-        return Contact.objects.select_related('country', 'state').order_by('name')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        client_id = self.kwargs.get('client_id')
-        if client_id:
-            context['client'] = get_object_or_404(Client, pk=client_id)
-        return context
+# TODO: Implement Contact views when Contact model is available
+# class ContactListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+#     """Vista para listar contactos de un cliente"""
+#     pass
 
+# class ContactDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+#     """Vista para mostrar detalles de contacto"""
+#     pass
 
-class ContactDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
-    """Vista para mostrar detalles de contacto"""
-    model = Contact
-    template_name = 'sales/contacts/contact_detail.html'
-    context_object_name = 'contact'
-    permission_required = 'sales.view_contact'
+# class ContactCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+#     """Vista para crear contacto"""
+#     pass
 
+# class ContactUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+#     """Vista para editar contacto"""
+#     pass
 
-class ContactCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """Vista para crear contacto"""
-    model = Contact
-    form_class = ContactForm
-    template_name = 'sales/contacts/contact_form.html'
-    permission_required = 'sales.add_contact'
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        client_id = self.kwargs.get('client_id')
-        if client_id:
-            kwargs['client'] = get_object_or_404(Client, pk=client_id)
-        return kwargs
-    
-    def get_success_url(self):
-        client_id = self.kwargs.get('client_id')
-        if client_id:
-            return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
-        return reverse('sales:contact_list')
-    
-    def form_valid(self, form):
-        client_id = self.kwargs.get('client_id')
-        if client_id:
-            form.instance.client = get_object_or_404(Client, pk=client_id)
-        messages.success(self.request, _('Contact created successfully.'))
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, _('Please correct the errors below.'))
-        return super().form_invalid(form)
-
-
-class ContactUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """Vista para editar contacto"""
-    model = Contact
-    form_class = ContactForm
-    template_name = 'sales/contacts/contact_form.html'
-    permission_required = 'sales.change_contact'
-    
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['client'] = self.object.client
-        return kwargs
-    
-    def get_success_url(self):
-        return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
-    
-    def form_valid(self, form):
-        messages.success(self.request, _('Contact updated successfully.'))
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, _('Please correct the errors below.'))
-        return super().form_invalid(form)
-
-
-class ContactDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
-    """Vista para eliminar contacto"""
-    model = Contact
-    template_name = 'sales/contacts/contact_confirm_delete.html'
-    permission_required = 'sales.delete_contact'
-    
-    def get_success_url(self):
-        return reverse('sales:client_detail', kwargs={'pk': self.object.client.pk})
-    
-    def delete(self, request, *args, **kwargs):
-        messages.success(request, _('Contact deleted successfully.'))
-        return super().delete(request, *args, **kwargs)
+# class ContactDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+#     """Vista para eliminar contacto"""
+#     pass
 
 
 # Vistas de autocompletado
@@ -1248,3 +1151,840 @@ def get_states_by_country(request):
     except Exception as e:
         # Si hay algún error, devolver lista vacía
         return JsonResponse({'states': []})
+
+# --- VISTAS PARA PUNTO DE VENTA (TPV) ---
+
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView, ListView, DetailView
+from django.contrib import messages
+from django.db import transaction
+from django.utils import timezone
+import json
+
+from .models import (
+    Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
+    PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
+    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog,
+    POSSession, POSTerminal, POSSale, POSPayment, POSPromotion,
+    PaymentMethod, PaymentProcessor
+)
+from .api.serializers import (
+    ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
+    PaymentSerializer, DeliveryOrderSerializer
+)
+from core.models import Currency
+from inventory.models import ProductVariant, Warehouse
+from .forms import ClientForm, ClientSearchForm
+
+
+
+@login_required
+def pos_dashboard(request):
+    """
+    Dashboard principal del punto de venta
+    """
+    # Obtener sesión activa del usuario
+    active_session = POSSession.objects.filter(
+        operator=request.user,
+        state='open'
+    ).first()
+    
+    # Obtener terminales disponibles
+    terminals = POSTerminal.objects.filter(
+        branch=request.user.branch,
+        is_active=True
+    )
+    
+    context = {
+        'active_session': active_session,
+        'terminals': terminals,
+        'user_branch': request.user.branch,
+    }
+    
+    return render(request, 'sales/pos/dashboard.html', context)
+
+@login_required
+def pos_session_open(request):
+    """
+    Abrir sesión de TPV
+    """
+    if request.method == 'POST':
+        terminal_id = request.POST.get('terminal_id')
+        opening_amount = float(request.POST.get('opening_amount', 0))
+        
+        terminal = get_object_or_404(POSTerminal, id=terminal_id)
+        
+        try:
+            pos_service = POSService(request.user, request.user.branch, terminal)
+            session = pos_service.open_session(opening_amount)
+            
+            messages.success(request, f'Sesión {session.number} abierta correctamente')
+            return redirect('pos_sale_new')
+            
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('pos_dashboard')
+    
+    return redirect('pos_dashboard')
+
+@login_required
+def pos_session_close(request):
+    """
+    Cerrar sesión de TPV
+    """
+    if request.method == 'POST':
+        session_id = request.POST.get('session_id')
+        closing_amount = float(request.POST.get('closing_amount', 0))
+        
+        session = get_object_or_404(POSSession, id=session_id, operator=request.user)
+        
+        try:
+            pos_service = POSService(request.user, request.user.branch, session.pos_terminal)
+            pos_service.current_session = session
+            closed_session = pos_service.close_session(closing_amount)
+            
+            messages.success(request, f'Sesión {closed_session.number} cerrada correctamente')
+            return redirect('pos_dashboard')
+            
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('pos_dashboard')
+    
+    return redirect('pos_dashboard')
+
+@login_required
+def pos_sale_new(request):
+    """
+    Nueva venta en TPV
+    """
+    # Verificar sesión activa
+    active_session = POSSession.objects.filter(
+        operator=request.user,
+        state='open'
+    ).first()
+    
+    if not active_session:
+        messages.error(request, 'No hay sesión activa. Abra una sesión primero.')
+        return redirect('pos_dashboard')
+    
+    # Crear nueva venta
+    sale_service = POSSaleService(active_session)
+    sale = sale_service.create_sale()
+    
+    context = {
+        'sale': sale,
+        'session': active_session,
+        'price_list': active_session.branch.default_price_list,
+    }
+    
+    return render(request, 'sales/pos/sale_new.html', context)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_product_search(request):
+    """
+    API para búsqueda de productos en TPV
+    """
+    try:
+        data = json.loads(request.body)
+        search_term = data.get('search_term', '')
+        search_type = data.get('search_type', 'barcode')
+        price_list_id = data.get('price_list_id')
+        
+        if not search_term:
+            return JsonResponse({'error': 'Término de búsqueda requerido'}, status=400)
+        
+        price_list = get_object_or_404(PriceList, id=price_list_id)
+        product_service = POSProductService(price_list)
+        
+        if search_type == 'name':
+            # Búsqueda por nombre retorna múltiples resultados
+            products = product_service.search_product(search_term, search_type)
+            return JsonResponse({'products': products})
+        else:
+            # Búsqueda específica retorna un producto
+            product = product_service.search_product(search_term, search_type)
+            if product:
+                return JsonResponse({'product': product})
+            else:
+                return JsonResponse({'error': 'Producto no encontrado'}, status=404)
+                
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_sale_add_product(request, sale_id):
+    """
+    API para agregar producto a la venta
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        data = json.loads(request.body)
+        
+        product_data = data.get('product')
+        quantity = float(data.get('quantity', 1))
+        discount_percentage = float(data.get('discount_percentage', 0))
+        
+        sale_service = POSSaleService(sale.session)
+        line = sale_service.add_product(sale, product_data, quantity, discount_percentage)
+        
+        # Retornar datos actualizados de la venta
+        sale.refresh_from_db()
+        
+        return JsonResponse({
+            'success': True,
+            'line': {
+                'id': line.id,
+                'product_name': line.description,
+                'quantity': line.quantity,
+                'unit_price': line.unit_price,
+                'subtotal': line.subtotal,
+                'discount_amount': line.discount_amount,
+                'tax_amount': line.tax_amount,
+            },
+            'sale_totals': {
+                'subtotal': sale.subtotal,
+                'total_discount': sale.total_discount,
+                'total_tax': sale.total_tax,
+                'total': sale.total,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def pos_sale_remove_product(request, sale_id, line_id):
+    """
+    API para remover producto de la venta
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        sale_service = POSSaleService(sale.session)
+        
+        sale_service.remove_product(sale, line_id)
+        
+        # Retornar datos actualizados de la venta
+        sale.refresh_from_db()
+        
+        return JsonResponse({
+            'success': True,
+            'sale_totals': {
+                'subtotal': sale.subtotal,
+                'total_discount': sale.total_discount,
+                'total_tax': sale.total_tax,
+                'total': sale.total,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_sale_apply_promotion(request, sale_id):
+    """
+    API para aplicar promoción a la venta
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        data = json.loads(request.body)
+        
+        promotion_code = data.get('promotion_code')
+        
+        sale_service = POSSaleService(sale.session)
+        discount = sale_service.apply_promotion(sale, promotion_code)
+        
+        # Retornar datos actualizados de la venta
+        sale.refresh_from_db()
+        
+        return JsonResponse({
+            'success': True,
+            'discount_applied': discount,
+            'sale_totals': {
+                'subtotal': sale.subtotal,
+                'total_discount': sale.total_discount,
+                'total_tax': sale.total_tax,
+                'total': sale.total,
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_sale_complete(request, sale_id):
+    """
+    API para completar venta
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        data = json.loads(request.body)
+        
+        payments_data = data.get('payments', [])
+        client_data = data.get('client', {})
+        
+        # Actualizar datos del cliente si es ocasional
+        if sale.is_occasional_client and client_data:
+            sale.occasional_client_data.update(client_data)
+            sale.save()
+        
+        sale_service = POSSaleService(sale.session)
+        completed_sale = sale_service.complete_sale(sale, payments_data)
+        
+        # Imprimir ticket si está configurado
+        integration_service = POSIntegrationService(sale.session.pos_terminal)
+        receipt_data = integration_service.print_receipt(completed_sale)
+        
+        return JsonResponse({
+            'success': True,
+            'sale_number': completed_sale.number,
+            'total_paid': completed_sale.total_paid,
+            'receipt_data': receipt_data,
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+def pos_sale_detail(request, sale_id):
+    """
+    Detalle de venta de TPV
+    """
+    sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+    
+    context = {
+        'sale': sale,
+        'lines': sale.lines.all(),
+        'payments': sale.payments.all(),
+    }
+    
+    return render(request, 'sales/pos/sale_detail.html', context)
+
+@login_required
+def pos_session_report(request, session_id):
+    """
+    Reporte de sesión de TPV
+    """
+    session = get_object_or_404(POSSession, id=session_id, operator=request.user)
+    report_service = POSReportService(session)
+    
+    summary = report_service.get_session_summary()
+    
+    context = {
+        'session': session,
+        'summary': summary,
+        'sales': session.sales.filter(state='completed').order_by('-sale_date'),
+    }
+    
+    return render(request, 'sales/pos/session_report.html', context)
+
+@login_required
+def pos_client_search(request):
+    """
+    Búsqueda de clientes para TPV
+    """
+    query = request.GET.get('q', '')
+    
+    if query:
+        clients = Client.objects.filter(
+            name__icontains=query,
+            is_customer=True
+        )[:10]
+    else:
+        clients = []
+    
+    context = {
+        'clients': clients,
+        'query': query,
+    }
+    
+    return render(request, 'sales/pos/client_search.html', context)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_scale_weight(request):
+    """
+    API para obtener peso de balanza
+    """
+    try:
+        data = json.loads(request.body)
+        terminal_id = data.get('terminal_id')
+        
+        terminal = get_object_or_404(POSTerminal, id=terminal_id)
+        integration_service = POSIntegrationService(terminal)
+        
+        weight_data = integration_service.send_to_scale('get_weight')
+        
+        return JsonResponse(weight_data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+class POSSessionListView(LoginRequiredMixin, ListView):
+    """
+    Lista de sesiones de TPV
+    """
+    model = POSSession
+    template_name = 'sales/pos/session_list.html'
+    context_object_name = 'sessions'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        return POSSession.objects.filter(
+            operator=self.request.user
+        ).order_by('-opened_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['active_session'] = POSSession.objects.filter(
+            operator=self.request.user,
+            state='open'
+        ).first()
+        return context
+
+class POSSaleListView(LoginRequiredMixin, ListView):
+    """
+    Lista de ventas de TPV
+    """
+    model = POSSale
+    template_name = 'sales/pos/sale_list.html'
+    context_object_name = 'sales'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        return POSSale.objects.filter(
+            session__operator=self.request.user
+        ).order_by('-sale_date')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_sales'] = self.get_queryset().count()
+        context['total_amount'] = self.get_queryset().aggregate(
+            total=models.Sum('total')
+        )['total'] or 0
+        return context
+
+@login_required
+def pos_configuration(request):
+    """
+    Configuración del TPV
+    """
+    terminals = POSTerminal.objects.filter(branch=request.user.branch)
+    promotions = POSPromotion.objects.filter(is_active=True)
+    
+    context = {
+        'terminals': terminals,
+        'promotions': promotions,
+    }
+    
+    return render(request, 'sales/pos/configuration.html', context)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_validate_stock(request):
+    """
+    API para validar stock en tiempo real
+    """
+    try:
+        data = json.loads(request.body)
+        product_id = data.get('product_id')
+        quantity = float(data.get('quantity', 1))
+        warehouse_id = data.get('warehouse_id')
+        
+        # Verificar si el módulo de inventory está disponible
+        from django.apps import apps
+        inventory_available = apps.is_installed('inventory')
+        
+        if not inventory_available:
+            return JsonResponse({
+                'is_valid': True,
+                'available_stock': 999999,
+                'requested_quantity': quantity,
+                'message': "Stock no validado (módulo inventory no activo)"
+            })
+        
+        from inventory.models import ProductVariant, Warehouse
+        
+        product = get_object_or_404(ProductVariant, id=product_id)
+        warehouse = get_object_or_404(Warehouse, id=warehouse_id) if warehouse_id else None
+        
+        available_stock = product.get_available_stock(warehouse)
+        is_valid = available_stock >= quantity
+        
+        return JsonResponse({
+            'is_valid': is_valid,
+            'available_stock': available_stock,
+            'requested_quantity': quantity,
+            'message': f"Stock disponible: {available_stock}" if is_valid else f"Stock insuficiente. Disponible: {available_stock}"
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@login_required
+@csrf_exempt
+@require_http_methods(["POST"])
+def pos_calculate_totals(request):
+    """
+    API para calcular totales de la venta
+    """
+    try:
+        data = json.loads(request.body)
+        lines = data.get('lines', [])
+        discount_percentage = float(data.get('discount_percentage', 0))
+        
+        subtotal = sum(line['subtotal'] for line in lines)
+        discount_amount = subtotal * (discount_percentage / 100)
+        tax_amount = (subtotal - discount_amount) * 0.21  # IVA 21%
+        total = subtotal - discount_amount + tax_amount
+        
+        return JsonResponse({
+            'subtotal': subtotal,
+            'discount_amount': discount_amount,
+            'tax_amount': tax_amount,
+            'total': total,
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+# --- VISTAS PARA ADMINISTRACIÓN DE MEDIOS DE PAGO ---
+
+@login_required
+def payment_method_list(request):
+    """Lista de medios de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('core:dashboard')
+        
+        payment_methods = PaymentMethod.objects.filter(
+            empresa=empresa
+        ).order_by('order', 'name')
+        
+        context = {
+            'payment_methods': payment_methods,
+            'empresa': empresa,
+        }
+        
+        return render(request, 'sales/payment_methods/payment_method_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al cargar medios de pago: {str(e)}")
+        return redirect('sales:dashboard')
+
+
+@login_required
+def payment_method_create(request):
+    """Crear nuevo medio de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('payment_method_list')
+        
+        if request.method == 'POST':
+            form = PaymentMethodForm(request.POST)
+            if form.is_valid():
+                payment_method = form.save(commit=False)
+                payment_method.empresa = empresa
+                payment_method.created_by = user_extended
+                payment_method.updated_by = user_extended
+                payment_method.save()
+                form.save_m2m()  # Guardar relaciones many-to-many
+                
+                messages.success(request, f"Medio de pago '{payment_method.name}' creado exitosamente")
+                return redirect('sales:payment_method_list')
+        else:
+            form = PaymentMethodForm(initial={'empresa': empresa})
+        
+        context = {
+            'form': form,
+            'empresa': empresa,
+            'action': 'create'
+        }
+        
+        return render(request, 'sales/payment_methods/payment_method_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al crear medio de pago: {str(e)}")
+        return redirect('sales:payment_method_list')
+
+
+@login_required
+def payment_method_edit(request, pk):
+    """Editar medio de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_method_list')
+        
+        payment_method = get_object_or_404(
+            PaymentMethod,
+            pk=pk,
+            empresa=empresa
+        )
+        
+        if request.method == 'POST':
+            form = PaymentMethodForm(request.POST, instance=payment_method)
+            if form.is_valid():
+                payment_method = form.save(commit=False)
+                payment_method.updated_by = user_extended
+                payment_method.save()
+                form.save_m2m()
+                
+                messages.success(request, f"Medio de pago '{payment_method.name}' actualizado exitosamente")
+                return redirect('sales:payment_method_list')
+        else:
+            form = PaymentMethodForm(instance=payment_method)
+        
+        context = {
+            'form': form,
+            'payment_method': payment_method,
+            'empresa': empresa,
+            'action': 'edit'
+        }
+        
+        return render(request, 'sales/payment_methods/payment_method_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al editar medio de pago: {str(e)}")
+        return redirect('sales:payment_method_list')
+
+
+@login_required
+def payment_method_delete(request, pk):
+    """Eliminar medio de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_method_list')
+        
+        payment_method = get_object_or_404(
+            PaymentMethod,
+            pk=pk,
+            empresa=empresa
+        )
+        
+        if request.method == 'POST':
+            name = payment_method.name
+            payment_method.delete()
+            messages.success(request, f"Medio de pago '{name}' eliminado exitosamente")
+            return redirect('sales:payment_method_list')
+        
+        context = {
+            'payment_method': payment_method,
+            'empresa': empresa,
+        }
+        
+        return render(request, 'sales/payment_methods/payment_method_confirm_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al eliminar medio de pago: {str(e)}")
+        return redirect('sales:payment_method_list')
+
+
+@login_required
+def payment_method_detail(request, pk):
+    """Detalle de medio de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_method_list')
+        
+        payment_method = get_object_or_404(
+            PaymentMethod,
+            pk=pk,
+            empresa=empresa
+        )
+        
+        # Obtener estadísticas de uso
+        usage_stats = {
+            'total_transactions': POSPayment.objects.filter(
+                payment_method=payment_method.code
+            ).count(),
+            'total_amount': POSPayment.objects.filter(
+                payment_method=payment_method.code
+            ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00'),
+        }
+        
+        context = {
+            'payment_method': payment_method,
+            'empresa': empresa,
+            'usage_stats': usage_stats,
+        }
+        
+        return render(request, 'sales/payment_methods/payment_method_detail.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al cargar detalle: {str(e)}")
+        return redirect('sales:payment_method_list')
+
+
+@login_required
+def payment_processor_list(request):
+    """Lista de procesadores de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('core:dashboard')
+        
+        processors = PaymentProcessor.objects.filter(
+            empresa=empresa
+        ).order_by('name')
+        
+        context = {
+            'processors': processors,
+            'empresa': empresa,
+        }
+        
+        return render(request, 'sales/payment_processors/processor_list.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al cargar procesadores: {str(e)}")
+        return redirect('sales:dashboard')
+
+
+@login_required
+def payment_processor_create(request):
+    """Crear nuevo procesador de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_processor_list')
+        
+        if request.method == 'POST':
+            form = PaymentProcessorForm(request.POST)
+            if form.is_valid():
+                processor = form.save(commit=False)
+                processor.empresa = empresa
+                processor.save()
+                
+                messages.success(request, f"Procesador '{processor.name}' creado exitosamente")
+                return redirect('sales:payment_processor_list')
+        else:
+            form = PaymentProcessorForm(initial={'empresa': empresa})
+        
+        context = {
+            'form': form,
+            'empresa': empresa,
+            'action': 'create'
+        }
+        
+        return render(request, 'sales/payment_processors/processor_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al crear procesador: {str(e)}")
+        return redirect('sales:payment_processor_list')
+
+
+@login_required
+def payment_processor_edit(request, pk):
+    """Editar procesador de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_processor_list')
+        
+        processor = get_object_or_404(
+            PaymentProcessor,
+            pk=pk,
+            empresa=empresa
+        )
+        
+        if request.method == 'POST':
+            form = PaymentProcessorForm(request.POST, instance=processor)
+            if form.is_valid():
+                processor = form.save()
+                messages.success(request, f"Procesador '{processor.name}' actualizado exitosamente")
+                return redirect('sales:payment_processor_list')
+        else:
+            form = PaymentProcessorForm(instance=processor)
+        
+        context = {
+            'form': form,
+            'processor': processor,
+            'empresa': empresa,
+            'action': 'edit'
+        }
+        
+        return render(request, 'sales/payment_processors/processor_form.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al editar procesador: {str(e)}")
+        return redirect('sales:payment_processor_list')
+
+
+@login_required
+def payment_processor_delete(request, pk):
+    """Eliminar procesador de pago"""
+    try:
+        user_extended = UsuarioExtendido.objects.get(user=request.user)
+        empresa = user_extended.empresa_activa
+        
+        if not empresa:
+            messages.error(request, "No se pudo determinar la empresa activa")
+            return redirect('sales:payment_processor_list')
+        
+        processor = get_object_or_404(
+            PaymentProcessor,
+            pk=pk,
+            empresa=empresa
+        )
+        
+        if request.method == 'POST':
+            name = processor.name
+            processor.delete()
+            messages.success(request, f"Procesador '{name}' eliminado exitosamente")
+            return redirect('sales:payment_processor_list')
+        
+        context = {
+            'processor': processor,
+            'empresa': empresa,
+        }
+        
+        return render(request, 'sales/payment_processors/processor_confirm_delete.html', context)
+        
+    except Exception as e:
+        messages.error(request, f"Error al eliminar procesador: {str(e)}")
+        return redirect('sales:payment_processor_list')

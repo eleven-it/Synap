@@ -1,0 +1,501 @@
+{% extends 'accounting/accounting_app_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}
+        {% trans "Editar Período Contable" %} - {{ form.instance.name }}
+    {% else %}
+        {% trans "Nuevo Período Contable" %}
+    {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        transition: all 0.3s ease;
+    }
+    .form-section:hover {
+        transform: translateY(-2px);
+    }
+    
+    .form-field {
+        transition: all 0.3s ease;
+    }
+    .form-field:focus-within {
+        transform: scale(1.02);
+    }
+    
+    .date-picker {
+        transition: all 0.3s ease;
+    }
+    .date-picker:focus {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    .submit-btn {
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, #f97316, #ea580c);
+    }
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);
+    }
+    
+    .cancel-btn {
+        transition: all 0.3s ease;
+    }
+    .cancel-btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    .progress-bar {
+        transition: width 0.5s ease;
+    }
+    
+    .step-indicator {
+        transition: all 0.3s ease;
+    }
+    .step-indicator.active {
+        background: linear-gradient(135deg, #f97316, #ea580c);
+        transform: scale(1.1);
+    }
+    
+    .validation-error {
+        animation: shake 0.5s ease-in-out;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+    
+    .help-text {
+        transition: all 0.3s ease;
+    }
+    .help-text:hover {
+        color: #f97316;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header Section -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button onclick="history.back()" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {% if form.instance.pk %}
+                                {% trans "Editar Período Contable" %}
+                            {% else %}
+                                {% trans "Nuevo Período Contable" %}
+                            {% endif %}
+                        </h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% if form.instance.pk %}
+                                {% trans "Modifica la información del período contable" %}
+                            {% else %}
+                                {% trans "Crea un nuevo período contable para tu empresa" %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'accounting:period_list' %}" class="cancel-btn inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Cancelar" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Progress Bar -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Progreso del formulario" %}</span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300" id="progressText">0%</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div class="progress-bar bg-gradient-to-r from-orange-400 to-orange-600 h-2 rounded-full" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form method="post" class="space-y-8" id="periodForm">
+            {% csrf_token %}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center mb-6">
+                    <div class="step-indicator w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-3 active">
+                        <span class="text-white font-bold text-sm">1</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Información Básica" %}
+                    </h3>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Name Field -->
+                    <div class="form-field">
+                        <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Nombre del Período" %} *
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.name.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Ej: Enero 2024, Q1 2024, Ajuste Diciembre" %}
+                        </p>
+                    </div>
+
+                    <!-- Code Field -->
+                    <div class="form-field">
+                        <label for="{{ form.code.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Código" %} *
+                        </label>
+                        {{ form.code }}
+                        {% if form.code.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.code.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Código único para identificar el período" %}
+                        </p>
+                    </div>
+
+                    <!-- Fiscal Year Field -->
+                    <div class="form-field">
+                        <label for="{{ form.fiscal_year.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Año Fiscal" %} *
+                        </label>
+                        {{ form.fiscal_year }}
+                        {% if form.fiscal_year.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.fiscal_year.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Selecciona el año fiscal al que pertenece este período" %}
+                        </p>
+                    </div>
+
+                    <!-- Period Type Field -->
+                    <div class="form-field">
+                        <label for="{{ form.period_type.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Tipo de Período" %} *
+                        </label>
+                        {{ form.period_type }}
+                        {% if form.period_type.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.period_type.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Define la frecuencia del período contable" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date Range Section -->
+            <div class="form-section bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center mb-6">
+                    <div class="step-indicator w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-white font-bold text-sm">2</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Rango de Fechas" %}
+                    </h3>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Start Date Field -->
+                    <div class="form-field">
+                        <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Fecha de Inicio" %} *
+                        </label>
+                        {{ form.start_date }}
+                        {% if form.start_date.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.start_date.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Primer día del período contable" %}
+                        </p>
+                    </div>
+
+                    <!-- End Date Field -->
+                    <div class="form-field">
+                        <label for="{{ form.end_date.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Fecha de Fin" %} *
+                        </label>
+                        {{ form.end_date }}
+                        {% if form.end_date.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.end_date.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Último día del período contable" %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Date Validation Message -->
+                <div id="dateValidation" class="mt-4 p-4 rounded-lg hidden">
+                    <div class="flex items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <span class="text-sm" id="dateValidationText"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Settings Section -->
+            <div class="form-section bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center mb-6">
+                    <div class="step-indicator w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-white font-bold text-sm">3</span>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Configuración Adicional" %}
+                    </h3>
+                </div>
+                
+                <div class="space-y-6">
+                    <!-- Description Field -->
+                    <div class="form-field">
+                        <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Descripción" %}
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.description.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Descripción opcional del período contable" %}
+                        </p>
+                    </div>
+
+                    <!-- Is Active Field -->
+                    <div class="form-field">
+                        <div class="flex items-center">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {% trans "Período Activo" %}
+                            </label>
+                        </div>
+                        {% if form.is_active.errors %}
+                            <div class="validation-error mt-1 text-sm text-red-600 dark:text-red-400">
+                                {{ form.is_active.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <p class="help-text mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {% trans "Los períodos activos pueden recibir asientos contables" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'accounting:period_list' %}" class="cancel-btn inline-flex items-center px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors duration-200">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Cancelar" %}
+                    </a>
+                    
+                    {% if form.instance.pk %}
+                        <a href="{% url 'accounting:period_detail' form.instance.pk %}" class="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            {% trans "Ver Detalle" %}
+                        </a>
+                    {% endif %}
+                </div>
+                
+                <button type="submit" class="submit-btn inline-flex items-center px-8 py-3 text-white font-medium rounded-lg shadow-lg">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {% if form.instance.pk %}
+                        {% trans "Actualizar Período" %}
+                    {% else %}
+                        {% trans "Crear Período" %}
+                    {% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Success Toast -->
+<div id="successToast" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+    <div class="flex items-center">
+        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span id="toastMessage"></span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Progress tracking
+    function updateProgress() {
+        const form = document.getElementById('periodForm');
+        const fields = form.querySelectorAll('input, select, textarea');
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        const filledRequired = Array.from(requiredFields).filter(field => field.value.trim() !== '').length;
+        const progress = Math.round((filledRequired / requiredFields.length) * 100);
+        
+        document.querySelector('.progress-bar').style.width = progress + '%';
+        document.getElementById('progressText').textContent = progress + '%';
+        
+        // Update step indicators
+        const steps = document.querySelectorAll('.step-indicator');
+        if (progress >= 33) {
+            steps[1].classList.add('active');
+        }
+        if (progress >= 66) {
+            steps[2].classList.add('active');
+        }
+    }
+
+    // Date validation
+    function validateDates() {
+        const startDate = document.getElementById('{{ form.start_date.id_for_label }}');
+        const endDate = document.getElementById('{{ form.end_date.id_for_label }}');
+        const validationDiv = document.getElementById('dateValidation');
+        const validationText = document.getElementById('dateValidationText');
+        
+        if (startDate.value && endDate.value) {
+            const start = new Date(startDate.value);
+            const end = new Date(endDate.value);
+            
+            if (end <= start) {
+                validationDiv.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'dark:bg-green-900', 'dark:text-green-200');
+                validationDiv.classList.add('bg-red-100', 'text-red-800', 'dark:bg-red-900', 'dark:text-red-200');
+                validationText.textContent = '{% trans "La fecha de fin debe ser posterior a la fecha de inicio" %}';
+            } else {
+                validationDiv.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'dark:bg-red-900', 'dark:text-red-200');
+                validationDiv.classList.add('bg-green-100', 'text-green-800', 'dark:bg-green-900', 'dark:text-green-200');
+                validationText.textContent = '{% trans "Rango de fechas válido" %}';
+            }
+        } else {
+            validationDiv.classList.add('hidden');
+        }
+    }
+
+    // Form submission
+    document.getElementById('periodForm').addEventListener('submit', function(e) {
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        submitBtn.innerHTML = `
+            <svg class="animate-spin w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Guardando..." %}
+        `;
+        submitBtn.disabled = true;
+    });
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        // Progress tracking
+        const form = document.getElementById('periodForm');
+        form.addEventListener('input', updateProgress);
+        form.addEventListener('change', updateProgress);
+        updateProgress();
+        
+        // Date validation
+        const startDate = document.getElementById('{{ form.start_date.id_for_label }}');
+        const endDate = document.getElementById('{{ form.end_date.id_for_label }}');
+        startDate.addEventListener('change', validateDates);
+        endDate.addEventListener('change', validateDates);
+        
+        // Auto-format code field
+        const codeField = document.getElementById('{{ form.code.id_for_label }}');
+        codeField.addEventListener('input', function() {
+            this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        });
+        
+        // Show success message if redirected from successful save
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success') === 'true') {
+            showToast('{% trans "Período guardado exitosamente" %}');
+        }
+    });
+
+    function showToast(message) {
+        const toast = document.getElementById('successToast');
+        const toastMessage = document.getElementById('toastMessage');
+        toastMessage.textContent = message;
+        
+        toast.classList.remove('translate-x-full');
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+        }, 3000);
+    }
+
+    // Auto-save draft functionality
+    let autoSaveTimeout;
+    function autoSave() {
+        clearTimeout(autoSaveTimeout);
+        autoSaveTimeout = setTimeout(() => {
+            const formData = new FormData(document.getElementById('periodForm'));
+            localStorage.setItem('periodFormDraft', JSON.stringify(Object.fromEntries(formData)));
+        }, 2000);
+    }
+
+    // Load draft on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        const draft = localStorage.getItem('periodFormDraft');
+        if (draft && !document.querySelector('input[name="pk"]').value) {
+            const formData = JSON.parse(draft);
+            Object.keys(formData).forEach(key => {
+                const field = document.querySelector(`[name="${key}"]`);
+                if (field) {
+                    field.value = formData[key];
+                }
+            });
+        }
+    });
+
+    // Clear draft on successful save
+    document.getElementById('periodForm').addEventListener('submit', function() {
+        localStorage.removeItem('periodFormDraft');
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,204 @@
+{% extends "core/core_app_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Delete Payment Method" %} - {{ payment_method.name }} - {{ empresa.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-card {
+        animation: slideIn 0.5s ease-out;
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .warning-pulse {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <!-- Header -->
+        <div class="text-center">
+            <div class="mx-auto h-16 w-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center warning-pulse">
+                <svg class="h-8 w-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <h2 class="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+                {% trans "Delete Payment Method" %}
+            </h2>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {% trans "This action cannot be undone" %}
+            </p>
+        </div>
+
+        <!-- Payment Method Info -->
+        <div class="delete-card bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <div class="flex items-center space-x-4 mb-6">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-lg flex items-center justify-center" style="background-color: {{ payment_method.color }}">
+                        <span class="material-icons text-white text-xl">{{ payment_method.icon }}</span>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ payment_method.name }}</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">{{ payment_method.get_payment_type_display }}</p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500 font-mono">{{ payment_method.code }}</p>
+                </div>
+            </div>
+
+            <!-- Warning Information -->
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            {% trans "Warning" %}
+                        </h3>
+                        <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>{% trans "This payment method will be permanently deleted" %}</li>
+                                <li>{% trans "Any existing transactions using this method will be affected" %}</li>
+                                <li>{% trans "This action cannot be undone" %}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Method Details -->
+            <div class="space-y-3 mb-6">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">{% trans "Status" %}:</span>
+                    <span class="font-medium text-gray-900 dark:text-white">
+                        {% if payment_method.is_active %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            {% trans "Active" %}
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                            {% trans "Inactive" %}
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if payment_method.is_default %}
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">{% trans "Default" %}:</span>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {% trans "Yes" %}
+                    </span>
+                </div>
+                {% endif %}
+                
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">{% trans "Commission" %}:</span>
+                    <span class="font-medium text-gray-900 dark:text-white">{{ payment_method.commission_percentage }}%</span>
+                </div>
+                
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500 dark:text-gray-400">{% trans "Branches" %}:</span>
+                    <span class="font-medium text-gray-900 dark:text-white">{{ payment_method.branches.count }}</span>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                
+                <div class="flex items-center justify-between">
+                    <button type="button" onclick="history.back()" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Cancel" %}
+                    </button>
+                    
+                    <button type="submit" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 transform hover:scale-105">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        {% trans "Delete Payment Method" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Back to List Link -->
+        <div class="text-center">
+            <a href="{% url 'sales:payment_method_list' %}" 
+               class="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors">
+                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                {% trans "Back to Payment Methods" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Add microinteractions
+document.addEventListener('DOMContentLoaded', function() {
+    // Add hover effects to buttons
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(button => {
+        button.addEventListener('mouseenter', function() {
+            if (this.type === 'submit') {
+                playSound('error');
+            } else {
+                playSound('success');
+            }
+        });
+    });
+    
+    // Form submission confirmation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Deleting..." %}
+        `;
+    });
+});
+
+// Sound effects
+function playSound(type) {
+    const audio = new Audio();
+    audio.volume = 0.3;
+    
+    switch(type) {
+        case 'success':
+            audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+            break;
+        case 'error':
+            audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+            break;
+    }
+    audio.play().catch(() => {}); // Ignore errors if audio fails to play
+}
+</script>
+{% endblock %} 

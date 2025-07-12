@@ -1,0 +1,113 @@
+{% extends 'sales/sales_base.html' %}
+{% load i18n %}
+{% load static %}
+
+{# Template principal del TPV - Interfaz moderna, Tailwind, preparado para JS #}
+{% block extra_head %}
+<script src="{% static 'sales/js/tpv.js' %}"></script>
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-gray-800 flex flex-col">
+  <!-- Header -->
+  <header class="flex items-center justify-between px-8 py-4 bg-white dark:bg-gray-900 shadow">
+    <h1 class="text-2xl font-bold tracking-tight text-gray-800 dark:text-white">{% trans 'Point of Sale' %}</h1>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-gray-500 dark:text-gray-300">{% trans 'User:' %} {{ user.get_full_name }}</span>
+      <span class="text-sm text-gray-500 dark:text-gray-300">{% trans 'Branch:' %} {{ session.branch.name }}</span>
+      <span class="text-sm text-gray-500 dark:text-gray-300">{% trans 'Terminal:' %} {{ session.terminal.name }}</span>
+      <button id="tpv-help-btn" class="ml-4 px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-200 dark:hover:bg-blue-800 transition" title="Atajos y sonidos">
+        <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z"/></svg>
+        {% trans 'Help' %}
+      </button>
+    </div>
+  </header>
+  <!-- Modal de ayuda -->
+  <div id="tpv-help-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-8 w-full max-w-md animate-fade-in">
+      <h3 class="text-lg font-bold mb-2 text-gray-800 dark:text-white">{% trans 'Shortcuts & Sounds' %}</h3>
+      <ul class="mb-4 text-gray-700 dark:text-gray-200 text-sm list-disc pl-5">
+        <li><b>F2</b>: {% trans 'Focus search' %}</li>
+        <li><b>F4</b>: {% trans 'Open payment' %}</li>
+        <li><b>Enter</b>: {% trans 'Confirm payment' %}</li>
+        <li><b>ESC</b>: {% trans 'Cancel payment' %}</li>
+        <li><b>+</b>/<b>-</b>: {% trans 'Increase/decrease quantity' %}</li>
+        <li><b>{% trans 'Sound feedback for actions (success, error, scan, pay)' %}</b></li>
+      </ul>
+      <button id="tpv-help-close" class="w-full py-2 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 text-white font-bold hover:scale-105 transition">{% trans 'Close' %}</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col md:flex-row gap-6 p-6">
+    <!-- Product Search & List -->
+    <section class="w-full md:w-2/3 bg-white dark:bg-gray-900 rounded-xl shadow p-6 flex flex-col">
+      <div class="mb-4">
+        <label for="product-search" class="block text-lg font-medium text-gray-700 dark:text-gray-200">{% trans 'Search product' %}</label>
+        <div class="relative mt-2">
+          <input id="product-search" type="text" autocomplete="off" placeholder="{% trans 'Type to search...' %}" class="w-full px-4 py-3 text-lg rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition" />
+          <div id="search-results" class="absolute z-10 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-b-lg shadow-lg hidden"></div>
+        </div>
+      </div>
+      <div class="flex-1 overflow-y-auto mt-4">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead>
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase">{% trans 'Product' %}</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase">{% trans 'Price' %}</th>
+              <th class="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-300 uppercase">{% trans 'Stock' %}</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody id="product-list">
+            {# Aquí se renderizan los productos encontrados #}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Cart & Payment -->
+    <section class="w-full md:w-1/3 bg-white dark:bg-gray-900 rounded-xl shadow p-6 flex flex-col">
+      <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">{% trans 'Cart' %}</h2>
+      <div id="cart-items" class="flex-1 overflow-y-auto mb-4">
+        {# Aquí se renderizan los productos agregados al carrito #}
+      </div>
+      <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+        <div class="flex justify-between text-lg font-bold">
+          <span>{% trans 'Total' %}</span>
+          <span id="cart-total">$0.00</span>
+        </div>
+        <button id="pay-btn" class="mt-6 w-full py-3 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 text-white font-bold text-lg shadow-lg hover:scale-105 hover:shadow-xl transition">{% trans 'Proceed to Payment' %}</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Payment Modal (hidden by default) -->
+  <div id="payment-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-8 w-full max-w-md animate-fade-in">
+      <h3 class="text-xl font-bold mb-4 text-gray-800 dark:text-white">{% trans 'Payment' %}</h3>
+      <form id="payment-form" class="space-y-4">
+        <div>
+          <label class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Amount to pay' %}</label>
+          <div class="text-2xl font-bold text-gray-900 dark:text-white" id="payment-amount">$0.00</div>
+        </div>
+        <div>
+          <label for="payment-method" class="block text-gray-700 dark:text-gray-200 mb-1">{% trans 'Payment method' %}</label>
+          <select id="payment-method" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="cash">{% trans 'Cash' %}</option>
+            <option value="card">{% trans 'Card' %}</option>
+            <option value="transfer">{% trans 'Transfer' %}</option>
+            <option value="other">{% trans 'Other' %}</option>
+          </select>
+        </div>
+        <div id="payment-extra-fields"></div>
+        <div class="flex gap-2 mt-6">
+          <button type="button" id="cancel-payment" class="flex-1 py-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition">{% trans 'Cancel' %}</button>
+          <button type="submit" class="flex-1 py-3 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 text-white font-bold text-lg hover:scale-105 hover:shadow-xl transition">{% trans 'Pay' %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %} 

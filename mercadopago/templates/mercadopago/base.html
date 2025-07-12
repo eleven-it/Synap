@@ -1,0 +1,168 @@
+{% extends "core/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block extra_css %}
+<style>
+    /* MercadoPago specific styles */
+    .mp-gradient {
+        background: linear-gradient(135deg, #009ee3 0%, #00c4b4 100%);
+    }
+    
+    .mp-card {
+        @apply bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700;
+        transition: all 0.3s ease;
+    }
+    
+    .mp-card:hover {
+        @apply shadow-xl transform -translate-y-1;
+    }
+    
+    .mp-button {
+        @apply px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 active:scale-95;
+    }
+    
+    .mp-button-primary {
+        @apply mp-button bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:shadow-xl;
+    }
+    
+    .mp-button-secondary {
+        @apply mp-button bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600;
+    }
+    
+    .mp-input {
+        @apply w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100;
+        @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300;
+    }
+    
+    .mp-status-badge {
+        @apply px-3 py-1 rounded-full text-xs font-semibold;
+    }
+    
+    .mp-status-active {
+        @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+    }
+    
+    .mp-status-inactive {
+        @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+    }
+    
+    .mp-status-pending {
+        @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200;
+    }
+    
+    /* Progress bar animation */
+    .mp-progress {
+        @apply w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2;
+    }
+    
+    .mp-progress-bar {
+        @apply bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-1000 ease-out;
+        animation: mp-progress-animation 2s ease-in-out infinite;
+    }
+    
+    @keyframes mp-progress-animation {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+    
+    /* Toast notifications */
+    .mp-toast {
+        @apply fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transform transition-all duration-300;
+        animation: mp-toast-slide-in 0.3s ease-out;
+    }
+    
+    @keyframes mp-toast-slide-in {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    
+    .mp-toast-success {
+        @apply bg-green-500 text-white;
+    }
+    
+    .mp-toast-error {
+        @apply bg-red-500 text-white;
+    }
+    
+    .mp-toast-info {
+        @apply bg-blue-500 text-white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="mp-gradient text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold">{% trans "MercadoPago Integration" %}</h1>
+                        <p class="text-blue-100">{% trans "Manage payments and SmartPOS devices" %}</p>
+                    </div>
+                </div>
+                
+                <!-- Navigation -->
+                <nav class="flex space-x-4">
+                    <a href="{% url 'mercadopago:config_list' %}" 
+                       class="px-4 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200">
+                        {% trans "Configuration" %}
+                    </a>
+                    <a href="{% url 'mercadopago:device_list' %}" 
+                       class="px-4 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200">
+                        {% trans "Devices" %}
+                    </a>
+                    <a href="{% url 'mercadopago:transaction_list' %}" 
+                       class="px-4 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200">
+                        {% trans "Transactions" %}
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block mercadopago_content %}{% endblock %}
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="mp-toast-container"></div>
+
+<script>
+// Toast notification system
+function showToast(message, type = 'info') {
+    const container = document.getElementById('mp-toast-container');
+    const toast = document.createElement('div');
+    toast.className = `mp-toast mp-toast-${type}`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.transform = 'translateX(100%)';
+        toast.style.opacity = '0';
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Auto-hide toasts on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const messages = document.querySelectorAll('.messages .message');
+    messages.forEach(message => {
+        const text = message.textContent;
+        const type = message.classList.contains('error') ? 'error' : 
+                    message.classList.contains('success') ? 'success' : 'info';
+        showToast(text, type);
+    });
+});
+</script>
+{% endblock %} 

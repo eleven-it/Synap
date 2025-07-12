@@ -49,6 +49,7 @@ APPS_MENU = [
             {
                 "seccion": _("Sales Operations"),
                 "items": [
+                    {"label": _("Point of Sale (TPV)"), "url": "sales:tpv_main", "icon": "point_of_sale", "permission": "sales.view_pos"},
                     {"label": _("Orders"), "url": "sales:sales_order_list", "icon": "assignment", "permission": "sales.ver_order"},
                     {"label": _("Create Order"), "url": "sales:sales_order_create", "icon": "add_box", "permission": "sales.crear_order"},
                 ]
@@ -66,6 +67,13 @@ APPS_MENU = [
                     {"label": _("Deliveries"), "url": "sales:delivery_order_list", "icon": "local_shipping", "permission": "sales.ver_delivery"},
                     {"label": _("Returns"), "url": "sales:return_delivery_list", "icon": "undo", "permission": "sales.ver_return"},
                     {"label": _("Credit Notes"), "url": "sales:credit_note_list", "icon": "note_add", "permission": "sales.ver_credit_note"},
+                ]
+            },
+            {
+                "seccion": _("Payment Configuration"),
+                "items": [
+                    {"label": _("Payment Methods"), "url": "sales:payment_method_list", "icon": "credit_card", "permission": "sales.ver"},
+                    {"label": _("Payment Processors"), "url": "sales:payment_processor_list", "icon": "settings", "permission": "sales.ver"},
                 ]
             },
             {
@@ -573,6 +581,177 @@ APPS_MENU = [
         ]
     },
     {
+        "id": "accounting",
+        "nombre": _("Accounting"),
+        "permiso": "accounting.ver",
+        "url": "accounting:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'/></svg>""",
+        "orden": 4,
+        "color": "emerald",
+        "submenus": [
+            {
+                "seccion": _("Dashboard"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "accounting:dashboard",
+                        "icon": "dashboard",
+                        "permission": "accounting.ver"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Chart of Accounts"),
+                "items": [
+                    {
+                        "label": _("Accounts"),
+                        "url": "accounting:account_list",
+                        "icon": "account_balance",
+                        "permission": "accounting.view_chartofaccounts"
+                    },
+                    {
+                        "label": _("Account Types"),
+                        "url": "accounting:account_type_list",
+                        "icon": "category",
+                        "permission": "accounting.view_chartofaccounts"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Journal Management"),
+                "items": [
+                    {
+                        "label": _("Journal Entries"),
+                        "url": "accounting:journal_entry_list",
+                        "icon": "receipt_long",
+                        "permission": "accounting.view_journalentry"
+                    },
+                    {
+                        "label": _("Journals"),
+                        "url": "accounting:journal_list",
+                        "icon": "book",
+                        "permission": "accounting.view_journal"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Tax Management"),
+                "items": [
+                    {
+                        "label": _("Tax Groups"),
+                        "url": "accounting:tax_group_list",
+                        "icon": "group_work",
+                        "permission": "accounting.view_taxgroup"
+                    },
+                    {
+                        "label": _("Taxes"),
+                        "url": "accounting:tax_list",
+                        "icon": "receipt",
+                        "permission": "accounting.view_tax"
+                    },
+                    {
+                        "label": _("Fiscal Positions"),
+                        "url": "accounting:fiscal_position_list",
+                        "icon": "location_on",
+                        "permission": "accounting.view_fiscalposition"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Period Management"),
+                "items": [
+                    {
+                        "label": _("Accounting Periods"),
+                        "url": "accounting:period_list",
+                        "icon": "calendar_today",
+                        "permission": "accounting.view_accountingperiod"
+                    },
+                    {
+                        "label": _("Fiscal Years"),
+                        "url": "accounting:fiscal_year_list",
+                        "icon": "event",
+                        "permission": "accounting.view_fiscalyear"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {
+                        "label": _("Currencies"),
+                        "url": "accounting:currency_list",
+                        "icon": "payments",
+                        "permission": "core.view_currency"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Reports"),
+                "items": [
+                    {
+                        "label": _("Balance Sheet"),
+                        "url": "accounting:balance_sheet_report",
+                        "icon": "assessment",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Income Statement"),
+                        "url": "accounting:income_statement_report",
+                        "icon": "trending_up",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Trial Balance"),
+                        "url": "accounting:trial_balance_report",
+                        "icon": "balance",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("General Ledger"),
+                        "url": "accounting:general_ledger_report",
+                        "icon": "library_books",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Tax Report"),
+                        "url": "accounting:tax_report",
+                        "icon": "receipt_long",
+                        "permission": "accounting.view_report"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Advanced Reports"),
+                "items": [
+                    {
+                        "label": _("Bank Reconciliation"),
+                        "url": "accounting:bank_reconciliation_report",
+                        "icon": "account_balance_wallet",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Trend Analysis"),
+                        "url": "accounting:trend_analysis_report",
+                        "icon": "show_chart",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Financial Ratios"),
+                        "url": "accounting:financial_ratios_report",
+                        "icon": "analytics",
+                        "permission": "accounting.view_report"
+                    },
+                    {
+                        "label": _("Custom Reports"),
+                        "url": "accounting:custom_reports",
+                        "icon": "build",
+                        "permission": "accounting.view_report"
+                    }
+                ]
+            }
+        ]
+    },
+    {
         "id": "module_management",
         "nombre": _("Module Management"),
         "permiso": "core.change_moduleconfig",
@@ -582,6 +761,80 @@ APPS_MENU = [
         "color": "indigo",
         "superuser_only": True,
         "submenus": []
+    },
+    {
+        "id": "reports",
+        "nombre": _("Reports"),
+        "permiso": "reports.ver",
+        "url": "reports:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M3 6h18M3 14h18M3 18h18'/></svg>""",
+        "orden": 6,
+        "color": "teal",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {
+                        "label": _("Dashboard"),
+                        "url": "reports:dashboard",
+                        "icon": "dashboard",
+                        "permission": "reports.ver"
+                    },
+                    {
+                        "label": _("Reports"),
+                        "url": "reports:report_list",
+                        "icon": "file_alt",
+                        "permission": "reports.ver"
+                    },
+                    {
+                        "label": _("Create Report"),
+                        "url": "reports:report_create",
+                        "icon": "add",
+                        "permission": "reports.crear"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Builder & Templates"),
+                "items": [
+                    {
+                        "label": _("Templates"),
+                        "url": "reports:template_list",
+                        "icon": "layer_group",
+                        "permission": "reports.ver_template"
+                    },
+                    {
+                        "label": _("Create Template"),
+                        "url": "reports:template_create",
+                        "icon": "add_box",
+                        "permission": "reports.crear_template"
+                    },
+                    {
+                        "label": _("Components"),
+                        "url": "reports:component_library",
+                        "icon": "puzzle_piece",
+                        "permission": "reports.ver"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Schedules & Export"),
+                "items": [
+                    {
+                        "label": _("Schedules"),
+                        "url": "reports:schedule_list",
+                        "icon": "clock",
+                        "permission": "reports.ver_schedule"
+                    },
+                    {
+                        "label": _("Create Schedule"),
+                        "url": "reports:schedule_create",
+                        "icon": "add_alarm",
+                        "permission": "reports.crear_schedule"
+                    }
+                ]
+            }
+        ]
     },
 ]
 
@@ -690,9 +943,35 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Di
                         print(f"Warning: Item missing 'url' key: {item}")
                         continue
                     
-                    # Usar reverse para generar la URL correcta
-                    url = reverse(item["url"])
-                    print(f"Successfully resolved URL '{item['url']}' to '{url}'")
+                    # Mapeo de URLs hardcodeadas para evitar problemas de resolución
+                    url_mapping = {
+                        'sales:dashboard': '/sales/',
+                        'sales:client_list': '/sales/clients/',
+                        'sales:client_create': '/sales/clients/create/',
+                        'sales:tpv_main': '/sales/tpv/',
+                        'sales:sales_order_list': '/sales/orders/',
+                        'sales:sales_order_create': '/sales/orders/create/',
+                        'sales:invoice_list': '/sales/invoices/',
+                        'sales:payment_list': '/sales/payments/',
+                        'sales:delivery_list': '/sales/deliveries/',
+                        'sales:return_delivery_list': '/sales/returns/',
+                        'sales:credit_note_list': '/sales/credit-notes/',
+                        'sales:payment_method_list': '/sales/payment-methods/',
+                        'sales:payment_processor_list': '/sales/payment-processors/',
+                        'sales:reports_dashboard': '/sales/reports/',
+                        'sales:price_list_list': '/sales/price-lists/',
+                        'sales:payment_term_list': '/sales/payment-terms/',
+                        'accounting:tax_list': '/accounting/taxes/',
+                    }
+                    
+                    # Usar mapeo hardcodeado si existe, sino intentar reverse
+                    if item["url"] in url_mapping:
+                        url = url_mapping[item["url"]]
+                        print(f"Using hardcoded URL for '{item['url']}': '{url}'")
+                    else:
+                        # Usar reverse para generar la URL correcta
+                        url = reverse(item["url"])
+                        print(f"Successfully resolved URL '{item['url']}' to '{url}'")
                 except NoReverseMatch:
                     # Si no se puede resolver la URL, usar una URL por defecto
                     print(f"Warning: Could not resolve URL '{item.get('url', '')}' for item: {item}")
@@ -777,7 +1056,7 @@ def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict
     return apps_visibles_para_usuario(user)
 
 # Antes de usar firestore, asegúrate de inicializar Firebase:
-get_firebase_app()
+# get_firebase_app()  # Comentado temporalmente para desarrollo
 
 def sincronizar_usuario_desde_firestore(decoded_token: Dict[str, Any]) -> UsuarioExtendido:
     """
@@ -1062,3 +1341,10 @@ def get_empresa_actual(request):
     
     # Fallback: primera empresa activa
     return Empresa.objects.filter(activa=True).first()
+
+
+def get_user_empresa(request):
+    """
+    Alias de get_empresa_actual para mantener compatibilidad con código existente
+    """
+    return get_empresa_actual(request)

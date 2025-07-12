@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block title %}{% trans "General Ledger Report" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* Animación de entrada */
+  .fade-in { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(30px);} to { opacity: 1; transform: none; } }
+  /* Confetti para celebración */
+  .confetti { pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 50; }
+  /* Barra de progreso animada */
+  .progress-bar-animated { transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+  /* Toasts */
+  .toast { position: fixed; top: 2rem; right: 2rem; z-index: 100; min-width: 220px; }
+  /* Dark mode */
+  html.dark .report-card, html.dark .summary-card, html.dark .ledger-table, html.dark .account-header { background: #18181b !important; color: #f4f4f5 !important; }
+  html.dark .ledger-table th { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; color: #18181b !important; }
+  html.dark .ledger-table td { border-bottom: 1px solid #27272a !important; }
+  html.dark .export-btn, html.dark .page-btn { color: #18181b !important; }
+  html.dark .summary-label { color: #a1a1aa !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="general-ledger-container min-h-screen bg-gradient-to-br from-orange-400 to-orange-700 py-8">
+  <div class="container mx-auto px-2 md:px-4 fade-in">
+    <!-- Barra de progreso animada -->
+    <div class="w-full mb-4">
+      <div class="h-2 bg-orange-200 rounded-full overflow-hidden">
+        <div id="progressBar" class="progress-bar-animated h-2 bg-gradient-to-r from-orange-400 to-orange-600" style="width: 100%"></div>
+      </div>
+    </div>
+    <div class="report-card bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-2xl shadow-2xl border border-white/20 overflow-hidden fade-in">
+      <!-- Header -->
+      <div class="report-header bg-gradient-to-br from-orange-400 to-orange-700 text-white p-8 text-center relative overflow-hidden">
+        <h1 class="report-title text-3xl md:text-4xl font-bold mb-2 relative z-10 flex items-center justify-center gap-2">
+          <i class="fas fa-book"></i>
+          {% trans "General Ledger" %}
+        </h1>
+        <p class="report-subtitle text-lg opacity-90 relative z-10">
+          {% trans "For the period" %} {{ start_date|date:"F j, Y" }} {% trans "to" %} {{ end_date|date:"F j, Y" }}
+        </p>
+        <div class="absolute inset-0 z-0 pointer-events-none" style="background: radial-gradient(circle,rgba(255,255,255,0.12) 0%,transparent 70%);"></div>
+      </div>
+      <!-- Filtros -->
+      <div class="filters-section bg-white/10 dark:bg-zinc-800/40 p-6 border-b border-white/20">
+        <form method="get" class="flex flex-wrap gap-4 items-end" id="reportFilterForm">
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Start Date" %}</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "End Date" %}</label>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Account" %}</label>
+            <select name="account" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 focus:ring-opacity-50">
+              <option value="">{% trans "All Accounts" %}</option>
+              {% for account in accounts_list %}
+                <option value="{{ account.id }}" {% if account.id == selected_account %}selected{% endif %}>{{ account.code }} - {{ account.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Company" %}</label>
+            <select name="empresa" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-orange-400 dark:focus:ring-orange-500 focus:ring-opacity-50">
+              {% for emp in empresas %}
+                <option value="{{ emp.id }}" {% if emp.id == selected_empresa %}selected{% endif %}>{{ emp.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-6 py-2 rounded-lg font-semibold shadow hover:scale-105 hover:shadow-lg transition-all flex items-center gap-2">
+            <i class="fas fa-search"></i>
+            {% trans "Generate Report" %}
+          </button>
+        </form>
+      </div>
+      <!-- Spinner de carga -->
+      <div class="loading-spinner text-center py-8 hidden" id="loadingSpinner">
+        <div class="spinner mx-auto mb-4 border-4 border-zinc-200 border-t-orange-400 rounded-full w-10 h-10 animate-spin"></div>
+        <p class="mt-2 text-zinc-600 dark:text-zinc-300">{% trans "Generating report..." %}</p>
+      </div>
+      <!-- Contenido del reporte -->
+      <div id="reportContent" class="p-6 fade-in">
+        <!-- Tarjetas resumen -->
+        <div class="summary-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-orange-500 mb-1">{{ total_debit|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Total Debit" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-orange-500 mb-1">{{ total_credit|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Total Credit" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-orange-500 mb-1">{{ net_balance|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Net Balance" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-orange-500 mb-1">{{ entries_count }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Entries" %}</div>
+          </div>
+        </div>
+        <!-- Header de cuenta seleccionada -->
+        {% if selected_account_obj %}
+        <div class="account-header bg-gradient-to-r from-orange-400 to-orange-600 text-white p-6 rounded-xl mb-6 shadow">
+          <h3 class="text-xl font-bold mb-1">{{ selected_account_obj.code }} - {{ selected_account_obj.name }}</h3>
+          <p class="opacity-90 text-base">{% trans "Account Type" %}: {{ selected_account_obj.account_type }}</p>
+        </div>
+        {% endif %}
+        <!-- Tabla principal -->
+        <div class="overflow-x-auto">
+          <table class="ledger-table w-full border-collapse bg-white dark:bg-zinc-900 rounded-xl shadow">
+            <thead>
+              <tr>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-left font-semibold text-xs uppercase">{% trans "Date" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-left font-semibold text-xs uppercase">{% trans "Entry" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-left font-semibold text-xs uppercase">{% trans "Description" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-left font-semibold text-xs uppercase">{% trans "Reference" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-right font-semibold text-xs uppercase">{% trans "Debit" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-right font-semibold text-xs uppercase">{% trans "Credit" %}</th>
+                <th class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-3 text-right font-semibold text-xs uppercase">{% trans "Balance" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in ledger_entries %}
+              <tr class="hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors">
+                <td class="entry-date font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ entry.date|date:"M j, Y" }}</td>
+                <td class="entry-description text-zinc-500 dark:text-zinc-300 text-xs">{{ entry.entry_number }}</td>
+                <td class="entry-description text-zinc-500 dark:text-zinc-300 text-xs">{{ entry.description }}</td>
+                <td class="entry-description text-zinc-500 dark:text-zinc-300 text-xs">{{ entry.reference|default:"-" }}</td>
+                <td class="debit-amount font-bold text-green-600 dark:text-green-400 text-right">{% if entry.debit > 0 %}${{ entry.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                <td class="credit-amount font-bold text-red-600 dark:text-red-400 text-right">{% if entry.credit > 0 %}${{ entry.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                <td class="balance-amount font-bold text-right {% if entry.balance >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">${{ entry.balance|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="bg-gradient-to-r from-orange-400 to-orange-600 text-white font-bold">
+                <td colspan="4">{% trans "TOTALS" %}</td>
+                <td class="debit-amount">${{ total_debit|floatformat:2 }}</td>
+                <td class="credit-amount">${{ total_credit|floatformat:2 }}</td>
+                <td class="balance-amount">${{ net_balance|floatformat:2 }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <!-- Paginación -->
+        {% if ledger_entries.has_other_pages %}
+        <div class="pagination flex justify-center items-center gap-2 my-8">
+          {% if ledger_entries.has_previous %}
+            <a href="?page={{ ledger_entries.previous_page_number }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&account={{ selected_account }}&empresa={{ selected_empresa }}" class="page-btn px-3 py-1 rounded-lg border border-orange-300 bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-800 transition-all">
+              <i class="fas fa-chevron-left"></i>
+            </a>
+          {% endif %}
+          {% for num in ledger_entries.paginator.page_range %}
+            {% if ledger_entries.number == num %}
+              <span class="page-btn active px-3 py-1 rounded-lg bg-gradient-to-r from-orange-400 to-orange-600 text-white font-bold">{{ num }}</span>
+            {% elif num > ledger_entries.number|add:'-3' and num < ledger_entries.number|add:'3' %}
+              <a href="?page={{ num }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&account={{ selected_account }}&empresa={{ selected_empresa }}" class="page-btn px-3 py-1 rounded-lg border border-orange-300 bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-800 transition-all">{{ num }}</a>
+            {% endif %}
+          {% endfor %}
+          {% if ledger_entries.has_next %}
+            <a href="?page={{ ledger_entries.next_page_number }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&account={{ selected_account }}&empresa={{ selected_empresa }}" class="page-btn px-3 py-1 rounded-lg border border-orange-300 bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-800 transition-all">
+              <i class="fas fa-chevron-right"></i>
+            </a>
+          {% endif %}
+        </div>
+        {% endif %}
+        <!-- Botones de exportación -->
+        <div class="export-buttons flex flex-wrap justify-center gap-4 mt-8">
+          <button class="export-btn btn-pdf bg-gradient-to-r from-red-400 to-red-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToPDF()">
+            <i class="fas fa-file-pdf"></i>
+            {% trans "Export PDF" %}
+          </button>
+          <button class="export-btn btn-excel bg-gradient-to-r from-green-400 to-green-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i>
+            {% trans "Export Excel" %}
+          </button>
+          <button class="export-btn btn-print bg-gradient-to-r from-blue-400 to-blue-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="printReport()">
+            <i class="fas fa-print"></i>
+            {% trans "Print Report" %}
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Toast de feedback -->
+    <div id="toast" class="toast hidden"></div>
+    <!-- Confetti animado -->
+    <canvas id="confetti" class="confetti hidden"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Spinner y animación de carga
+const form = document.getElementById('reportFilterForm');
+form.addEventListener('submit', function() {
+  document.getElementById('loadingSpinner').classList.remove('hidden');
+  document.getElementById('reportContent').classList.add('hidden');
+});
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.getElementById('loadingSpinner').classList.add('hidden');
+    document.getElementById('reportContent').classList.remove('hidden');
+  }, 800);
+});
+// Toasts de feedback
+function showToast(msg, type='success') {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = `<div class="px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 ${type==='success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'} animate-bounceIn">` +
+    (type==='success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>') +
+    `<span>${msg}</span></div>`;
+  toast.classList.remove('hidden');
+  setTimeout(()=>toast.classList.add('hidden'), 3000);
+}
+// Exportar PDF/Excel/Imprimir
+function exportToPDF() { showToast('{% trans "PDF export functionality will be implemented" %}'); }
+function exportToExcel() { showToast('{% trans "Excel export functionality will be implemented" %}'); }
+function printReport() { window.print(); showToast('{% trans "Printing..." %}'); }
+// Confetti animado al completar (ejemplo: si hay un parámetro ?celebrate=1)
+function launchConfetti() {
+  const canvas = document.getElementById('confetti');
+  if (!canvas) return;
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  let pieces = Array.from({length: 120},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height/2,s:Math.random()*8+4,d:Math.random()*2*Math.PI,c:`hsl(${Math.random()*360},90%,60%)`,v:Math.random()*2+1}));
+  canvas.classList.remove('hidden');
+  let frame=0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const p of pieces) {
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.s,0,2*Math.PI);
+      ctx.fillStyle=p.c; ctx.fill();
+      p.y+=p.v; p.x+=Math.sin(frame/10+p.d)*2;
+      if(p.y>canvas.height) p.y=-10;
+    }
+    frame++;
+    if(frame<180) requestAnimationFrame(draw); else canvas.classList.add('hidden');
+  }
+  draw();
+}
+if(window.location.search.includes('celebrate=1')) setTimeout(launchConfetti, 1200);
+// Microinteracciones: focus ring animado
+const inputs = document.querySelectorAll('input, select');
+inputs.forEach(el=>{
+  el.addEventListener('focus',()=>el.classList.add('ring-2','ring-orange-400','dark:ring-orange-500','ring-opacity-70'));
+  el.addEventListener('blur',()=>el.classList.remove('ring-2','ring-orange-400','dark:ring-orange-500','ring-opacity-70'));
+});
+</script>
+{% endblock %} 

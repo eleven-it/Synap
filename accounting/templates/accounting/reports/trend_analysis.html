@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Trend Analysis" %} - {{ empresa.nombre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .fade-in { animation: fadeIn 0.7s cubic-bezier(0.4,0,0.2,1) both; }
+  .slide-up { animation: slideUp 0.7s cubic-bezier(0.4,0,0.2,1) both; }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(40px);} to { opacity:1; transform:translateY(0);} }
+  .progress-bar-animated { transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
+  .toast { animation: fadeIn 0.5s, slideUp 0.5s; }
+  .dark-mode .bg-white { background-color: #18181b !important; }
+  .dark-mode .text-gray-700, .dark-mode .text-gray-600 { color: #d1d5db !important; }
+  .dark-mode .text-gray-900 { color: #fff !important; }
+  .dark-mode .bg-gray-100 { background-color: #27272a !important; }
+  .dark-mode .border-gray-200 { border-color: #27272a !important; }
+  .dark-mode .shadow { box-shadow: 0 2px 8px #0004 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 dark:from-zinc-900 dark:to-zinc-800 py-8 transition-colors duration-500">
+  <div class="max-w-6xl mx-auto px-2 fade-in">
+    <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden slide-up">
+      <!-- Header -->
+      <div class="px-8 py-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white relative">
+        <h1 class="text-3xl font-bold flex items-center gap-3">
+          <span class="inline-block animate-bounce"><i class="fas fa-chart-line"></i></span>
+          {% trans "Trend Analysis" %}
+        </h1>
+        <p class="mt-2 opacity-90">{% trans "Analyze accounting trends over time" %}</p>
+      </div>
+      <!-- Barra de filtros -->
+      <form method="get" class="flex flex-col md:flex-row gap-4 items-end px-8 py-4 bg-gray-50 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
+        <div class="flex-1 min-w-[180px]">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Period (days)" %}</label>
+          <select name="period" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-400 transition">
+            <option value="7" {% if period == "7" %}selected{% endif %}>7 {% trans "days" %}</option>
+            <option value="30" {% if period == "30" %}selected{% endif %}>30 {% trans "days" %}</option>
+            <option value="90" {% if period == "90" %}selected{% endif %}>90 {% trans "days" %}</option>
+            <option value="180" {% if period == "180" %}selected{% endif %}>180 {% trans "days" %}</option>
+          </select>
+        </div>
+        <div class="flex-1 min-w-[180px]">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Account Type" %}</label>
+          <select name="account_type" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-400 transition">
+            <option value="">{% trans "All types" %}</option>
+            {% for type_code, type_name in account_types %}
+              <option value="{{ type_code }}" {% if account_type == type_code %}selected{% endif %}>{{ type_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="relative group bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-2 rounded-lg font-semibold shadow hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-purple-400">
+          <span class="flex items-center gap-2"><i class="fas fa-search"></i> {% trans "Apply Filters" %}</span>
+          <span class="absolute left-0 top-0 w-full h-full rounded-lg opacity-0 group-active:opacity-100 bg-white/20 transition"></span>
+        </button>
+      </form>
+      <!-- Barra de progreso animada -->
+      <div id="progressBarContainer" class="w-full h-2 bg-gray-200 dark:bg-zinc-700 overflow-hidden" style="display:none;">
+        <div id="progressBar" class="h-2 bg-gradient-to-r from-blue-500 to-purple-500 progress-bar-animated" style="width:0%"></div>
+      </div>
+      <!-- Toast de feedback -->
+      <div id="toast" class="fixed top-6 right-6 z-50 hidden toast bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"></div>
+      <!-- Resumen de métricas -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 px-8 py-6 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 summary-cards">
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-blue-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-blue-600 dark:text-blue-300">
+            {% if trend_direction == 'up' %}
+              <span class="text-green-600 dark:text-green-400">↑ {% trans "Upward" %}</span>
+            {% elif trend_direction == 'down' %}
+              <span class="text-red-600 dark:text-red-400">↓ {% trans "Downward" %}</span>
+            {% else %}
+              <span class="text-gray-600 dark:text-gray-400">→ {% trans "Stable" %}</span>
+            {% endif %}
+          </div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Trend Direction" %}</div>
+        </div>
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-green-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-green-600 dark:text-green-300">{{ trend_percentage|floatformat:1 }}%</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Change %" %}</div>
+        </div>
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-purple-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-purple-600 dark:text-purple-300">{{ trends_data|length }}</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Data Points" %}</div>
+        </div>
+      </div>
+      <!-- Gráficos y análisis -->
+      <div class="px-8 py-6 space-y-8">
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-chart-area"></i> {% trans "Net Movement Trend" %}</h2>
+          <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+            <canvas id="netMovementChart"></canvas>
+          </div>
+        </section>
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-exchange-alt"></i> {% trans "Debit vs Credit" %}</h2>
+          <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+            <canvas id="debitCreditChart"></canvas>
+          </div>
+        </section>
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-calendar-day"></i> {% trans "Daily Entries" %}</h2>
+          <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4">
+            <canvas id="entriesCountChart"></canvas>
+          </div>
+        </section>
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-chart-bar"></i> {% trans "Trend Analysis" %}</h2>
+          <div class="bg-white dark:bg-zinc-800 rounded-lg shadow p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Average Daily Net" %}</span>
+              <span class="text-sm font-medium text-gray-900 dark:text-white">${{ trends_data|length|default:0|floatformat:2 }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Peak Day" %}</span>
+              <span class="text-sm font-medium text-gray-900 dark:text-white">
+                {% if trends_data %}
+                  {% with max_day=trends_data|dictsort:"net"|last %}{{ max_day.date }}{% endwith %}
+                {% else %}-{% endif %}
+              </span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Volatility" %}</span>
+              <span class="text-sm font-medium text-gray-900 dark:text-white">{% if trends_data|length > 1 %}{{ trends_data|length|floatformat:1 }}%{% else %}-{% endif %}</span>
+            </div>
+          </div>
+        </section>
+        <!-- Exportar -->
+        <div class="flex flex-wrap gap-4 justify-center mt-8">
+          <button class="export-btn btn-pdf bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="exportToPDF()">
+            <i class="fas fa-file-pdf"></i> {% trans "Export PDF" %}
+          </button>
+          <button class="export-btn btn-excel bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i> {% trans "Export Excel" %}
+          </button>
+          <button class="export-btn btn-print bg-gradient-to-r from-blue-500 to-blue-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="printReport()">
+            <i class="fas fa-print"></i> {% trans "Print Report" %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Barra de progreso animada
+const form = document.querySelector('form');
+const progressBarContainer = document.getElementById('progressBarContainer');
+const progressBar = document.getElementById('progressBar');
+const toast = document.getElementById('toast');
+
+form.addEventListener('submit', function() {
+  progressBarContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  setTimeout(() => progressBar.style.width = '80%', 100);
+  setTimeout(() => progressBar.style.width = '100%', 1200);
+});
+
+window.addEventListener('pageshow', function() {
+  progressBarContainer.style.display = 'none';
+  progressBar.style.width = '0%';
+});
+
+// Toast feedback
+function showToast(msg, color='bg-green-500') {
+  toast.textContent = msg;
+  toast.className = `fixed top-6 right-6 z-50 toast px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 ${color}`;
+  toast.style.display = 'flex';
+  setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+// Export functions
+function exportToPDF() {
+  showToast('{% trans "PDF export functionality will be implemented" %}', 'bg-indigo-500');
+}
+function exportToExcel() {
+  showToast('{% trans "Excel export functionality will be implemented" %}', 'bg-green-600');
+}
+function printReport() {
+  showToast('{% trans "Printing..." %}', 'bg-blue-600');
+  window.print();
+}
+// Dark mode toggle (opcional, si tu base.html lo soporta)
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark-mode');
+}
+</script>
+{% endblock %} 

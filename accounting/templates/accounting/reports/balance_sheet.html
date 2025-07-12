@@ -1,0 +1,232 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block title %}{% trans "Balance Sheet Report" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Animaciones y microinteracciones */
+  .fade-in { animation: fadeIn 0.7s cubic-bezier(0.4,0,0.2,1) both; }
+  .slide-up { animation: slideUp 0.7s cubic-bezier(0.4,0,0.2,1) both; }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(40px);} to { opacity:1; transform:translateY(0);} }
+  .progress-bar-animated { transition: width 0.7s cubic-bezier(0.4,0,0.2,1); }
+  .toast { animation: fadeIn 0.5s, slideUp 0.5s; }
+  .dark-mode .bg-white { background-color: #18181b !important; }
+  .dark-mode .text-gray-700, .dark-mode .text-gray-600 { color: #d1d5db !important; }
+  .dark-mode .text-gray-900 { color: #fff !important; }
+  .dark-mode .bg-gray-100 { background-color: #27272a !important; }
+  .dark-mode .border-gray-200 { border-color: #27272a !important; }
+  .dark-mode .shadow { box-shadow: 0 2px 8px #0004 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-zinc-900 dark:to-zinc-800 py-8 transition-colors duration-500">
+  <div class="max-w-5xl mx-auto px-2 fade-in">
+    <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden slide-up">
+      <!-- Header -->
+      <div class="px-8 py-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white relative">
+        <h1 class="text-3xl font-bold flex items-center gap-3">
+          <span class="inline-block animate-bounce"><i class="fas fa-balance-scale"></i></span>
+          {% trans "Balance Sheet" %}
+        </h1>
+        <p class="mt-2 opacity-90">{% trans "Financial Position as of" %} <span class="font-semibold">{{ as_of_date|date:"F j, Y" }}</span></p>
+      </div>
+      <!-- Barra de filtros -->
+      <form method="get" class="flex flex-col md:flex-row gap-4 items-end px-8 py-4 bg-gray-50 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
+        <div class="flex-1 min-w-[180px]">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "As of Date" %}</label>
+          <input type="date" name="as_of_date" value="{{ as_of_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-400 transition" required>
+        </div>
+        <div class="flex-1 min-w-[180px]">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Company" %}</label>
+          <select name="empresa" class="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-400 transition">
+            {% for emp in empresas %}
+              <option value="{{ emp.id }}" {% if emp.id == selected_empresa %}selected{% endif %}>{{ emp.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="relative group bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-6 py-2 rounded-lg font-semibold shadow hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-purple-400">
+          <span class="flex items-center gap-2"><i class="fas fa-search"></i> {% trans "Generate Report" %}</span>
+          <span class="absolute left-0 top-0 w-full h-full rounded-lg opacity-0 group-active:opacity-100 bg-white/20 transition"></span>
+        </button>
+      </form>
+      <!-- Barra de progreso animada -->
+      <div id="progressBarContainer" class="w-full h-2 bg-gray-200 dark:bg-zinc-700 overflow-hidden" style="display:none;">
+        <div id="progressBar" class="h-2 bg-gradient-to-r from-indigo-500 to-purple-500 progress-bar-animated" style="width:0%"></div>
+      </div>
+      <!-- Toast de feedback -->
+      <div id="toast" class="fixed top-6 right-6 z-50 hidden toast bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"></div>
+      <!-- Resumen -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 px-8 py-6 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-700 summary-cards">
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-indigo-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-indigo-600 dark:text-indigo-300">{{ total_assets|floatformat:2 }}</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Total Assets" %}</div>
+        </div>
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-purple-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-purple-600 dark:text-purple-300">{{ total_liabilities|floatformat:2 }}</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Total Liabilities" %}</div>
+        </div>
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-green-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-green-600 dark:text-green-300">{{ total_equity|floatformat:2 }}</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Total Equity" %}</div>
+        </div>
+        <div class="summary-card text-center p-4 rounded-xl shadow hover:scale-105 transition bg-gradient-to-br from-yellow-100 to-white dark:from-zinc-800 dark:to-zinc-900">
+          <div class="summary-value text-2xl font-bold text-yellow-600 dark:text-yellow-300">{{ working_capital|floatformat:2 }}</div>
+          <div class="summary-label text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{% trans "Working Capital" %}</div>
+        </div>
+      </div>
+      <!-- Secciones principales -->
+      <div class="px-8 py-6 space-y-8">
+        <!-- Activos -->
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-building"></i> {% trans "ASSETS" %}</h2>
+          <div class="space-y-2">
+            <h3 class="text-base font-semibold text-indigo-700 dark:text-indigo-300">{% trans "Current Assets" %}</h3>
+            {% for account in current_assets %}
+              <div class="flex justify-between items-center bg-indigo-50 dark:bg-zinc-800 rounded-lg px-4 py-2 shadow-sm hover:scale-[1.01] transition-all">
+                <div>
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">{{ account.code }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ account.name }}</div>
+                </div>
+                <div class="font-bold text-green-600 dark:text-green-300">${{ account.balance|floatformat:2 }}</div>
+              </div>
+            {% empty %}
+              <div class="text-gray-400 dark:text-gray-500">{% trans "No current assets" %}</div>
+            {% endfor %}
+            <h3 class="text-base font-semibold text-indigo-700 dark:text-indigo-300 mt-4">{% trans "Fixed Assets" %}</h3>
+            {% for account in fixed_assets %}
+              <div class="flex justify-between items-center bg-indigo-50 dark:bg-zinc-800 rounded-lg px-4 py-2 shadow-sm hover:scale-[1.01] transition-all">
+                <div>
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">{{ account.code }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ account.name }}</div>
+                </div>
+                <div class="font-bold text-green-600 dark:text-green-300">${{ account.balance|floatformat:2 }}</div>
+              </div>
+            {% empty %}
+              <div class="text-gray-400 dark:text-gray-500">{% trans "No fixed assets" %}</div>
+            {% endfor %}
+            <div class="text-right mt-2 font-bold text-indigo-700 dark:text-indigo-300">{% trans "Total Assets" %}: ${{ total_assets|floatformat:2 }}</div>
+          </div>
+        </section>
+        <!-- Pasivos -->
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-hand-holding-usd"></i> {% trans "LIABILITIES" %}</h2>
+          <div class="space-y-2">
+            <h3 class="text-base font-semibold text-purple-700 dark:text-purple-300">{% trans "Current Liabilities" %}</h3>
+            {% for account in current_liabilities %}
+              <div class="flex justify-between items-center bg-purple-50 dark:bg-zinc-800 rounded-lg px-4 py-2 shadow-sm hover:scale-[1.01] transition-all">
+                <div>
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">{{ account.code }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ account.name }}</div>
+                </div>
+                <div class="font-bold text-red-600 dark:text-red-300">${{ account.balance|floatformat:2 }}</div>
+              </div>
+            {% empty %}
+              <div class="text-gray-400 dark:text-gray-500">{% trans "No current liabilities" %}</div>
+            {% endfor %}
+            <h3 class="text-base font-semibold text-purple-700 dark:text-purple-300 mt-4">{% trans "Long-term Liabilities" %}</h3>
+            {% for account in long_term_liabilities %}
+              <div class="flex justify-between items-center bg-purple-50 dark:bg-zinc-800 rounded-lg px-4 py-2 shadow-sm hover:scale-[1.01] transition-all">
+                <div>
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">{{ account.code }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ account.name }}</div>
+                </div>
+                <div class="font-bold text-red-600 dark:text-red-300">${{ account.balance|floatformat:2 }}</div>
+              </div>
+            {% empty %}
+              <div class="text-gray-400 dark:text-gray-500">{% trans "No long-term liabilities" %}</div>
+            {% endfor %}
+            <div class="text-right mt-2 font-bold text-purple-700 dark:text-purple-300">{% trans "Total Liabilities" %}: ${{ total_liabilities|floatformat:2 }}</div>
+          </div>
+        </section>
+        <!-- Patrimonio -->
+        <section class="fade-in">
+          <h2 class="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white mb-4"><i class="fas fa-chart-line"></i> {% trans "EQUITY" %}</h2>
+          <div class="space-y-2">
+            {% for account in equity_accounts %}
+              <div class="flex justify-between items-center bg-green-50 dark:bg-zinc-800 rounded-lg px-4 py-2 shadow-sm hover:scale-[1.01] transition-all">
+                <div>
+                  <div class="font-semibold text-gray-700 dark:text-gray-200">{{ account.code }}</div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">{{ account.name }}</div>
+                </div>
+                <div class="font-bold {% if account.balance >= 0 %}text-green-600 dark:text-green-300{% else %}text-red-600 dark:text-red-300{% endif %}">${{ account.balance|floatformat:2 }}</div>
+              </div>
+            {% empty %}
+              <div class="text-gray-400 dark:text-gray-500">{% trans "No equity accounts" %}</div>
+            {% endfor %}
+            <div class="text-right mt-2 font-bold text-green-700 dark:text-green-300">{% trans "Total Equity" %}: ${{ total_equity|floatformat:2 }}</div>
+          </div>
+        </section>
+        <!-- Balance final -->
+        <section class="fade-in">
+          <div class="text-right mt-4 text-lg font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white px-6 py-4 rounded-xl shadow">
+            {% trans "Total Liabilities + Equity" %}: ${{ total_liabilities_equity|floatformat:2 }}
+          </div>
+        </section>
+        <!-- Exportar -->
+        <div class="flex flex-wrap gap-4 justify-center mt-8">
+          <button class="export-btn btn-pdf bg-gradient-to-r from-red-500 to-red-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="exportToPDF()">
+            <i class="fas fa-file-pdf"></i> {% trans "Export PDF" %}
+          </button>
+          <button class="export-btn btn-excel bg-gradient-to-r from-green-500 to-green-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i> {% trans "Export Excel" %}
+          </button>
+          <button class="export-btn btn-print bg-gradient-to-r from-blue-500 to-blue-700 text-white px-5 py-2 rounded-lg font-semibold shadow hover:scale-105 transition-all" onclick="printReport()">
+            <i class="fas fa-print"></i> {% trans "Print Report" %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Barra de progreso animada
+const form = document.querySelector('form');
+const progressBarContainer = document.getElementById('progressBarContainer');
+const progressBar = document.getElementById('progressBar');
+const toast = document.getElementById('toast');
+
+form.addEventListener('submit', function() {
+  progressBarContainer.style.display = 'block';
+  progressBar.style.width = '0%';
+  setTimeout(() => progressBar.style.width = '80%', 100);
+  setTimeout(() => progressBar.style.width = '100%', 1200);
+});
+
+window.addEventListener('pageshow', function() {
+  progressBarContainer.style.display = 'none';
+  progressBar.style.width = '0%';
+});
+
+// Toast feedback
+function showToast(msg, color='bg-green-500') {
+  toast.textContent = msg;
+  toast.className = `fixed top-6 right-6 z-50 toast px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 ${color}`;
+  toast.style.display = 'flex';
+  setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+// Export functions
+function exportToPDF() {
+  showToast('{% trans "PDF export functionality will be implemented" %}', 'bg-indigo-500');
+}
+function exportToExcel() {
+  showToast('{% trans "Excel export functionality will be implemented" %}', 'bg-green-600');
+}
+function printReport() {
+  showToast('{% trans "Printing..." %}', 'bg-blue-600');
+  window.print();
+}
+// Dark mode toggle (opcional, si tu base.html lo soporta)
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark-mode');
+}
+</script>
+{% endblock %} 

@@ -44,15 +44,15 @@ class TiendaNubeService:
         if config and hasattr(config, 'store_id') and config.store_id:
             self.store_id = str(config.store_id)
         if config:
-            # Usar la nueva URL base recomendada por la documentación
-            self.BASE_URL = f"https://api.tiendanube.com/2025-03/{self.store_id}" if self.store_id else "https://api.tiendanube.com/2025-03"
+            # Usar la URL base que funciona (v1 con store_id)
+            self.BASE_URL = f"https://api.tiendanube.com/v1/{self.store_id}" if self.store_id else "https://api.tiendanube.com/v1"
             self.headers = {
                 "Content-Type": "application/json",
                 "Authentication": f"bearer {config.access_token}",
                 "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
             }
         else:
-            self.BASE_URL = "https://api.tiendanube.com/2025-03"
+            self.BASE_URL = "https://api.tiendanube.com/v1"
             self.headers = {
                 "Content-Type": "application/json",
                 "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
@@ -338,7 +338,11 @@ class TiendaNubeService:
             
             response = requests.get(f"{self.BASE_URL}/orders", headers=self.headers, params=params)
             
-            if response.status_code != 200:
+            if response.status_code == 404:
+                # No hay pedidos en la tienda o el endpoint no está disponible
+                self.log_sync('order', 'info', "No hay pedidos para sincronizar o endpoint no disponible")
+                return 0, 0
+            elif response.status_code != 200:
                 self.log_sync('order', 'error', f"Error obteniendo pedidos: {response.status_code}")
                 return 0, 1
             
@@ -581,7 +585,11 @@ class TiendaNubeService:
             params = {'limit': limit, 'offset': offset}
             response = requests.get(f"{self.BASE_URL}/customers", headers=self.headers, params=params)
             
-            if response.status_code != 200:
+            if response.status_code == 404:
+                # No hay clientes en la tienda o el endpoint no está disponible
+                self.log_sync('customer', 'info', "No hay clientes para sincronizar o endpoint no disponible")
+                return 0, 0
+            elif response.status_code != 200:
                 self.log_sync('customer', 'error', f"Error obteniendo clientes: {response.status_code}")
                 return 0, 1
             
@@ -709,7 +717,15 @@ class TiendaNubeService:
                 # Actualizar cliente existente
                 response = requests.put(f"{self.BASE_URL}/customers/{mapping.tiendanube_id}", headers=self.headers, json=customer_data)
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 404:
+                # Endpoint de clientes no disponible
+                mapping.sync_status = TiendaNubeCustomerMapping.SyncStatus.ERROR
+                mapping.error_message = "Endpoint de clientes no disponible"
+                mapping.save()
+                
+                self.log_sync('customer', 'warning', f'Endpoint de clientes no disponible para {client.name}')
+                return True, "Endpoint de clientes no disponible"
+            elif response.status_code in [200, 201]:
                 customer_response = response.json()
                 mapping.tiendanube_id = customer_response['id']
                 mapping.tiendanube_email = customer_data['email']
@@ -873,7 +889,10 @@ class TiendaNubeService:
                 )
                 self.log_api_response("update_product_stock", url, stock_data, response, product.sku)
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 404:
+                logger.warning(f"[STOCK] Endpoint de stock no disponible para {product.sku} (404)")
+                return True, "Endpoint de stock no disponible"
+            elif response.status_code in [200, 201]:
                 logger.info(f"[STOCK] Stock actualizado correctamente para {product.sku} (status {response.status_code})")
                 return True, None
             else:
@@ -1532,7 +1551,10 @@ class TiendaNubeService:
             # Obtener variantes desde Tiendanube
             url_variants = f"{self.BASE_URL}/products/{product_id}/variants"
             response = requests.get(url_variants, headers=self.headers)
-            if response.status_code != 200:
+            if response.status_code == 404:
+                logger.warning(f"⚠️ Endpoint de variantes no disponible para producto {producto.sku} (404)")
+                return True
+            elif response.status_code != 200:
                 logger.error(f"❌ No se pudieron obtener variantes para producto {producto.sku}: {response.text}")
                 return False
             variants = response.json()
@@ -1548,7 +1570,10 @@ class TiendaNubeService:
                 url_create_variant = f"{self.BASE_URL}/products/{product_id}/variants"
                 resp_create = requests.post(url_create_variant, headers=self.headers, json=variant_data)
                 self.log_api_response("create_variant", url_create_variant, variant_data, resp_create, producto.sku)
-                if resp_create.status_code in [200, 201]:
+                if resp_create.status_code == 404:
+                    logger.warning(f"⚠️ Endpoint de variantes no disponible para producto {producto.sku} (404)")
+                    return True
+                elif resp_create.status_code in [200, 201]:
                     logger.info(f"✅ Variante creada y precio actualizado para producto {producto.sku}")
                     return True
                 else:
@@ -1562,7 +1587,10 @@ class TiendaNubeService:
                     url_update = f"{self.BASE_URL}/products/{product_id}/variants/{variant_id}"
                     resp_update = requests.put(url_update, headers=self.headers, json=price_data)
                     self.log_api_response("update_variant_price", url_update, price_data, resp_update, producto.sku)
-                    if resp_update.status_code in [200, 201]:
+                    if resp_update.status_code == 404:
+                        logger.warning(f"⚠️ Endpoint de variantes no disponible para variante {variant_id} de producto {producto.sku} (404)")
+                        continue
+                    elif resp_update.status_code in [200, 201]:
                         logger.info(f"✅ Precio actualizado para variante {variant_id} de producto {producto.sku}")
                     else:
                         logger.error(f"❌ Error actualizando precio de variante {variant_id} para producto {producto.sku}: {resp_update.text}")
@@ -1597,7 +1625,10 @@ class TiendaNubeService:
             
             response = requests.post(f"{self.BASE_URL}/webhooks", headers=self.headers, json=webhook_data)
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 404:
+                logger.warning(f"⚠️ Endpoint de webhooks no disponible (404)")
+                return None
+            elif response.status_code in [200, 201]:
                 webhook_response = response.json()
                 return webhook_response
             else:
@@ -1937,7 +1968,10 @@ class TiendaNubeService:
             # Log detallado de la respuesta
             self.log_api_response("create", url, product_data, response, product_sku)
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 404:
+                logger.warning(f"⚠️ Endpoint de productos no disponible para {product_sku} (404)")
+                return None
+            elif response.status_code in [200, 201]:
                 result = response.json()
                 logger.info(f"✅ Producto {product_sku} creado exitosamente en Tiendanube (ID: {result.get('id')})")
                 return result
@@ -1964,7 +1998,10 @@ class TiendaNubeService:
             # Log detallado de la respuesta
             self.log_api_response("update", url, product_data, response, product_sku)
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 404:
+                logger.warning(f"⚠️ Endpoint de productos no disponible para {product_sku} (404)")
+                return None
+            elif response.status_code in [200, 201]:
                 result = response.json()
                 logger.info(f"✅ Producto {product_sku} actualizado exitosamente en Tiendanube")
                 return result
@@ -2050,7 +2087,10 @@ class TiendaNubeService:
 
     def handle_response(self, response):
         """Handle API response with detailed logging."""
-        if response.status_code in [200, 201]:
+        if response.status_code == 404:
+            logger.warning(f"⚠️ Endpoint no disponible (404) - {response.text}")
+            return None
+        elif response.status_code in [200, 201]:
             try:
                 return response.json()
             except:

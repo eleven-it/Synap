@@ -1,0 +1,541 @@
+{% extends 'accounting/accounting_app_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Detalle del Período Contable" %} - {{ period.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .period-status {
+        transition: all 0.3s ease;
+    }
+    .period-status.open {
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    }
+    .period-status.closed {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+    }
+    .period-status.adjustment {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+    }
+    
+    .metric-card {
+        transition: all 0.3s ease;
+        border: 1px solid transparent;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--primary-color);
+    }
+    
+    .progress-ring {
+        transition: stroke-dasharray 0.5s ease;
+    }
+    
+    .timeline-item {
+        transition: all 0.3s ease;
+    }
+    .timeline-item:hover {
+        transform: translateX(5px);
+    }
+    
+    .action-btn {
+        transition: all 0.3s ease;
+    }
+    .action-btn:hover {
+        transform: scale(1.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- Header Section -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <button onclick="history.back()" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {% trans "Período Contable" %}
+                        </h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Detalles y configuración del período" %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <span class="period-status {{ period.status|lower }} px-4 py-2 rounded-full text-white font-medium text-sm">
+                        {% if period.status == 'open' %}
+                            {% trans "Abierto" %}
+                        {% elif period.status == 'closed' %}
+                            {% trans "Cerrado" %}
+                        {% elif period.status == 'adjustment' %}
+                            {% trans "Ajuste" %}
+                        {% endif %}
+                    </span>
+                    
+                    {% if period.status == 'open' %}
+                        <a href="{% url 'accounting:period_edit' period.id %}" class="action-btn inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                            {% trans "Editar" %}
+                        </a>
+                    {% endif %}
+                    
+                    {% if period.status == 'open' %}
+                        <button onclick="closePeriod()" class="action-btn inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            {% trans "Cerrar Período" %}
+                        </button>
+                    {% elif period.status == 'closed' %}
+                        <button onclick="reopenPeriod()" class="action-btn inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            {% trans "Reabrir Período" %}
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Period Information Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Basic Information -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Información Básica" %}
+                    </h3>
+                    <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Nombre" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ period.name }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Código" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ period.code }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Año Fiscal" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ period.fiscal_year.name }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Tipo" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% if period.period_type == 'monthly' %}
+                                {% trans "Mensual" %}
+                            {% elif period.period_type == 'quarterly' %}
+                                {% trans "Trimestral" %}
+                            {% elif period.period_type == 'yearly' %}
+                                {% trans "Anual" %}
+                            {% elif period.period_type == 'adjustment' %}
+                                {% trans "Ajuste" %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date Range -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Rango de Fechas" %}
+                    </h3>
+                    <div class="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Fecha de Inicio" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ period.start_date|date:"d/m/Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Fecha de Fin" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ period.end_date|date:"d/m/Y" }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Duración" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% with period.start_date|timesince:period.end_date as duration %}
+                                {{ duration }}
+                            {% endwith %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status & Actions -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {% trans "Estado y Acciones" %}
+                    </h3>
+                    <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Estado Actual" %}</label>
+                        <div class="mt-2">
+                            <span class="period-status {{ period.status|lower }} px-3 py-1 rounded-full text-white font-medium text-sm">
+                                {% if period.status == 'open' %}
+                                    {% trans "Abierto" %}
+                                {% elif period.status == 'closed' %}
+                                    {% trans "Cerrado" %}
+                                {% elif period.status == 'adjustment' %}
+                                    {% trans "Ajuste" %}
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Fecha de Cierre" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% if period.closed_date %}
+                                {{ period.closed_date|date:"d/m/Y H:i" }}
+                            {% else %}
+                                <span class="text-gray-400">{% trans "No cerrado" %}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Cerrado por" %}</label>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% if period.closed_by %}
+                                {{ period.closed_by.get_full_name|default:period.closed_by.email }}
+                            {% else %}
+                                <span class="text-gray-400">{% trans "No aplica" %}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Dashboard -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {% trans "Métricas del Período" %}
+                </h3>
+                <div class="flex items-center space-x-2">
+                    <button onclick="refreshMetrics()" class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Journal Entries -->
+                <div class="metric-card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-blue-600 dark:text-blue-400">{% trans "Asientos Contables" %}</p>
+                            <p class="text-2xl font-bold text-blue-900 dark:text-blue-100">{{ period.journal_entries.count }}</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Debits -->
+                <div class="metric-card bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-green-600 dark:text-green-400">{% trans "Total Débitos" %}</p>
+                            <p class="text-2xl font-bold text-green-900 dark:text-green-100">${{ period.total_debits|floatformat:2 }}</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total Credits -->
+                <div class="metric-card bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-xl p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-red-600 dark:text-red-400">{% trans "Total Créditos" %}</p>
+                            <p class="text-2xl font-bold text-red-900 dark:text-red-100">${{ period.total_credits|floatformat:2 }}</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Balance -->
+                <div class="metric-card bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-purple-600 dark:text-purple-400">{% trans "Balance" %}</p>
+                            <p class="text-2xl font-bold {% if period.balance == 0 %}text-green-900 dark:text-green-100{% else %}text-purple-900 dark:text-purple-100{% endif %}">
+                                ${{ period.balance|floatformat:2 }}
+                            </p>
+                        </div>
+                        <div class="w-12 h-12 {% if period.balance == 0 %}bg-green-500{% else %}bg-purple-500{% endif %} rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Journal Entries -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {% trans "Asientos Recientes" %}
+                </h3>
+                        <a href="{% url 'accounting:journal_entry_list' %}?period={{ period.id }}" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                    {% trans "Ver Todos" %}
+                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+            
+            {% if period.journal_entries.all %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    {% trans "Fecha" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    {% trans "Número" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    {% trans "Descripción" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    {% trans "Estado" %}
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                    {% trans "Monto" %}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for entry in period.journal_entries.all|slice:":5" %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                    {{ entry.date|date:"d/m/Y" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600 dark:text-blue-400">
+                                    <a href="{% url 'accounting:journal_entry_detail' entry.id %}" class="hover:underline">
+                                        {{ entry.number }}
+                                    </a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {{ entry.description|truncatechars:50 }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                        {% if entry.status == 'draft' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                        {% elif entry.status == 'posted' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                        {% elif entry.status == 'cancelled' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
+                                        {% if entry.status == 'draft' %}
+                                            {% trans "Borrador" %}
+                                        {% elif entry.status == 'posted' %}
+                                            {% trans "Publicado" %}
+                                        {% elif entry.status == 'cancelled' %}
+                                            {% trans "Cancelado" %}
+                                        {% endif %}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                    ${{ entry.total_amount|floatformat:2 }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans "No hay asientos" %}</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "No se han registrado asientos contables en este período." %}</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
+                <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mt-4" id="modalTitle"></h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500 dark:text-gray-400" id="modalMessage"></p>
+            </div>
+            <div class="items-center px-4 py-3">
+                <button id="confirmAction" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300">
+                    {% trans "Confirmar" %}
+                </button>
+                <button onclick="closeModal()" class="mt-2 px-4 py-2 bg-gray-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-300">
+                    {% trans "Cancelar" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function showModal(title, message, action) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+        document.getElementById('confirmAction').onclick = action;
+        document.getElementById('confirmationModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+        document.getElementById('confirmationModal').classList.add('hidden');
+    }
+
+    function closePeriod() {
+        showModal(
+            '{% trans "Cerrar Período" %}',
+            '{% trans "¿Estás seguro de que deseas cerrar este período? Esta acción no se puede deshacer." %}',
+            () => {
+                fetch(`{% url 'accounting:period_close' period.id %}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.error || '{% trans "Error al cerrar el período" %}');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('{% trans "Error al cerrar el período" %}');
+                });
+                closeModal();
+            }
+        );
+    }
+
+    function reopenPeriod() {
+        showModal(
+            '{% trans "Reabrir Período" %}',
+            '{% trans "¿Estás seguro de que deseas reabrir este período?" %}',
+            () => {
+                fetch(`{% url 'accounting:period_reopen' period.id %}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.error || '{% trans "Error al reabrir el período" %}');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('{% trans "Error al reabrir el período" %}');
+                });
+                closeModal();
+            }
+        );
+    }
+
+    function refreshMetrics() {
+        // Add loading animation
+        const button = event.target.closest('button');
+        const originalContent = button.innerHTML;
+        button.innerHTML = '<svg class="animate-spin w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+        
+        setTimeout(() => {
+            button.innerHTML = originalContent;
+            // Here you could add actual refresh logic
+        }, 1000);
+    }
+
+    // Add CSRF token to all forms
+    document.addEventListener('DOMContentLoaded', function() {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            const token = document.createElement('input');
+            token.type = 'hidden';
+            token.name = 'csrfmiddlewaretoken';
+            token.value = '{{ csrf_token }}';
+            document.body.appendChild(token);
+        }
+    });
+</script>
+{% endblock %} 

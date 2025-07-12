@@ -1,0 +1,812 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Reports Dashboard" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-all duration-300 hover:shadow-md;
+    }
+    
+    .stats-number {
+        @apply text-3xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .stats-label {
+        @apply text-sm font-medium text-gray-500 dark:text-gray-400 mt-1;
+    }
+    
+    .stats-change {
+        @apply text-xs font-medium mt-2;
+    }
+    
+    .stats-change.positive {
+        @apply text-green-600 dark:text-green-400;
+    }
+    
+    .stats-change.negative {
+        @apply text-red-600 dark:text-red-400;
+    }
+    
+    .chart-container {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6;
+    }
+    
+    .filter-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .report-link {
+        @apply block p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-800/30 dark:hover:to-indigo-800/30 transition-all duration-300;
+    }
+    
+    .report-link:hover {
+        @apply transform scale-105 shadow-lg;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Reports Dashboard" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Comprehensive financial reports and analytics" %}
+                    </p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="window.print()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                        </svg>
+                        {% trans "Print" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="filter-card">
+            <form method="get" class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-48">
+                    <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "From Date" %}
+                    </label>
+                    <input type="date" name="date_from" id="date_from" value="{{ date_from }}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                <div class="flex-1 min-w-48">
+                    <label for="date_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "To Date" %}
+                    </label>
+                    <input type="date" name="date_to" id="date_to" value="{{ date_to }}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        {% trans "Apply Filters" %}
+                    </button>
+                    <a href="{% url 'accounting:reports_dashboard' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        {% trans "Clear" %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quick Reports Navigation -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Quick Reports" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <a href="{% url 'accounting:account_balance_report' %}" class="report-link">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Account Balance" %}
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "View account balances and movements" %}
+                        </p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{% url 'accounting:tax_summary_report' %}" class="report-link">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Tax Summary" %}
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Tax analysis and summaries" %}
+                        </p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{% url 'accounting:financial_statements' %}" class="report-link">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Financial Statements" %}
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Balance sheet and income statement" %}
+                        </p>
+                    </div>
+                </div>
+            </a>
+
+            <a href="{% url 'accounting:entry_dashboard' %}" class="report-link">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                            {% trans "Journal Entries" %}
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "View and manage journal entries" %}
+                        </p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Key Performance Indicators" %}
+        </h2>
+        
+        <!-- Alertas -->
+        {% if alerts %}
+        <div class="mb-6 space-y-3">
+            {% for alert in alerts %}
+            <div class="flex items-center p-4 rounded-lg border-l-4 
+                {% if alert.type == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-500 text-red-700 dark:text-red-400
+                {% elif alert.type == 'warning' %}bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500 text-yellow-700 dark:text-yellow-400
+                {% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-500 text-blue-700 dark:text-blue-400{% endif %}">
+                <svg class="w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {% if alert.icon == 'exclamation-triangle' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    {% elif alert.icon == 'x-circle' %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    {% else %}
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    {% endif %}
+                </svg>
+                <span class="text-sm font-medium">{{ alert.message }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Total Entries with Progress -->
+            <div class="stats-card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <div class="stats-number">{{ total_entries }}</div>
+                            <div class="stats-label">{% trans "Total Entries" %}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="flex items-center text-sm {% if entries_change >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            {% if entries_change >= 0 %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                            </svg>
+                            {% else %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                            {% endif %}
+                            {{ entries_change|floatformat:1 }}%
+                        </div>
+                    </div>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" 
+                         style="width: {{ posting_efficiency }}%"></div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "Posting Efficiency" %}: {{ posting_efficiency|floatformat:1 }}%
+                </div>
+            </div>
+
+            <!-- Posted Entries with Trend -->
+            <div class="stats-card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <div class="stats-number">{{ posted_entries }}</div>
+                            <div class="stats-label">{% trans "Posted Entries" %}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="flex items-center text-sm {% if posted_change >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            {% if posted_change >= 0 %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                            </svg>
+                            {% else %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                            {% endif %}
+                            {{ posted_change|floatformat:1 }}%
+                        </div>
+                    </div>
+                </div>
+                <!-- Performance Metric -->
+                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "Avg per day" %}: {{ performance_metrics.avg_entries_per_day|floatformat:1 }}
+                </div>
+            </div>
+
+            <!-- Total Debit with Balance Ratio -->
+            <div class="stats-card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <div class="stats-number">${{ total_debit|floatformat:2 }}</div>
+                            <div class="stats-label">{% trans "Total Debit" %}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="flex items-center text-sm {% if debit_change >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            {% if debit_change >= 0 %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                            </svg>
+                            {% else %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                            {% endif %}
+                            {{ debit_change|floatformat:1 }}%
+                        </div>
+                    </div>
+                </div>
+                <!-- Balance Accuracy -->
+                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "Balance Accuracy" %}: {{ performance_metrics.balance_accuracy|floatformat:1 }}%
+                </div>
+            </div>
+
+            <!-- Total Credit with Financial Health -->
+            <div class="stats-card">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <div class="stats-number">${{ total_credit|floatformat:2 }}</div>
+                            <div class="stats-label">{% trans "Total Credit" %}</div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="flex items-center text-sm {% if credit_change >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            {% if credit_change >= 0 %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                            </svg>
+                            {% else %}
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                            </svg>
+                            {% endif %}
+                            {{ credit_change|floatformat:1 }}%
+                        </div>
+                    </div>
+                </div>
+                <!-- Financial Health Indicator -->
+                <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "Debit/Credit Ratio" %}: {{ balance_ratio|floatformat:1 }}%
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Performance Metrics -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Performance Analytics" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Efficiency Metrics -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Operational Efficiency" %}
+                </h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {% trans "Posting Efficiency" %}
+                            </span>
+                            <span class="text-sm font-semibold {% if posting_efficiency >= 80 %}text-green-600 dark:text-green-400{% elif posting_efficiency >= 60 %}text-yellow-600 dark:text-yellow-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {{ posting_efficiency|floatformat:1 }}%
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div class="h-2 rounded-full transition-all duration-500 
+                                {% if posting_efficiency >= 80 %}bg-green-500{% elif posting_efficiency >= 60 %}bg-yellow-500{% else %}bg-red-500{% endif %}" 
+                                style="width: {{ posting_efficiency }}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {% trans "Balance Accuracy" %}
+                            </span>
+                            <span class="text-sm font-semibold {% if performance_metrics.balance_accuracy >= 95 %}text-green-600 dark:text-green-400{% elif performance_metrics.balance_accuracy >= 90 %}text-yellow-600 dark:text-yellow-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {{ performance_metrics.balance_accuracy|floatformat:1 }}%
+                            </span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div class="h-2 rounded-full transition-all duration-500 
+                                {% if performance_metrics.balance_accuracy >= 95 %}bg-green-500{% elif performance_metrics.balance_accuracy >= 90 %}bg-yellow-500{% else %}bg-red-500{% endif %}" 
+                                style="width: {{ performance_metrics.balance_accuracy }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Metrics -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Activity Metrics" %}
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Entries per Day" %}
+                        </span>
+                        <span class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {{ performance_metrics.avg_entries_per_day|floatformat:1 }}
+                        </span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Avg Amount per Entry" %}
+                        </span>
+                        <span class="text-lg font-semibold text-gray-900 dark:text-white">
+                            ${{ performance_metrics.avg_amount_per_entry|floatformat:2 }}
+                        </span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Period Days" %}
+                        </span>
+                        <span class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {{ period_days }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Health -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Financial Health" %}
+                </h3>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Debit/Credit Ratio" %}
+                        </span>
+                        <span class="text-lg font-semibold {% if balance_ratio >= 95 and balance_ratio <= 105 %}text-green-600 dark:text-green-400{% else %}text-yellow-600 dark:text-yellow-400{% endif %}">
+                            {{ balance_ratio|floatformat:1 }}%
+                        </span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Balance Difference" %}
+                        </span>
+                        <span class="text-lg font-semibold {% if total_debit == total_credit %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            ${{ total_debit|sub:total_credit|abs|floatformat:2 }}
+                        </span>
+                    </div>
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Total Movement" %}
+                        </span>
+                        <span class="text-lg font-semibold text-gray-900 dark:text-white">
+                            ${{ total_debit|add:total_credit|floatformat:2 }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts and Analytics -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Balance by Account Type" %}
+                </h3>
+                <canvas id="chart-balance" height="180"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Entries Trend (per Month)" %}
+                </h3>
+                <canvas id="chart-month" height="180"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Tax Distribution by Group" %}
+                </h3>
+                <canvas id="chart-tax" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Accounts -->
+    {% if top_accounts %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Most Active Accounts" %}
+        </h2>
+        <div class="bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Account" %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Type" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Movements" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Total Debit" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Total Credit" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for account in top_accounts %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ account.account__code }}
+                                    </div>
+                                    <div class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                        {{ account.account__name }}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                                    {% if account.account__account_type == 'ASSETS' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                                    {% elif account.account__account_type == 'LIABILITIES' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                                    {% elif account.account__account_type == 'EQUITY' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
+                                    {% elif account.account__account_type == 'INCOME' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400
+                                    {% else %}bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400{% endif %}">
+                                    {{ account.account__account_type|title }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                {{ account.movement_count }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ account.total_debit|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ account.total_credit|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tax Statistics (if available) -->
+    {% if tax_stats %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Tax Statistics" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">{{ tax_stats.total_taxes }}</div>
+                        <div class="stats-label">{% trans "Active Taxes" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">{{ tax_stats.total_tax_groups }}</div>
+                        <div class="stats-label">{% trans "Tax Groups" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">${{ tax_stats.total_tax_amount|floatformat:2 }}</div>
+                        <div class="stats-label">{% trans "Total Tax Amount" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">${{ tax_stats.total_base_amount|floatformat:2 }}</div>
+                        <div class="stats-label">{% trans "Total Base Amount" %}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Datos desde el contexto Django
+    const chartBalanceLabels = {{ chart_balance_labels|safe }};
+    const chartBalanceData = {{ chart_balance_data|safe }};
+    const chartMonthLabels = {{ chart_month_labels|safe }};
+    const chartMonthData = {{ chart_month_data|safe }};
+    const chartTaxLabels = {{ chart_tax_labels|safe }};
+    const chartTaxData = {{ chart_tax_data|safe }};
+
+    // Detectar modo dark
+    function isDarkMode() {
+        return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function getColors() {
+        if (isDarkMode()) {
+            return {
+                text: '#fff',
+                grid: '#444',
+                bg: '#1e293b',
+                border: '#334155',
+                palette: [
+                    '#60a5fa', '#f472b6', '#facc15', '#34d399', '#a78bfa', '#f87171', '#38bdf8', '#fbbf24', '#4ade80', '#818cf8'
+                ]
+            };
+        } else {
+            return {
+                text: '#222',
+                grid: '#e5e7eb',
+                bg: '#fff',
+                border: '#cbd5e1',
+                palette: [
+                    '#2563eb', '#db2777', '#ca8a04', '#059669', '#7c3aed', '#dc2626', '#0284c7', '#d97706', '#16a34a', '#6366f1'
+                ]
+            };
+        }
+    }
+
+    function renderCharts() {
+        const colors = getColors();
+        // Balance por tipo de cuenta (barras)
+        const ctxBalance = document.getElementById('chart-balance').getContext('2d');
+        new Chart(ctxBalance, {
+            type: 'bar',
+            data: {
+                labels: chartBalanceLabels,
+                datasets: [{
+                    label: 'Balance',
+                    data: chartBalanceData,
+                    backgroundColor: colors.palette,
+                    borderColor: colors.border,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: colors.text },
+                        grid: { color: colors.grid }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: colors.text },
+                        grid: { color: colors.grid }
+                    }
+                }
+            }
+        });
+        // Tendencia de asientos por mes (líneas)
+        const ctxMonth = document.getElementById('chart-month').getContext('2d');
+        new Chart(ctxMonth, {
+            type: 'line',
+            data: {
+                labels: chartMonthLabels,
+                datasets: [{
+                    label: 'Asientos publicados',
+                    data: chartMonthData,
+                    fill: true,
+                    borderColor: colors.palette[0],
+                    backgroundColor: colors.palette[0] + '33',
+                    tension: 0.3,
+                    pointBackgroundColor: colors.palette[0],
+                    pointBorderColor: colors.border
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: colors.text },
+                        grid: { color: colors.grid }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: colors.text },
+                        grid: { color: colors.grid }
+                    }
+                }
+            }
+        });
+        // Distribución de impuestos por grupo (dona)
+        const ctxTax = document.getElementById('chart-tax').getContext('2d');
+        new Chart(ctxTax, {
+            type: 'doughnut',
+            data: {
+                labels: chartTaxLabels,
+                datasets: [{
+                    label: 'Impuestos',
+                    data: chartTaxData,
+                    backgroundColor: colors.palette,
+                    borderColor: colors.border,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: { color: colors.text }
+                    },
+                    tooltip: { enabled: true }
+                }
+            }
+        });
+    }
+
+    // Renderizar al cargar y al cambiar dark/light
+    document.addEventListener('DOMContentLoaded', renderCharts);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
+</script>
+{% endblock %} 

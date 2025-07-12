@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Delete Fiscal Year" %} - {{ fiscal_year.name }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div class="bg-white dark:bg-gray-800 shadow-xl rounded-lg overflow-hidden">
+            <!-- Header -->
+            <div class="bg-red-50 dark:bg-red-900/20 px-6 py-4 border-b border-red-200 dark:border-red-800">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-lg font-medium text-red-800 dark:text-red-200">
+                            {% trans "Delete Fiscal Year" %}
+                        </h3>
+                        <p class="text-sm text-red-700 dark:text-red-300">
+                            {% trans "This action cannot be undone" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-6">
+                <div class="text-center">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900">
+                        <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </div>
+                    
+                    <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "Are you sure?" %}
+                    </h3>
+                    
+                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "You are about to delete the fiscal year" %} <strong>{{ fiscal_year.name }}</strong>.
+                        {% trans "This will also delete all associated accounting periods and their data." %}
+                    </p>
+                </div>
+
+                <!-- Fiscal Year Details -->
+                <div class="mt-6 bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                    <dl class="grid grid-cols-1 gap-2 text-sm">
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Name:" %}</dt>
+                            <dd class="font-medium text-gray-900 dark:text-white">{{ fiscal_year.name }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Code:" %}</dt>
+                            <dd class="font-medium text-gray-900 dark:text-white">{{ fiscal_year.code }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Period:" %}</dt>
+                            <dd class="font-medium text-gray-900 dark:text-white">{{ fiscal_year.date_from|date:"M d, Y" }} - {{ fiscal_year.date_to|date:"M d, Y" }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Periods:" %}</dt>
+                            <dd class="font-medium text-gray-900 dark:text-white">{{ fiscal_year.periods.count }}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-gray-500 dark:text-gray-400">{% trans "Status:" %}</dt>
+                            <dd class="font-medium">
+                                {% if fiscal_year.is_closed %}
+                                    <span class="text-red-600 dark:text-red-400">{% trans "Closed" %}</span>
+                                {% else %}
+                                    <span class="text-green-600 dark:text-green-400">{% trans "Active" %}</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <!-- Warning -->
+                <div class="mt-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                                {% trans "Important Warning" %}
+                            </h3>
+                            <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                                <ul class="list-disc pl-5 space-y-1">
+                                    <li>{% trans "All accounting periods will be permanently deleted" %}</li>
+                                    <li>{% trans "Journal entries in these periods will be lost" %}</li>
+                                    <li>{% trans "This action cannot be undone" %}</li>
+                                    <li>{% trans "Consider backing up your data first" %}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-8 flex space-x-3">
+                    <a href="{% url 'accounting:fiscal_year_detail' fiscal_year.pk %}" 
+                       class="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+                        {% trans "Cancel" %}
+                    </a>
+                    <form method="post" class="flex-1">
+                        {% csrf_token %}
+                        <button type="submit" 
+                                class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            {% trans "Delete Fiscal Year" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Animación de entrada
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.querySelector('.max-w-md');
+    modal.style.opacity = '0';
+    modal.style.transform = 'scale(0.95) translateY(-20px)';
+    setTimeout(() => {
+        modal.style.transition = 'all 0.3s ease';
+        modal.style.opacity = '1';
+        modal.style.transform = 'scale(1) translateY(0)';
+    }, 100);
+});
+
+// Confirmación adicional
+document.querySelector('form').addEventListener('submit', function(e) {
+    const confirmed = confirm('{% trans "Are you absolutely sure? This will permanently delete all data associated with this fiscal year." %}');
+    if (!confirmed) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %} 

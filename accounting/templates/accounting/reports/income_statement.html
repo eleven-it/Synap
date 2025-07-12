@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% load i18n %}
+
+{% block title %}{% trans "Income Statement Report" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  /* Animación de entrada */
+  .fade-in { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(30px);} to { opacity: 1; transform: none; } }
+  /* Confetti para celebración */
+  .confetti { pointer-events: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 50; }
+  /* Barra de progreso animada */
+  .progress-bar-animated { transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+  /* Toasts */
+  .toast { position: fixed; top: 2rem; right: 2rem; z-index: 100; min-width: 220px; }
+  /* Dark mode */
+  html.dark .report-card, html.dark .summary-card, html.dark .account-item, html.dark .net-income { background: #18181b !important; color: #f4f4f5 !important; }
+  html.dark .account-item { border-left-color: #10b981 !important; }
+  html.dark .export-btn { color: #18181b !important; }
+  html.dark .summary-label { color: #a1a1aa !important; }
+  html.dark .account-code { color: #f4f4f5 !important; }
+  html.dark .account-name { color: #a1a1aa !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="income-statement-container min-h-screen bg-gradient-to-br from-green-400 to-green-700 py-8">
+  <div class="container mx-auto px-2 md:px-4 fade-in">
+    <!-- Barra de progreso animada -->
+    <div class="w-full mb-4">
+      <div class="h-2 bg-green-200 rounded-full overflow-hidden">
+        <div id="progressBar" class="progress-bar-animated h-2 bg-gradient-to-r from-green-400 to-green-600" style="width: 100%"></div>
+      </div>
+    </div>
+    <div class="report-card bg-white/90 dark:bg-zinc-900/90 backdrop-blur rounded-2xl shadow-2xl border border-white/20 overflow-hidden fade-in">
+      <!-- Header -->
+      <div class="report-header bg-gradient-to-br from-green-400 to-green-700 text-white p-8 text-center relative overflow-hidden">
+        <h1 class="report-title text-3xl md:text-4xl font-bold mb-2 relative z-10 flex items-center justify-center gap-2">
+          <i class="fas fa-chart-line"></i>
+          {% trans "Income Statement" %}
+        </h1>
+        <p class="report-subtitle text-lg opacity-90 relative z-10">
+          {% trans "For the period" %} {{ start_date|date:"F j, Y" }} {% trans "to" %} {{ end_date|date:"F j, Y" }}
+        </p>
+        <div class="absolute inset-0 z-0 pointer-events-none" style="background: radial-gradient(circle,rgba(255,255,255,0.12) 0%,transparent 70%);"></div>
+      </div>
+      <!-- Filtros -->
+      <div class="filters-section bg-white/10 dark:bg-zinc-800/40 p-6 border-b border-white/20">
+        <form method="get" class="flex flex-wrap gap-4 items-end" id="reportFilterForm">
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Start Date" %}</label>
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-green-400 dark:focus:ring-green-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "End Date" %}</label>
+            <input type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-green-400 dark:focus:ring-green-500 focus:ring-opacity-50">
+          </div>
+          <div class="flex-1 min-w-48">
+            <label class="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-2">{% trans "Company" %}</label>
+            <select name="empresa" class="w-full px-4 py-2 rounded-lg border-0 focus:ring-2 focus:ring-green-400 dark:focus:ring-green-500 focus:ring-opacity-50">
+              {% for emp in empresas %}
+                <option value="{{ emp.id }}" {% if emp.id == selected_empresa %}selected{% endif %}>{{ emp.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="bg-gradient-to-r from-green-400 to-green-600 text-white px-6 py-2 rounded-lg font-semibold shadow hover:scale-105 hover:shadow-lg transition-all flex items-center gap-2">
+            <i class="fas fa-search"></i>
+            {% trans "Generate Report" %}
+          </button>
+        </form>
+      </div>
+      <!-- Spinner de carga -->
+      <div class="loading-spinner text-center py-8 hidden" id="loadingSpinner">
+        <div class="spinner mx-auto mb-4 border-4 border-zinc-200 border-t-green-400 rounded-full w-10 h-10 animate-spin"></div>
+        <p class="mt-2 text-zinc-600 dark:text-zinc-300">{% trans "Generating report..." %}</p>
+      </div>
+      <!-- Contenido del reporte -->
+      <div id="reportContent" class="fade-in">
+        <!-- Tarjetas resumen -->
+        <div class="summary-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-6">
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-green-500 mb-1">{{ total_revenue|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Total Revenue" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-green-500 mb-1">{{ total_expenses|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Total Expenses" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-green-500 mb-1">{{ gross_profit|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Gross Profit" %}</div>
+          </div>
+          <div class="summary-card bg-white dark:bg-zinc-900 p-6 rounded-xl shadow text-center hover:scale-105 hover:shadow-lg transition-all">
+            <div class="summary-value text-2xl font-bold text-green-500 mb-1">{{ operating_income|floatformat:2 }}</div>
+            <div class="summary-label uppercase tracking-wide text-xs">{% trans "Operating Income" %}</div>
+          </div>
+        </div>
+        <!-- Sección de Ingresos -->
+        <div class="statement-section p-6 border-b border-zinc-200 dark:border-zinc-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
+          <h2 class="section-title text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-arrow-up text-green-500"></i>
+            {% trans "REVENUE" %}
+          </h2>
+          {% for account in revenue_accounts %}
+          <div class="account-item flex justify-between items-center p-4 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow hover:translate-x-2 hover:shadow-lg transition-all border-l-4 border-transparent hover:border-green-500">
+            <div class="account-info flex-1">
+              <div class="account-code font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ account.code }}</div>
+              <div class="account-name text-zinc-500 dark:text-zinc-300 text-xs mt-1">{{ account.name }}</div>
+            </div>
+            <div class="account-amount font-bold text-green-600 dark:text-green-400 text-lg">
+              ${{ account.balance|floatformat:2 }}
+            </div>
+          </div>
+          {% endfor %}
+          <div class="section-total bg-gradient-to-r from-green-400 to-green-600 text-white p-4 rounded-xl mt-4 text-right font-bold text-lg shadow">
+            {% trans "Total Revenue" %}: ${{ total_revenue|floatformat:2 }}
+          </div>
+        </div>
+        <!-- Sección de Costo de Ventas -->
+        <div class="statement-section p-6 border-b border-zinc-200 dark:border-zinc-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
+          <h2 class="section-title text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-shopping-cart text-green-500"></i>
+            {% trans "COST OF GOODS SOLD" %}
+          </h2>
+          {% for account in cogs_accounts %}
+          <div class="account-item flex justify-between items-center p-4 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow hover:translate-x-2 hover:shadow-lg transition-all border-l-4 border-transparent hover:border-green-500">
+            <div class="account-info flex-1">
+              <div class="account-code font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ account.code }}</div>
+              <div class="account-name text-zinc-500 dark:text-zinc-300 text-xs mt-1">{{ account.name }}</div>
+            </div>
+            <div class="account-amount font-bold text-red-600 dark:text-red-400 text-lg">
+              (${{ account.balance|floatformat:2 }})
+            </div>
+          </div>
+          {% endfor %}
+          <div class="section-total bg-gradient-to-r from-green-400 to-green-600 text-white p-4 rounded-xl mt-4 text-right font-bold text-lg shadow">
+            {% trans "Total Cost of Goods Sold" %}: (${{ total_cogs|floatformat:2 }})
+          </div>
+        </div>
+        <!-- Ganancia Bruta -->
+        <div class="net-income bg-gradient-to-r from-green-500 to-green-700 text-white p-8 rounded-2xl text-center mx-6 my-8 shadow-2xl">
+          <div class="net-income-value text-4xl md:text-5xl font-bold mb-2">${{ gross_profit|floatformat:2 }}</div>
+          <div class="net-income-label text-xl opacity-90">{% trans "GROSS PROFIT" %}</div>
+        </div>
+        <!-- Sección de Gastos Operativos -->
+        <div class="statement-section p-6 border-b border-zinc-200 dark:border-zinc-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
+          <h2 class="section-title text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-tools text-green-500"></i>
+            {% trans "OPERATING EXPENSES" %}
+          </h2>
+          {% for account in operating_expenses %}
+          <div class="account-item flex justify-between items-center p-4 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow hover:translate-x-2 hover:shadow-lg transition-all border-l-4 border-transparent hover:border-green-500">
+            <div class="account-info flex-1">
+              <div class="account-code font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ account.code }}</div>
+              <div class="account-name text-zinc-500 dark:text-zinc-300 text-xs mt-1">{{ account.name }}</div>
+            </div>
+            <div class="account-amount font-bold text-red-600 dark:text-red-400 text-lg">
+              (${{ account.balance|floatformat:2 }})
+            </div>
+          </div>
+          {% endfor %}
+          <div class="section-total bg-gradient-to-r from-green-400 to-green-600 text-white p-4 rounded-xl mt-4 text-right font-bold text-lg shadow">
+            {% trans "Total Operating Expenses" %}: (${{ total_operating_expenses|floatformat:2 }})
+          </div>
+        </div>
+        <!-- Ingreso Operativo -->
+        <div class="net-income bg-gradient-to-r from-green-500 to-green-700 text-white p-8 rounded-2xl text-center mx-6 my-8 shadow-2xl">
+          <div class="net-income-value text-4xl md:text-5xl font-bold mb-2">${{ operating_income|floatformat:2 }}</div>
+          <div class="net-income-label text-xl opacity-90">{% trans "OPERATING INCOME" %}</div>
+        </div>
+        <!-- Sección de Otros Ingresos/Gastos -->
+        <div class="statement-section p-6 border-b border-zinc-200 dark:border-zinc-700 hover:bg-green-50 dark:hover:bg-green-900/20 transition-all">
+          <h2 class="section-title text-xl font-semibold text-zinc-700 dark:text-zinc-100 mb-6 flex items-center gap-2">
+            <i class="fas fa-exchange-alt text-green-500"></i>
+            {% trans "OTHER INCOME & EXPENSES" %}
+          </h2>
+          <!-- Otros Ingresos -->
+          <h3 class="text-lg font-semibold text-zinc-700 dark:text-zinc-100 mb-3">{% trans "Other Income" %}</h3>
+          {% for account in other_income %}
+          <div class="account-item flex justify-between items-center p-4 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow hover:translate-x-2 hover:shadow-lg transition-all border-l-4 border-transparent hover:border-green-500">
+            <div class="account-info flex-1">
+              <div class="account-code font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ account.code }}</div>
+              <div class="account-name text-zinc-500 dark:text-zinc-300 text-xs mt-1">{{ account.name }}</div>
+            </div>
+            <div class="account-amount font-bold text-green-600 dark:text-green-400 text-lg">
+              ${{ account.balance|floatformat:2 }}
+            </div>
+          </div>
+          {% endfor %}
+          <!-- Otros Gastos -->
+          <h3 class="text-lg font-semibold text-zinc-700 dark:text-zinc-100 mb-3 mt-6">{% trans "Other Expenses" %}</h3>
+          {% for account in other_expenses %}
+          <div class="account-item flex justify-between items-center p-4 mb-2 bg-white dark:bg-zinc-900 rounded-xl shadow hover:translate-x-2 hover:shadow-lg transition-all border-l-4 border-transparent hover:border-green-500">
+            <div class="account-info flex-1">
+              <div class="account-code font-semibold text-zinc-700 dark:text-zinc-100 text-sm">{{ account.code }}</div>
+              <div class="account-name text-zinc-500 dark:text-zinc-300 text-xs mt-1">{{ account.name }}</div>
+            </div>
+            <div class="account-amount font-bold text-red-600 dark:text-red-400 text-lg">
+              (${{ account.balance|floatformat:2 }})
+            </div>
+          </div>
+          {% endfor %}
+          <div class="section-total bg-gradient-to-r from-green-400 to-green-600 text-white p-4 rounded-xl mt-4 text-right font-bold text-lg shadow">
+            {% trans "Net Other Income/Expenses" %}: ${{ net_other_income|floatformat:2 }}
+          </div>
+        </div>
+        <!-- Ingreso Neto -->
+        <div class="net-income bg-gradient-to-r from-green-500 to-green-700 text-white p-8 rounded-2xl text-center mx-6 my-8 shadow-2xl">
+          <div class="net-income-value text-4xl md:text-5xl font-bold mb-2">${{ net_income|floatformat:2 }}</div>
+          <div class="net-income-label text-xl opacity-90">{% trans "NET INCOME" %}</div>
+        </div>
+        <!-- Botones de exportación -->
+        <div class="export-buttons flex flex-wrap justify-center gap-4 p-6">
+          <button class="export-btn btn-pdf bg-gradient-to-r from-red-400 to-red-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToPDF()">
+            <i class="fas fa-file-pdf"></i>
+            {% trans "Export PDF" %}
+          </button>
+          <button class="export-btn btn-excel bg-gradient-to-r from-green-400 to-green-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="exportToExcel()">
+            <i class="fas fa-file-excel"></i>
+            {% trans "Export Excel" %}
+          </button>
+          <button class="export-btn btn-print bg-gradient-to-r from-blue-400 to-blue-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center gap-2 shadow hover:scale-105 hover:shadow-lg transition-all" onclick="printReport()">
+            <i class="fas fa-print"></i>
+            {% trans "Print Report" %}
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Toast de feedback -->
+    <div id="toast" class="toast hidden"></div>
+    <!-- Confetti animado -->
+    <canvas id="confetti" class="confetti hidden"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Spinner y animación de carga
+const form = document.getElementById('reportFilterForm');
+form.addEventListener('submit', function() {
+  document.getElementById('loadingSpinner').classList.remove('hidden');
+  document.getElementById('reportContent').classList.add('hidden');
+});
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    document.getElementById('loadingSpinner').classList.add('hidden');
+    document.getElementById('reportContent').classList.remove('hidden');
+  }, 800);
+});
+// Toasts de feedback
+function showToast(msg, type='success') {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = `<div class="px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 ${type==='success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'} animate-bounceIn">` +
+    (type==='success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>') +
+    `<span>${msg}</span></div>`;
+  toast.classList.remove('hidden');
+  setTimeout(()=>toast.classList.add('hidden'), 3000);
+}
+// Exportar PDF/Excel/Imprimir
+function exportToPDF() { showToast('{% trans "PDF export functionality will be implemented" %}'); }
+function exportToExcel() { showToast('{% trans "Excel export functionality will be implemented" %}'); }
+function printReport() { window.print(); showToast('{% trans "Printing..." %}'); }
+// Confetti animado al completar (ejemplo: si hay un parámetro ?celebrate=1)
+function launchConfetti() {
+  const canvas = document.getElementById('confetti');
+  if (!canvas) return;
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  let pieces = Array.from({length: 120},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height/2,s:Math.random()*8+4,d:Math.random()*2*Math.PI,c:`hsl(${Math.random()*360},90%,60%)`,v:Math.random()*2+1}));
+  canvas.classList.remove('hidden');
+  let frame=0;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for(const p of pieces) {
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.s,0,2*Math.PI);
+      ctx.fillStyle=p.c; ctx.fill();
+      p.y+=p.v; p.x+=Math.sin(frame/10+p.d)*2;
+      if(p.y>canvas.height) p.y=-10;
+    }
+    frame++;
+    if(frame<180) requestAnimationFrame(draw); else canvas.classList.add('hidden');
+  }
+  draw();
+}
+if(window.location.search.includes('celebrate=1')) setTimeout(launchConfetti, 1200);
+// Microinteracciones: focus ring animado
+const inputs = document.querySelectorAll('input, select');
+inputs.forEach(el=>{
+  el.addEventListener('focus',()=>el.classList.add('ring-2','ring-green-400','dark:ring-green-500','ring-opacity-70'));
+  el.addEventListener('blur',()=>el.classList.remove('ring-2','ring-green-400','dark:ring-green-500','ring-opacity-70'));
+});
+</script>
+{% endblock %} 

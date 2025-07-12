@@ -71,9 +71,9 @@
   <!-- Logo -->
   <a href="/" class="flex items-center">
     {% if empresa_activa and empresa_activa.logo %}
-      <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="h-12 w-auto mr-2" />
+      <img src="{{ empresa_activa.logo.url }}" alt="{% trans 'Logo' %} {{ empresa_activa.nombre }}" class="h-12 w-auto mr-2" />
     {% else %}
-      <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo Synap" class="h-12 w-auto mr-2" />
+      <img src="{% static 'images/Synap-transparencia.png' %}" alt="{% trans 'Synap Logo' %}" class="h-12 w-auto mr-2" />
     {% endif %}
   </a>
 
@@ -181,7 +181,7 @@
         :disabled="loading"
       >
         <span class="material-icons text-base mr-1">location_on</span>
-        <span x-text="loading ? 'Cargando...' : (activeBranch ? activeBranch.name : 'Sin sucursal')" class="truncate max-w-[8rem]"></span>
+        <span x-text="loading ? '{% trans "Loading..." %}' : (activeBranch ? activeBranch.name : '{% trans "No Branch" %}')" class="truncate max-w-[8rem]"></span>
         <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
       </button>
       
@@ -228,7 +228,7 @@
     </div>
     
     <!-- Usuario -->
-    <button class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center">
+    <button class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center" aria-label="{% trans 'User Menu' %}">
       <span class="material-icons">person</span>
     </button>
     

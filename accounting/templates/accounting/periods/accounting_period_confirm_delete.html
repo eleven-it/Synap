@@ -1,0 +1,322 @@
+{% extends 'accounting/accounting_app_base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Confirmar Eliminación" %} - {{ period.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-card {
+        animation: slideIn 0.5s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .warning-icon {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
+        }
+    }
+    
+    .delete-btn {
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    .delete-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+    }
+    
+    .cancel-btn {
+        transition: all 0.3s ease;
+    }
+    .cancel-btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    .period-info {
+        transition: all 0.3s ease;
+    }
+    .period-info:hover {
+        transform: translateX(5px);
+    }
+    
+    .impact-list {
+        transition: all 0.3s ease;
+    }
+    .impact-list li {
+        transition: all 0.3s ease;
+    }
+    .impact-list li:hover {
+        transform: translateX(10px);
+        color: #ef4444;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <button onclick="history.back()" class="absolute top-4 left-4 p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                <svg class="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </button>
+            
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans "Confirmar Eliminación" %}
+            </h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {% trans "Esta acción no se puede deshacer" %}
+            </p>
+        </div>
+
+        <!-- Delete Confirmation Card -->
+        <div class="delete-card bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+            <!-- Warning Icon -->
+            <div class="text-center mb-6">
+                <div class="warning-icon mx-auto w-16 h-16 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-8 h-8 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    {% trans "¿Eliminar Período Contable?" %}
+                </h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "Estás a punto de eliminar permanentemente el período" %}
+                </p>
+            </div>
+
+            <!-- Period Information -->
+            <div class="period-info bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Información del Período" %}
+                    </h3>
+                    <span class="px-2 py-1 text-xs font-medium rounded-full 
+                        {% if period.status == 'open' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% elif period.status == 'closed' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                        {% elif period.status == 'adjustment' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                        {% if period.status == 'open' %}
+                            {% trans "Abierto" %}
+                        {% elif period.status == 'closed' %}
+                            {% trans "Cerrado" %}
+                        {% elif period.status == 'adjustment' %}
+                            {% trans "Ajuste" %}
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Nombre:" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ period.name }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Código:" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ period.code }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Año Fiscal:" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ period.fiscal_year.name }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Rango:" %}</span>
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">
+                            {{ period.start_date|date:"d/m/Y" }} - {{ period.end_date|date:"d/m/Y" }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Impact Warning -->
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    {% trans "Impacto de la Eliminación" %}
+                </h3>
+                <ul class="impact-list space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                    <li class="flex items-start">
+                        <svg class="w-4 h-4 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Se eliminarán todos los asientos contables asociados" %}
+                    </li>
+                    <li class="flex items-start">
+                        <svg class="w-4 h-4 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Se perderán todos los datos contables del período" %}
+                    </li>
+                    <li class="flex items-start">
+                        <svg class="w-4 h-4 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Los reportes que incluyan este período se verán afectados" %}
+                    </li>
+                    {% if period.journal_entries.count > 0 %}
+                    <li class="flex items-start">
+                        <svg class="w-4 h-4 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% blocktrans with count=period.journal_entries.count %}
+                            Se eliminarán {{ count }} asientos contables
+                        {% endblocktrans %}
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <!-- Confirmation Checkbox -->
+            <div class="mb-6">
+                <label class="flex items-start">
+                    <input type="checkbox" id="confirmDelete" class="mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded">
+                    <span class="ml-3 text-sm text-gray-700 dark:text-gray-300">
+                        {% trans "Entiendo que esta acción es irreversible y eliminará permanentemente todos los datos asociados a este período contable." %}
+                    </span>
+                </label>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex space-x-3">
+                <button onclick="history.back()" class="cancel-btn flex-1 inline-flex items-center justify-center px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    {% trans "Cancelar" %}
+                </button>
+                
+                <button onclick="confirmDelete()" id="deleteButton" disabled class="delete-btn flex-1 inline-flex items-center justify-center px-4 py-3 text-white text-sm font-medium rounded-lg opacity-50 cursor-not-allowed">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    {% trans "Eliminar" %}
+                </button>
+            </div>
+        </div>
+
+        <!-- Alternative Actions -->
+        <div class="mt-6 text-center">
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                {% trans "¿Necesitas una alternativa?" %}
+            </p>
+            <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                {% if period.status == 'open' %}
+                    <a href="{% url 'accounting:period_close' period.id %}" class="inline-flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        {% trans "Cerrar Período" %}
+                    </a>
+                {% endif %}
+                        <a href="{% url 'accounting:period_edit' period.id %}" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    {% trans "Editar Período" %}
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center space-x-4">
+        <svg class="animate-spin w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="text-gray-900 dark:text-white">{% trans "Eliminando período..." %}</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Enable/disable delete button based on checkbox
+    document.getElementById('confirmDelete').addEventListener('change', function() {
+        const deleteButton = document.getElementById('deleteButton');
+        if (this.checked) {
+            deleteButton.disabled = false;
+            deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            deleteButton.disabled = true;
+            deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    });
+
+    function confirmDelete() {
+        if (!document.getElementById('confirmDelete').checked) {
+            return;
+        }
+
+        // Show loading overlay
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "accounting:accounting_period_delete" period.id %}';
+
+        // Add CSRF token
+        const csrfToken = document.createElement('input');
+        csrfToken.type = 'hidden';
+        csrfToken.name = 'csrfmiddlewaretoken';
+        csrfToken.value = '{{ csrf_token }}';
+        form.appendChild(csrfToken);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            history.back();
+        }
+        if (e.key === 'Enter' && document.getElementById('confirmDelete').checked) {
+            confirmDelete();
+        }
+    });
+
+    // Prevent accidental navigation
+    window.addEventListener('beforeunload', function(e) {
+        if (document.getElementById('confirmDelete').checked) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    // Add CSRF token to all forms
+    document.addEventListener('DOMContentLoaded', function() {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (!csrfToken) {
+            const token = document.createElement('input');
+            token.type = 'hidden';
+            token.name = 'csrfmiddlewaretoken';
+            token.value = '{{ csrf_token }}';
+            document.body.appendChild(token);
+        }
+    });
+</script>
+{% endblock %} 

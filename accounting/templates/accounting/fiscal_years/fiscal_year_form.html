@@ -1,0 +1,272 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ title }} - {% trans "Fiscal Year" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div class="flex items-center">
+                    <a href="{% url 'accounting:fiscal_year_list' %}" 
+                       class="mr-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </a>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ title }}
+                        </h1>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Configure fiscal year settings and periods" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Form -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <form method="post" class="space-y-6">
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information -->
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                                {% trans "Basic Information" %}
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ form.name.label }}
+                                    </label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.name.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div>
+                                    <label for="{{ form.code.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ form.code.label }}
+                                    </label>
+                                    {{ form.code }}
+                                    {% if form.code.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.code.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="mt-6">
+                                <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {{ form.description.label }}
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.description.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div>
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                                {% trans "Date Range" %}
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="{{ form.date_from.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ form.date_from.label }}
+                                    </label>
+                                    {{ form.date_from }}
+                                    {% if form.date_from.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.date_from.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div>
+                                    <label for="{{ form.date_to.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ form.date_to.label }}
+                                    </label>
+                                    {{ form.date_to }}
+                                    {% if form.date_to.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.date_to.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Period Configuration -->
+                        <div>
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                                {% trans "Period Configuration" %}
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="{{ form.period_length.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        {{ form.period_length.label }}
+                                    </label>
+                                    {{ form.period_length }}
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                        {% trans "Number of months per accounting period" %}
+                                    </p>
+                                    {% if form.period_length.errors %}
+                                        <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.period_length.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="flex items-center">
+                                    {{ form.auto_create_periods }}
+                                    <label for="{{ form.auto_create_periods.id_for_label }}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                        {{ form.auto_create_periods.label }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Settings -->
+                        <div>
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                                {% trans "Advanced Settings" %}
+                            </h3>
+                            
+                            <div class="space-y-4">
+                                <div class="flex items-center">
+                                    {{ form.is_active }}
+                                    <label for="{{ form.is_active.id_for_label }}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                        {{ form.is_active.label }}
+                                    </label>
+                                </div>
+                                
+                                <div class="flex items-center">
+                                    {{ form.allow_negative_cash }}
+                                    <label for="{{ form.allow_negative_cash.id_for_label }}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                        {{ form.allow_negative_cash.label }}
+                                    </label>
+                                </div>
+                                
+                                <div class="flex items-center">
+                                    {{ form.allow_negative_equity }}
+                                    <label for="{{ form.allow_negative_equity.id_for_label }}" class="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                                        {{ form.allow_negative_equity.label }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Errors -->
+                    {% if form.non_field_errors %}
+                    <div class="rounded-md bg-red-50 dark:bg-red-900/20 p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800 dark:text-red-200">
+                                    {% trans "Please correct the following errors:" %}
+                                </h3>
+                                <div class="mt-2 text-sm text-red-700 dark:text-red-300">
+                                    <ul class="list-disc pl-5 space-y-1">
+                                        {% for error in form.non_field_errors %}
+                                        <li>{{ error }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                        <a href="{% url 'accounting:fiscal_year_list' %}" 
+                           class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+                            {% trans "Cancel" %}
+                        </a>
+                        <button type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                            </svg>
+                            {{ submit_text }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Help Information -->
+        <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        {% trans "Fiscal Year Guidelines" %}
+                    </h3>
+                    <div class="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                        <ul class="list-disc pl-5 space-y-1">
+                            <li>{% trans "Fiscal years typically span 12 months and align with your business cycle" %}</li>
+                            <li>{% trans "Period length determines how accounting periods are automatically created" %}</li>
+                            <li>{% trans "Once created, periods can be managed individually" %}</li>
+                            <li>{% trans "Closed fiscal years cannot be modified" %}</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Validación de fechas
+document.addEventListener('DOMContentLoaded', function() {
+    const dateFrom = document.getElementById('{{ form.date_from.id_for_label }}');
+    const dateTo = document.getElementById('{{ form.date_to.id_for_label }}');
+    
+    function validateDates() {
+        if (dateFrom.value && dateTo.value) {
+            const fromDate = new Date(dateFrom.value);
+            const toDate = new Date(dateTo.value);
+            
+            if (fromDate >= toDate) {
+                dateTo.setCustomValidity('{% trans "End date must be after start date" %}');
+            } else {
+                dateTo.setCustomValidity('');
+            }
+        }
+    }
+    
+    dateFrom.addEventListener('change', validateDates);
+    dateTo.addEventListener('change', validateDates);
+    
+    // Animaciones de entrada
+    const form = document.querySelector('form');
+    form.style.opacity = '0';
+    form.style.transform = 'translateY(20px)';
+    setTimeout(() => {
+        form.style.transition = 'all 0.5s ease';
+        form.style.opacity = '1';
+        form.style.transform = 'translateY(0)';
+    }, 100);
+});
+</script>
+{% endblock %} 

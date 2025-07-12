@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import views
+from . import tpv_views
 
 app_name = 'sales'
 
@@ -14,16 +15,16 @@ urlpatterns = [
     path('clients/<int:pk>/edit/', views.ClientUpdateView.as_view(), name='client_update'),
     path('clients/<int:pk>/delete/', views.ClientDeleteView.as_view(), name='client_delete'),
     
-    # Gestión de contactos
-    path('contacts/', views.ContactListView.as_view(), name='contact_list'),
-    path('contacts/create/', views.ContactCreateView.as_view(), name='contact_create'),
-    path('contacts/<int:pk>/', views.ContactDetailView.as_view(), name='contact_detail'),
-    path('contacts/<int:pk>/edit/', views.ContactUpdateView.as_view(), name='contact_update'),
-    path('contacts/<int:pk>/delete/', views.ContactDeleteView.as_view(), name='contact_delete'),
+    # Gestión de contactos (comentado - no implementado)
+    # path('contacts/', views.ContactListView.as_view(), name='contact_list'),
+    # path('contacts/create/', views.ContactCreateView.as_view(), name='contact_create'),
+    # path('contacts/<int:pk>/', views.ContactDetailView.as_view(), name='contact_detail'),
+    # path('contacts/<int:pk>/edit/', views.ContactUpdateView.as_view(), name='contact_update'),
+    # path('contacts/<int:pk>/delete/', views.ContactDeleteView.as_view(), name='contact_delete'),
     
-    # Contactos por cliente
-    path('clients/<int:client_id>/contacts/', views.ContactListView.as_view(), name='client_contacts'),
-    path('clients/<int:client_id>/contacts/add/', views.ContactCreateView.as_view(), name='contact_create_by_client'),
+    # Contactos por cliente (comentado - no implementado)
+    # path('clients/<int:client_id>/contacts/', views.ContactListView.as_view(), name='client_contacts'),
+    # path('clients/<int:client_id>/contacts/add/', views.ContactCreateView.as_view(), name='contact_create_by_client'),
     
     # Gestión de pedidos de venta
     path('orders/', views.sales_order_list, name='sales_order_list'),
@@ -107,4 +108,60 @@ urlpatterns = [
     
     # APIs RESTful
     path('api/', include('sales.api.urls')),
+
+    # --- URLs PARA PUNTO DE VENTA (TPV) ---
+
+    # Dashboard y sesiones
+    path('pos/', views.pos_dashboard, name='pos_dashboard'),
+    path('pos/session/open/', views.pos_session_open, name='pos_session_open'),
+    path('pos/session/close/', views.pos_session_close, name='pos_session_close'),
+    path('pos/session/<int:session_id>/report/', views.pos_session_report, name='pos_session_report'),
+    path('pos/sessions/', views.POSSessionListView.as_view(), name='pos_session_list'),
+
+    # Ventas
+    path('pos/sale/new/', views.pos_sale_new, name='pos_sale_new'),
+    path('pos/sale/<int:sale_id>/', views.pos_sale_detail, name='pos_sale_detail'),
+    path('pos/sales/', views.POSSaleListView.as_view(), name='pos_sale_list'),
+
+    # APIs para TPV
+    path('pos/api/product/search/', views.pos_product_search, name='pos_product_search'),
+    path('pos/api/sale/<int:sale_id>/add-product/', views.pos_sale_add_product, name='pos_sale_add_product'),
+    path('pos/api/sale/<int:sale_id>/remove-product/<int:line_id>/', views.pos_sale_remove_product, name='pos_sale_remove_product'),
+    path('pos/api/sale/<int:sale_id>/apply-promotion/', views.pos_sale_apply_promotion, name='pos_sale_apply_promotion'),
+    path('pos/api/sale/<int:sale_id>/complete/', views.pos_sale_complete, name='pos_sale_complete'),
+    path('pos/api/scale/weight/', views.pos_scale_weight, name='pos_scale_weight'),
+    path('pos/api/validate-stock/', views.pos_validate_stock, name='pos_validate_stock'),
+    path('pos/api/calculate-totals/', views.pos_calculate_totals, name='pos_calculate_totals'),
+
+    # Búsqueda de clientes
+    path('pos/client/search/', views.pos_client_search, name='pos_client_search'),
+
+    # Configuración
+    path('pos/configuration/', views.pos_configuration, name='pos_configuration'),
+
+    # URLs del TPV
+    path('tpv/', tpv_views.tpv_main, name='tpv_main'),
+    path('tpv/dashboard/', tpv_views.tpv_dashboard, name='tpv_dashboard'),
+    path('tpv/sessions/', tpv_views.tpv_session_list, name='tpv_session_list'),
+    path('tpv/session/<int:session_id>/', tpv_views.tpv_session_detail, name='tpv_session_detail'),
+    path('tpv/open-session/', tpv_views.tpv_open_session, name='tpv_open_session'),
+    path('tpv/close-session/<int:session_id>/', tpv_views.tpv_close_session, name='tpv_close_session'),
+    path('tpv/session/<int:session_id>/sale/', tpv_views.tpv_sale_create, name='tpv_sale_create'),
+    path('tpv/product-search/', tpv_views.tpv_product_search, name='tpv_product_search'),
+    path('tpv/session/<int:session_id>/sale/save/', tpv_views.tpv_sale_save, name='tpv_sale_save'),
+    path('tpv/reports/', tpv_views.tpv_reports, name='tpv_reports'),
+    path('tpv/sale/<int:sale_id>/summary/', tpv_views.TPVSaleSummaryView.as_view(), name='tpv_sale_summary'),
+
+    # Vistas de medios de pago
+    path('payment-methods/', views.payment_method_list, name='payment_method_list'),
+    path('payment-methods/create/', views.payment_method_create, name='payment_method_create'),
+    path('payment-methods/<int:pk>/', views.payment_method_detail, name='payment_method_detail'),
+    path('payment-methods/<int:pk>/edit/', views.payment_method_edit, name='payment_method_edit'),
+    path('payment-methods/<int:pk>/delete/', views.payment_method_delete, name='payment_method_delete'),
+
+    # Vistas de procesadores de pago
+    path('payment-processors/', views.payment_processor_list, name='payment_processor_list'),
+    path('payment-processors/create/', views.payment_processor_create, name='payment_processor_create'),
+    path('payment-processors/<int:pk>/edit/', views.payment_processor_edit, name='payment_processor_edit'),
+    path('payment-processors/<int:pk>/delete/', views.payment_processor_delete, name='payment_processor_delete'),
 ] 

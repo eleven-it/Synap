@@ -9,7 +9,7 @@ requests
 PyJWT==2.8.0
 cryptography
 python-decouple
-mysqlclient
+mysqlclient==2.2.7
 django-allauth
 fastapi
 firebase-admin

@@ -11,7 +11,8 @@ from django.contrib.auth import get_user_model
 from sales.models import (
     Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
-    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog
+    DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog,
+    POSSale, POSSaleLine
 )
 from core.models import Contact
 from inventory.models import ProductVariant, Warehouse
@@ -799,4 +800,167 @@ class ApprovalLogViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['action', 'user', 'sales_order']
     search_fields = ['reason']
     ordering_fields = ['action_date']
-    ordering = ['-action_date'] 
+    ordering = ['-action_date']
+
+
+# ============================================================================
+# TPV (Point of Sale) API Endpoints
+# ============================================================================
+
+class TPVProductViewSet(viewsets.ReadOnlyModelViewSet):
+    """API para búsqueda de productos en el TPV"""
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Obtener productos del inventario si está disponible
+        try:
+            from inventory.models import ProductVariant
+            return ProductVariant.objects.filter(
+                is_active=True,
+                product__is_active=True
+            ).select_related('product', 'product__category')
+        except ImportError:
+            # Si no hay módulo de inventario, devolver lista vacía
+            return ProductVariant.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """Búsqueda de productos para el TPV"""
+        query = request.query_params.get('q', '')
+        if not query or len(query) < 2:
+            return Response([])
+        
+        queryset = self.get_queryset().filter(
+            Q(product__name__icontains=query) |
+            Q(product__sku__icontains=query) |
+            Q(sku__icontains=query)
+        )[:20]
+        
+        results = []
+        for variant in queryset:
+            # Obtener stock si está disponible
+            stock = 0
+            try:
+                # Intentar obtener stock del inventario si está disponible
+                if hasattr(variant, 'stock_quantity'):
+                    stock = variant.stock_quantity
+                elif hasattr(variant.product, 'stock_quantity'):
+                    stock = variant.product.stock_quantity
+            except:
+                pass
+            
+            # Obtener precio
+            price = 0
+            if hasattr(variant, 'sale_price') and variant.sale_price:
+                price = float(variant.sale_price)
+            elif hasattr(variant.product, 'sale_price') and variant.product.sale_price:
+                price = float(variant.product.sale_price)
+            
+            results.append({
+                'id': variant.id,
+                'name': variant.product.name,
+                'sku': variant.sku or variant.product.sku,
+                'price': price,
+                'stock': stock,
+                'category': variant.product.category.name if variant.product.category else None
+            })
+        
+        return Response(results)
+    
+    def list(self, request):
+        """Lista de productos para el TPV"""
+        queryset = self.get_queryset()[:50]  # Limitar a 50 productos
+        
+        results = []
+        for variant in queryset:
+            # Obtener stock si está disponible
+            stock = 0
+            try:
+                # Intentar obtener stock del inventario si está disponible
+                if hasattr(variant, 'stock_quantity'):
+                    stock = variant.stock_quantity
+                elif hasattr(variant.product, 'stock_quantity'):
+                    stock = variant.product.stock_quantity
+            except:
+                pass
+            
+            # Obtener precio
+            price = 0
+            if hasattr(variant, 'sale_price') and variant.sale_price:
+                price = float(variant.sale_price)
+            elif hasattr(variant.product, 'sale_price') and variant.product.sale_price:
+                price = float(variant.product.sale_price)
+            
+            results.append({
+                'id': variant.id,
+                'name': variant.product.name,
+                'sku': variant.sku or variant.product.sku,
+                'price': price,
+                'stock': stock,
+                'category': variant.product.category.name if variant.product.category else None
+            })
+        
+        return Response(results)
+
+
+class TPVPaymentViewSet(viewsets.ViewSet):
+    """API para procesamiento de pagos del TPV"""
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def process_payment(self, request):
+        """Procesar pago del TPV"""
+        try:
+            from sales.services.tpv_service import TPVService
+            from sales.services.sale_service import SaleService
+            
+            data = request.data
+            items = data.get('items', [])
+            payment_method = data.get('payment_method', 'cash')
+            total = data.get('total', 0)
+            extra_data = data.get('extra_data', {})
+            
+            if not items:
+                return Response(
+                    {'error': 'No items in cart'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Obtener sesión activa del TPV
+            tpv_service = TPVService()
+            session = tpv_service.get_active_session(request.user)
+            
+            if not session:
+                return Response(
+                    {'error': 'No active TPV session'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Crear la venta
+            sale_service = SaleService()
+            sale_data = {
+                'session': session,
+                'items': items,
+                'payment_method': payment_method,
+                'total': total,
+                'extra_data': extra_data
+            }
+            
+            sale = sale_service.create_tpv_sale(sale_data)
+            
+            # Procesar pago
+            payment_result = sale_service.process_tpv_payment(sale, payment_method, extra_data)
+            
+            return Response({
+                'success': True,
+                'sale_number': sale.number,
+                'total': float(sale.total),
+                'payment_method': payment_method,
+                'change': payment_result.get('change', 0)
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            ) 

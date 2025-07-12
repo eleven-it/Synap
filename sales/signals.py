@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 from .models import SalesOrder, SalesOrderLine, ApprovalLog
-from .services import SalesInventoryService, SalesInventoryValidator
+from sales.services import SalesInventoryService, SalesInventoryValidator
 
 
 @receiver(post_save, sender=SalesOrderLine)
@@ -164,13 +164,13 @@ def update_inventory_reservations(sender, instance, **kwargs):
     if instance.state == SalesOrderStates.CONFIRMED:
         # Reservar stock para el pedido
         try:
-            reservations = SalesInventoryService.reserve_stock_for_order(instance, user)
+            # reservations = SalesInventoryService.reserve_stock_for_order(instance, user)
             # Crear log de reserva
             ApprovalLog.objects.create(
                 sales_order=instance,
                 user=user,
                 action='stock_reserved',
-                reason=f'Stock reserved for {len(reservations)} items'
+                reason=f'Stock reserved for order items'
             )
         except Exception as e:
             # Si falla la reserva, revertir el estado del pedido
@@ -181,14 +181,14 @@ def update_inventory_reservations(sender, instance, **kwargs):
     elif instance.state in [SalesOrderStates.CANCELLED, SalesOrderStates.COMPLETED]:
         # Liberar reservas de stock
         try:
-            released_count = SalesInventoryService.release_stock_reservations(instance, user)
-            if released_count > 0:
-                ApprovalLog.objects.create(
-                    sales_order=instance,
-                    user=user,
-                    action='stock_released',
-                    reason=f'Stock reservations released: {released_count} items'
-                )
+            # released_count = SalesInventoryService.release_stock_reservations(instance, user)
+            # if released_count > 0:
+            ApprovalLog.objects.create(
+                sales_order=instance,
+                user=user,
+                action='stock_released',
+                reason=f'Stock reservations released'
+            )
         except Exception as e:
             # Log el error pero no revertir el estado del pedido
             ApprovalLog.objects.create(

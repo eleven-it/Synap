@@ -126,17 +126,17 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {{ search_form.search|as_crispy_field }}
                     {{ search_form.type|as_crispy_field }}
-                    {{ search_form.country|as_crispy_field }}
-                    {{ search_form.state|as_crispy_field }}
+                    {# {{ search_form.country|as_crispy_field }} #}
+                    {# {{ search_form.state|as_crispy_field }} #}
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {{ search_form.is_customer|as_crispy_field }}
-                    {{ search_form.is_supplier|as_crispy_field }}
+                    {# {{ search_form.is_supplier|as_crispy_field }} #}
                     {{ search_form.is_active|as_crispy_field }}
                 </div>
                 <div class="flex items-center justify-between">
                     <div class="flex-1 max-w-md">
-                        {{ search_form.assigned_seller|as_crispy_field }}
+                        {# {{ search_form.assigned_seller|as_crispy_field }} #}
                     </div>
                     <div class="flex items-center space-x-3">
                         <button type="submit" class="btn-secondary">
@@ -273,10 +273,10 @@
                                 {% trans "View Details" %}
                             </a>
                             <span class="text-gray-300 dark:text-gray-600">|</span>
-                            <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" 
+                            {# <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" 
                                class="text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 font-medium">
                                 {% trans "Add Contact" %}
-                            </a>
+                            </a> #}
                         </div>
                         <div class="flex items-center space-x-2">
                             <a href="{% url 'sales:client_update' client.pk %}" 

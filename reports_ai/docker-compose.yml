@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  reports-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    container_name: synap_reports_ai
+    ports:
+      - "8001:8000"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - synap_network
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: synap_reports_ai_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - synap_network
+
+volumes:
+  redis_data:
+
+networks:
+  synap_network:
+    external: true 

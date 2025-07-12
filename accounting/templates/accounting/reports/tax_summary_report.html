@@ -1,0 +1,632 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Tax Summary Report" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-all duration-300 hover:shadow-md;
+    }
+    
+    .stats-number {
+        @apply text-3xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .stats-label {
+        @apply text-sm font-medium text-gray-500 dark:text-gray-400 mt-1;
+    }
+    
+    .filter-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .summary-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden;
+    }
+    
+    .summary-header {
+        @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700;
+    }
+    
+    .summary-row {
+        @apply hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200;
+    }
+    
+    .tax-amount {
+        @apply font-semibold;
+    }
+    
+    .tax-amount.positive {
+        @apply text-green-600 dark:text-green-400;
+    }
+    
+    .tax-amount.negative {
+        @apply text-red-600 dark:text-red-400;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Tax Summary Report" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Tax analysis from" %} {{ start_date|date:"F j, Y" }} {% trans "to" %} {{ end_date|date:"F j, Y" }}
+                    </p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="window.print()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                        </svg>
+                        {% trans "Print" %}
+                    </button>
+                    <a href="{% url 'accounting:reports_dashboard' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Back to Reports" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="filter-card">
+            <form method="get" class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-48">
+                    <label for="date_from" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "From Date" %}
+                    </label>
+                    <input type="date" name="date_from" id="date_from" value="{{ date_from }}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                <div class="flex-1 min-w-48">
+                    <label for="date_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "To Date" %}
+                    </label>
+                    <input type="date" name="date_to" id="date_to" value="{{ date_to }}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                <div class="flex-1 min-w-48">
+                    <label for="tax_group" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "Tax Group" %}
+                    </label>
+                    <select name="tax_group" id="tax_group"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        <option value="">{% trans "All Groups" %}</option>
+                        {% for group in tax_groups %}
+                        <option value="{{ group.id }}" {% if tax_group_filter == group.id|stringformat:"s" %}selected{% endif %}>
+                            {{ group.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        {% trans "Apply Filters" %}
+                    </button>
+                    <a href="{% url 'accounting:tax_summary_report' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        {% trans "Clear" %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Tax Summary" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Total Base Amount -->
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">${{ total_base|floatformat:2 }}</div>
+                        <div class="stats-label">{% trans "Total Base Amount" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Tax Amount -->
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">${{ total_tax|floatformat:2 }}</div>
+                        <div class="stats-label">{% trans "Total Tax Amount" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Amount -->
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">${{ total_amount|floatformat:2 }}</div>
+                        <div class="stats-label">{% trans "Total Amount" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Average Tax Rate -->
+            <div class="stats-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="stats-number">
+                            {% if total_base > 0 %}
+                                {{ total_tax|div:total_base|mul:100|floatformat:1 }}%
+                            {% else %}
+                                0.0%
+                            {% endif %}
+                        </div>
+                        <div class="stats-label">{% trans "Average Tax Rate" %}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary by Tax Group -->
+    {% if summary_by_group %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="summary-card">
+            <div class="summary-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Summary by Tax Group" %}
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax Group" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Base Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Total Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Lines" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for group in summary_by_group %}
+                        <tr class="summary-row">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ group.tax__tax_group__name|default:"Unknown Group" }}
+                                    </div>
+                                    {% if group.tax__tax_group__code %}
+                                    <div class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                        ({{ group.tax__tax_group__code }})
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ group.total_base|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <span class="tax-amount positive">${{ group.total_tax|floatformat:2 }}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ group.total_amount|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+                                {{ group.line_count }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary by Individual Tax -->
+    {% if summary_by_tax %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="summary-card">
+            <div class="summary-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Summary by Individual Tax" %}
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax" %}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Group" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Rate" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Base Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Total Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Lines" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for tax in summary_by_tax %}
+                        <tr class="summary-row">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ tax.tax__name|default:"Unknown Tax" }}
+                                    </div>
+                                    {% if tax.tax__code %}
+                                    <div class="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                        ({{ tax.tax__code }})
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {{ tax.tax__tax_group__name|default:"-" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                {% if tax.tax__amount_type == 'PERCENTAGE' %}
+                                    {{ tax.tax__amount|floatformat:2 }}%
+                                {% else %}
+                                    ${{ tax.tax__amount|floatformat:2 }}
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ tax.total_base|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <span class="tax-amount positive">${{ tax.total_tax|floatformat:2 }}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ tax.total_amount|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+                                {{ tax.line_count }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Summary by Tax Type -->
+    {% if summary_by_type %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="summary-card">
+            <div class="summary-header">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                    {% trans "Summary by Tax Type" %}
+                </h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax Type" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Base Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tax Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Total Amount" %}
+                            </th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Lines" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for type_summary in summary_by_type %}
+                        <tr class="summary-row">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                                    {% if type_summary.tax__amount_type == 'PERCENTAGE' %}bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
+                                    {% else %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400{% endif %}">
+                                    {{ type_summary.tax__amount_type|title }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ type_summary.total_base|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right">
+                                <span class="tax-amount positive">${{ type_summary.total_tax|floatformat:2 }}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                                ${{ type_summary.total_amount|floatformat:2 }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+                                {{ type_summary.line_count }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Charts -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Analytics" %}
+        </h2>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Tax Distribution by Group" %}
+                </h3>
+                <canvas id="chart-group-distribution" height="250"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Top Individual Taxes" %}
+                </h3>
+                <canvas id="chart-top-taxes" height="250"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Base vs Tax Comparison" %}
+                </h3>
+                <canvas id="chart-comparison" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- No Data Message -->
+    {% if not summary_by_group and not summary_by_tax and not summary_by_type %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="text-center py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                {% trans "No tax data found" %}
+            </h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {% trans "No tax lines were found for the selected period and filters." %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Datos desde el contexto Django
+    const chartGroupLabels = {{ chart_group_labels|safe }};
+    const chartGroupTax = {{ chart_group_tax|safe }};
+    const chartGroupBase = {{ chart_group_base|safe }};
+    const chartTaxLabels = {{ chart_tax_labels|safe }};
+    const chartTaxAmounts = {{ chart_tax_amounts|safe }};
+    const chartComparisonLabels = {{ chart_comparison_labels|safe }};
+    const chartComparisonData = {{ chart_comparison_data|safe }};
+
+    // Detectar modo dark
+    function isDarkMode() {
+        return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function getColors() {
+        if (isDarkMode()) {
+            return {
+                text: '#fff',
+                grid: '#444',
+                bg: '#1e293b',
+                border: '#334155',
+                palette: [
+                    '#60a5fa', '#f472b6', '#facc15', '#34d399', '#a78bfa', '#f87171', '#38bdf8', '#fbbf24', '#4ade80', '#818cf8'
+                ]
+            };
+        } else {
+            return {
+                text: '#222',
+                grid: '#e5e7eb',
+                bg: '#fff',
+                border: '#cbd5e1',
+                palette: [
+                    '#2563eb', '#db2777', '#ca8a04', '#059669', '#7c3aed', '#dc2626', '#0284c7', '#d97706', '#16a34a', '#6366f1'
+                ]
+            };
+        }
+    }
+
+    function renderCharts() {
+        const colors = getColors();
+        
+        // Distribución de impuestos por grupo (barras)
+        const ctxGroup = document.getElementById('chart-group-distribution');
+        if (ctxGroup) {
+            new Chart(ctxGroup.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartGroupLabels,
+                    datasets: [{
+                        label: 'Tax Amount',
+                        data: chartGroupTax,
+                        backgroundColor: colors.palette[0],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }, {
+                        label: 'Base Amount',
+                        data: chartGroupBase,
+                        backgroundColor: colors.palette[1],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { 
+                            display: true,
+                            labels: { color: colors.text }
+                        },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        },
+                        y: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Top impuestos individuales (barras)
+        const ctxTop = document.getElementById('chart-top-taxes');
+        if (ctxTop) {
+            new Chart(ctxTop.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartTaxLabels,
+                    datasets: [{
+                        label: 'Tax Amount',
+                        data: chartTaxAmounts,
+                        backgroundColor: colors.palette,
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        },
+                        y: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Comparación base vs impuesto (dona)
+        const ctxComparison = document.getElementById('chart-comparison');
+        if (ctxComparison) {
+            new Chart(ctxComparison.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: chartComparisonLabels,
+                    datasets: [{
+                        label: 'Amount',
+                        data: chartComparisonData,
+                        backgroundColor: [colors.palette[0], colors.palette[1]],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: { color: colors.text }
+                        },
+                        tooltip: { enabled: true }
+                    }
+                }
+            });
+        }
+    }
+
+    // Renderizar al cargar y al cambiar dark/light
+    document.addEventListener('DOMContentLoaded', renderCharts);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
+
+    // Auto-submit form when date inputs change
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    dateInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            this.closest('form').submit();
+        });
+    });
+</script>
+{% endblock %} 

@@ -2,3 +2,5 @@
 firebase_credentials.json
 *.pyc
 __pycache__/
+administraNET_Limpio/
+*.md

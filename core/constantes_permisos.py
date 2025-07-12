@@ -119,12 +119,18 @@ PERMISOS_POR_MODULO = {
         ("finance.exportar", "Exportar datos financieros"),
     ],
     "Reportes": [
-        ("reportes.ver", "Ver reportes"),
-        ("reportes.crear", "Crear reportes personalizados"),
-        ("reportes.exportar", "Exportar reportes"),
-        ("reportes.programar", "Programar reportes automáticos"),
-        ("reportes.dashboard", "Acceso a dashboards"),
-        ("reportes.bi", "Acceso a Business Intelligence"),
+        ("reports.ver", "Ver reportes"),
+        ("reports.crear", "Crear reportes personalizados"),
+        ("reports.editar", "Editar reportes"),
+        ("reports.eliminar", "Eliminar reportes"),
+        ("reports.exportar", "Exportar reportes"),
+        ("reports.programar", "Programar reportes automáticos"),
+        ("reports.dashboard", "Acceso a dashboards"),
+        ("reports.builder", "Usar constructor visual de reportes"),
+        ("reports.templates", "Gestionar templates de reportes"),
+        ("reports.components", "Gestionar componentes de reportes"),
+        ("reports.schedules", "Gestionar programación de reportes"),
+        ("reports.ai", "Usar funcionalidades de IA para reportes"),
     ],
     "Usuarios": [
         ("usuarios.ver", "Ver usuarios"),
@@ -180,7 +186,7 @@ ROLES_PREDEFINIDOS = {
         "descripcion": "Gestión completa de operaciones",
         "permisos": [
             "clientes.*", "proveedores.*", "inventory.*", 
-            "sales.*", "purchases.*", "compras.*", "reportes.*",
+            "sales.*", "purchases.*", "compras.*", "reports.*",
             "core.ver_contact", "core.crear_contact", "core.editar_contact",
             "usuarios.ver", "usuarios.editar", "usuarios.perfil",
             "configuracion.general", "configuracion.empresa"
@@ -192,7 +198,7 @@ ROLES_PREDEFINIDOS = {
             "clientes.ver", "clientes.crear", "clientes.editar",
             "ventas.ver", "ventas.crear", "ventas.editar",
             "inventario.ver", "inventario.ver_stock",
-            "reportes.ver", "usuarios.perfil"
+            "reports.ver", "usuarios.perfil"
         ]
     },
     "Comprador": {
@@ -207,7 +213,7 @@ ROLES_PREDEFINIDOS = {
             "purchases.ver_receipt", "purchases.aprobar_receipt", "purchases.ver_rating", "purchases.crear_rating",
             "purchases.ver_workflow", "purchases.crear_workflow", "purchases.ver_report", "purchases.ver_settings",
             "inventory.ver", "inventory.ver_stock",
-            "reportes.ver", "usuarios.perfil"
+            "reports.ver", "usuarios.perfil"
         ]
     },
     "Almacén": {
@@ -225,14 +231,14 @@ ROLES_PREDEFINIDOS = {
             "inventory.ver_movements",
             "proveedores.ver",
             "compras.ver", 
-            "reportes.ver", 
+            "reports.ver", 
             "usuarios.perfil"
         ]
     },
     "Contador": {
         "descripcion": "Gestión financiera y contable",
         "permisos": [
-            "finance.*", "reportes.ver", "reportes.exportar",
+            "finance.*", "reports.ver", "reports.exportar",
             "usuarios.perfil"
         ]
     },
@@ -240,7 +246,7 @@ ROLES_PREDEFINIDOS = {
         "descripcion": "Solo lectura y reportes",
         "permisos": [
             "clientes.ver", "proveedores.ver", "inventario.ver",
-            "ventas.ver", "compras.ver", "reportes.ver",
+            "ventas.ver", "compras.ver", "reports.ver",
             "usuarios.perfil"
         ]
     }

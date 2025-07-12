@@ -10,13 +10,40 @@ MENU_CONFIG = [
         'permission': 'sales.view_client',
         'order': 10,
         'children': [
+            # Dashboard
+            {
+                'name': 'dashboard',
+                'label': 'Dashboard',
+                'url': 'sales:dashboard',
+                'permission': 'sales.ver',
+                'icon': 'fas fa-tachometer-alt',
+                'order': 1
+            },
+            # Gestión de Clientes
             {
                 'name': 'clients',
                 'label': 'Clients',
                 'url': 'sales:client_list',
                 'permission': 'sales.view_client',
                 'icon': 'fas fa-users',
-                'order': 1
+                'order': 2
+            },
+            {
+                'name': 'create_client',
+                'label': 'Create Client',
+                'url': 'sales:client_create',
+                'permission': 'sales.add_client',
+                'icon': 'fas fa-user-plus',
+                'order': 3
+            },
+            # Operaciones de Venta
+            {
+                'name': 'pos',
+                'label': 'Point of Sale (TPV)',
+                'url': 'sales:tpv_main',
+                'permission': 'sales.view_pos',
+                'icon': 'fas fa-cash-register',
+                'order': 4
             },
             {
                 'name': 'orders',
@@ -24,15 +51,24 @@ MENU_CONFIG = [
                 'url': 'sales:order_list',
                 'permission': 'sales.view_order',
                 'icon': 'fas fa-file-invoice',
-                'order': 2
+                'order': 5
             },
+            {
+                'name': 'create_order',
+                'label': 'Create Order',
+                'url': 'sales:sales_order_create',
+                'permission': 'sales.add_order',
+                'icon': 'fas fa-plus-circle',
+                'order': 6
+            },
+            # Facturación y Pagos
             {
                 'name': 'invoices',
                 'label': 'Invoices',
                 'url': 'sales:invoice_list',
                 'permission': 'sales.view_invoice',
                 'icon': 'fas fa-receipt',
-                'order': 3
+                'order': 7
             },
             {
                 'name': 'payments',
@@ -40,30 +76,64 @@ MENU_CONFIG = [
                 'url': 'sales:payment_list',
                 'permission': 'sales.view_payment',
                 'icon': 'fas fa-credit-card',
-                'order': 4
+                'order': 8
             },
+            # Logística
             {
                 'name': 'deliveries',
                 'label': 'Deliveries',
                 'url': 'sales:delivery_list',
                 'permission': 'sales.view_delivery',
                 'icon': 'fas fa-truck',
-                'order': 5
+                'order': 9
+            },
+            {
+                'name': 'returns',
+                'label': 'Returns',
+                'url': 'sales:return_delivery_list',
+                'permission': 'sales.ver_return',
+                'icon': 'fas fa-undo',
+                'order': 10
             },
             {
                 'name': 'credit_notes',
                 'label': 'Credit Notes',
                 'url': 'sales:credit_note_list',
                 'permission': 'sales.view_credit_note',
-                'icon': 'fas fa-undo',
-                'order': 6
+                'icon': 'fas fa-sticky-note',
+                'order': 11
             },
+            # Configuración de Pagos
+            {
+                'name': 'payment_configuration',
+                'label': 'Payment Configuration',
+                'icon': 'fas fa-cog',
+                'permission': 'sales.ver',
+                'order': 12,
+                'children': [
+                    {
+                        'name': 'payment_methods',
+                        'label': 'Payment Methods',
+                        'url': 'sales:payment_method_list',
+                        'permission': 'sales.ver',
+                        'icon': 'fas fa-credit-card'
+                    },
+                    {
+                        'name': 'payment_processors',
+                        'label': 'Payment Processors',
+                        'url': 'sales:payment_processor_list',
+                        'permission': 'sales.ver',
+                        'icon': 'fas fa-cogs'
+                    }
+                ]
+            },
+            # Reportes
             {
                 'name': 'reports',
                 'label': 'Reports',
                 'icon': 'fas fa-chart-bar',
                 'permission': 'sales.view_report',
-                'order': 7,
+                'order': 13,
                 'children': [
                     {
                         'name': 'sales_summary',
@@ -85,15 +155,23 @@ MENU_CONFIG = [
                         'url': 'sales:product_performance_report',
                         'permission': 'sales.view_report',
                         'icon': 'fas fa-box-chart'
+                    },
+                    {
+                        'name': 'payment_analysis',
+                        'label': 'Payment Analysis',
+                        'url': 'sales:payment_list',
+                        'permission': 'sales.view_report',
+                        'icon': 'fas fa-credit-card'
                     }
                 ]
             },
+            # Configuración General
             {
                 'name': 'configuration',
                 'label': 'Configuration',
                 'icon': 'fas fa-cog',
                 'permission': 'sales.view_config',
-                'order': 8,
+                'order': 14,
                 'children': [
                     {
                         'name': 'price_lists',
@@ -108,6 +186,13 @@ MENU_CONFIG = [
                         'url': 'sales:payment_term_list',
                         'permission': 'sales.view_payment_term',
                         'icon': 'fas fa-calendar-alt'
+                    },
+                    {
+                        'name': 'tax_configuration',
+                        'label': 'Tax Configuration',
+                        'url': 'accounting:tax_list',
+                        'permission': 'accounting.view_tax',
+                        'icon': 'fas fa-percentage'
                     }
                 ]
             }

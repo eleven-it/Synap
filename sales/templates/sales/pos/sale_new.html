@@ -1,0 +1,1041 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Nueva Venta" %} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pos-sale-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 1rem;
+    }
+    
+    .pos-sale-card {
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 1rem;
+    }
+    
+    .product-search {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .search-input {
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        padding: 1rem;
+        font-size: 1.2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .product-card {
+        background: white;
+        border-radius: 15px;
+        padding: 1rem;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+    }
+    
+    .product-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        border-color: #667eea;
+    }
+    
+    .product-card.selected {
+        border-color: #00b894;
+        background: linear-gradient(45deg, #00b894, #00a085);
+        color: white;
+    }
+    
+    .sale-lines {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .sale-line {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .sale-line:hover {
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    .quantity-input {
+        width: 80px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+        padding: 0.5rem;
+    }
+    
+    .totals-section {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+    }
+    
+    .total-amount {
+        font-size: 2.5rem;
+        font-weight: bold;
+        text-align: center;
+        margin: 1rem 0;
+    }
+    
+    .payment-methods {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .payment-method {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .payment-method:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .payment-method.selected {
+        border-color: #00b894;
+        background: #00b894;
+        color: white;
+    }
+    
+    .pos-button {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        border: none;
+        border-radius: 15px;
+        padding: 1rem 2rem;
+        color: white;
+        font-weight: 600;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        margin: 0.5rem;
+    }
+    
+    .pos-button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 20px rgba(238, 90, 36, 0.3);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .pos-button.secondary {
+        background: linear-gradient(45deg, #74b9ff, #0984e3);
+    }
+    
+    .pos-button.secondary:hover {
+        box-shadow: 0 10px 20px rgba(9, 132, 227, 0.3);
+    }
+    
+    .pos-button.success {
+        background: linear-gradient(45deg, #00b894, #00a085);
+    }
+    
+    .pos-button.success:hover {
+        box-shadow: 0 10px 20px rgba(0, 184, 148, 0.3);
+    }
+    
+    .client-info {
+        background: white;
+        border-radius: 15px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .promotion-section {
+        background: white;
+        border-radius: 15px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .pos-sale-container {
+            padding: 0.5rem;
+        }
+        
+        .product-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .payment-methods {
+            grid-template-columns: 1fr;
+        }
+        
+        .total-amount {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pos-sale-container">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="pos-sale-card p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h2 class="mb-0">
+                                <i class="fas fa-shopping-cart me-2"></i>
+                                {% trans "Nueva Venta" %}
+                            </h2>
+                            <p class="text-muted mb-0">
+                                {% trans "Sesión" %}: {{ session.number }} | 
+                                {% trans "Operador" %}: {{ user.get_full_name }}
+                            </p>
+                        </div>
+                        <div class="text-end">
+                            <a href="{% url 'pos_dashboard' %}" class="pos-button secondary">
+                                <i class="fas fa-arrow-left me-2"></i>
+                                {% trans "Volver" %}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Columna Izquierda - Productos y Líneas -->
+            <div class="col-lg-8">
+                <!-- Búsqueda de Productos -->
+                <div class="pos-sale-card p-3">
+                    <div class="product-search">
+                        <h4 class="mb-3">
+                            <i class="fas fa-search me-2"></i>
+                            {% trans "Buscar Producto" %}
+                        </h4>
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <input type="text" 
+                                       id="productSearch" 
+                                       class="form-control search-input" 
+                                       placeholder="{% trans 'Código de barras, nombre o SKU...' %}"
+                                       autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <select id="searchType" class="form-control">
+                                    <option value="barcode">{% trans "Código de Barras" %}</option>
+                                    <option value="code">{% trans "Código" %}</option>
+                                    <option value="name">{% trans "Nombre" %}</option>
+                                    <option value="ean13">{% trans "EAN13 (Balanza)" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Resultados de búsqueda -->
+                        <div id="searchResults" class="product-grid mt-3" style="display: none;">
+                            <!-- Los productos se cargarán dinámicamente aquí -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Líneas de Venta -->
+                <div class="pos-sale-card p-3">
+                    <h4 class="mb-3">
+                        <i class="fas fa-list me-2"></i>
+                        {% trans "Productos en Venta" %}
+                    </h4>
+                    
+                    <div id="saleLines" class="sale-lines">
+                        <!-- Las líneas se cargarán dinámicamente aquí -->
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+                            <p>{% trans "No hay productos en la venta" %}</p>
+                            <p>{% trans "Busque y agregue productos para comenzar" %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna Derecha - Totales y Pagos -->
+            <div class="col-lg-4">
+                <!-- Información del Cliente -->
+                <div class="pos-sale-card p-3">
+                    <div class="client-info">
+                        <h5 class="mb-3">
+                            <i class="fas fa-user me-2"></i>
+                            {% trans "Cliente" %}
+                        </h5>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">{% trans "Tipo de Cliente" %}</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="clientType" id="clientExisting" value="existing" checked>
+                                <label class="form-check-label" for="clientExisting">
+                                    {% trans "Cliente Existente" %}
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="clientType" id="clientOccasional" value="occasional">
+                                <label class="form-check-label" for="clientOccasional">
+                                    {% trans "Cliente Ocasional" %}
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="existingClientSection">
+                            <div class="mb-3">
+                                <label for="clientSearch" class="form-label">{% trans "Buscar Cliente" %}</label>
+                                <input type="text" id="clientSearch" class="form-control" placeholder="{% trans 'Nombre o documento...' %}">
+                            </div>
+                            <div id="clientSearchResults" class="list-group" style="display: none;">
+                                <!-- Resultados de búsqueda de clientes -->
+                            </div>
+                        </div>
+                        
+                        <div id="occasionalClientSection" style="display: none;">
+                            <div class="mb-3">
+                                <label for="occasionalName" class="form-label">{% trans "Nombre" %}</label>
+                                <input type="text" id="occasionalName" class="form-control" placeholder="{% trans 'Nombre del cliente' %}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="occasionalDocument" class="form-label">{% trans "Documento" %}</label>
+                                <input type="text" id="occasionalDocument" class="form-control" placeholder="{% trans 'DNI, CUIT, etc.' %}">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Promociones -->
+                <div class="pos-sale-card p-3">
+                    <div class="promotion-section">
+                        <h5 class="mb-3">
+                            <i class="fas fa-tag me-2"></i>
+                            {% trans "Promociones" %}
+                        </h5>
+                        
+                        <div class="mb-3">
+                            <label for="promotionCode" class="form-label">{% trans "Código de Promoción" %}</label>
+                            <div class="input-group">
+                                <input type="text" id="promotionCode" class="form-control" placeholder="{% trans 'Ingrese código...' %}">
+                                <button class="btn btn-outline-primary" type="button" id="applyPromotion">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="appliedPromotions">
+                            <!-- Promociones aplicadas se mostrarán aquí -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Totales -->
+                <div class="pos-sale-card p-3">
+                    <div class="totals-section">
+                        <h5 class="mb-3">
+                            <i class="fas fa-calculator me-2"></i>
+                            {% trans "Totales" %}
+                        </h5>
+                        
+                        <div class="row mb-2">
+                            <div class="col-6">{% trans "Subtotal" %}:</div>
+                            <div class="col-6 text-end" id="subtotal">$0.00</div>
+                        </div>
+                        
+                        <div class="row mb-2">
+                            <div class="col-6">{% trans "Descuentos" %}:</div>
+                            <div class="col-6 text-end" id="totalDiscount">$0.00</div>
+                        </div>
+                        
+                        <div class="row mb-2">
+                            <div class="col-6">{% trans "IVA" %}:</div>
+                            <div class="col-6 text-end" id="totalTax">$0.00</div>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="total-amount" id="totalAmount">$0.00</div>
+                        
+                        <div class="text-center">
+                            <small>{% trans "Venta" %} #{{ sale.number }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Métodos de Pago -->
+                <div class="pos-sale-card p-3">
+                    <h5 class="mb-3">
+                        <i class="fas fa-credit-card me-2"></i>
+                        {% trans "Método de Pago" %}
+                    </h5>
+                    
+                    <div class="payment-methods">
+                        <div class="payment-method" data-method="cash">
+                            <i class="fas fa-money-bill-wave fa-2x mb-2"></i>
+                            <div>{% trans "Efectivo" %}</div>
+                        </div>
+                        
+                        <div class="payment-method" data-method="credit_card">
+                            <i class="fas fa-credit-card fa-2x mb-2"></i>
+                            <div>{% trans "Tarjeta Crédito" %}</div>
+                        </div>
+                        
+                        <div class="payment-method" data-method="debit_card">
+                            <i class="fas fa-credit-card fa-2x mb-2"></i>
+                            <div>{% trans "Tarjeta Débito" %}</div>
+                        </div>
+                        
+                        <div class="payment-method" data-method="account_credit">
+                            <i class="fas fa-user-tie fa-2x mb-2"></i>
+                            <div>{% trans "Cuenta Corriente" %}</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detalles del pago -->
+                    <div id="paymentDetails" class="mt-3" style="display: none;">
+                        <div class="mb-3">
+                            <label for="paymentAmount" class="form-label">{% trans "Monto" %}</label>
+                            <input type="number" id="paymentAmount" class="form-control" step="0.01" min="0">
+                        </div>
+                        
+                        <div id="cardDetails" style="display: none;">
+                            <div class="mb-3">
+                                <label for="cardNumber" class="form-label">{% trans "Número de Tarjeta" %}</label>
+                                <input type="text" id="cardNumber" class="form-control" placeholder="**** **** **** ****">
+                            </div>
+                            <div class="row">
+                                <div class="col-6">
+                                    <label for="cardInstallments" class="form-label">{% trans "Cuotas" %}</label>
+                                    <select id="cardInstallments" class="form-control">
+                                        <option value="1">1 cuota</option>
+                                        <option value="3">3 cuotas</option>
+                                        <option value="6">6 cuotas</option>
+                                        <option value="12">12 cuotas</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label for="cardType" class="form-label">{% trans "Tipo" %}</label>
+                                    <select id="cardType" class="form-control">
+                                        <option value="visa">Visa</option>
+                                        <option value="mastercard">Mastercard</option>
+                                        <option value="amex">American Express</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="pos-sale-card p-3">
+                    <div class="d-grid gap-2">
+                        <button type="button" id="completeSale" class="pos-button success" disabled>
+                            <i class="fas fa-check me-2"></i>
+                            {% trans "Completar Venta" %}
+                        </button>
+                        
+                        <button type="button" id="holdSale" class="pos-button secondary">
+                            <i class="fas fa-pause me-2"></i>
+                            {% trans "Pausar Venta" %}
+                        </button>
+                        
+                        <button type="button" id="cancelSale" class="pos-button">
+                            <i class="fas fa-times me-2"></i>
+                            {% trans "Cancelar Venta" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmación -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmModalTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {% trans "Cancelar" %}
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmModalOk">
+                    {% trans "Confirmar" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Variables globales
+    let currentSale = {
+        id: {{ sale.id }},
+        lines: [],
+        client: null,
+        promotions: [],
+        paymentMethod: null,
+        paymentAmount: 0
+    };
+    
+    let searchTimeout;
+    
+    // Inicialización
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeEventListeners();
+        updateTotals();
+    });
+    
+    function initializeEventListeners() {
+        // Búsqueda de productos
+        document.getElementById('productSearch').addEventListener('input', handleProductSearch);
+        document.getElementById('searchType').addEventListener('change', handleProductSearch);
+        
+        // Tipo de cliente
+        document.querySelectorAll('input[name="clientType"]').forEach(function(radio) {
+            radio.addEventListener('change', handleClientTypeChange);
+        });
+        
+        // Búsqueda de clientes
+        document.getElementById('clientSearch').addEventListener('input', handleClientSearch);
+        
+        // Métodos de pago
+        document.querySelectorAll('.payment-method').forEach(function(method) {
+            method.addEventListener('click', handlePaymentMethodSelect);
+        });
+        
+        // Botones de acción
+        document.getElementById('completeSale').addEventListener('click', handleCompleteSale);
+        document.getElementById('holdSale').addEventListener('click', handleHoldSale);
+        document.getElementById('cancelSale').addEventListener('click', handleCancelSale);
+        document.getElementById('applyPromotion').addEventListener('click', handleApplyPromotion);
+        
+        // Monto de pago
+        document.getElementById('paymentAmount').addEventListener('input', handlePaymentAmountChange);
+    }
+    
+    function handleProductSearch() {
+        clearTimeout(searchTimeout);
+        const searchTerm = document.getElementById('productSearch').value.trim();
+        const searchType = document.getElementById('searchType').value;
+        
+        if (searchTerm.length < 2) {
+            hideSearchResults();
+            return;
+        }
+        
+        searchTimeout = setTimeout(function() {
+            searchProducts(searchTerm, searchType);
+        }, 300);
+    }
+    
+    function searchProducts(searchTerm, searchType) {
+        fetch('{% url "pos_product_search" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                search_term: searchTerm,
+                search_type: searchType,
+                price_list_id: {{ price_list.id }}
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else {
+                displaySearchResults(data.products || [data.product]);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Error al buscar productos');
+        });
+    }
+    
+    function displaySearchResults(products) {
+        const resultsContainer = document.getElementById('searchResults');
+        
+        if (products.length === 0) {
+            resultsContainer.innerHTML = '<div class="text-center text-muted py-3">No se encontraron productos</div>';
+            resultsContainer.style.display = 'block';
+            return;
+        }
+        
+        let html = '';
+        products.forEach(product => {
+            html += `
+                <div class="product-card" data-product='${JSON.stringify(product)}'>
+                    <h6>${product.name}</h6>
+                    <p class="text-muted mb-1">${product.sku}</p>
+                    <p class="text-primary fw-bold">$${product.price}</p>
+                    <small class="text-muted">Stock: ${product.stock}</small>
+                </div>
+            `;
+        });
+        
+        resultsContainer.innerHTML = html;
+        resultsContainer.style.display = 'block';
+        
+        // Event listeners para productos
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                const product = JSON.parse(this.dataset.product);
+                addProductToSale(product);
+                hideSearchResults();
+                document.getElementById('productSearch').value = '';
+            });
+        });
+    }
+    
+    function hideSearchResults() {
+        document.getElementById('searchResults').style.display = 'none';
+    }
+    
+    function addProductToSale(product) {
+        // Verificar si el producto ya está en la venta
+        const existingLine = currentSale.lines.find(line => line.product_id === product.id);
+        
+        if (existingLine) {
+            existingLine.quantity += 1;
+            updateLineQuantity(existingLine);
+        } else {
+            const newLine = {
+                id: Date.now(), // ID temporal
+                product_id: product.id,
+                product_name: product.name,
+                sku: product.sku,
+                quantity: 1,
+                unit_price: product.price,
+                discount_percentage: 0,
+                subtotal: product.price,
+                discount_amount: 0,
+                tax_amount: product.price * 0.21
+            };
+            
+            currentSale.lines.push(newLine);
+            addLineToDisplay(newLine);
+        }
+        
+        updateTotals();
+        updateCompleteButton();
+    }
+    
+    function addLineToDisplay(line) {
+        const linesContainer = document.getElementById('saleLines');
+        
+        // Remover mensaje de "no hay productos" si existe
+        const noProductsMessage = linesContainer.querySelector('.text-center.text-muted');
+        if (noProductsMessage) {
+            noProductsMessage.remove();
+        }
+        
+        const lineHtml = `
+            <div class="sale-line" data-line-id="${line.id}">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <h6 class="mb-1">${line.product_name}</h6>
+                        <small class="text-muted">${line.sku}</small>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" 
+                               class="quantity-input" 
+                               value="${line.quantity}" 
+                               min="1" 
+                               data-line-id="${line.id}">
+                    </div>
+                    <div class="col-md-2 text-end">
+                        $${line.unit_price}
+                    </div>
+                    <div class="col-md-2 text-end">
+                        $${line.subtotal.toFixed(2)}
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button class="btn btn-sm btn-danger remove-line" data-line-id="${line.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        linesContainer.insertAdjacentHTML('beforeend', lineHtml);
+        
+        // Event listeners para la línea
+        const quantityInput = linesContainer.querySelector(`[data-line-id="${line.id}"]`);
+        quantityInput.addEventListener('change', function() {
+            updateLineQuantity(line, parseFloat(this.value));
+        });
+        
+        const removeButton = linesContainer.querySelector(`.remove-line[data-line-id="${line.id}"]`);
+        removeButton.addEventListener('click', function() {
+            removeLineFromSale(line.id);
+        });
+    }
+    
+    function updateLineQuantity(line, newQuantity = null) {
+        if (newQuantity !== null) {
+            line.quantity = newQuantity;
+        }
+        
+        line.subtotal = line.quantity * line.unit_price;
+        line.discount_amount = line.subtotal * (line.discount_percentage / 100);
+        line.tax_amount = (line.subtotal - line.discount_amount) * 0.21;
+        
+        // Actualizar display
+        const lineElement = document.querySelector(`[data-line-id="${line.id}"]`);
+        if (lineElement) {
+            const quantityInput = lineElement.querySelector('.quantity-input');
+            const subtotalSpan = lineElement.querySelector('.col-md-2:last-of-type');
+            
+            quantityInput.value = line.quantity;
+            subtotalSpan.textContent = `$${line.subtotal.toFixed(2)}`;
+        }
+        
+        updateTotals();
+    }
+    
+    function removeLineFromSale(lineId) {
+        currentSale.lines = currentSale.lines.filter(line => line.id !== lineId);
+        
+        const lineElement = document.querySelector(`[data-line-id="${lineId}"]`);
+        if (lineElement) {
+            lineElement.remove();
+        }
+        
+        if (currentSale.lines.length === 0) {
+            showNoProductsMessage();
+        }
+        
+        updateTotals();
+        updateCompleteButton();
+    }
+    
+    function showNoProductsMessage() {
+        const linesContainer = document.getElementById('saleLines');
+        linesContainer.innerHTML = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+                <p>{% trans "No hay productos en la venta" %}</p>
+                <p>{% trans "Busque y agregue productos para comenzar" %}</p>
+            </div>
+        `;
+    }
+    
+    function updateTotals() {
+        const subtotal = currentSale.lines.reduce((sum, line) => sum + line.subtotal, 0);
+        const totalDiscount = currentSale.lines.reduce((sum, line) => sum + line.discount_amount, 0);
+        const totalTax = currentSale.lines.reduce((sum, line) => sum + line.tax_amount, 0);
+        const total = subtotal - totalDiscount + totalTax;
+        
+        document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
+        document.getElementById('totalDiscount').textContent = `$${totalDiscount.toFixed(2)}`;
+        document.getElementById('totalTax').textContent = `$${totalTax.toFixed(2)}`;
+        document.getElementById('totalAmount').textContent = `$${total.toFixed(2)}`;
+        
+        // Actualizar monto de pago si es necesario
+        const paymentAmount = document.getElementById('paymentAmount');
+        if (paymentAmount.value === '' || parseFloat(paymentAmount.value) === 0) {
+            paymentAmount.value = total.toFixed(2);
+            currentSale.paymentAmount = total;
+        }
+    }
+    
+    function updateCompleteButton() {
+        const completeButton = document.getElementById('completeSale');
+        const hasProducts = currentSale.lines.length > 0;
+        const hasPaymentMethod = currentSale.paymentMethod !== null;
+        const hasValidPayment = currentSale.paymentAmount > 0;
+        
+        completeButton.disabled = !(hasProducts && hasPaymentMethod && hasValidPayment);
+    }
+    
+    function handleClientTypeChange() {
+        const clientType = document.querySelector('input[name="clientType"]:checked').value;
+        const existingSection = document.getElementById('existingClientSection');
+        const occasionalSection = document.getElementById('occasionalClientSection');
+        
+        if (clientType === 'existing') {
+            existingSection.style.display = 'block';
+            occasionalSection.style.display = 'none';
+        } else {
+            existingSection.style.display = 'none';
+            occasionalSection.style.display = 'block';
+        }
+    }
+    
+    function handleClientSearch() {
+        const searchTerm = document.getElementById('clientSearch').value.trim();
+        
+        if (searchTerm.length < 2) {
+            hideClientSearchResults();
+            return;
+        }
+        
+        // Implementar búsqueda de clientes
+        // Por ahora, simular resultados
+        showClientSearchResults([
+            { id: 1, name: 'Cliente Ejemplo', document: '12345678' }
+        ]);
+    }
+    
+    function showClientSearchResults(clients) {
+        const resultsContainer = document.getElementById('clientSearchResults');
+        
+        let html = '';
+        clients.forEach(client => {
+            html += `
+                <a href="#" class="list-group-item list-group-item-action" data-client-id="${client.id}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${client.name}</h6>
+                    </div>
+                    <small class="text-muted">${client.document}</small>
+                </a>
+            `;
+        });
+        
+        resultsContainer.innerHTML = html;
+        resultsContainer.style.display = 'block';
+        
+        // Event listeners para clientes
+        document.querySelectorAll('#clientSearchResults a').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const clientId = this.dataset.clientId;
+                selectClient(clientId);
+                hideClientSearchResults();
+            });
+        });
+    }
+    
+    function hideClientSearchResults() {
+        document.getElementById('clientSearchResults').style.display = 'none';
+    }
+    
+    function selectClient(clientId) {
+        currentSale.client = { id: clientId };
+        document.getElementById('clientSearch').value = 'Cliente seleccionado';
+    }
+    
+    function handlePaymentMethodSelect() {
+        // Remover selección anterior
+        document.querySelectorAll('.payment-method').forEach(function(method) {
+            method.classList.remove('selected');
+        });
+        
+        // Seleccionar método actual
+        this.classList.add('selected');
+        currentSale.paymentMethod = this.dataset.method;
+        
+        // Mostrar detalles específicos del método
+        const paymentDetails = document.getElementById('paymentDetails');
+        const cardDetails = document.getElementById('cardDetails');
+        
+        paymentDetails.style.display = 'block';
+        
+        if (['credit_card', 'debit_card'].includes(currentSale.paymentMethod)) {
+            cardDetails.style.display = 'block';
+        } else {
+            cardDetails.style.display = 'none';
+        }
+        
+        updateCompleteButton();
+    }
+    
+    function handlePaymentAmountChange() {
+        currentSale.paymentAmount = parseFloat(this.value) || 0;
+        updateCompleteButton();
+    }
+    
+    function handleApplyPromotion() {
+        const promotionCode = document.getElementById('promotionCode').value.trim();
+        
+        if (!promotionCode) {
+            showError('Ingrese un código de promoción');
+            return;
+        }
+        
+        // Implementar aplicación de promoción
+        showSuccess('Promoción aplicada correctamente');
+        document.getElementById('promotionCode').value = '';
+    }
+    
+    function handleCompleteSale() {
+        if (!validateSale()) {
+            return;
+        }
+        
+        showConfirmModal(
+            'Completar Venta',
+            '¿Está seguro de que desea completar esta venta?',
+            function() {
+                completeSale();
+            }
+        );
+    }
+    
+    function validateSale() {
+        if (currentSale.lines.length === 0) {
+            showError('Debe agregar al menos un producto');
+            return false;
+        }
+        
+        if (!currentSale.paymentMethod) {
+            showError('Debe seleccionar un método de pago');
+            return false;
+        }
+        
+        if (currentSale.paymentAmount <= 0) {
+            showError('El monto de pago debe ser mayor a 0');
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function completeSale() {
+        const paymentData = {
+            method: currentSale.paymentMethod,
+            amount: currentSale.paymentAmount
+        };
+        
+        if (['credit_card', 'debit_card'].includes(currentSale.paymentMethod)) {
+            paymentData.card_number = document.getElementById('cardNumber').value;
+            paymentData.installments = document.getElementById('cardInstallments').value;
+            paymentData.card_type = document.getElementById('cardType').value;
+        }
+        
+        fetch(`{% url 'pos_sale_complete' sale.id %}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                payments: [paymentData],
+                client: currentSale.client
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess('Venta completada correctamente');
+                setTimeout(function() {
+                    window.location.href = '{% url "pos_sale_new" %}';
+                }, 2000);
+            } else {
+                showError(data.error || 'Error al completar la venta');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Error al completar la venta');
+        });
+    }
+    
+    function handleHoldSale() {
+        showConfirmModal(
+            'Pausar Venta',
+            '¿Está seguro de que desea pausar esta venta?',
+            function() {
+                // Implementar pausar venta
+                showSuccess('Venta pausada correctamente');
+            }
+        );
+    }
+    
+    function handleCancelSale() {
+        showConfirmModal(
+            'Cancelar Venta',
+            '¿Está seguro de que desea cancelar esta venta? Esta acción no se puede deshacer.',
+            function() {
+                window.location.href = '{% url "pos_dashboard" %}';
+            }
+        );
+    }
+    
+    function showConfirmModal(title, message, onConfirm) {
+        document.getElementById('confirmModalTitle').textContent = title;
+        document.getElementById('confirmModalBody').textContent = message;
+        
+        const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+        modal.show();
+        
+        document.getElementById('confirmModalOk').onclick = function() {
+            modal.hide();
+            onConfirm();
+        };
+    }
+    
+    function showSuccess(message) {
+        // Implementar notificación de éxito
+        alert(message);
+    }
+    
+    function showError(message) {
+        // Implementar notificación de error
+        alert('Error: ' + message);
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %} 

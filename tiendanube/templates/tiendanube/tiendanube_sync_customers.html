@@ -1,0 +1,195 @@
+{% extends 'tiendanube/tiendanube_app_base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Sincronización de Clientes - TiendaNube" %}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans "Sincronización de Clientes" %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "Sincroniza clientes desde TiendaNube hacia Synap" %}
+            </p>
+        </div>
+
+        <!-- Configuración -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                {% trans "Configuración de TiendaNube" %}
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "Store ID" %}
+                    </label>
+                    <p class="mt-1 text-sm text-gray-900 dark:text-white">{{ config.store_id }}</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {% trans "API URL" %}
+                    </label>
+                    <p class="mt-1 text-sm text-gray-900 dark:text-white">{{ config.api_url|default:"https://api.tiendanube.com/v1" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Clientes Sincronizados -->
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-green-800 dark:text-green-200">
+                            {% trans "Clientes Sincronizados" %}
+                        </h3>
+                        <p class="text-2xl font-bold text-green-900 dark:text-green-100">
+                            {{ synced_customers }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clientes Pendientes -->
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-8 w-8 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-yellow-800 dark:text-yellow-200">
+                            {% trans "Clientes Pendientes" %}
+                        </h3>
+                        <p class="text-2xl font-bold text-yellow-900 dark:text-yellow-100">
+                            {{ unsynced_customers }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                {% trans "Acciones de Sincronización" %}
+            </h2>
+            
+            <div class="space-y-4">
+                <!-- Sincronizar Clientes desde TiendaNube -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                        {% trans "Sincronizar Clientes desde TiendaNube" %}
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">
+                        {% trans "Importa clientes desde TiendaNube hacia Synap. Solo se sincronizarán clientes que tengan el tag 'tiendanube'." %}
+                    </p>
+                    
+                    <form method="post" class="space-y-4">
+                        {% csrf_token %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {% trans "Límite" %}
+                                </label>
+                                <input type="number" name="limit" id="limit" value="50" min="1" max="1000"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="offset" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {% trans "Offset" %}
+                                </label>
+                                <input type="number" name="offset" id="offset" value="0" min="0"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            {% trans "Sincronizar Clientes" %}
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Sincronizar Clientes hacia TiendaNube -->
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                        {% trans "Sincronizar Clientes hacia TiendaNube" %}
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4">
+                        {% trans "Exporta clientes desde Synap hacia TiendaNube. Solo se sincronizarán clientes que tengan el tag 'tiendanube'." %}
+                    </p>
+                    
+                    <form method="post" action="{% url 'tiendanube:sync_customers_to_tiendanube' %}" class="space-y-4">
+                        {% csrf_token %}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="limit_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {% trans "Límite" %}
+                                </label>
+                                <input type="number" name="limit" id="limit_to" value="100" min="1" max="1000"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="offset_to" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {% trans "Offset" %}
+                                </label>
+                                <input type="number" name="offset" id="offset_to" value="0" min="0"
+                                       class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" 
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200">
+                            <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                            </svg>
+                            {% trans "Sincronizar hacia TiendaNube" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Información Adicional -->
+        <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+            <h3 class="text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">
+                {% trans "Información Importante" %}
+            </h3>
+            <ul class="text-blue-700 dark:text-blue-300 space-y-2 text-sm">
+                <li class="flex items-start">
+                    <svg class="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Solo se sincronizarán clientes que tengan el tag 'tiendanube' en su perfil." %}
+                </li>
+                <li class="flex items-start">
+                    <svg class="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Los clientes se sincronizan a través de sus contactos asociados." %}
+                </li>
+                <li class="flex items-start">
+                    <svg class="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Si el endpoint de clientes no está disponible en TiendaNube, se mostrará una advertencia pero no se considerará un error." %}
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %} 

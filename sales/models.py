@@ -797,3 +797,707 @@ class ReturnDelivery(models.Model):
     reason = models.CharField(max_length=255, blank=True, null=True)
     origin = models.CharField(max_length=32, blank=True, null=True)
     external_id = models.CharField(max_length=64, blank=True, null=True)
+
+# --- MODELOS PARA PUNTO DE VENTA (TPV) ---
+
+class POSSession(models.Model):
+    """
+    Sesión de punto de venta - control de caja y operador
+    """
+    POS_SESSION_STATES = [
+        ('open', _('Open')),
+        ('closed', _('Closed')),
+        ('suspended', _('Suspended')),
+    ]
+    
+    number = models.CharField(_("Session Number"), max_length=32, unique=True)
+    state = models.CharField(_("State"), max_length=16, choices=POS_SESSION_STATES, default='open')
+    
+    # Operador y ubicación
+    operator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("Operator"))
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"))
+    pos_terminal = models.ForeignKey('POSTerminal', on_delete=models.PROTECT, verbose_name=_("POS Terminal"))
+    
+    # Control de caja
+    opening_amount = models.DecimalField(_("Opening Amount"), max_digits=12, decimal_places=2, default=0)
+    closing_amount = models.DecimalField(_("Closing Amount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    expected_amount = models.DecimalField(_("Expected Amount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    difference_amount = models.DecimalField(_("Difference Amount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    
+    # Fechas
+    opened_at = models.DateTimeField(_("Opened At"), auto_now_add=True)
+    closed_at = models.DateTimeField(_("Closed At"), null=True, blank=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('POS Session')
+        verbose_name_plural = _('POS Sessions')
+        ordering = ['-opened_at']
+    
+    def __str__(self):
+        return f"Session {self.number} - {self.operator} - {self.state}"
+    
+    def close_session(self, closing_amount, user):
+        """Cerrar sesión de TPV"""
+        self.state = 'closed'
+        self.closing_amount = closing_amount
+        self.closed_at = dj_timezone.now()
+        self.expected_amount = self.calculate_expected_amount()
+        self.difference_amount = closing_amount - self.expected_amount
+        self.save()
+        
+        # Crear registro de auditoría
+        POSSessionLog.objects.create(
+            session=self,
+            user=user,
+            action='close',
+            amount=closing_amount,
+            notes=f"Session closed. Expected: {self.expected_amount}, Actual: {closing_amount}"
+        )
+    
+    def calculate_expected_amount(self):
+        """Calcular monto esperado basado en transacciones"""
+        total_sales = self.sales.filter(state='completed').aggregate(
+            total=models.Sum('total_paid')
+        )['total'] or 0
+        
+        total_refunds = self.sales.filter(state='refunded').aggregate(
+            total=models.Sum('total_paid')
+        )['total'] or 0
+        
+        return self.opening_amount + total_sales - total_refunds
+
+class POSTerminal(models.Model):
+    """
+    Terminal de punto de venta
+    """
+    name = models.CharField(_("Terminal Name"), max_length=100)
+    code = models.CharField(_("Terminal Code"), max_length=20, unique=True)
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"))
+    
+    # Configuración fiscal
+    fiscal_printer = models.CharField(_("Fiscal Printer"), max_length=100, blank=True, null=True)
+    fiscal_number = models.CharField(_("Fiscal Number"), max_length=20, blank=True, null=True)
+    electronic_invoice = models.BooleanField(_("Electronic Invoice"), default=False)
+    
+    # Configuración de impresión
+    receipt_printer = models.CharField(_("Receipt Printer"), max_length=100, blank=True, null=True)
+    ticket_width = models.IntegerField(_("Ticket Width"), default=80)
+    
+    # Configuración de búsqueda
+    barcode_scanner = models.BooleanField(_("Barcode Scanner"), default=True)
+    scale_integration = models.BooleanField(_("Scale Integration"), default=False)
+    scale_port = models.CharField(_("Scale Port"), max_length=20, blank=True, null=True)
+    
+    # Estado
+    is_active = models.BooleanField(_("Active"), default=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('POS Terminal')
+        verbose_name_plural = _('POS Terminals')
+        ordering = ['name']
+    
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+class POSSale(models.Model):
+    """
+    Venta de punto de venta
+    """
+    POSSALE_STATES = [
+        ('draft', _('Draft')),
+        ('confirmed', _('Confirmed')),
+        ('completed', _('Completed')),
+        ('cancelled', _('Cancelled')),
+        ('refunded', _('Refunded')),
+    ]
+    
+    number = models.CharField(_("Sale Number"), max_length=32, unique=True)
+    state = models.CharField(_("State"), max_length=16, choices=POSSALE_STATES, default='draft')
+    
+    # Relaciones con empresa y sucursal (multiempresa/multisucursal)
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
+    
+    # Sesión y operador
+    session = models.ForeignKey(POSSession, on_delete=models.PROTECT, related_name='sales', verbose_name=_("Session"))
+    operator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("Operator"))
+    
+    # Cliente
+    client = models.ForeignKey(Client, on_delete=models.PROTECT, null=True, blank=True, verbose_name=_("Client"))
+    is_occasional_client = models.BooleanField(_("Occasional Client"), default=False)
+    occasional_client_data = models.JSONField(_("Occasional Client Data"), null=True, blank=True)
+    
+    # Totales
+    subtotal = models.DecimalField(_("Subtotal"), max_digits=12, decimal_places=2, default=0)
+    total_discount = models.DecimalField(_("Total Discount"), max_digits=12, decimal_places=2, default=0)
+    total_tax = models.DecimalField(_("Total Tax"), max_digits=12, decimal_places=2, default=0)
+    total = models.DecimalField(_("Total"), max_digits=12, decimal_places=2, default=0)
+    total_paid = models.DecimalField(_("Total Paid"), max_digits=12, decimal_places=2, default=0)
+    
+    # Configuración
+    price_list = models.ForeignKey(PriceList, on_delete=models.PROTECT, verbose_name=_("Price List"))
+    currency = models.CharField(_("Currency"), max_length=3, default='ARS')
+    
+    # Comprobante fiscal
+    invoice_number = models.CharField(_("Invoice Number"), max_length=32, blank=True, null=True)
+    invoice_type = models.CharField(_("Invoice Type"), max_length=10, blank=True, null=True)
+    fiscal_data = models.JSONField(_("Fiscal Data"), null=True, blank=True)
+    
+    # Fechas
+    sale_date = models.DateTimeField(_("Sale Date"), auto_now_add=True)
+    completed_at = models.DateTimeField(_("Completed At"), null=True, blank=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('POS Sale')
+        verbose_name_plural = _('POS Sales')
+        ordering = ['-sale_date']
+        indexes = [
+            models.Index(fields=['empresa', 'branch']),
+            models.Index(fields=['session']),
+            models.Index(fields=['state']),
+        ]
+    
+    def __str__(self):
+        return f"Sale {self.number} - {self.total}"
+    
+    def save(self, *args, **kwargs):
+        if not self.number:
+            self.number = self.generate_sale_number()
+        
+        # Auto-asignar empresa y branch desde la sesión si no están definidos
+        if not self.empresa_id and self.session:
+            self.empresa = self.session.branch.empresa
+        if not self.branch_id and self.session:
+            self.branch = self.session.branch
+            
+        super().save(*args, **kwargs)
+    
+    def generate_sale_number(self):
+        """Generar número de venta único"""
+        prefix = f"POS{self.session.branch.code}{self.session.pos_terminal.code}"
+        last_sale = POSSale.objects.filter(
+            session__branch=self.session.branch,
+            session__pos_terminal=self.session.pos_terminal
+        ).order_by('-number').first()
+        
+        if last_sale:
+            last_number = int(last_sale.number.replace(prefix, ''))
+            new_number = last_number + 1
+        else:
+            new_number = 1
+        
+        return f"{prefix}{new_number:06d}"
+    
+    def recalculate_totals(self):
+        """Recalcular totales de la venta"""
+        lines = self.lines.all()
+        
+        self.subtotal = sum(line.subtotal for line in lines)
+        self.total_discount = sum(line.discount_amount for line in lines)
+        self.total_tax = sum(line.tax_amount for line in lines)
+        self.total = self.subtotal - self.total_discount + self.total_tax
+        
+        self.save()
+    
+    def complete_sale(self, payments_data):
+        """Completar venta con pagos"""
+        self.state = 'completed'
+        self.completed_at = dj_timezone.now()
+        
+        # Crear pagos
+        for payment_data in payments_data:
+            POSPayment.objects.create(
+                sale=self,
+                payment_method=payment_data['method'],
+                amount=payment_data['amount'],
+                reference=payment_data.get('reference', ''),
+                notes=payment_data.get('notes', '')
+            )
+        
+        self.total_paid = sum(payment_data['amount'] for payment_data in payments_data)
+        self.save()
+        
+        return self
+
+class POSSaleLine(models.Model):
+    """
+    Línea de venta de punto de venta
+    """
+    sale = models.ForeignKey(POSSale, on_delete=models.CASCADE, related_name='lines', verbose_name=_("Sale"))
+    product_variant = models.ForeignKey('inventory.ProductVariant', on_delete=models.PROTECT, verbose_name=_("Product"))
+    
+    # Relaciones con empresa y sucursal (multiempresa/multisucursal)
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
+    
+    # Cantidad y precio
+    quantity = models.DecimalField(_("Quantity"), max_digits=12, decimal_places=3)
+    unit_price = models.DecimalField(_("Unit Price"), max_digits=12, decimal_places=2)
+    subtotal = models.DecimalField(_("Subtotal"), max_digits=12, decimal_places=2)
+    
+    # Descuentos
+    discount_percentage = models.DecimalField(_("Discount Percentage"), max_digits=5, decimal_places=2, default=0)
+    discount_amount = models.DecimalField(_("Discount Amount"), max_digits=12, decimal_places=2, default=0)
+    
+    # Impuestos
+    tax_percentage = models.DecimalField(_("Tax Percentage"), max_digits=5, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(_("Tax Amount"), max_digits=12, decimal_places=2, default=0)
+    
+    # Información adicional
+    description = models.CharField(_("Description"), max_length=255, blank=True, null=True)
+    barcode = models.CharField(_("Barcode"), max_length=50, blank=True, null=True)
+    lot_number = models.CharField(_("Lot Number"), max_length=50, blank=True, null=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('POS Sale Line')
+        verbose_name_plural = _('POS Sale Lines')
+        ordering = ['id']
+        indexes = [
+            models.Index(fields=['empresa', 'branch']),
+            models.Index(fields=['sale']),
+        ]
+    
+    def __str__(self):
+        return f"{self.product_variant} x {self.quantity}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-asignar empresa y branch desde la venta si no están definidos
+        if not self.empresa_id and self.sale:
+            self.empresa = self.sale.empresa
+        if not self.branch_id and self.sale:
+            self.branch = self.sale.branch
+            
+        self.calculate_totals()
+        super().save(*args, **kwargs)
+    
+    def calculate_totals(self):
+        """Calcular totales de la línea"""
+        self.subtotal = self.quantity * self.unit_price
+        self.discount_amount = self.subtotal * (self.discount_percentage / 100)
+        self.tax_amount = (self.subtotal - self.discount_amount) * (self.tax_percentage / 100)
+
+class POSPayment(models.Model):
+    """
+    Pago de punto de venta
+    """
+    PAYMENT_METHODS = [
+        ('cash', _('Cash')),
+        ('credit_card', _('Credit Card')),
+        ('debit_card', _('Debit Card')),
+        ('check', _('Check')),
+        ('bank_transfer', _('Bank Transfer')),
+        ('account_credit', _('Account Credit')),
+        ('gift_card', _('Gift Card')),
+        ('other', _('Other')),
+    ]
+    
+    sale = models.ForeignKey(POSSale, on_delete=models.CASCADE, related_name='payments', verbose_name=_("Sale"))
+    
+    # Relaciones con empresa y sucursal (multiempresa/multisucursal)
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
+    
+    payment_method = models.CharField(_("Payment Method"), max_length=20, choices=PAYMENT_METHODS)
+    amount = models.DecimalField(_("Amount"), max_digits=12, decimal_places=2)
+    
+    # Información adicional según método
+    reference = models.CharField(_("Reference"), max_length=100, blank=True, null=True)
+    card_type = models.CharField(_("Card Type"), max_length=50, blank=True, null=True)
+    card_number = models.CharField(_("Card Number"), max_length=20, blank=True, null=True)
+    installments = models.IntegerField(_("Installments"), default=1)
+    check_number = models.CharField(_("Check Number"), max_length=50, blank=True, null=True)
+    
+    # Notas
+    notes = models.TextField(_("Notes"), blank=True, null=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _('POS Payment')
+        verbose_name_plural = _('POS Payments')
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['empresa', 'branch']),
+            models.Index(fields=['sale']),
+            models.Index(fields=['payment_method']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_payment_method_display()} - {self.amount}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-asignar empresa y branch desde la venta si no están definidos
+        if not self.empresa_id and self.sale:
+            self.empresa = self.sale.empresa
+        if not self.branch_id and self.sale:
+            self.branch = self.sale.branch
+            
+        super().save(*args, **kwargs)
+
+class POSSessionLog(models.Model):
+    """
+    Log de sesiones de punto de venta
+    """
+    session = models.ForeignKey(POSSession, on_delete=models.CASCADE, related_name='logs', verbose_name=_("Session"))
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name=_("User"))
+    
+    action = models.CharField(_("Action"), max_length=50)
+    amount = models.DecimalField(_("Amount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    notes = models.TextField(_("Notes"), blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _('POS Session Log')
+        verbose_name_plural = _('POS Session Logs')
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.session} - {self.action} - {self.user}"
+
+class POSPromotion(models.Model):
+    """
+    Promociones para punto de venta
+    """
+    PROMOTION_TYPES = [
+        ('discount_percentage', _('Discount Percentage')),
+        ('discount_amount', _('Discount Amount')),
+        ('buy_x_get_y', _('Buy X Get Y')),
+        ('bundle', _('Bundle')),
+        ('loyalty_points', _('Loyalty Points')),
+    ]
+    
+    name = models.CharField(_("Name"), max_length=100)
+    code = models.CharField(_("Code"), max_length=50, unique=True)
+    promotion_type = models.CharField(_("Promotion Type"), max_length=20, choices=PROMOTION_TYPES)
+    
+    # Relaciones con empresa y sucursal (multiempresa/multisucursal)
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
+    
+    # Configuración
+    is_active = models.BooleanField(_("Active"), default=True)
+    valid_from = models.DateTimeField(_("Valid From"), null=True, blank=True)
+    valid_to = models.DateTimeField(_("Valid To"), null=True, blank=True)
+    
+    # Condiciones
+    minimum_amount = models.DecimalField(_("Minimum Amount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    maximum_discount = models.DecimalField(_("Maximum Discount"), max_digits=12, decimal_places=2, null=True, blank=True)
+    
+    # Productos aplicables
+    applicable_products = models.ManyToManyField('inventory.ProductVariant', blank=True, verbose_name=_("Applicable Products"))
+    applicable_categories = models.ManyToManyField('inventory.Category', blank=True, verbose_name=_("Applicable Categories"))
+    
+    # Configuración específica por tipo
+    configuration = models.JSONField(_("Configuration"), default=dict)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('POS Promotion')
+        verbose_name_plural = _('POS Promotions')
+        ordering = ['name']
+        indexes = [
+            models.Index(fields=['empresa', 'branch']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['code']),
+        ]
+    
+    def __str__(self):
+        return self.name
+    
+    def is_valid(self, sale_data):
+        """Verificar si la promoción es válida para la venta"""
+        now = dj_timezone.now()
+        
+        if not self.is_active:
+            return False
+        
+        if self.valid_from and now < self.valid_from:
+            return False
+        
+        if self.valid_to and now > self.valid_to:
+            return False
+        
+        if self.minimum_amount and sale_data['subtotal'] < self.minimum_amount:
+            return False
+        
+        return True
+    
+    def calculate_discount(self, sale_data):
+        """Calcular descuento aplicable"""
+        if not self.is_valid(sale_data):
+            return 0
+        
+        if self.promotion_type == 'discount_percentage':
+            discount = sale_data['subtotal'] * (self.configuration.get('percentage', 0) / 100)
+        elif self.promotion_type == 'discount_amount':
+            discount = self.configuration.get('amount', 0)
+        else:
+            discount = 0
+        
+        if self.maximum_discount:
+            discount = min(discount, self.maximum_discount)
+        
+        return discount
+
+# --- MEDIOS DE PAGO DINÁMICOS ---
+class PaymentMethod(models.Model):
+    """
+    Modelo para administración dinámica de medios de pago
+    Sigue mejores prácticas internacionales y soporta medios electrónicos modernos
+    """
+    
+    # Tipos de medios de pago
+    PAYMENT_TYPE_CHOICES = [
+        ('cash', _('Cash')),
+        ('card', _('Card')),
+        ('bank_transfer', _('Bank Transfer')),
+        ('digital_wallet', _('Digital Wallet')),
+        ('check', _('Check')),
+        ('crypto', _('Cryptocurrency')),
+        ('buy_now_pay_later', _('Buy Now Pay Later')),
+        ('other', _('Other')),
+    ]
+    
+    # Categorías de tarjetas
+    CARD_TYPE_CHOICES = [
+        ('visa', 'Visa'),
+        ('mastercard', 'Mastercard'),
+        ('amex', 'American Express'),
+        ('discover', 'Discover'),
+        ('diners', 'Diners Club'),
+        ('jcb', 'JCB'),
+        ('unionpay', 'UnionPay'),
+        ('other', _('Other')),
+    ]
+    
+    # Estados de procesamiento
+    PROCESSING_STATUS_CHOICES = [
+        ('pending', _('Pending')),
+        ('processing', _('Processing')),
+        ('completed', _('Completed')),
+        ('failed', _('Failed')),
+        ('cancelled', _('Cancelled')),
+        ('refunded', _('Refunded')),
+    ]
+    
+    # Información básica
+    name = models.CharField(_("Name"), max_length=100, help_text=_("Display name for the payment method"))
+    code = models.CharField(_("Code"), max_length=20, unique=True, help_text=_("Unique identifier for the payment method"))
+    description = models.TextField(_("Description"), blank=True, help_text=_("Detailed description of the payment method"))
+    
+    # Categorización
+    payment_type = models.CharField(_("Payment Type"), max_length=20, choices=PAYMENT_TYPE_CHOICES)
+    card_type = models.CharField(_("Card Type"), max_length=20, choices=CARD_TYPE_CHOICES, blank=True, null=True)
+    
+    # Configuración visual
+    icon = models.CharField(_("Icon"), max_length=50, default="credit_card", help_text=_("Material Design icon name"))
+    color = models.CharField(_("Color"), max_length=7, default="#3B82F6", help_text=_("Hex color for UI display"))
+    logo_url = models.URLField(_("Logo URL"), blank=True, help_text=_("URL to payment method logo"))
+    
+    # Configuración de negocio
+    is_active = models.BooleanField(_("Active"), default=True)
+    is_default = models.BooleanField(_("Default"), default=False, help_text=_("Default payment method for new transactions"))
+    order = models.IntegerField(_("Display Order"), default=0, help_text=_("Order in which to display this payment method"))
+    
+    # Configuración de comisiones
+    commission_percentage = models.DecimalField(_("Commission %"), max_digits=5, decimal_places=2, default=0, help_text=_("Commission percentage charged by the payment processor"))
+    fixed_commission = models.DecimalField(_("Fixed Commission"), max_digits=10, decimal_places=2, default=0, help_text=_("Fixed commission amount"))
+    minimum_amount = models.DecimalField(_("Minimum Amount"), max_digits=12, decimal_places=2, default=0, help_text=_("Minimum transaction amount"))
+    maximum_amount = models.DecimalField(_("Maximum Amount"), max_digits=12, decimal_places=2, default=0, help_text=_("Maximum transaction amount (0 = no limit)"))
+    
+    # Configuración de campos requeridos
+    requires_reference = models.BooleanField(_("Requires Reference"), default=False)
+    requires_card_number = models.BooleanField(_("Requires Card Number"), default=False)
+    requires_expiry = models.BooleanField(_("Requires Expiry Date"), default=False)
+    requires_cvv = models.BooleanField(_("Requires CVV"), default=False)
+    requires_installments = models.BooleanField(_("Supports Installments"), default=False)
+    max_installments = models.IntegerField(_("Max Installments"), default=1)
+    
+    # Configuración de procesamiento
+    processing_time_hours = models.IntegerField(_("Processing Time (Hours)"), default=0, help_text=_("Time to process payment in hours"))
+    supports_refunds = models.BooleanField(_("Supports Refunds"), default=True)
+    supports_partial_refunds = models.BooleanField(_("Supports Partial Refunds"), default=True)
+    
+    # Integración con procesadores
+    processor_name = models.CharField(_("Processor Name"), max_length=50, blank=True, help_text=_("Payment processor name (e.g., Stripe, PayPal, MercadoPago)"))
+    processor_config = models.JSONField(_("Processor Configuration"), default=dict, blank=True, help_text=_("Configuration for payment processor"))
+    
+    # Configuración de seguridad
+    requires_3d_secure = models.BooleanField(_("Requires 3D Secure"), default=False)
+    supports_tokenization = models.BooleanField(_("Supports Tokenization"), default=False)
+    
+    # Configuración regional
+    supported_currencies = models.JSONField(_("Supported Currencies"), default=list, blank=True, help_text=_("List of supported currency codes"))
+    supported_countries = models.JSONField(_("Supported Countries"), default=list, blank=True, help_text=_("List of supported country codes"))
+    
+    # Relaciones multiempresa/multisucursal
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, verbose_name=_("Company"))
+    branches = models.ManyToManyField('core.Branch', blank=True, verbose_name=_("Branches"), help_text=_("Branches where this payment method is available"))
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey('core.UsuarioExtendido', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_payment_methods')
+    updated_by = models.ForeignKey('core.UsuarioExtendido', on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_payment_methods')
+    
+    class Meta:
+        verbose_name = _('Payment Method')
+        verbose_name_plural = _('Payment Methods')
+        ordering = ['order', 'name']
+        indexes = [
+            models.Index(fields=['empresa', 'is_active']),
+            models.Index(fields=['payment_type']),
+            models.Index(fields=['code']),
+        ]
+        unique_together = [['empresa', 'code']]
+    
+    def __str__(self):
+        return f"{self.name} ({self.empresa.name})"
+    
+    def clean(self):
+        """Validaciones del modelo"""
+        from django.core.exceptions import ValidationError
+        
+        # Validar que solo un método sea default por empresa
+        if self.is_default:
+            PaymentMethod.objects.filter(
+                empresa=self.empresa,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        
+        # Validar configuración de tarjetas
+        if self.payment_type == 'card' and not self.card_type:
+            raise ValidationError(_("Card type is required for card payment methods"))
+        
+        # Validar montos
+        if self.minimum_amount > self.maximum_amount and self.maximum_amount > 0:
+            raise ValidationError(_("Minimum amount cannot be greater than maximum amount"))
+    
+    def get_commission_amount(self, transaction_amount):
+        """Calcular comisión para un monto dado"""
+        commission = self.fixed_commission
+        if self.commission_percentage > 0:
+            commission += (transaction_amount * self.commission_percentage / 100)
+        return commission
+    
+    def is_available_for_amount(self, amount):
+        """Verificar si el método está disponible para un monto"""
+        if amount < self.minimum_amount:
+            return False
+        if self.maximum_amount > 0 and amount > self.maximum_amount:
+            return False
+        return True
+    
+    def is_available_for_currency(self, currency_code):
+        """Verificar si el método está disponible para una moneda"""
+        if not self.supported_currencies:
+            return True  # Si no hay restricciones, está disponible
+        return currency_code.upper() in [c.upper() for c in self.supported_currencies]
+    
+    def is_available_for_country(self, country_code):
+        """Verificar si el método está disponible para un país"""
+        if not self.supported_countries:
+            return True  # Si no hay restricciones, está disponible
+        return country_code.upper() in [c.upper() for c in self.supported_countries]
+    
+    def get_required_fields(self):
+        """Obtener campos requeridos para este método de pago"""
+        fields = []
+        if self.requires_reference:
+            fields.append('reference')
+        if self.requires_card_number:
+            fields.append('card_number')
+        if self.requires_expiry:
+            fields.append('expiry_date')
+        if self.requires_cvv:
+            fields.append('cvv')
+        if self.requires_installments:
+            fields.append('installments')
+        return fields
+    
+    def get_processor_config(self):
+        """Obtener configuración del procesador"""
+        return self.processor_config or {}
+    
+    def set_processor_config(self, config):
+        """Establecer configuración del procesador"""
+        self.processor_config = config
+        self.save(update_fields=['processor_config'])
+
+
+# --- CONFIGURACIÓN DE PROCESADORES DE PAGO ---
+class PaymentProcessor(models.Model):
+    """
+    Configuración de procesadores de pago
+    """
+    
+    PROCESSOR_TYPES = [
+        ('stripe', 'Stripe'),
+        ('paypal', 'PayPal'),
+        ('mercadopago', 'MercadoPago'),
+        ('modo', 'Modo'),
+        ('clover', 'Clover'),
+        ('square', 'Square'),
+        ('adyen', 'Adyen'),
+        ('braintree', 'Braintree'),
+        ('custom', _('Custom')),
+    ]
+    
+    name = models.CharField(_("Name"), max_length=100)
+    processor_type = models.CharField(_("Processor Type"), max_length=20, choices=PROCESSOR_TYPES)
+    is_active = models.BooleanField(_("Active"), default=True)
+    
+    # Configuración de API
+    api_key = models.CharField(_("API Key"), max_length=255, blank=True)
+    api_secret = models.CharField(_("API Secret"), max_length=255, blank=True)
+    webhook_url = models.URLField(_("Webhook URL"), blank=True)
+    webhook_secret = models.CharField(_("Webhook Secret"), max_length=255, blank=True)
+    
+    # Configuración adicional
+    config = models.JSONField(_("Configuration"), default=dict, blank=True)
+    
+    # Relaciones
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, verbose_name=_("Company"))
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Payment Processor')
+        verbose_name_plural = _('Payment Processors')
+        ordering = ['name']
+        unique_together = [['empresa', 'processor_type']]
+    
+    def __str__(self):
+        return f"{self.name} ({self.empresa.name})"
+    
+    def get_config(self, key, default=None):
+        """Obtener valor de configuración"""
+        return self.config.get(key, default)
+    
+    def set_config(self, key, value):
+        """Establecer valor de configuración"""
+        self.config[key] = value
+        self.save(update_fields=['config'])

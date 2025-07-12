@@ -895,6 +895,39 @@ class TiendaNubeSyncProductsView(TiendaNubePermissionMixin, View):
 class TiendaNubeSyncCustomersView(TiendaNubePermissionMixin, View):
     """Sincroniza clientes desde Tiendanube hacia Synap."""
     
+    def get(self, request):
+        """Muestra la página de sincronización de clientes."""
+        config = TiendaNubeConfig.objects.first()
+        if not config:
+            messages.error(request, _('TiendaNube configuration not found.'))
+            return redirect('tiendanube:dashboard')
+        
+        # Obtener estadísticas de clientes sincronizados
+        from core.models import Contact
+        synced_customers = Contact.objects.filter(
+            tags__icontains='tiendanube'
+        ).count()
+        
+        # Obtener clientes con tag tiendanube que no están sincronizados
+        # Simplificar la consulta para evitar errores de lookup
+        total_tiendanube_contacts = Contact.objects.filter(
+            tags__icontains='tiendanube'
+        ).count()
+        
+        # Contar mappings existentes
+        from .models import TiendaNubeCustomerMapping
+        existing_mappings = TiendaNubeCustomerMapping.objects.count()
+        
+        # Calcular clientes pendientes (aproximado)
+        unsynced_customers = max(0, total_tiendanube_contacts - existing_mappings)
+        
+        context = {
+            'config': config,
+            'synced_customers': synced_customers,
+            'unsynced_customers': unsynced_customers,
+        }
+        return render(request, 'tiendanube/tiendanube_sync_customers.html', context)
+    
     def post(self, request):
         try:
             config = TiendaNubeConfig.objects.first()
@@ -919,4 +952,34 @@ class TiendaNubeSyncCustomersView(TiendaNubePermissionMixin, View):
             
         except Exception as e:
             messages.error(request, f'Error during customer synchronization: {str(e)}')
+            return redirect('tiendanube:dashboard')
+
+
+class TiendaNubeSyncCustomersToTiendanubeView(TiendaNubePermissionMixin, View):
+    """Sincroniza clientes desde Synap hacia Tiendanube."""
+    
+    def post(self, request):
+        try:
+            config = TiendaNubeConfig.objects.first()
+            if not config:
+                messages.error(request, _('TiendaNube configuration not found.'))
+                return redirect('tiendanube:dashboard')
+            
+            service = TiendaNubeService(config)
+            limit = int(request.POST.get('limit', 100))
+            offset = int(request.POST.get('offset', 0))
+            
+            success_count, failed_count = service.sync_all_customers_to_tiendanube(limit, offset)
+            
+            if failed_count == 0:
+                messages.success(request, _('All customers synchronized to Tiendanube successfully.'))
+            elif success_count > 0:
+                messages.warning(request, _('Partial customer synchronization completed. Some customers failed.'))
+            else:
+                messages.error(request, _('Customer synchronization to Tiendanube failed.'))
+            
+            return redirect('tiendanube:dashboard')
+            
+        except Exception as e:
+            messages.error(request, f'Error during customer synchronization to Tiendanube: {str(e)}')
             return redirect('tiendanube:dashboard')

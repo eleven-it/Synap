@@ -1,0 +1,136 @@
+{% extends "mercadopago/base.html" %}
+{% load i18n %}
+
+{% block mercadopago_content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white">{% trans "MercadoPago Configurations" %}</h2>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">{% trans "Manage your MercadoPago integration settings" %}</p>
+        </div>
+        <a href="{% url 'mercadopago:config_new' %}" 
+           class="mp-button-primary">
+            <svg class="w-5 h-5 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+            </svg>
+            {% trans "New Configuration" %}
+        </a>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="mp-progress">
+        <div class="mp-progress-bar" style="width: 75%"></div>
+    </div>
+
+    <!-- Configurations Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for config in configs %}
+        <div class="mp-card p-6">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ config.empresa.nombre }}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ config.empresa.cuit }}</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    {% if config.is_active %}
+                        <span class="mp-status-badge mp-status-active">{% trans "Active" %}</span>
+                    {% else %}
+                        <span class="mp-status-badge mp-status-inactive">{% trans "Inactive" %}</span>
+                    {% endif %}
+                    {% if config.is_sandbox %}
+                        <span class="mp-status-badge mp-status-pending">{% trans "Sandbox" %}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="space-y-3 mb-6">
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-600 dark:text-gray-400">{% trans "Client ID" %}</span>
+                    <span class="font-mono text-gray-900 dark:text-white">{{ config.client_id|truncatechars:12 }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-600 dark:text-gray-400">{% trans "Commission" %}</span>
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ config.commission_percentage }}%</span>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-600 dark:text-gray-400">{% trans "Max Installments" %}</span>
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ config.max_installments }}</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="flex space-x-2">
+                    <a href="{% url 'mercadopago:config_edit' config.pk %}" 
+                       class="mp-button-secondary text-sm">
+                        <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                        {% trans "Edit" %}
+                    </a>
+                    <a href="{% url 'mercadopago:config_test' config.pk %}" 
+                       class="mp-button-secondary text-sm">
+                        <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        {% trans "Test" %}
+                    </a>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "Updated" %} {{ config.updated_at|timesince }} {% trans "ago" %}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full">
+            <div class="text-center py-12">
+                <div class="w-24 h-24 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                    <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "No configurations found" %}</h3>
+                <p class="text-gray-500 dark:text-gray-400 mb-6">{% trans "Get started by creating your first MercadoPago configuration" %}</p>
+                <a href="{% url 'mercadopago:config_new' %}" class="mp-button-primary">
+                    {% trans "Create Configuration" %}
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add hover effects to cards
+    const cards = document.querySelectorAll('.mp-card');
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-4px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+    
+    // Add click effects to buttons
+    const buttons = document.querySelectorAll('.mp-button');
+    buttons.forEach(button => {
+        button.addEventListener('click', function() {
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1)';
+            }, 150);
+        });
+    });
+});
+</script>
+{% endblock %} 

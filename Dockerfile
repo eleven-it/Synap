@@ -1,52 +1,64 @@
-# Usamos la imagen oficial de Python
-FROM python:3.10
+# Usar imagen base más ligera
+FROM python:3.10-slim
 
-# Establecer directorio de trabajo en el contenedor
+# Establecer directorio de trabajo
 WORKDIR /app
 
-# Instalar Node.js y npm con actualización de claves GPG para evitar errores de firma
+# Instalar dependencias básicas del sistema
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gnupg2 ca-certificates \
-    && apt-get install -y curl \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && npm install -g npm@latest \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+        # Dependencias básicas
+        curl \
+        gnupg2 \
+        ca-certificates \
+        pkg-config \
+        # Dependencias de compilación
+        build-essential \
+        gcc \
+        default-libmysqlclient-dev \
+        python3-dev \
+        gettext \
+        # Node.js
+        && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+        && apt-get install -y nodejs \
+        && npm install -g npm@latest \
+        && apt-get clean \
+        && rm -rf /var/lib/apt/lists/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/tmp/*
 
-# Verificar la instalación de Node.js y npm
+# Verificar instalaciones
 RUN node -v && npm -v
 
-RUN apt-get update && apt-get install -y \
-    gcc \
-    default-libmysqlclient-dev \
-    python3-dev \
-    gettext
+# Copiar requirements antes del resto para aprovechar cache de Docker
+COPY requirements.txt .
 
-# Actualizar certificados de CA del sistema operativo
-RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+# Instalar dependencias Python en una sola capa con optimizaciones
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir --upgrade --force-reinstall certifi \
+    && rm -rf ~/.cache/pip
 
-# Copiar los archivos al contenedor
-COPY requirements.txt requirements.txt
+# Limpiar herramientas de compilación después de instalar dependencias Python
+RUN apt-get purge -y build-essential gcc python3-dev \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
 
-# Instalar dependencias y forzar la reinstalación de certifi
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --upgrade --force-reinstall certifi
-
-# Configurar variables de entorno para Firebase
-#ENV FIREBASE_CREDENTIALS_PATH=/app/firebase_credentials.json
-
-# Copia la clave privada de Firebase (asegúrate de tenerla en tu máquina local)
+# Copiar configuración de Firebase
 COPY firebase_credentials.json /app/firebase_credentials.json
 
-# Exponer el puerto del API
-EXPOSE 8000
-
-RUN mkdir /app/staticfiles
+# Crear directorio para archivos estáticos
+RUN mkdir -p /app/staticfiles
 
 # Copiar el resto del código del proyecto
 COPY . .
 
-# Comando por defecto para ejecutar Django
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "django_project.wsgi:application"]
+# Exponer puerto
+EXPOSE 8000
+
+# Comando por defecto optimizado
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120", "django_project.wsgi:application"]
 

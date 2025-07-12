@@ -63,7 +63,7 @@ def tiendanube_sync_products(request):
         success_pending = 0
         failed_pending = 0
         for mapping in pendientes:
-            ok, msg = service.sync_product_update(mapping.product)
+            ok = service.sync_product_update(mapping.product)
             if ok:
                 success_pending += 1
             else:

@@ -13,6 +13,22 @@ _firebase_app = None
 
 def get_firebase_app():
     global _firebase_app
+    
+    # No inicializar Firebase en modo test o con settings de prueba
+    import sys
+    import os
+    
+    # Detectar modo test o settings de prueba
+    is_test_mode = (
+        'test' in sys.argv or 
+        'check' in sys.argv or
+        os.environ.get('DJANGO_SETTINGS_MODULE', '').endswith('test_settings')
+    )
+    
+    if is_test_mode:
+        logger.info("[Firebase] Modo test/settings de prueba detectado, omitiendo inicialización de Firebase.")
+        return None
+    
     if _firebase_app is None:
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
         logger.info(f"[Firebase] Inicializando Firebase con credenciales: {cred_path}")

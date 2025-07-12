@@ -1,6 +1,7 @@
 # Importaciones necesarias
 from .utils import (
     get_empresa_actual,
+    get_user_empresa,
     registrar_actividad_usuario,
     limpiar_cache_usuario,
     permisos_contextuales,
@@ -13,6 +14,7 @@ from .utils import (
 # Re-exportar las funciones
 __all__ = [
     'get_empresa_actual',
+    'get_user_empresa',
     'registrar_actividad_usuario', 
     'limpiar_cache_usuario',
     'permisos_contextuales',

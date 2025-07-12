@@ -1,0 +1,723 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Financial Statements" %} - {{ block.super }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .statement-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden;
+    }
+    
+    .statement-header {
+        @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700;
+    }
+    
+    .statement-section {
+        @apply border-b border-gray-200 dark:border-gray-700 last:border-b-0;
+    }
+    
+    .statement-section-header {
+        @apply px-6 py-3 bg-gray-100 dark:bg-gray-600 border-b border-gray-200 dark:border-gray-700;
+    }
+    
+    .statement-row {
+        @apply hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200;
+    }
+    
+    .statement-total {
+        @apply font-semibold bg-gray-50 dark:bg-gray-600;
+    }
+    
+    .balance-number {
+        @apply font-semibold;
+    }
+    
+    .balance-number.positive {
+        @apply text-green-600 dark:text-green-400;
+    }
+    
+    .balance-number.negative {
+        @apply text-red-600 dark:text-red-400;
+    }
+    
+    .balance-number.neutral {
+        @apply text-gray-600 dark:text-gray-400;
+    }
+    
+    .filter-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4;
+    }
+    
+    .summary-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6;
+    }
+    
+    .summary-number {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .summary-label {
+        @apply text-sm font-medium text-gray-500 dark:text-gray-400 mt-1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Financial Statements" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Balance Sheet and Income Statement as of" %} {{ as_of_date|date:"F j, Y" }}
+                    </p>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="window.print()" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+                        </svg>
+                        {% trans "Print" %}
+                    </button>
+                    <a href="{% url 'accounting:reports_dashboard' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        {% trans "Back to Reports" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="filter-card">
+            <form method="get" class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-48">
+                    <label for="date_as_of" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {% trans "As of Date" %}
+                    </label>
+                    <input type="date" name="date_as_of" id="date_as_of" value="{{ date_as_of }}"
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        {% trans "Update Statements" %}
+                    </button>
+                    <a href="{% url 'accounting:financial_statements' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                        {% trans "Clear" %}
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Financial Summary -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Financial Summary" %}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Total Assets -->
+            <div class="summary-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="summary-number">${{ assets_total|floatformat:2 }}</div>
+                        <div class="summary-label">{% trans "Total Assets" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Liabilities -->
+            <div class="summary-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="summary-number">${{ liabilities_total|floatformat:2 }}</div>
+                        <div class="summary-label">{% trans "Total Liabilities" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Equity -->
+            <div class="summary-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="summary-number">${{ equity_total|floatformat:2 }}</div>
+                        <div class="summary-label">{% trans "Total Equity" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Net Income -->
+            <div class="summary-card">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 {% if net_income >= 0 %}bg-green-100 dark:bg-green-900/30{% else %}bg-red-100 dark:bg-red-900/30{% endif %} rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 {% if net_income >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <div class="summary-number {% if net_income >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            ${{ net_income|floatformat:2 }}
+                        </div>
+                        <div class="summary-label">{% trans "Net Income" %} ({% trans "Period" %})</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Balance Sheet -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="statement-card">
+            <div class="statement-header">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {% trans "Balance Sheet" %}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "As of" %} {{ as_of_date|date:"F j, Y" }}
+                </p>
+            </div>
+
+            <!-- Assets -->
+            <div class="statement-section">
+                <div class="statement-section-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "ASSETS" %}
+                    </h3>
+                </div>
+                {% if assets_details %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for asset in assets_details %}
+                    <div class="statement-row px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ asset.account.code }}
+                                </div>
+                                <div class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ asset.account.name }}
+                                </div>
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number positive">${{ asset.balance|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="statement-total px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                {% trans "TOTAL ASSETS" %}
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number positive">${{ assets_total|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="px-6 py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "No asset accounts with balances found" %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Liabilities -->
+            <div class="statement-section">
+                <div class="statement-section-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "LIABILITIES" %}
+                    </h3>
+                </div>
+                {% if liabilities_details %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for liability in liabilities_details %}
+                    <div class="statement-row px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ liability.account.code }}
+                                </div>
+                                <div class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ liability.account.name }}
+                                </div>
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number negative">${{ liability.balance|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="statement-total px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                {% trans "TOTAL LIABILITIES" %}
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number negative">${{ liabilities_total|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="px-6 py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "No liability accounts with balances found" %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Equity -->
+            <div class="statement-section">
+                <div class="statement-section-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "EQUITY" %}
+                    </h3>
+                </div>
+                {% if equity_details %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for equity in equity_details %}
+                    <div class="statement-row px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ equity.account.code }}
+                                </div>
+                                <div class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ equity.account.name }}
+                                </div>
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number {% if equity.balance >= 0 %}positive{% else %}negative{% endif %}">${{ equity.balance|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="statement-total px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                {% trans "TOTAL EQUITY" %}
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number {% if equity_total >= 0 %}positive{% else %}negative{% endif %}">${{ equity_total|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="px-6 py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "No equity accounts with balances found" %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Income Statement -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="statement-card">
+            <div class="statement-header">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {% trans "Income Statement" %}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "For the period ending" %} {{ as_of_date|date:"F j, Y" }}
+                </p>
+            </div>
+
+            <!-- Income -->
+            <div class="statement-section">
+                <div class="statement-section-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "INCOME" %}
+                    </h3>
+                </div>
+                {% if income_details %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for income in income_details %}
+                    <div class="statement-row px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ income.account.code }}
+                                </div>
+                                <div class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ income.account.name }}
+                                </div>
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number positive">${{ income.balance|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="statement-total px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                {% trans "TOTAL INCOME" %}
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number positive">${{ income_total|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="px-6 py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "No income accounts with activity found" %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Expenses -->
+            <div class="statement-section">
+                <div class="statement-section-header">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">
+                        {% trans "EXPENSES" %}
+                    </h3>
+                </div>
+                {% if expenses_details %}
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for expense in expenses_details %}
+                    <div class="statement-row px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ expense.account.code }}
+                                </div>
+                                <div class="ml-3 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ expense.account.name }}
+                                </div>
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number negative">${{ expense.balance|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="statement-total px-6 py-3">
+                        <div class="flex justify-between items-center">
+                            <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                                {% trans "TOTAL EXPENSES" %}
+                            </div>
+                            <div class="text-sm">
+                                <span class="balance-number negative">${{ expenses_total|floatformat:2 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="px-6 py-8 text-center">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "No expense accounts with activity found" %}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Net Income -->
+            <div class="statement-section">
+                <div class="statement-total px-6 py-4">
+                    <div class="flex justify-between items-center">
+                        <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% trans "NET INCOME" %}
+                        </div>
+                        <div class="text-lg">
+                            <span class="balance-number {% if net_income >= 0 %}positive{% else %}negative{% endif %}">${{ net_income|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                {% trans "Notes" %}
+            </h4>
+            <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                <li>• {% trans "Balance Sheet shows financial position as of" %} {{ as_of_date|date:"F j, Y" }}</li>
+                <li>• {% trans "Income Statement covers the period from" %} {{ period_start|date:"F j, Y" }} {% trans "to" %} {{ as_of_date|date:"F j, Y" }}</li>
+                <li>• {% trans "All amounts are in the company's base currency" %}</li>
+                <li>• {% trans "Only posted journal entries are included in calculations" %}</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans "Financial Analytics" %}
+        </h2>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Balance Sheet Overview" %}
+                </h3>
+                <canvas id="chart-balance-general" height="250"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Income Statement" %}
+                </h3>
+                <canvas id="chart-income-statement" height="250"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Top 5 Asset Accounts" %}
+                </h3>
+                <canvas id="chart-top-assets" height="250"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Top 5 Liability Accounts" %}
+                </h3>
+                <canvas id="chart-top-liabilities" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Datos desde el contexto Django
+    const chartBalanceLabels = {{ chart_balance_labels|safe }};
+    const chartBalanceData = {{ chart_balance_data|safe }};
+    const chartIncomeLabels = {{ chart_income_labels|safe }};
+    const chartIncomeData = {{ chart_income_data|safe }};
+    const chartAssetsLabels = {{ chart_assets_labels|safe }};
+    const chartAssetsData = {{ chart_assets_data|safe }};
+    const chartLiabilitiesLabels = {{ chart_liabilities_labels|safe }};
+    const chartLiabilitiesData = {{ chart_liabilities_data|safe }};
+
+    // Detectar modo dark
+    function isDarkMode() {
+        return document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function getColors() {
+        if (isDarkMode()) {
+            return {
+                text: '#fff',
+                grid: '#444',
+                bg: '#1e293b',
+                border: '#334155',
+                palette: [
+                    '#60a5fa', '#f472b6', '#facc15', '#34d399', '#a78bfa', '#f87171', '#38bdf8', '#fbbf24', '#4ade80', '#818cf8'
+                ]
+            };
+        } else {
+            return {
+                text: '#222',
+                grid: '#e5e7eb',
+                bg: '#fff',
+                border: '#cbd5e1',
+                palette: [
+                    '#2563eb', '#db2777', '#ca8a04', '#059669', '#7c3aed', '#dc2626', '#0284c7', '#d97706', '#16a34a', '#6366f1'
+                ]
+            };
+        }
+    }
+
+    function renderCharts() {
+        const colors = getColors();
+        
+        // Balance General (dona)
+        const ctxBalance = document.getElementById('chart-balance-general');
+        if (ctxBalance) {
+            new Chart(ctxBalance.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: chartBalanceLabels,
+                    datasets: [{
+                        label: 'Amount',
+                        data: chartBalanceData,
+                        backgroundColor: [colors.palette[0], colors.palette[5], colors.palette[2]],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: { color: colors.text }
+                        },
+                        tooltip: { enabled: true }
+                    }
+                }
+            });
+        }
+
+        // Estado de Resultados (barras)
+        const ctxIncome = document.getElementById('chart-income-statement');
+        if (ctxIncome) {
+            new Chart(ctxIncome.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartIncomeLabels,
+                    datasets: [{
+                        label: 'Amount',
+                        data: chartIncomeData,
+                        backgroundColor: [
+                            colors.palette[2], // Income - verde
+                            colors.palette[5], // Expenses - rojo
+                            colors.palette[0]  // Net Income - azul
+                        ],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        },
+                        y: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Top cuentas de activos (barras horizontales)
+        const ctxAssets = document.getElementById('chart-top-assets');
+        if (ctxAssets) {
+            new Chart(ctxAssets.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartAssetsLabels,
+                    datasets: [{
+                        label: 'Balance',
+                        data: chartAssetsData,
+                        backgroundColor: colors.palette[0],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        },
+                        y: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Top cuentas de pasivos (barras horizontales)
+        const ctxLiabilities = document.getElementById('chart-top-liabilities');
+        if (ctxLiabilities) {
+            new Chart(ctxLiabilities.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: chartLiabilitiesLabels,
+                    datasets: [{
+                        label: 'Balance',
+                        data: chartLiabilitiesData,
+                        backgroundColor: colors.palette[5],
+                        borderColor: colors.border,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        },
+                        y: {
+                            ticks: { color: colors.text },
+                            grid: { color: colors.grid }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // Renderizar al cargar y al cambiar dark/light
+    document.addEventListener('DOMContentLoaded', renderCharts);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => location.reload());
+
+    // Auto-submit form when date input changes
+    const dateInput = document.getElementById('date_as_of');
+    if (dateInput) {
+        dateInput.addEventListener('change', function() {
+            this.closest('form').submit();
+        });
+    }
+</script>
+{% endblock %} 

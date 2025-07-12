@@ -29,7 +29,7 @@ def sync_tiendanube_periodic():
         # Si el mapping existe pero el producto no tiene tiendanube_id, saltar
         if not mapping.product.tiendanube_id:
             continue
-        ok, msg = service.sync_product_update(mapping.product)
+        ok = service.sync_product_update(mapping.product)
         if ok:
             prod_update_ok += 1
         else:

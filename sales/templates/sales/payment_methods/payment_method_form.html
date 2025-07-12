@@ -1,0 +1,722 @@
+{% extends "core/core_app_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}
+    {% if action == 'create' %}{% trans "Create Payment Method" %}{% else %}{% trans "Edit Payment Method" %}{% endif %} - {{ empresa.name }}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        animation: slideIn 0.5s ease-out;
+    }
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .field-group {
+        transition: all 0.3s ease;
+    }
+    .field-group:hover {
+        transform: translateX(5px);
+    }
+    .progress-bar {
+        transition: width 0.5s ease;
+    }
+    .color-picker {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-color: transparent;
+        width: 50px;
+        height: 50px;
+        border: none;
+        cursor: pointer;
+    }
+    .color-picker::-webkit-color-swatch-wrapper {
+        padding: 0;
+    }
+    .color-picker::-webkit-color-swatch {
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+    }
+    .form-input:focus {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    .error-shake {
+        animation: shake 0.5s ease-in-out;
+    }
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div class="flex items-center space-x-3">
+                    <button onclick="history.back()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <svg class="w-5 h-5 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                            {% if action == 'create' %}{% trans "Create Payment Method" %}{% else %}{% trans "Edit Payment Method" %}{% endif %}
+                        </h1>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            {% if action == 'create' %}
+                                {% trans "Configure a new payment method for your business" %}
+                            {% else %}
+                                {% trans "Update payment method configuration" %}
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <button onclick="window.location.href='{% url 'sales:payment_method_list' %}'" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                        {% trans "Back to List" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="py-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Form Progress" %}</span>
+                    <span class="text-sm text-gray-500 dark:text-gray-400" id="progressText">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="progress-bar bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full" style="width: 0%" id="progressBar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form Content -->
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" id="paymentMethodForm" class="space-y-8">
+            {% csrf_token %}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Basic Information" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Name" %} *
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.name.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Display name for the payment method" %}</p>
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.code.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Code" %} *
+                            </label>
+                            {{ form.code }}
+                            {% if form.code.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.code.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Unique identifier (e.g., visa_credit)" %}</p>
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="{{ form.description.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Description" %}
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.description.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.payment_type.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Payment Type" %} *
+                            </label>
+                            {{ form.payment_type }}
+                            {% if form.payment_type.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.payment_type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group" id="cardTypeGroup" style="display: none;">
+                            <label for="{{ form.card_type.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Card Type" %}
+                            </label>
+                            {{ form.card_type }}
+                            {% if form.card_type.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.card_type.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Configuration Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z"></path>
+                        </svg>
+                        {% trans "Visual Configuration" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.icon.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Icon" %}
+                            </label>
+                            {{ form.icon }}
+                            {% if form.icon.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.icon.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Material Design icon name" %}</p>
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.color.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Color" %}
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                {{ form.color }}
+                                <div class="w-8 h-8 rounded border-2 border-gray-300 dark:border-gray-600" id="colorPreview"></div>
+                            </div>
+                            {% if form.color.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.color.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.logo_url.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Logo URL" %}
+                            </label>
+                            {{ form.logo_url }}
+                            {% if form.logo_url.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.logo_url.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Business Configuration Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Business Configuration" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.is_active }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Active" %}</span>
+                            </label>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Enable this payment method" %}</p>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.is_default }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Default" %}</span>
+                            </label>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Set as default payment method" %}</p>
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.order.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Display Order" %}
+                            </label>
+                            {{ form.order }}
+                            {% if form.order.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.order.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="{{ form.branches.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Available Branches" %}
+                        </label>
+                        {{ form.branches }}
+                        {% if form.branches.errors %}
+                        <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.branches.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Select branches where this payment method is available" %}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commission & Limits Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                        </svg>
+                        {% trans "Commission & Limits" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.commission_percentage.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Commission Percentage" %}
+                            </label>
+                            <div class="relative">
+                                {{ form.commission_percentage }}
+                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                    <span class="text-gray-500 dark:text-gray-400 text-sm">%</span>
+                                </div>
+                            </div>
+                            {% if form.commission_percentage.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.commission_percentage.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.fixed_commission.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Fixed Commission" %}
+                            </label>
+                            {{ form.fixed_commission }}
+                            {% if form.fixed_commission.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.fixed_commission.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.minimum_amount.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Minimum Amount" %}
+                            </label>
+                            {{ form.minimum_amount }}
+                            {% if form.minimum_amount.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.minimum_amount.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.maximum_amount.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Maximum Amount" %}
+                            </label>
+                            {{ form.maximum_amount }}
+                            {% if form.maximum_amount.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.maximum_amount.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "0 = no limit" %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Required Fields Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        {% trans "Required Fields" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_reference }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Requires Reference" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_card_number }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Requires Card Number" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_expiry }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Requires Expiry Date" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_cvv }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Requires CVV" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_installments }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Supports Installments" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group" id="maxInstallmentsGroup" style="display: none;">
+                            <label for="{{ form.max_installments.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Max Installments" %}
+                            </label>
+                            {{ form.max_installments }}
+                            {% if form.max_installments.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.max_installments.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processing Configuration Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        {% trans "Processing Configuration" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.processing_time_hours.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Processing Time (Hours)" %}
+                            </label>
+                            {{ form.processing_time_hours }}
+                            {% if form.processing_time_hours.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.processing_time_hours.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.supports_refunds }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Supports Refunds" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.supports_partial_refunds }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Supports Partial Refunds" %}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.processor_name.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Processor Name" %}
+                            </label>
+                            {{ form.processor_name }}
+                            {% if form.processor_name.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.processor_name.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.processor_config.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Processor Configuration" %}
+                            </label>
+                            {{ form.processor_config }}
+                            {% if form.processor_config.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.processor_config.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "JSON configuration for payment processor" %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security & Regional Configuration Section -->
+            <div class="form-section bg-white dark:bg-gray-800 shadow rounded-lg">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        {% trans "Security & Regional Configuration" %}
+                    </h3>
+                </div>
+                <div class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.requires_3d_secure }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Requires 3D Secure" %}</span>
+                            </label>
+                        </div>
+
+                        <div class="field-group">
+                            <label class="flex items-center">
+                                {{ form.supports_tokenization }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Supports Tokenization" %}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="field-group">
+                            <label for="{{ form.supported_currencies.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Supported Currencies" %}
+                            </label>
+                            {{ form.supported_currencies }}
+                            {% if form.supported_currencies.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.supported_currencies.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "One currency code per line (e.g., USD, EUR, ARS)" %}</p>
+                        </div>
+
+                        <div class="field-group">
+                            <label for="{{ form.supported_countries.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Supported Countries" %}
+                            </label>
+                            {{ form.supported_countries }}
+                            {% if form.supported_countries.errors %}
+                            <p class="mt-1 text-sm text-red-600 dark:text-red-400 error-shake">{{ form.supported_countries.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "One country code per line (e.g., US, AR, BR)" %}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-between pt-6">
+                <button type="button" onclick="history.back()" 
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    {% trans "Cancel" %}
+                </button>
+                
+                <button type="submit" 
+                        class="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-105">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    {% if action == 'create' %}{% trans "Create Payment Method" %}{% else %}{% trans "Update Payment Method" %}{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Progress tracking
+function updateProgress() {
+    const form = document.getElementById('paymentMethodForm');
+    const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+    const filledFields = Array.from(requiredFields).filter(field => field.value.trim() !== '');
+    const progress = (filledFields.length / requiredFields.length) * 100;
+    
+    document.getElementById('progressBar').style.width = progress + '%';
+    document.getElementById('progressText').textContent = Math.round(progress) + '%';
+}
+
+// Color picker preview
+function updateColorPreview() {
+    const colorInput = document.querySelector('input[type="color"]');
+    const preview = document.getElementById('colorPreview');
+    if (colorInput && preview) {
+        preview.style.backgroundColor = colorInput.value;
+    }
+}
+
+// Dynamic field configuration based on payment type
+function configureFieldsForPaymentType(paymentType) {
+    const cardTypeGroup = document.getElementById('cardTypeGroup');
+    const maxInstallmentsGroup = document.getElementById('maxInstallmentsGroup');
+    const requiresInstallments = document.getElementById('id_requires_installments');
+    
+    // Show/hide card type field
+    if (paymentType === 'card') {
+        cardTypeGroup.style.display = 'block';
+        document.getElementById('id_card_type').required = true;
+    } else {
+        cardTypeGroup.style.display = 'none';
+        document.getElementById('id_card_type').required = false;
+    }
+    
+    // Show/hide max installments field
+    if (requiresInstallments && requiresInstallments.checked) {
+        maxInstallmentsGroup.style.display = 'block';
+    } else {
+        maxInstallmentsGroup.style.display = 'none';
+    }
+    
+    updateProgress();
+}
+
+// Form validation and submission
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('paymentMethodForm');
+    const colorInput = document.querySelector('input[type="color"]');
+    const requiresInstallments = document.getElementById('id_requires_installments');
+    
+    // Initialize
+    updateProgress();
+    updateColorPreview();
+    
+    // Configure fields based on initial values
+    const paymentTypeSelect = document.getElementById('id_payment_type');
+    if (paymentTypeSelect) {
+        configureFieldsForPaymentType(paymentTypeSelect.value);
+    }
+    
+    // Event listeners
+    if (colorInput) {
+        colorInput.addEventListener('input', updateColorPreview);
+    }
+    
+    if (requiresInstallments) {
+        requiresInstallments.addEventListener('change', function() {
+            const maxInstallmentsGroup = document.getElementById('maxInstallmentsGroup');
+            if (this.checked) {
+                maxInstallmentsGroup.style.display = 'block';
+            } else {
+                maxInstallmentsGroup.style.display = 'none';
+            }
+        });
+    }
+    
+    // Track progress on all form changes
+    form.addEventListener('input', updateProgress);
+    form.addEventListener('change', updateProgress);
+    
+    // Form submission with validation
+    form.addEventListener('submit', function(e) {
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        let isValid = true;
+        
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('error-shake');
+                isValid = false;
+                
+                // Remove error class after animation
+                setTimeout(() => {
+                    field.classList.remove('error-shake');
+                }, 500);
+            }
+        });
+        
+        if (!isValid) {
+            e.preventDefault();
+            playSound('error');
+            return false;
+        }
+        
+        // Show loading state
+        const submitBtn = form.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {% trans "Saving..." %}
+        `;
+        
+        playSound('success');
+    });
+});
+
+// Sound effects
+function playSound(type) {
+    const audio = new Audio();
+    audio.volume = 0.3;
+    
+    switch(type) {
+        case 'success':
+            audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+            break;
+        case 'error':
+            audio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+            break;
+    }
+    audio.play().catch(() => {}); // Ignore errors if audio fails to play
+}
+
+// Add microinteractions
+document.addEventListener('DOMContentLoaded', function() {
+    // Add focus effects
+    const inputs = document.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        input.addEventListener('focus', function() {
+            this.parentElement.classList.add('ring-2', 'ring-blue-500', 'ring-opacity-50');
+        });
+        
+        input.addEventListener('blur', function() {
+            this.parentElement.classList.remove('ring-2', 'ring-blue-500', 'ring-opacity-50');
+        });
+    });
+    
+    // Add hover effects to sections
+    const sections = document.querySelectorAll('.form-section');
+    sections.forEach(section => {
+        section.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1)';
+        });
+        
+        section.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1)';
+        });
+    });
+});
+</script>
+{% endblock %} 

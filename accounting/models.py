@@ -427,34 +427,199 @@ class FiscalPositionTax(models.Model):
     tax_src_id = models.ForeignKey(Tax, on_delete=models.CASCADE, related_name='fiscal_position_src', verbose_name=_('Source Tax'))
     tax_dest_id = models.ForeignKey(Tax, on_delete=models.CASCADE, related_name='fiscal_position_dest', verbose_name=_('Destination Tax'))
     
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         verbose_name = _('Fiscal Position Tax')
         verbose_name_plural = _('Fiscal Position Taxes')
         unique_together = ('fiscal_position', 'tax_src_id')
 
     def __str__(self):
-        return f"{self.fiscal_position.name} - {self.tax_src_id.name} -> {self.tax_dest_id.name}"
+        return f"{self.fiscal_position.name} - {self.tax_src_id.name} → {self.tax_dest_id.name}"
 
-# --- UTILIDADES ---
+
+class FiscalYear(models.Model):
+    """Año fiscal"""
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='fiscal_years')
+    name = models.CharField(_('Name'), max_length=100)
+    code = models.CharField(_('Code'), max_length=20, unique=True)
+    description = models.TextField(_('Description'), blank=True)
+    date_from = models.DateField(_('Start Date'))
+    date_to = models.DateField(_('End Date'))
+    is_active = models.BooleanField(_('Active'), default=True)
+    is_closed = models.BooleanField(_('Closed'), default=False)
+    period_length = models.IntegerField(_('Period Length (months)'), default=1)
+    auto_create_periods = models.BooleanField(_('Auto Create Periods'), default=True)
+    allow_negative_cash = models.BooleanField(_('Allow Negative Cash'), default=False)
+    allow_negative_equity = models.BooleanField(_('Allow Negative Equity'), default=False)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Fiscal Year')
+        verbose_name_plural = _('Fiscal Years')
+        ordering = ['-date_from']
+
+    def __str__(self):
+        return f"{self.name} ({self.date_from} - {self.date_to})"
+
+    def clean(self):
+        if self.date_from and self.date_to and self.date_from >= self.date_to:
+            raise ValidationError(_('Start date must be before end date.'))
+
+    def close(self, user):
+        """Cerrar el año fiscal"""
+        if self.is_closed:
+            raise ValidationError(_('Fiscal year is already closed.'))
+        # Verificar que todos los períodos estén cerrados
+        open_periods = self.periods.filter(is_closed=False)
+        if open_periods.exists():
+            raise ValidationError(_('Cannot close fiscal year with open periods.'))
+        self.is_closed = True
+        self.save()
+
+    def reopen(self, user):
+        """Reabrir el año fiscal"""
+        if not self.is_closed:
+            raise ValidationError(_('Fiscal year is not closed.'))
+        self.is_closed = False
+        self.save()
+
+    @property
+    def is_current(self):
+        """Verificar si es el año fiscal actual"""
+        today = timezone.now().date()
+        return self.date_from <= today <= self.date_to
+
+
+class AccountingPeriod(models.Model):
+    """Período contable"""
+    fiscal_year = models.ForeignKey(FiscalYear, on_delete=models.CASCADE, related_name='periods')
+    name = models.CharField(_('Name'), max_length=100)
+    code = models.CharField(_('Code'), max_length=20)
+    description = models.TextField(_('Description'), blank=True)
+    date_from = models.DateField(_('Start Date'))
+    date_to = models.DateField(_('End Date'))
+    is_active = models.BooleanField(_('Active'), default=True)
+    is_closed = models.BooleanField(_('Closed'), default=False)
+    is_adjustment = models.BooleanField(_('Adjustment Period'), default=False)
+    sequence = models.IntegerField(_('Sequence'), default=0)
+    allow_entries = models.BooleanField(_('Allow Entries'), default=True)
+    allow_adjustments = models.BooleanField(_('Allow Adjustments'), default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('Accounting Period')
+        verbose_name_plural = _('Accounting Periods')
+        ordering = ['fiscal_year', 'sequence', 'date_from']
+        unique_together = ('fiscal_year', 'code')
+
+    def __str__(self):
+        return f"{self.name} ({self.date_from} - {self.date_to})"
+
+    def clean(self):
+        if self.date_from and self.date_to and self.date_from >= self.date_to:
+            raise ValidationError(_('Start date must be before end date.'))
+        
+        if self.fiscal_year:
+            if self.date_from < self.fiscal_year.date_from or self.date_to > self.fiscal_year.date_to:
+                raise ValidationError(_('Period dates must be within fiscal year dates.'))
+
+    def close(self, user):
+        """Cerrar el período contable"""
+        if self.is_closed:
+            raise ValidationError(_('Accounting period is already closed.'))
+        
+        # Verificar que no haya asientos pendientes
+        pending_entries = JournalEntry.objects.filter(
+            empresa=self.fiscal_year.empresa,
+            date__gte=self.date_from,
+            date__lte=self.date_to,
+            state=EntryStates.DRAFT
+        )
+        
+        if pending_entries.exists():
+            raise ValidationError(_('Cannot close period with pending entries.'))
+        
+        self.is_closed = True
+        self.save()
+
+    def reopen(self, user):
+        """Reabrir el período contable"""
+        if not self.is_closed:
+            raise ValidationError(_('Accounting period is not closed.'))
+        
+        # Verificar que el año fiscal no esté cerrado
+        if self.fiscal_year.is_closed:
+            raise ValidationError(_('Cannot reopen period in a closed fiscal year.'))
+        
+        self.is_closed = False
+        self.save()
+
+    @property
+    def entries_count(self):
+        """Número de asientos en el período"""
+        return JournalEntry.objects.filter(
+            empresa=self.fiscal_year.empresa,
+            date__gte=self.date_from,
+            date__lte=self.date_to,
+            state=EntryStates.POSTED
+        ).count()
+
+    @property
+    def total_debits(self):
+        """Total de débitos en el período"""
+        from django.db.models import Sum
+        result = JournalEntryLine.objects.filter(
+            entry__empresa=self.fiscal_year.empresa,
+            entry__date__gte=self.date_from,
+            entry__date__lte=self.date_to,
+            entry__state=EntryStates.POSTED
+        ).aggregate(total=Sum('debit'))
+        return result['total'] or 0
+
+    @property
+    def total_credits(self):
+        """Total de créditos en el período"""
+        from django.db.models import Sum
+        result = JournalEntryLine.objects.filter(
+            entry__empresa=self.fiscal_year.empresa,
+            entry__date__gte=self.date_from,
+            entry__date__lte=self.date_to,
+            entry__state=EntryStates.POSTED
+        ).aggregate(total=Sum('credit'))
+        return result['total'] or 0
+
+    @property
+    def balance(self):
+        """Balance del período (débitos - créditos)"""
+        return self.total_debits - self.total_credits
+
+    @property
+    def duration_days(self):
+        """Duración del período en días"""
+        return (self.date_to - self.date_from).days + 1
+
 
 def get_account_balance(account, date=None):
     """Obtener saldo de una cuenta hasta una fecha específica"""
-    if date is None:
+    from decimal import Decimal
+    
+    if not date:
         date = timezone.now().date()
     
-    # Obtener todas las líneas de la cuenta hasta la fecha
+    # Obtener todas las líneas de asientos publicados hasta la fecha
     lines = JournalEntryLine.objects.filter(
         account=account,
-        entry__date__lte=date,
-        entry__state=EntryStates.POSTED
+        entry__state=EntryStates.POSTED,
+        entry__date__lte=date
     )
     
     # Calcular saldo
-    total_debit = lines.aggregate(total=models.Sum('debit'))['total'] or Decimal('0')
-    total_credit = lines.aggregate(total=models.Sum('credit'))['total'] or Decimal('0')
+    total_debit = sum(line.debit for line in lines)
+    total_credit = sum(line.credit for line in lines)
     
-    # Determinar tipo de cuenta para el signo
-    if account.account_type in [AccountTypes.ASSETS, AccountTypes.EXPENSES]:
-        return total_debit - total_credit
-    else:
-        return total_credit - total_debit 
+    return total_debit - total_credit 

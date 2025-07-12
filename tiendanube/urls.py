@@ -45,6 +45,7 @@ urlpatterns = [
     path('sync/manual/', views.TiendaNubeManualSyncView.as_view(), name='manual_sync'),
     path('sync/products/', views.TiendaNubeSyncProductsView.as_view(), name='sync_products'),
     path('sync/customers/', views.TiendaNubeSyncCustomersView.as_view(), name='sync_customers'),
+    path('sync/customers/to-tiendanube/', views.TiendaNubeSyncCustomersToTiendanubeView.as_view(), name='sync_customers_to_tiendanube'),
     path('sync/all-stock/', views.TiendaNubeSyncAllStockView.as_view(), name='sync_all_stock'),
     # Reports
     path('reports/', views.TiendaNubeReportsView.as_view(), name='reports'),
