@@ -1,213 +1,106 @@
 """
-Configuración del menú para la app Clover
-Sigue la estructura definida en core.menu_config
+Configuración de menú para el módulo Clover
 """
 
-from .permissions import CLOVER_PERMISSIONS
+from django.utils.translation import gettext_lazy as _
 
-# Configuración del menú principal de Clover
-CLOVER_MENU_CONFIG = {
-    'id': 'clover_main',
-    'name': 'Clover',
-    'icon': 'fas fa-credit-card',
-    'url': 'clover:device_list',
-    'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][0]],  # Solo necesita ver dispositivos
-    'order': 6,  # Después de Sales
-    'children': [
-        {
-            'id': 'clover_devices',
-            'name': 'Devices',
-            'icon': 'fas fa-mobile-alt',
-            'url': 'clover:device_list',
-            'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][0]],
-            'order': 1,
-        },
-        {
-            'id': 'clover_transactions',
-            'name': 'Transactions',
-            'icon': 'fas fa-receipt',
-            'url': 'clover:transaction_list',
-            'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][4]],  # Ver transacciones
-            'order': 2,
-        },
-        {
-            'id': 'clover_config',
-            'name': 'Configuration',
-            'icon': 'fas fa-cog',
-            'url': 'clover:config_list',
-            'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][8]],  # Ver configuración
-            'order': 3,
-        },
-        {
-            'id': 'clover_webhooks',
-            'name': 'Webhooks',
-            'icon': 'fas fa-link',
-            'url': 'clover:webhook_list',
-            'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][12]],  # Ver webhooks
-            'order': 4,
-        },
-        {
-            'id': 'clover_reports',
-            'name': 'Reports',
-            'icon': 'fas fa-chart-bar',
-            'url': 'clover:reports',
-            'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][4]],  # Ver transacciones
-            'order': 5,
-        },
-    ]
-}
-
-# Configuración de submenús específicos
-CLOVER_SUBMENU_CONFIG = {
-    'device_management': {
-        'id': 'clover_device_management',
-        'name': 'Device Management',
-        'icon': 'fas fa-tools',
-        'children': [
+MENU_CONFIG = [
+    {
+        "seccion": _("Device Management"),
+        "items": [
             {
-                'id': 'clover_device_list',
-                'name': 'All Devices',
-                'url': 'clover:device_list',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][0]],
+                "label": _("Devices"),
+                "url": "clover:device_list",
+                "icon": "point_of_sale",
+                "permission": "clover.view_cloverdevice"
             },
             {
-                'id': 'clover_device_create',
-                'name': 'Add Device',
-                'url': 'clover:device_create',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][1]],
+                "label": _("Add Device"),
+                "url": "clover:device_create",
+                "icon": "add_circle",
+                "permission": "clover.add_cloverdevice"
             },
             {
-                'id': 'clover_device_status',
-                'name': 'Device Status',
-                'url': 'clover:device_status',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][0]],
-            },
+                "label": _("Device Status"),
+                "url": "clover:device_status",
+                "icon": "monitor_heart",
+                "permission": "clover.view_cloverdevice"
+            }
         ]
     },
-    'transaction_management': {
-        'id': 'clover_transaction_management',
-        'name': 'Transaction Management',
-        'icon': 'fas fa-exchange-alt',
-        'children': [
+    {
+        "seccion": _("Transactions"),
+        "items": [
             {
-                'id': 'clover_transaction_list',
-                'name': 'All Transactions',
-                'url': 'clover:transaction_list',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][4]],
+                "label": _("Transaction History"),
+                "url": "clover:transaction_list",
+                "icon": "receipt_long",
+                "permission": "clover.view_clovertransaction"
             },
             {
-                'id': 'clover_transaction_create',
-                'name': 'New Transaction',
-                'url': 'clover:transaction_create',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][5]],
+                "label": _("Failed Transactions"),
+                "url": "clover:transaction_failed",
+                "icon": "error_outline",
+                "permission": "clover.view_clovertransaction"
             },
             {
-                'id': 'clover_transaction_refunds',
-                'name': 'Refunds',
-                'url': 'clover:refund_list',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][6]],
-            },
+                "label": _("Transaction Reports"),
+                "url": "clover:transaction_reports",
+                "icon": "analytics",
+                "permission": "clover.view_reports"
+            }
         ]
     },
-    'system_config': {
-        'id': 'clover_system_config',
-        'name': 'System Configuration',
-        'icon': 'fas fa-server',
-        'children': [
+    {
+        "seccion": _("Configuration"),
+        "items": [
             {
-                'id': 'clover_config_list',
-                'name': 'Configuration',
-                'url': 'clover:config_list',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][8]],
+                "label": _("Settings"),
+                "url": "clover:config_list",
+                "icon": "settings",
+                "permission": "clover.view_cloverconfig"
             },
             {
-                'id': 'clover_webhook_list',
-                'name': 'Webhooks',
-                'url': 'clover:webhook_list',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][12]],
+                "label": _("Webhooks"),
+                "url": "clover:webhook_list",
+                "icon": "webhook",
+                "permission": "clover.view_cloverwebhook"
             },
             {
-                'id': 'clover_api_settings',
-                'name': 'API Settings',
-                'url': 'clover:api_settings',
-                'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][10]],
+                "label": _("API Configuration"),
+                "url": "clover:api_config",
+                "icon": "api",
+                "permission": "clover.change_cloverconfig"
+            }
+        ]
+    },
+    {
+        "seccion": _("Reports & Analytics"),
+        "items": [
+            {
+                "label": _("Sales by Device"),
+                "url": "clover:device_sales_report",
+                "icon": "bar_chart",
+                "permission": "clover.view_reports"
             },
+            {
+                "label": _("Payment Methods"),
+                "url": "clover:payment_methods_report",
+                "icon": "credit_card",
+                "permission": "clover.view_reports"
+            },
+            {
+                "label": _("Device Performance"),
+                "url": "clover:device_performance_report",
+                "icon": "speed",
+                "permission": "clover.view_reports"
+            },
+            {
+                "label": _("Export Data"),
+                "url": "clover:export_data",
+                "icon": "download",
+                "permission": "clover.export_data"
+            }
         ]
     }
-}
-
-# Configuración de breadcrumbs
-CLOVER_BREADCRUMB_CONFIG = {
-    'clover:device_list': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Devices', 'url': 'clover:device_list'},
-    ],
-    'clover:device_create': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Devices', 'url': 'clover:device_list'},
-        {'name': 'Add Device', 'url': 'clover:device_create'},
-    ],
-    'clover:device_detail': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Devices', 'url': 'clover:device_list'},
-        {'name': 'Device Detail', 'url': None},
-    ],
-    'clover:device_update': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Devices', 'url': 'clover:device_list'},
-        {'name': 'Edit Device', 'url': None},
-    ],
-    'clover:transaction_list': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Transactions', 'url': 'clover:transaction_list'},
-    ],
-    'clover:transaction_detail': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Transactions', 'url': 'clover:transaction_list'},
-        {'name': 'Transaction Detail', 'url': None},
-    ],
-    'clover:config_list': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Configuration', 'url': 'clover:config_list'},
-    ],
-    'clover:webhook_list': [
-        {'name': 'Clover', 'url': 'clover:device_list'},
-        {'name': 'Webhooks', 'url': 'clover:webhook_list'},
-    ],
-}
-
-# Configuración de acciones rápidas
-CLOVER_QUICK_ACTIONS = [
-    {
-        'id': 'add_device',
-        'name': 'Add Device',
-        'icon': 'fas fa-plus',
-        'url': 'clover:device_create',
-        'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][1]],
-        'color': 'green',
-    },
-    {
-        'id': 'view_transactions',
-        'name': 'View Transactions',
-        'icon': 'fas fa-receipt',
-        'url': 'clover:transaction_list',
-        'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][4]],
-        'color': 'blue',
-    },
-    {
-        'id': 'device_status',
-        'name': 'Device Status',
-        'icon': 'fas fa-wifi',
-        'url': 'clover:device_status',
-        'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][0]],
-        'color': 'purple',
-    },
-    {
-        'id': 'sync_devices',
-        'name': 'Sync Devices',
-        'icon': 'fas fa-sync',
-        'url': 'clover:sync_devices',
-        'permissions': [CLOVER_PERMISSIONS['clover_admin']['permissions'][2]],
-        'color': 'orange',
-    },
 ] 

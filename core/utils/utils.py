@@ -836,6 +836,115 @@ APPS_MENU = [
             }
         ]
     },
+    {
+        "id": "clover",
+        "nombre": _("Clover"),
+        "permiso": "clover.view_cloverdevice",
+        "url": "clover:device_list",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'/></svg>""",
+        "orden": 97,
+        "color": "green",
+        "submenus": [
+            {
+                "seccion": _("Device Management"),
+                "items": [
+                    {
+                        "label": _("Devices"),
+                        "url": "clover:device_list",
+                        "icon": "point_of_sale",
+                        "permission": "clover.view_cloverdevice"
+                    },
+                    {
+                        "label": _("Add Device"),
+                        "url": "clover:device_create",
+                        "icon": "add_circle",
+                        "permission": "clover.add_cloverdevice"
+                    },
+                    {
+                        "label": _("Device Status"),
+                        "url": "clover:device_status",
+                        "icon": "monitor_heart",
+                        "permission": "clover.view_cloverdevice"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Transactions"),
+                "items": [
+                    {
+                        "label": _("Transaction History"),
+                        "url": "clover:transaction_list",
+                        "icon": "receipt_long",
+                        "permission": "clover.view_clovertransaction"
+                    },
+                    {
+                        "label": _("Failed Transactions"),
+                        "url": "clover:transaction_failed",
+                        "icon": "error_outline",
+                        "permission": "clover.view_clovertransaction"
+                    },
+                    {
+                        "label": _("Transaction Reports"),
+                        "url": "clover:transaction_reports",
+                        "icon": "analytics",
+                        "permission": "clover.view_reports"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {
+                        "label": _("Settings"),
+                        "url": "clover:config_list",
+                        "icon": "settings",
+                        "permission": "clover.view_cloverconfig"
+                    },
+                    {
+                        "label": _("Webhooks"),
+                        "url": "clover:webhook_list",
+                        "icon": "webhook",
+                        "permission": "clover.view_cloverwebhook"
+                    },
+                    {
+                        "label": _("API Configuration"),
+                        "url": "clover:api_config",
+                        "icon": "api",
+                        "permission": "clover.change_cloverconfig"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Reports & Analytics"),
+                "items": [
+                    {
+                        "label": _("Sales by Device"),
+                        "url": "clover:device_sales_report",
+                        "icon": "bar_chart",
+                        "permission": "clover.view_reports"
+                    },
+                    {
+                        "label": _("Payment Methods"),
+                        "url": "clover:payment_methods_report",
+                        "icon": "credit_card",
+                        "permission": "clover.view_reports"
+                    },
+                    {
+                        "label": _("Device Performance"),
+                        "url": "clover:device_performance_report",
+                        "icon": "speed",
+                        "permission": "clover.view_reports"
+                    },
+                    {
+                        "label": _("Export Data"),
+                        "url": "clover:export_data",
+                        "icon": "download",
+                        "permission": "clover.export_data"
+                    }
+                ]
+            }
+        ]
+    },
 ]
 
 # Apps comentadas para futuras implementaciones
