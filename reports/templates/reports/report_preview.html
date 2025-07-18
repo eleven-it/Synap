@@ -58,7 +58,7 @@
                         {% endif %}
                     </div>
                     <div class="text-right text-orange-100">
-                        <p class="text-sm">{{ empresa.nombre }}</p>
+                        <p class="text-sm">{{ empresa.name }}</p>
                         <p class="text-sm">{{ report.created_at|date:"F d, Y" }}</p>
                     </div>
                 </div>
@@ -242,7 +242,7 @@
                         <p>{% trans "Created by" %} {{ report.created_by.nombre_completo }}</p>
                     </div>
                     <div class="text-right">
-                        <p>{{ empresa.nombre }}</p>
+                        <p>{{ empresa.name }}</p>
                         <p>{% trans "Page 1 of 1" %}</p>
                     </div>
                 </div>

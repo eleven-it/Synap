@@ -59,7 +59,7 @@ class MercadoPagoConfig(models.Model):
     class Meta:
         verbose_name = _('MercadoPago Configuration')
         verbose_name_plural = _('MercadoPago Configurations')
-        ordering = ['empresa__nombre']
+        ordering = ['empresa__name']
         unique_together = [['empresa']]
         indexes = [
             models.Index(fields=['empresa', 'is_active']),
@@ -67,7 +67,7 @@ class MercadoPagoConfig(models.Model):
         ]
     
     def __str__(self):
-        return f"MercadoPago Config - {self.empresa.nombre}"
+        return f"MercadoPago Config - {self.empresa.name}"
     
     def clean(self):
         """Validaciones del modelo"""

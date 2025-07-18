@@ -42,7 +42,7 @@ class MercadoPagoPaymentService:
         try:
             return MercadoPagoConfig.objects.get(empresa=self.empresa, is_active=True)
         except MercadoPagoConfig.DoesNotExist:
-            logger.warning(f"No active MercadoPago configuration found for empresa: {self.empresa.nombre}")
+            logger.warning(f"No active MercadoPago configuration found for empresa: {self.empresa.name}")
             return None
     
     def _get_available_device(self, branch, amount: Decimal, payment_method: str) -> Optional[MercadoPagoDevice]:

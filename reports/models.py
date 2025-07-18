@@ -38,7 +38,7 @@ class Report(models.Model):
         # Los permisos de reportes se gestionan vía core/constantes_permisos.py siguiendo la lógica de core.
     
     def __str__(self):
-        return f"{self.name} - {self.empresa.nombre}"
+        return f"{self.name} - {self.empresa.name}"
 
 
 class ReportTemplate(models.Model):
@@ -68,7 +68,7 @@ class ReportTemplate(models.Model):
         ordering = ['name']
     
     def __str__(self):
-        return f"{self.name} ({self.category}) - {self.empresa.nombre}"
+        return f"{self.name} ({self.category}) - {self.empresa.name}"
 
 
 class ReportComponent(models.Model):

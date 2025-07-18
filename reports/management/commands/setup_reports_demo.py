@@ -117,7 +117,7 @@ class Command(BaseCommand):
             # Get a branch for this empresa
             branch = empresa.branches.first()
             if not branch:
-                self.stdout.write(self.style.ERROR(f'No branch found for empresa {empresa.nombre}'))
+                self.stdout.write(self.style.ERROR(f'No branch found for empresa {empresa.name}'))
                 continue
                 
             report, created = Report.objects.get_or_create(

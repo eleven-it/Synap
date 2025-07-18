@@ -60,8 +60,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR('❌ No se encontró ninguna sucursal activa'))
                 return
         
-        self.stdout.write(f'�� Empresa: {empresa.nombre}')
-        self.stdout.write(f'�� Sucursal: {branch.name}')
+        self.stdout.write(f'🏢 Empresa: {empresa.name}')
+        self.stdout.write(f'🏪 Sucursal: {branch.name}')
         
         if options['dry_run']:
             self.stdout.write('🔍 Modo dry-run - no se realizarán cambios')

@@ -212,7 +212,7 @@ class ReportSchedulerService:
             # Obtener contexto de la empresa
             empresa = report.empresa
             company_context = {
-                "name": empresa.nombre,
+                "name": empresa.name,
                 "industry": empresa.industria or "General",
                 "size": "Medium"  # Por defecto
             }
@@ -247,7 +247,7 @@ class ReportSchedulerService:
         try:
             empresa = report.empresa
             company_data = {
-                "name": empresa.nombre,
+                "name": empresa.name,
                 "industry": empresa.industria or "General",
                 "size": "Medium"
             }
@@ -264,7 +264,7 @@ class ReportSchedulerService:
                 return {
                     "primary_color": "#2563eb",
                     "secondary_color": "#64748b",
-                    "company_name": empresa.nombre,
+                    "company_name": empresa.name,
                     "tagline": "Reporte Automático"
                 }
                 
@@ -274,7 +274,7 @@ class ReportSchedulerService:
             return {
                 "primary_color": "#2563eb",
                 "secondary_color": "#64748b",
-                "company_name": report.empresa.nombre,
+                "company_name": report.empresa.name,
                 "tagline": "Reporte Automático"
             }
     
