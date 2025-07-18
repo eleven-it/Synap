@@ -1,0 +1,526 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Plantilla de Configuración de Sincronización AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 font-sans">{% trans "Sync Settings" %}</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 font-sans">{% trans "Configure synchronization parameters and monitoring options" %}</p>
+        </div>
+        
+        <!-- Estado de la configuración -->
+        <div class="flex flex-wrap gap-3">
+            {% if config.is_active %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Active" %}
+                </span>
+            {% else %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Inactive" %}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Configuración principal -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Configuración de sincronización -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Synchronization Configuration" %}</h2>
+                <form id="sync-settings-form" method="post" class="space-y-4">
+                    {% csrf_token %}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="sync_interval" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Sync Interval (minutes)" %}</label>
+                            <input type="number" id="sync_interval" name="sync_interval" min="1" max="1440" 
+                                   value="{{ config.sync_interval|default:30 }}"
+                                   class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                   placeholder="30">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Minimum: 1 minute, Maximum: 1440 minutes (24 hours)" %}</p>
+                        </div>
+                        
+                        <div>
+                            <label for="is_active" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Status" %}</label>
+                            <select id="is_active" name="is_active" 
+                                    class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans">
+                                <option value="true" {% if config.is_active %}selected{% endif %}>{% trans "Active" %}</option>
+                                <option value="false" {% if not config.is_active %}selected{% endif %}>{% trans "Inactive" %}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="enable_logging" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Enable Logging" %}</label>
+                            <select id="enable_logging" name="enable_logging" 
+                                    class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans">
+                                <option value="true" {% if config.enable_logging %}selected{% endif %}>{% trans "Enabled" %}</option>
+                                <option value="false" {% if not config.enable_logging %}selected{% endif %}>{% trans "Disabled" %}</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label for="log_level" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Log Level" %}</label>
+                            <select id="log_level" name="log_level" 
+                                    class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans">
+                                <option value="DEBUG" {% if config.log_level == 'DEBUG' %}selected{% endif %}>{% trans "Debug" %}</option>
+                                <option value="INFO" {% if config.log_level == 'INFO' %}selected{% endif %}>{% trans "Info" %}</option>
+                                <option value="WARNING" {% if config.log_level == 'WARNING' %}selected{% endif %}>{% trans "Warning" %}</option>
+                                <option value="ERROR" {% if config.log_level == 'ERROR' %}selected{% endif %}>{% trans "Error" %}</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuración avanzada -->
+                    <div class="border-t border-gray-200 dark:border-neutral-600 pt-4">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 font-sans">{% trans "Advanced Settings" %}</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="host" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Database Host" %}</label>
+                                <input type="text" id="host" name="host" 
+                                       value="{{ config.host|default:'localhost' }}"
+                                       class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                       placeholder="localhost">
+                            </div>
+                            
+                            <div>
+                                <label for="port" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Database Port" %}</label>
+                                <input type="number" id="port" name="port" min="1" max="65535" 
+                                       value="{{ config.port|default:3306 }}"
+                                       class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                       placeholder="3306">
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="database_name" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Database Name" %}</label>
+                                <input type="text" id="database_name" name="database_name" 
+                                       value="{{ config.database_name|default:'administranet' }}"
+                                       class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                       placeholder="administranet">
+                            </div>
+                            
+                            <div>
+                                <label for="username" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Database Username" %}</label>
+                                <input type="text" id="username" name="username" 
+                                       value="{{ config.username|default:'root' }}"
+                                       class="w-full p-2 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                       placeholder="root">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <label for="password" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 font-sans">{% trans "Database Password" %}</label>
+                            <div class="relative">
+                                <input type="password" id="password" name="password" 
+                                       value="{{ config.password|default:'' }}"
+                                       class="w-full p-2 pr-10 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-xs focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans" 
+                                       placeholder="Enter password">
+                                <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center" onclick="togglePassword('password')">
+                                    <svg id="password-eye" class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Botones de acción -->
+                    <div class="flex gap-3 pt-4">
+                        <button type="submit" class="flex-1 py-3 px-4 rounded-md bg-gradient-to-r from-orange-400 to-orange-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-orange-400">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
+                            {% trans "Save Settings" %}
+                        </button>
+                        
+                        <button type="button" id="test-connection" class="py-3 px-4 rounded-md bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-all">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            {% trans "Test Connection" %}
+                        </button>
+                        
+                        <button type="button" id="reset-defaults" class="py-3 px-4 rounded-md bg-gray-600 text-white text-sm font-semibold hover:bg-gray-700 transition-all">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            {% trans "Reset Defaults" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Monitoreo y estadísticas -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Monitoring & Statistics" %}</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Last Sync" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    {% if config.last_sync %}
+                                        {{ config.last_sync|date:'Y-m-d H:i' }}
+                                    {% else %}
+                                        {% trans "Never" %}
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                                <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Success Rate" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ stats.success_rate|default:0 }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                                <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Avg Duration" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ stats.avg_duration|default:0 }}s</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico de rendimiento con datos reales -->
+                <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 font-sans">{% trans "Performance Chart" %}</h3>
+                    <div class="h-32 bg-gray-100 dark:bg-neutral-600 rounded flex items-end justify-around p-2">
+                        {% for value in performance_data %}
+                        <div class="bg-orange-400 rounded-t transition-all duration-300 hover:bg-orange-500" 
+                             style="width: 8px; height: {{ value }}%" 
+                             title="{% trans 'Day' %} {{ forloop.counter }}: {{ value }}%">
+                        </div>
+                        {% empty %}
+                        <div class="flex items-center justify-center w-full h-full text-gray-400 text-xs">
+                            {% trans "No data available" %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">{% trans "Last 7 days sync performance" %}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar con información y acciones -->
+        <div class="space-y-6">
+            <!-- Estado del sistema -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "System Status" %}</h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Database Connection" %}</span>
+                        {% if system_status.database_connected %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Connected" %}
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Disconnected" %}
+                            </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Sync Service" %}</span>
+                        {% if system_status.sync_service_running %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Running" %}
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Stopped" %}
+                            </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Logging" %}</span>
+                        {% if system_status.logging_active %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Active" %}
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                                {% trans "Inactive" %}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Quick Actions" %}</h3>
+                
+                <div class="space-y-3">
+                    <button id="manual-sync" class="w-full py-3 px-4 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        {% trans "Manual Sync" %}
+                    </button>
+                    
+                    <button id="view-logs" class="w-full py-3 px-4 rounded-md bg-gray-600 text-white text-sm font-semibold hover:bg-gray-700 transition-all">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        {% trans "View Logs" %}
+                    </button>
+                    
+                    <button id="export-config" class="w-full py-3 px-4 rounded-md bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-all">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        {% trans "Export Config" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Información del sistema -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "System Info" %}</h3>
+                
+                <div class="space-y-3 text-sm font-sans">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Version" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">1.0.0</div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Last Updated" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">
+                            {% if config.updated_at %}
+                                {{ config.updated_at|date:'Y-m-d H:i' }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Created" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">
+                            {% if config.created_at %}
+                                {{ config.created_at|date:'Y-m-d H:i' }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('sync-settings-form');
+    const testConnectionBtn = document.getElementById('test-connection');
+    const resetDefaultsBtn = document.getElementById('reset-defaults');
+    const manualSyncBtn = document.getElementById('manual-sync');
+    const viewLogsBtn = document.getElementById('view-logs');
+    const exportConfigBtn = document.getElementById('export-config');
+
+    // Test de conexión
+    testConnectionBtn.addEventListener('click', function() {
+        this.disabled = true;
+        this.innerHTML = '<svg class="w-4 h-4 mr-2 inline animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>{% trans "Testing..." %}';
+        
+        // Obtener datos de conexión del formulario
+        const formData = new FormData();
+        formData.append('host', document.getElementById('host').value);
+        formData.append('port', document.getElementById('port').value);
+        formData.append('database', document.getElementById('database_name').value);
+        formData.append('username', document.getElementById('username').value);
+        formData.append('password', document.getElementById('password').value);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        fetch('{% url "adminet:sync_test_connection" %}', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            this.disabled = false;
+            this.innerHTML = '<svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>{% trans "Test Connection" %}';
+            showToast(data.message, data.success ? 'success' : 'error');
+        })
+        .catch(error => {
+            this.disabled = false;
+            this.innerHTML = '<svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>{% trans "Test Connection" %}';
+            showToast('{% trans "Error testing connection" %}', 'error');
+        });
+    });
+
+    // Reset defaults
+    resetDefaultsBtn.addEventListener('click', function() {
+        if (confirm('{% trans "Are you sure you want to reset all settings to defaults?" %}')) {
+            const formData = new FormData();
+            formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+            
+            fetch('{% url "adminet:sync_reset_defaults" %}', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    // Actualizar valores en el formulario
+                    if (data.config) {
+                        document.getElementById('sync_interval').value = data.config.sync_interval;
+                        document.getElementById('is_active').value = data.config.is_active.toString();
+                        document.getElementById('enable_logging').value = data.config.enable_logging.toString();
+                        document.getElementById('log_level').value = data.config.log_level;
+                        document.getElementById('max_retries').value = data.config.max_retries;
+                        document.getElementById('timeout_seconds').value = data.config.timeout_seconds;
+                        document.getElementById('batch_size').value = data.config.batch_size;
+                    }
+                    // Recargar página para actualizar métricas
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('{% trans "Error resetting settings" %}', 'error');
+            });
+        }
+    });
+
+    // Manual sync
+    manualSyncBtn.addEventListener('click', function() {
+        window.location.href = '{% url "adminet:adminet_manual_sync" %}';
+    });
+
+    // View logs
+    viewLogsBtn.addEventListener('click', function() {
+        window.location.href = '{% url "adminet:adminet_sync_history" %}';
+    });
+
+    // Export config
+    exportConfigBtn.addEventListener('click', function() {
+        window.location.href = '{% url "adminet:sync_export_config" %}';
+    });
+
+    // Efectos hover en botones
+    const buttons = document.querySelectorAll('button, a');
+    buttons.forEach(button => {
+        button.addEventListener('mousedown', () => button.classList.add('scale-95'));
+        button.addEventListener('mouseup', () => button.classList.remove('scale-95'));
+        button.addEventListener('mouseleave', () => button.classList.remove('scale-95'));
+    });
+});
+
+// Función para mostrar toasts
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-lg shadow-lg text-sm font-sans transform transition-all duration-300 ${
+        type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+    }`;
+    toast.innerText = message;
+    
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
+    
+    // Animación de entrada
+    setTimeout(() => toast.classList.add('translate-x-0'), 100);
+    
+    // Auto-remover después de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+</script>
+
+<style>
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+#toast-container > div {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+#toast-container > div.translate-x-0 {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+</style>
+{% endblock %} 

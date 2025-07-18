@@ -12,7 +12,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                     </svg>
                 </button>
-                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{% trans 'Confirmar Eliminación' %}</h1>
+                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{% trans 'Confirm Deletion' %}</h1>
             </div>
         </div>
     </div>
@@ -30,10 +30,10 @@
                         </svg>
                     </div>
                     <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                        {% trans '¿Eliminar empresa?' %}
+                        {% trans 'Delete company?' %}
                     </h2>
                     <p class="text-gray-600 dark:text-gray-400">
-                        {% trans 'Esta acción no se puede deshacer.' %}
+                        {% trans 'This action cannot be undone.' %}
                     </p>
                 </div>
 
@@ -109,14 +109,14 @@
                             </svg>
                             <div class="ml-3">
                                 <h4 class="text-sm font-medium text-red-800 dark:text-red-200">
-                                    {% trans '¿Qué se eliminará?' %}
+                                    {% trans 'What will be deleted?' %}
                                 </h4>
                                 <div class="mt-2 text-sm text-red-700 dark:text-red-300">
                                     <ul class="list-disc list-inside space-y-1">
-                                        <li>{% trans 'Todos los datos de la empresa' %}</li>
-                                        <li>{% trans 'Configuraciones asociadas' %}</li>
-                                        <li>{% trans 'Logo y archivos relacionados' %}</li>
-                                        <li>{% trans 'Esta acción es permanente' %}</li>
+                                        <li>{% trans 'All company data' %}</li>
+                                        <li>{% trans 'Associated configurations' %}</li>
+                                        <li>{% trans 'Logo and related files' %}</li>
+                                        <li>{% trans 'This action is permanent' %}</li>
                                     </ul>
                                 </div>
                             </div>
@@ -131,7 +131,7 @@
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                             </svg>
-                            {% trans 'Cancelar' %}
+                            {% trans 'Cancel' %}
                         </button>
                         <form method="post" class="flex-1">
                             {% csrf_token %}
@@ -139,7 +139,7 @@
                                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                 </svg>
-                                {% trans 'Sí, eliminar empresa' %}
+                                {% trans 'Yes, delete company' %}
                             </button>
                         </form>
                     </div>

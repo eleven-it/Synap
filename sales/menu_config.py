@@ -31,7 +31,7 @@ MENU_CONFIG = [
             {
                 'name': 'create_client',
                 'label': 'Create Client',
-                'url': 'sales:client_create',
+                'url': 'sales:client_wizard',
                 'permission': 'sales.add_client',
                 'icon': 'fas fa-user-plus',
                 'order': 3

@@ -14,7 +14,7 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = [
             'name', 'sku', 'description', 'category', 'brand', 'subcategory',
-            'handle', 'price', 'sale_price', 'cost_price', 'profit_margin', 'price_currency', 'uom', 'tracking',
+            'handle', 'price', 'sale_price', 'cost_price', 'profit_margin', 'uom', 'tracking',
             'weight_kg', 'volume_m3', 'width_cm', 'height_cm', 'depth_cm', 'is_dangerous', 'barcode',
             'video_url', 'product_kind', 'is_published', 'tags'
         ]
@@ -30,7 +30,6 @@ class ProductForm(forms.ModelForm):
             'sale_price': forms.NumberInput(attrs={'class': 'form-input'}),
             'cost_price': forms.NumberInput(attrs={'class': 'form-input'}),
             'profit_margin': forms.NumberInput(attrs={'class': 'form-input'}),
-            'price_currency': forms.Select(attrs={'class': 'form-select'}),
             'uom': forms.Select(attrs={'class': 'form-select'}),
             'tracking': forms.Select(attrs={'class': 'form-select'}),
             'weight_kg': forms.NumberInput(attrs={'class': 'form-input'}),

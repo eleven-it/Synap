@@ -1,0 +1,568 @@
+{% extends "base.html" %}
+{% load i18n crispy_forms_tags mapping_extras static %}
+
+{# Edición/creación de mapeo AdministraNET <-> Synap #}
+
+{% block content %}
+<div class="max-w-4xl mx-auto mt-8 p-6 space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white font-sans">
+                {% if form.instance.pk %}{% trans "Edit Mapping" %}{% else %}{% trans "Add New Mapping" %}{% endif %}
+            </h1>
+        </div>
+        <p class="text-sm text-gray-600 dark:text-gray-300 font-sans">
+            {% if form.instance.pk %}
+                {% trans "Modify the mapping configuration between AdministraNET and Synap." %}
+            {% else %}
+                {% trans "Create a new mapping between AdministraNET tables and Synap models." %}
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Formulario -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+                <div class="p-4 rounded-lg bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 text-sm font-sans">
+                    <div class="font-semibold">{% trans "Please correct the following errors:" %}</div>
+                    <ul class="mt-2 list-disc list-inside">
+                        {% for error in form.non_field_errors %}
+                            <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            
+            <!-- Información Básica -->
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+                    <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {% trans "Basic Information" %}
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.mapping_type.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans mb-2">
+                            {{ form.mapping_type.label }}
+                        </label>
+                        {{ form.mapping_type }}
+                        {% if form.mapping_type.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.mapping_type.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.mapping_type.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.mapping_type.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="{{ form.sync_direction.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans mb-2">
+                            {{ form.sync_direction.label }}
+                        </label>
+                        {{ form.sync_direction }}
+                        {% if form.sync_direction.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.sync_direction.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.sync_direction.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.sync_direction.help_text }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Configuración de Tablas -->
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+                    <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
+                    </svg>
+                    {% trans "Table Configuration" %}
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.administraNET_table.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans mb-2">
+                            {{ form.administraNET_table.label }}
+                        </label>
+                        {{ form.administraNET_table }}
+                        {% if form.administraNET_table.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.administraNET_table.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.administraNET_table.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.administraNET_table.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div>
+                        <label for="{{ form.synap_model.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans mb-2">
+                            {{ form.synap_model.label }}
+                        </label>
+                        {{ form.synap_model }}
+                        {% if form.synap_model.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.synap_model.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.synap_model.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.synap_model.help_text }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Configuración de Sincronización -->
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+                    <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    {% trans "Synchronization Settings" %}
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.sync_frequency.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans mb-2">
+                            {{ form.sync_frequency.label }}
+                        </label>
+                        {{ form.sync_frequency }}
+                        {% if form.sync_frequency.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.sync_frequency.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.sync_frequency.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.sync_frequency.help_text }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center">
+                        <label class="flex items-center">
+                            {{ form.is_active }}
+                            <span class="ml-2 text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{{ form.is_active.label }}</span>
+                        </label>
+                        {% if form.is_active.errors %}
+                            <div class="mt-1 text-xs text-red-600 dark:text-red-300">{{ form.is_active.errors|striptags }}</div>
+                        {% endif %}
+                        {% if form.is_active.help_text %}
+                            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ form.is_active.help_text }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mapeo de Campos -->
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                    {% trans "Field Mapping" %}
+                </h2>
+                
+                <div class="flex items-center gap-2 mb-2">
+                    <button type="button" id="add-row-btn" class="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-semibold hover:bg-blue-200 dark:hover:bg-blue-800 transition-all">
+                        + {% trans "Add Row" %}
+                    </button>
+                    <button type="button" id="restore-preset-btn" class="px-2 py-1 rounded bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-200 text-xs font-semibold hover:bg-orange-200 dark:hover:bg-orange-800 transition-all">
+                        <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        {% trans "Restore Preset" %}
+                    </button>
+                    <div class="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                        <span id="mapping-count">0</span> {% trans "fields mapped" %}
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-700">
+                    <table id="mapping-table" class="min-w-full bg-white dark:bg-neutral-900 text-xs font-sans">
+                        <thead>
+                            <tr class="bg-gray-100 dark:bg-neutral-800">
+                                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">{% trans "AdministraNET Field" %}</th>
+                                <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-200">{% trans "Synap Field" %}</th>
+                                <th class="px-3 py-2 w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="mapping-tbody">
+                            <!-- Filas generadas por JS -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <input type="hidden" name="field_mappings_json" id="field-mappings-json">
+                <div id="mapping-error" class="mt-2 text-xs text-red-600 dark:text-red-300 hidden"></div>
+                
+                <div class="mt-2 p-3 bg-blue-50 dark:bg-blue-900 rounded-lg text-xs text-blue-700 dark:text-blue-200">
+                    <div class="font-semibold">{% trans "Instructions:" %}</div>
+                    <ul class="list-disc ml-5 mt-1">
+                        <li>{% trans "Select a mapping type to auto-populate fields, or configure manually." %}</li>
+                        <li>{% trans "Use predictive search to find available fields from both systems." %}</li>
+                        <li>{% trans "Add/remove rows as needed. All fields must be unique and non-empty." %}</li>
+                        <li>{% trans "You can restore the default mapping at any time." %}</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Botones de Acción -->
+            <div class="flex gap-3 justify-end pt-4 border-t border-gray-200 dark:border-neutral-700">
+                <a href="{% url 'administraNET_integration:adminet_mappings' %}" class="py-2 px-4 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="py-2 px-6 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 font-sans">
+                    {% if form.instance.pk %}{% trans "Update Mapping" %}{% else %}{% trans "Create Mapping" %}{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="{% static 'administraNET_integration/js/predictive_search.js' %}"></script>
+<script>
+// --- Configuración inicial ---
+const initialMapping = {{ form.instance.field_mappings|default:'{}'|safe }};
+const mappingTypeSelect = document.getElementById('{{ form.mapping_type.id_for_label }}');
+const tableInput = document.getElementById('{{ form.administraNET_table.id_for_label }}');
+const modelInput = document.getElementById('{{ form.synap_model.id_for_label }}');
+
+// Instancias de búsqueda predictiva
+let adminetSearch = null;
+let synapSearch = null;
+
+// --- Funciones principales ---
+function createRow(adminField = '', synapField = '') {
+    return `<tr class="mapping-row">
+        <td class="px-3 py-2">
+            <input type="text" class="admin-field-input w-full rounded border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all text-xs font-sans" value="${adminField}" placeholder="{% trans 'Search AdministraNET field...' %}">
+        </td>
+        <td class="px-3 py-2">
+            <input type="text" class="synap-field-input w-full rounded border border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all text-xs font-sans" value="${synapField}" placeholder="{% trans 'Search Synap field...' %}">
+        </td>
+        <td class="px-3 py-2 text-center">
+            <button type="button" class="remove-row-btn text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-all" title="{% trans 'Remove row' %}">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </td>
+    </tr>`;
+}
+
+function renderTable(mapping) {
+    const tbody = document.getElementById('mapping-tbody');
+    tbody.innerHTML = '';
+    
+    if (Object.keys(mapping).length === 0) {
+        tbody.insertAdjacentHTML('beforeend', createRow('', ''));
+    } else {
+        Object.entries(mapping).forEach(([adminField, synapField]) => {
+            tbody.insertAdjacentHTML('beforeend', createRow(adminField, synapField));
+        });
+    }
+    
+    // Reinicializar búsqueda predictiva
+    initializePredictiveSearch();
+    updateMappingCount();
+}
+
+function getCurrentMapping() {
+    const rows = document.querySelectorAll('#mapping-tbody tr');
+    const mapping = {};
+    let valid = true;
+    let adminSet = new Set();
+    let synapSet = new Set();
+    
+    rows.forEach(row => {
+        const adminField = row.querySelector('.admin-field-input').value.trim();
+        const synapField = row.querySelector('.synap-field-input').value.trim();
+        
+        if (adminField && synapField) {
+            if (adminSet.has(adminField) || synapSet.has(synapField)) {
+                valid = false;
+            } else {
+                mapping[adminField] = synapField;
+                adminSet.add(adminField);
+                synapSet.add(synapField);
+            }
+        } else if (adminField || synapField) {
+            valid = false; // Campo incompleto
+        }
+    });
+    
+    return {mapping, valid};
+}
+
+function updateHiddenField() {
+    const {mapping, valid} = getCurrentMapping();
+    document.getElementById('field-mappings-json').value = JSON.stringify(mapping);
+    
+    const errorDiv = document.getElementById('mapping-error');
+    if (!valid) {
+        errorDiv.textContent = '{% trans "All fields must be unique and non-empty. Remove incomplete rows." %}';
+        errorDiv.classList.remove('hidden');
+    } else {
+        errorDiv.textContent = '';
+        errorDiv.classList.add('hidden');
+    }
+    
+    updateMappingCount();
+    updatePredictiveSearch();
+    
+    return valid;
+}
+
+function updateMappingCount() {
+    const {mapping} = getCurrentMapping();
+    const count = Object.keys(mapping).length;
+    document.getElementById('mapping-count').textContent = count;
+}
+
+function updatePredictiveSearch() {
+    const {mapping} = getCurrentMapping();
+    const usedAdminFields = Object.keys(mapping);
+    const usedSynapFields = Object.values(mapping);
+    
+    if (adminetSearch) {
+        adminetSearch.updateUsedFields(usedAdminFields);
+    }
+    if (synapSearch) {
+        synapSearch.updateUsedFields(usedSynapFields);
+    }
+}
+
+async function loadPresetMapping(mappingType) {
+    try {
+        // Primero intentar con la API
+        const response = await fetch(`{% url 'administraNET_integration:adminet_api:preset_mapping' %}?type=${mappingType}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            const preset = data.preset;
+            
+            // Autocompletar tabla y modelo
+            if (tableInput) tableInput.value = preset.table || '';
+            if (modelInput) modelInput.value = preset.model || '';
+            
+            // Autocompletar mapeo de campos
+            renderTable(preset.fields || {});
+            
+            // Mostrar notificación
+            showToast('{% trans "Preset mapping loaded successfully" %}', 'success');
+        } else {
+            // Fallback: usar presets locales
+            loadLocalPreset(mappingType);
+        }
+    } catch (error) {
+        console.error('Error loading preset from API:', error);
+        // Fallback: usar presets locales
+        loadLocalPreset(mappingType);
+    }
+}
+
+function loadLocalPreset(mappingType) {
+    // Presets locales como fallback
+    const localPresets = {
+        'PRODUCTS': {
+            table: 'articulos',
+            model: 'inventory.Product',
+            fields: {
+                'codigo': 'sku',
+                'nombre': 'name',
+                'descripcion': 'description',
+                'precio': 'price',
+                'precio_costo': 'cost_price',
+                'codigo_marca': 'brand',
+                'codigo_rubro': 'category',
+                'anulado': 'is_active',
+                'codigo_barras': 'barcode'
+            }
+        },
+        'CUSTOMERS': {
+            table: 'clientes',
+            model: 'sales.Client',
+            fields: {
+                'codigo': 'code',
+                'nombre_cliente': 'name',
+                'nombre_fantasia': 'trade_name',
+                'cuit': 'tax_id',
+                'email': 'email',
+                'telefono': 'phone',
+                'celular': 'mobile',
+                'direccion': 'address',
+                'localidad': 'city',
+                'codigo_postal': 'postal_code',
+                'provincia': 'state',
+                'pais': 'country'
+            }
+        },
+        'SUPPLIERS': {
+            table: 'proveedores',
+            model: 'purchases.Supplier',
+            fields: {
+                'codigo': 'code',
+                'nombre_proveedor': 'name',
+                'nombre_fantasia': 'trade_name',
+                'cuit': 'tax_id',
+                'email': 'email',
+                'telefono': 'phone',
+                'direccion': 'address',
+                'localidad': 'city',
+                'codigo_postal': 'postal_code',
+                'provincia': 'state'
+            }
+        },
+        'CATEGORIES': {
+            table: 'rubros',
+            model: 'inventory.Category',
+            fields: {
+                'codigo': 'code',
+                'nombre': 'name',
+                'descripcion': 'description',
+                'anulado': 'is_active'
+            }
+        },
+        'BRANDS': {
+            table: 'marcas',
+            model: 'inventory.Brand',
+            fields: {
+                'codigo': 'code',
+                'nombre': 'name',
+                'descripcion': 'description',
+                'anulado': 'is_active'
+            }
+        }
+    };
+    
+    const preset = localPresets[mappingType];
+    if (preset) {
+        // Autocompletar tabla y modelo
+        if (tableInput) tableInput.value = preset.table || '';
+        if (modelInput) modelInput.value = preset.model || '';
+        
+        // Autocompletar mapeo de campos
+        renderTable(preset.fields || {});
+        
+        // Mostrar notificación
+        showToast('{% trans "Preset mapping loaded successfully" %}', 'success');
+    } else {
+        showToast('{% trans "Unknown mapping type" %}', 'error');
+    }
+}
+
+function initializePredictiveSearch() {
+    // Destruir instancias anteriores
+    if (adminetSearch) adminetSearch.destroy();
+    if (synapSearch) synapSearch.destroy();
+    
+    // Crear nuevas instancias
+    const adminInputs = document.querySelectorAll('.admin-field-input');
+    const synapInputs = document.querySelectorAll('.synap-field-input');
+    
+    adminInputs.forEach(input => {
+        adminetSearch = new PredictiveFieldSearch(
+            input, 
+            '{% url "administraNET_integration:adminet_api:table_fields" %}',
+            getCurrentMapping().mapping ? Object.keys(getCurrentMapping().mapping) : []
+        );
+    });
+    
+    synapInputs.forEach(input => {
+        synapSearch = new PredictiveFieldSearch(
+            input, 
+            '{% url "administraNET_integration:adminet_api:model_fields" %}',
+            getCurrentMapping().mapping ? Object.values(getCurrentMapping().mapping) : []
+        );
+    });
+}
+
+function showToast(message, type = 'info') {
+    // Crear toast notification
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-md text-xs font-sans shadow-lg transition-all transform translate-x-full`;
+    
+    if (type === 'success') {
+        toast.classList.add('bg-green-100', 'dark:bg-green-900', 'text-green-700', 'dark:text-green-200');
+    } else if (type === 'error') {
+        toast.classList.add('bg-red-100', 'dark:bg-red-900', 'text-red-700', 'dark:text-red-200');
+    } else {
+        toast.classList.add('bg-blue-100', 'dark:bg-blue-900', 'text-blue-700', 'dark:text-blue-200');
+    }
+    
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    // Animar entrada
+    setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+    
+    // Remover después de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// --- Event Listeners ---
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tabla
+    renderTable(initialMapping);
+    
+    // Cambio de tipo de mapeo
+    mappingTypeSelect.addEventListener('change', function() {
+        const selectedType = this.value;
+        if (selectedType) {
+            loadPresetMapping(selectedType);
+        }
+    });
+    
+    // Agregar fila
+    document.getElementById('add-row-btn').addEventListener('click', function() {
+        document.getElementById('mapping-tbody').insertAdjacentHTML('beforeend', createRow('', ''));
+        initializePredictiveSearch();
+    });
+    
+    // Restaurar preset
+    document.getElementById('restore-preset-btn').addEventListener('click', function() {
+        const selectedType = mappingTypeSelect.value;
+        if (selectedType) {
+            loadPresetMapping(selectedType);
+        } else {
+            showToast('{% trans "Please select a mapping type first" %}', 'error');
+        }
+    });
+    
+    // Delegación de eventos para inputs y eliminar fila
+    document.getElementById('mapping-tbody').addEventListener('input', function(e) {
+        if (e.target.classList.contains('admin-field-input') || e.target.classList.contains('synap-field-input')) {
+            updateHiddenField();
+        }
+    });
+    
+    document.getElementById('mapping-tbody').addEventListener('click', function(e) {
+        if (e.target.closest('.remove-row-btn')) {
+            e.target.closest('tr').remove();
+            updateHiddenField();
+            initializePredictiveSearch();
+        }
+    });
+    
+    // Validar antes de submit
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!updateHiddenField()) {
+            e.preventDefault();
+            document.getElementById('mapping-error').scrollIntoView({behavior: 'smooth', block: 'center'});
+            showToast('{% trans "Please fix mapping errors before saving" %}', 'error');
+        }
+    });
+    
+    // Microinteracciones
+    const buttons = document.querySelectorAll('button, a');
+    buttons.forEach(button => {
+        button.addEventListener('mousedown', () => button.classList.add('scale-95'));
+        button.addEventListener('mouseup', () => button.classList.remove('scale-95'));
+        button.addEventListener('mouseleave', () => button.classList.remove('scale-95'));
+    });
+});
+</script>
+{% endblock %}
+{% endblock %} 

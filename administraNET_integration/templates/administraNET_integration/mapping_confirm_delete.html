@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Confirmación de eliminación de mapeo AdministraNET <-> Synap #}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-16 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <div class="flex items-center gap-3 mb-4">
+        <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+        </svg>
+        <h1 class="text-lg font-semibold text-red-700 dark:text-red-300 font-sans">{% trans "Delete Mapping" %}</h1>
+    </div>
+    
+    <p class="mb-4 text-sm text-gray-700 dark:text-gray-200 font-sans">{% trans "Are you sure you want to delete this mapping? This action cannot be undone." %}</p>
+    
+    <div class="mb-6 p-4 bg-gray-50 dark:bg-neutral-800 rounded-lg text-xs font-sans">
+        <div class="grid grid-cols-1 gap-2">
+            <div class="flex justify-between">
+                <span class="font-semibold text-gray-600 dark:text-gray-400">{% trans "Adminet Table" %}:</span>
+                <span class="text-gray-900 dark:text-white">{{ object.administraNET_table }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="font-semibold text-gray-600 dark:text-gray-400">{% trans "Synap Model" %}:</span>
+                <span class="text-gray-900 dark:text-white">{{ object.synap_model }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="font-semibold text-gray-600 dark:text-gray-400">{% trans "Type" %}:</span>
+                <span class="text-gray-900 dark:text-white">{{ object.get_mapping_type_display }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="font-semibold text-gray-600 dark:text-gray-400">{% trans "Direction" %}:</span>
+                <span class="text-gray-900 dark:text-white">{{ object.get_sync_direction_display }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="font-semibold text-gray-600 dark:text-gray-400">{% trans "Status" %}:</span>
+                <span class="text-gray-900 dark:text-white">
+                    {% if object.is_active %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                            {% trans "Active" %}
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                            {% trans "Inactive" %}
+                        </span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <form method="post" class="flex gap-3 justify-end">
+        {% csrf_token %}
+        <a href="{% url 'adminet:adminet_mappings' %}" class="py-2 px-4 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+            {% trans "Cancel" %}
+        </a>
+        <button type="submit" class="py-2 px-4 rounded-md bg-gradient-to-r from-red-400 to-red-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-red-400 font-sans">
+            {% trans "Delete Mapping" %}
+        </button>
+    </form>
+</div>
+
+<script>
+// Microinteractions
+const buttons = document.querySelectorAll('button, a');
+buttons.forEach(button => {
+    button.addEventListener('mousedown', () => button.classList.add('scale-95'));
+    button.addEventListener('mouseup', () => button.classList.remove('scale-95'));
+    button.addEventListener('mouseleave', () => button.classList.remove('scale-95'));
+});
+</script>
+{% endblock %} 

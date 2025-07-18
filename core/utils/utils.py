@@ -837,6 +837,109 @@ APPS_MENU = [
         ]
     },
     {
+        "id": "mercadopago",
+        "nombre": _("MercadoPago"),
+        "permiso": "mercadopago.view_mercadopagoconfig",
+        "url": "mercadopago:config_list",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1'/></svg>""",
+        "orden": 96,
+        "color": "blue",
+        "submenus": [
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {
+                        "label": _("Settings"),
+                        "url": "mercadopago:config_list",
+                        "icon": "settings",
+                        "permission": "mercadopago.view_mercadopagoconfig"
+                    },
+                    {
+                        "label": _("Add Configuration"),
+                        "url": "mercadopago:config_create",
+                        "icon": "add_circle",
+                        "permission": "mercadopago.add_mercadopagoconfig"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Device Management"),
+                "items": [
+                    {
+                        "label": _("SmartPOS Devices"),
+                        "url": "mercadopago:device_list",
+                        "icon": "point_of_sale",
+                        "permission": "mercadopago.view_mercadopagodevice"
+                    },
+                    {
+                        "label": _("Add Device"),
+                        "url": "mercadopago:device_create",
+                        "icon": "add_circle",
+                        "permission": "mercadopago.add_mercadopagodevice"
+                    },
+                    {
+                        "label": _("Device Status"),
+                        "url": "mercadopago:device_status",
+                        "icon": "monitor_heart",
+                        "permission": "mercadopago.view_mercadopagodevice"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Transactions"),
+                "items": [
+                    {
+                        "label": _("Transaction History"),
+                        "url": "mercadopago:transaction_list",
+                        "icon": "receipt_long",
+                        "permission": "mercadopago.view_mercadopagotransaction"
+                    },
+                    {
+                        "label": _("Failed Transactions"),
+                        "url": "mercadopago:transaction_failed",
+                        "icon": "error_outline",
+                        "permission": "mercadopago.view_mercadopagotransaction"
+                    },
+                    {
+                        "label": _("Transaction Reports"),
+                        "url": "mercadopago:transaction_reports",
+                        "icon": "analytics",
+                        "permission": "mercadopago.view_reports"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Reports & Analytics"),
+                "items": [
+                    {
+                        "label": _("Sales by Device"),
+                        "url": "mercadopago:device_sales_report",
+                        "icon": "bar_chart",
+                        "permission": "mercadopago.view_reports"
+                    },
+                    {
+                        "label": _("Payment Methods"),
+                        "url": "mercadopago:payment_methods_report",
+                        "icon": "credit_card",
+                        "permission": "mercadopago.view_reports"
+                    },
+                    {
+                        "label": _("Device Performance"),
+                        "url": "mercadopago:device_performance_report",
+                        "icon": "speed",
+                        "permission": "mercadopago.view_reports"
+                    },
+                    {
+                        "label": _("Export Data"),
+                        "url": "mercadopago:export_data",
+                        "icon": "download",
+                        "permission": "mercadopago.export_data"
+                    }
+                ]
+            }
+        ]
+    },
+    {
         "id": "clover",
         "nombre": _("Clover"),
         "permiso": "clover.view_cloverdevice",
@@ -945,6 +1048,50 @@ APPS_MENU = [
             }
         ]
     },
+    {
+        "id": "administraNET_integration",
+        "nombre": _("Integración administraNET"),
+        "permiso": "administraNET_integration.view_dashboard",
+        "url": "adminet:adminet_panel",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'/>
+        </svg>""",
+        "orden": 15,
+        "color": "purple",
+        "submenus": [
+            {
+                "seccion": _("Dashboard"),
+                "items": [
+                    {"label": _("Dashboard"), "url": "adminet:adminet_panel", "icon": "dashboard", "permission": "administraNET_integration.view_dashboard"},
+                    {"label": _("Status"), "url": "adminet:adminet_status", "icon": "monitor_heart", "permission": "administraNET_integration.view_dashboard"},
+                ]
+            },
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {"label": _("Connection Settings"), "url": "adminet:adminet_connection", "icon": "settings", "permission": "administraNET_integration.change_config"},
+                    {"label": _("Mappings"), "url": "adminet:adminet_mappings", "icon": "link", "permission": "administraNET_integration.view_mappings"},
+                    {"label": _("Sync Settings"), "url": "adminet:sync_settings", "icon": "sync", "permission": "administraNET_integration.change_config"},
+                ]
+            },
+            {
+                "seccion": _("Synchronization"),
+                "items": [
+                    {"label": _("Manual Sync"), "url": "adminet:adminet_manual_sync", "icon": "play_arrow", "permission": "administraNET_integration.manual_sync"},
+                    {"label": _("Sync History"), "url": "adminet:adminet_sync_history", "icon": "history", "permission": "administraNET_integration.view_logs"},
+                    {"label": _("Data Validation"), "url": "adminet:adminet_validation", "icon": "verified", "permission": "administraNET_integration.view_logs"},
+                ]
+            },
+            {
+                "seccion": _("Monitoring"),
+                "items": [
+                    {"label": _("Logs"), "url": "adminet:adminet_sync_history", "icon": "article", "permission": "administraNET_integration.view_logs"},
+                    {"label": _("Error Reports"), "url": "adminet:adminet_sync_history", "icon": "error", "permission": "administraNET_integration.view_logs"},
+                    {"label": _("Performance"), "url": "adminet:adminet_status", "icon": "speed", "permission": "administraNET_integration.view_logs"},
+                ]
+            }
+        ]
+    },
 ]
 
 # Apps comentadas para futuras implementaciones
@@ -1032,7 +1179,7 @@ def obtener_app_por_id(app_id: str) -> Optional[Dict[str, Any]]:
             return app
     return None
 
-def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Dict[str, Any]]:
+def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=None) -> List[Dict[str, Any]]:
     """Obtiene los submenús visibles para una app específica según los permisos del usuario"""
     from django.urls import reverse
     from django.urls.exceptions import NoReverseMatch
@@ -1081,6 +1228,25 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Di
                         # Usar reverse para generar la URL correcta
                         url = reverse(item["url"])
                         print(f"Successfully resolved URL '{item['url']}' to '{url}'")
+                    
+                    # Reemplazar {empresa_id} en la URL si existe y tenemos request
+                    if request and '{empresa_id}' in url:
+                        empresa_activa = None
+                        if hasattr(request.user, 'empresa_activa') and request.user.empresa_activa:
+                            empresa_activa = request.user.empresa_activa
+                        elif request.session.get('empresa_activa_id'):
+                            try:
+                                from core.models import Empresa
+                                empresa_activa = Empresa.objects.get(id=request.session['empresa_activa_id'], activa=True)
+                            except:
+                                pass
+                        
+                        if empresa_activa:
+                            url = url.replace('{empresa_id}', str(empresa_activa.id))
+                        else:
+                            # Si no hay empresa activa, ocultar el ítem
+                            continue
+                            
                 except NoReverseMatch:
                     # Si no se puede resolver la URL, usar una URL por defecto
                     print(f"Warning: Could not resolve URL '{item.get('url', '')}' for item: {item}")
@@ -1105,10 +1271,11 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str]) -> List[Di
     
     return submenus_visibles
 
-def apps_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[str, Any]]:
+def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -> List[Dict[str, Any]]:
     """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús"""
     from django.urls import reverse
     from django.urls.exceptions import NoReverseMatch
+    from core.models import ModuleConfig
     
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return []
@@ -1117,12 +1284,45 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[st
     if isinstance(user, UsuarioExtendido):
         permisos_usuario = user.get_permisos_totales()
 
+    # Obtener módulos activos desde la base de datos
+    active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
+    
+    # Agregar módulos core que siempre deben estar activos
+    core_modules = {'core', 'login', 'dashboard'}
+    active_modules.update(core_modules)
+
     apps_filtradas = []
     for app in APPS_MENU:
-        # Si la app es solo para superusuarios y el usuario no lo es, saltar
+        app_id = app.get("id")
+        
+        # REGLA 1: Module Management y Settings siempre visibles para superusuarios
+        if app_id in ["module_management", "settings"]:
+            if user.is_superuser:
+                app_copy = app.copy()
+                try:
+                    app_copy["url"] = reverse(app["url"])
+                except NoReverseMatch:
+                    app_copy["url"] = "#"
+                
+                # Agregar submenús si existen
+                if app.get("submenus"):
+                    submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario, request)
+                    if submenus_visibles:
+                        app_copy["submenus"] = submenus_visibles
+                
+                apps_filtradas.append(app_copy)
+            continue  # Saltar el resto de verificaciones para Module Management y Settings
+        
+        # REGLA 2: Para el resto de apps, verificar módulo activo
+        if app_id not in active_modules:
+            continue
+            
+        # REGLA 3: Si la app es solo para superusuarios y el usuario no lo es, saltar
         if app.get("superuser_only") and not user.is_superuser:
             continue
-        if "*" in permisos_usuario or app["permiso"] in permisos_usuario:
+            
+        # REGLA 4: Verificar permisos (excepto para superusuarios que tienen acceso total)
+        if user.is_superuser or "*" in permisos_usuario or app["permiso"] in permisos_usuario:
             app_copy = app.copy()
             
             # Resolver la URL principal de la app
@@ -1133,7 +1333,7 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict[st
             
             # Agregar submenús si existen
             if app.get("submenus"):
-                submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario)
+                submenus_visibles = obtener_submenus_por_app(app["id"], permisos_usuario, request)
                 if submenus_visibles:
                     app_copy["submenus"] = submenus_visibles
                 else:

@@ -37,7 +37,7 @@ class Command(BaseCommand):
         try:
             if empresa_id:
                 empresa = Empresa.objects.get(id=empresa_id)
-                self.stdout.write(f'✅ Usando empresa específica: {empresa.nombre} (ID: {empresa.id})')
+                self.stdout.write(f'✅ Usando empresa específica: {empresa.name} (ID: {empresa.id})')
             else:
                 empresa = Empresa.objects.first()
                 if not empresa:
@@ -45,7 +45,7 @@ class Command(BaseCommand):
                         self.style.ERROR('❌ No se encontró ninguna empresa en la base de datos')
                     )
                     return
-                self.stdout.write(f'✅ Usando primera empresa: {empresa.nombre} (ID: {empresa.id})')
+                self.stdout.write(f'✅ Usando primera empresa: {empresa.name} (ID: {empresa.id})')
 
             if branch_id:
                 branch = Branch.objects.get(id=branch_id)
@@ -111,7 +111,7 @@ class Command(BaseCommand):
 
         # Mostrar resumen final
         self.stdout.write('\n📋 RESUMEN FINAL:')
-        self.stdout.write(f'  - Empresa: {empresa.nombre}')
+        self.stdout.write(f'  - Empresa: {empresa.name}')
         self.stdout.write(f'  - Sucursal: {branch.name}')
         
         if not dry_run:

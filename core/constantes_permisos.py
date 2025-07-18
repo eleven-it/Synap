@@ -173,6 +173,15 @@ PERMISOS_POR_MODULO = {
     ],
     "TiendaNube": [
         ("tiendanube.access", "Access TiendaNube integration")
+    ],
+    "Integraciones": [
+        ("core.can_manage_integrations", "Gestionar integraciones"),
+        ("core.can_edit_mappings", "Editar mapeos de integración"),
+        ("core.can_run_sync", "Ejecutar sincronizaciones"),
+        ("core.can_view_sync_logs", "Ver logs de sincronización"),
+        ("core.can_configure_integrations", "Configurar integraciones"),
+        ("core.can_validate_data", "Validar datos de integración"),
+        ("core.can_manage_validation_rules", "Gestionar reglas de validación"),
     ]
 }
 
@@ -272,4 +281,13 @@ PERMISOS_AUDITABLES = [
     "finance.pagos",
     "administrar.backup"
 ]
+
+# Constantes de permisos para integraciones
+CAN_MANAGE_INTEGRATIONS = "core.can_manage_integrations"
+CAN_EDIT_MAPPINGS = "core.can_edit_mappings"
+CAN_RUN_SYNC = "core.can_run_sync"
+CAN_VIEW_SYNC_LOGS = "core.can_view_sync_logs"
+CAN_CONFIGURE_INTEGRATIONS = "core.can_configure_integrations"
+CAN_VALIDATE_DATA = "core.can_validate_data"
+CAN_MANAGE_VALIDATION_RULES = "core.can_manage_validation_rules"
 

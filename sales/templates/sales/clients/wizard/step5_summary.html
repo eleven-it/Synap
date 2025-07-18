@@ -1,0 +1,116 @@
+{% extends "base.html" %} 
+{% block extra_css %}
+<style>
+    .wizard-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 1.2rem 0.5rem 1.2rem 0.5rem;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        font-size: 13px;
+        animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(20px);} to { opacity:1; transform:translateY(0);} }
+    .form-section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.01em;
+        animation: slideUp 0.5s cubic-bezier(.4,0,.2,1) both;
+    }
+    @keyframes slideUp { from { opacity:0; transform:translateY(20px);} to { opacity:1; transform:translateY(0);} }
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1.2rem;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #f97316, #ea580c);
+        border: none;
+        color: white;
+        padding: 0.45rem 1.4rem;
+        border-radius: 7px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 0.18s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        box-shadow: 0 1px 4px rgba(249, 115, 22, 0.07);
+    }
+    .btn-primary:hover {
+        transform: translateY(-1px) scale(1.03);
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.13);
+    }
+    .btn-secondary {
+        background: #f3f4f6;
+        color: #374151;
+        border: none;
+        padding: 0.45rem 1.4rem;
+        border-radius: 7px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: all 0.18s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .btn-secondary:hover {
+        background: #e5e7eb;
+        transform: scale(1.03);
+    }
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.7rem 1.2rem;
+        margin-bottom: 0.5rem;
+    }
+    @media (max-width: 700px) {
+        .form-grid { grid-template-columns: 1fr; }
+    }
+    .form-group {
+        margin-bottom: 0.2rem;
+        position: relative;
+        animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both;
+    }
+    .form-group label {
+        font-size: 0.92rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.1rem;
+        letter-spacing: 0.01em;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        padding: 0.35rem 0.7rem;
+        font-size: 0.95rem;
+        border: 1px solid #d1d5db;
+        border-radius: 7px;
+        background: #f9fafb;
+        color: #222;
+        transition: border-color 0.18s, box-shadow 0.18s;
+        outline: none;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        border-color: #f97316;
+        box-shadow: 0 0 0 2px #f9731633;
+        background: #fff7ed;
+        animation: bounce 0.3s;
+    }
+    @keyframes bounce {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.03); }
+    }
+    .form-group .help-block {
+        font-size: 0.8rem;
+        color: #a1a1aa;
+        margin-top: 0.1rem;
+    }
+</style>
+{% endblock %} 

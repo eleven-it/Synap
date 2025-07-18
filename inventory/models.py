@@ -65,8 +65,10 @@ class Location(models.Model):
 # MODEL: Product Brand
 # ─────────────────────────────────────────────
 class Brand(models.Model):
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='brands', verbose_name=_('Company'), null=True, blank=True)
     name = models.CharField(_("Name"), max_length=100, unique=True)
     is_active = models.BooleanField(_("Active"), default=True)
+    adminet_id = models.IntegerField(null=True, blank=True, unique=True, help_text='ID original de administraNET para sincronización')
 
     def __str__(self):
         return self.name
@@ -80,8 +82,10 @@ class Brand(models.Model):
 # MODEL: Product Category
 # ─────────────────────────────────────────────
 class Category(models.Model):
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='categories', verbose_name=_('Company'), null=True, blank=True)
     name = models.CharField(_("Name"), max_length=100, unique=True)
     is_active = models.BooleanField(_("Active"), default=True)
+    adminet_id = models.IntegerField(null=True, blank=True, unique=True, help_text='ID original de administraNET para sincronización')
 
     def __str__(self):
         return self.name
@@ -95,9 +99,11 @@ class Category(models.Model):
 # MODEL: Product Subcategory
 # ─────────────────────────────────────────────
 class Subcategory(models.Model):
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='subcategories', verbose_name=_('Company'), null=True, blank=True)
     name = models.CharField(_("Name"), max_length=100)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='subcategories', verbose_name=_("Category"))
     is_active = models.BooleanField(_("Active"), default=True)
+    adminet_id = models.IntegerField(null=True, blank=True, unique=True, help_text='ID original de administraNET para sincronización')
 
     class Meta:
         unique_together = ('name', 'category')
@@ -211,6 +217,9 @@ class Product(models.Model):
         return self.price
 
     def save(self, *args, **kwargs):
+        # Asignar la moneda de la empresa automáticamente
+        if self.empresa and hasattr(self.empresa, 'currency') and self.empresa.currency:
+            self.price_currency = self.empresa.currency
         super().save(*args, **kwargs)
         # Si el producto tiene tiendanube_id pero no existe mapping, crearlo automáticamente
         from tiendanube.models import TiendaNubeProductMapping

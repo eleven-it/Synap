@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Create Client" %} - {% trans "Step 1" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: #f6f7fa;
+        font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+    }
+    .wizard-container {
+        max-width: 520px;
+        margin: 56px auto 0 auto;
+        padding: 1.2rem 2.2rem 1.5rem 2.2rem;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        font-size: 0.75rem; /* text-xs */
+        border: 1.5px solid #f3f4f6;
+        min-height: 340px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    @media (max-width: 700px) {
+        .wizard-container { max-width: 98vw; padding: 1rem 0.5rem; }
+    }
+    .wizard-progress-bar {
+        width: 100%;
+        background: #f3f4f6;
+        border-radius: 9999px;
+        height: 5px;
+        margin-bottom: 1.1rem;
+        overflow: hidden;
+    }
+    .wizard-progress-bar-inner {
+        background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
+        height: 100%;
+        width: 20%;
+        border-radius: 9999px;
+        transition: width 0.5s cubic-bezier(.4,0,.2,1);
+    }
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.2rem;
+        margin-bottom: 1.2rem;
+    }
+    .wizard-step {
+        font-size: 0.75rem;
+        color: #bdbdbd;
+        font-weight: 500;
+        min-width: 36px;
+        text-align: center;
+        opacity: 0.8;
+    }
+    .wizard-step.active {
+        color: #f97316;
+        font-weight: 700;
+        opacity: 1;
+    }
+    .wizard-step-circle {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        background: #fff;
+        border: 1.5px solid #f3f4f6;
+        color: #f97316;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin: 0 auto 0.1rem auto;
+        transition: border 0.2s, color 0.2s, background 0.2s;
+    }
+    .wizard-step.active .wizard-step-circle {
+        background: #f97316;
+        color: #fff;
+        border: 1.5px solid #f97316;
+    }
+    .wizard-title {
+        font-size: 1.125rem; /* text-lg */
+        font-weight: 800;
+        color: #22223b;
+        margin-bottom: 0.1rem;
+        letter-spacing: -0.01em;
+        text-align: center;
+        line-height: 1.2;
+    }
+    .wizard-desc {
+        font-size: 0.875rem; /* text-sm */
+        color: #6b7280;
+        text-align: center;
+        margin-bottom: 1.2rem;
+        font-weight: 400;
+    }
+    .client-type-selector {
+        display: flex;
+        gap: 1.1rem;
+        justify-content: center;
+        margin: 1.1rem 0 1.3rem 0;
+    }
+    .client-type-option {
+        border: 1.5px solid #f3f4f6;
+        border-radius: 12px;
+        padding: 1rem 1.3rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.18s cubic-bezier(.4,0,.2,1);
+        background: #fafbfc;
+        font-size: 0.75rem;
+        min-width: 110px;
+        font-weight: 600;
+        outline: none;
+        box-shadow: none;
+    }
+    .client-type-option.selected, .client-type-option:focus {
+        border-color: #f97316;
+        background: #fff7ed;
+        color: #f97316;
+        transform: scale(1.03);
+        z-index: 2;
+    }
+    .client-type-title {
+        font-weight: 700;
+        font-size: 1rem; /* text-base */
+        margin-bottom: 0.1rem;
+        color: #22223b;
+        letter-spacing: -0.01em;
+    }
+    .client-type-description {
+        font-size: 0.75rem;
+        color: #6b7280;
+        font-weight: 400;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1.2rem;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #f97316, #ea580c);
+        border: none;
+        color: white;
+        padding: 0.7rem 2rem;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.18s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        box-shadow: none;
+        letter-spacing: 0.01em;
+        outline: none;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+        transform: translateY(-1px) scale(1.03);
+        background: linear-gradient(135deg, #ea580c, #f97316);
+    }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        body { background: #181926; }
+        .wizard-container { background: #23243a; box-shadow: 0 2px 12px rgba(0,0,0,0.10); border-color: #23243a; }
+        .wizard-title { color: #fff; }
+        .wizard-desc { color: #bdbdbd; }
+        .client-type-option { background: #23243a; color: #e5e7eb; border-color: #23243a; }
+        .client-type-option.selected, .client-type-option:focus { background: #2d2e4a; color: #fff; border-color: #f97316; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Subheader visual fijo bajo la navbar -->
+{% include 'core/partials/crud_subheader.html' with title='Nuevo Cliente' action_url='/sales/clients/' action_label='Volver a la lista' show_toggle=False show_counter=False %}
+
+<div class="wizard-container mt-32">
+    <!-- Barra de progreso -->
+    <div class="wizard-progress-bar">
+        <div class="wizard-progress-bar-inner"></div>
+    </div>
+    <!-- Indicadores de pasos -->
+    <div class="wizard-steps">
+        <div class="wizard-step active">
+            <div class="wizard-step-circle">1</div>
+            <span>{% trans "Tipo" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">2</div>
+            <span>{% trans "Datos" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">3</div>
+            <span>{% trans "Fiscal" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">4</div>
+            <span>{% trans "Contactos" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">5</div>
+            <span>{% trans "Resumen" %}</span>
+        </div>
+    </div>
+    <form method="post" id="wizard-form" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="1">
+        <div class="text-center mb-2">
+            <h2 class="text-2xl font-bold text-gray-800 mb-1">{% trans "Client Type" %}</h2>
+            <p class="text-gray-500 text-base">{% trans "Define el tipo de cliente y la información fundamental" %}</p>
+        </div>
+        <div class="client-type-selector">
+            <label class="client-type-option{% if form.client_type.value == 'individual' or not form.client_type.value %} selected{% endif %}" for="id_client_type_0" tabindex="0">
+                <input type="radio" name="client_type" value="individual" id="id_client_type_0" style="display:none;"
+                       {% if form.client_type.value == 'individual' or not form.client_type.value %}checked{% endif %}>
+                <div class="client-type-title">{% trans "Person" %}</div>
+                <div class="client-type-description">{% trans "Individual or personal client" %}</div>
+            </label>
+            <label class="client-type-option{% if form.client_type.value == 'company' %} selected{% endif %}" for="id_client_type_1" tabindex="0">
+                <input type="radio" name="client_type" value="company" id="id_client_type_1" style="display:none;"
+                       {% if form.client_type.value == 'company' %}checked{% endif %}>
+                <div class="client-type-title">{% trans "Company" %}</div>
+                <div class="client-type-description">{% trans "Business or corporate client" %}</div>
+            </label>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">
+                {% trans "Next Step" %}
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Selección visual
+    document.querySelectorAll('.client-type-option').forEach(option => {
+        option.addEventListener('click', function() {
+            document.querySelectorAll('.client-type-option').forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            this.querySelector('input[type="radio"]').checked = true;
+        });
+    });
+    // Accesibilidad: selección con teclado
+    document.querySelectorAll('.client-type-option').forEach(option => {
+        option.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.click();
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

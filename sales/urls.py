@@ -1,6 +1,7 @@
 from django.urls import path, include
 from . import views
 from . import tpv_views
+from django.views.generic import RedirectView
 
 app_name = 'sales'
 
@@ -14,6 +15,10 @@ urlpatterns = [
     path('clients/<int:pk>/', views.ClientDetailView.as_view(), name='client_detail'),
     path('clients/<int:pk>/edit/', views.ClientUpdateView.as_view(), name='client_update'),
     path('clients/<int:pk>/delete/', views.ClientDeleteView.as_view(), name='client_delete'),
+    
+    # Wizard multi-step de clientes
+    path('clients/wizard/', views.client_wizard_view, name='client_wizard'),
+    path('clients/wizard/step/<int:step>/', views.wizard_step_navigation, name='wizard_step'),
     
     # Gestión de contactos (comentado - no implementado)
     # path('contacts/', views.ContactListView.as_view(), name='contact_list'),
@@ -92,6 +97,11 @@ urlpatterns = [
     path('config/payment-terms/<int:pk>/', views.payment_term_detail, name='payment_term_detail'),
     path('config/payment-terms/<int:pk>/edit/', views.payment_term_edit, name='payment_term_edit'),
     path('config/payment-terms/<int:pk>/delete/', views.payment_term_delete, name='payment_term_delete'),
+    path('config/payment-terms/<int:pk>/activate/', views.payment_terms_activate, name='payment_terms_activate'),
+    path('config/payment-terms/<int:pk>/deactivate/', views.payment_terms_deactivate, name='payment_terms_deactivate'),
+    path('config/payment-terms/<int:payment_term_id>/lines/create/', views.payment_term_line_create, name='payment_term_line_create'),
+    path('config/payment-terms/lines/<int:pk>/edit/', views.payment_term_line_edit, name='payment_term_line_edit'),
+    path('config/payment-terms/lines/<int:pk>/delete/', views.payment_term_line_delete, name='payment_term_line_delete'),
     
     # Reportes
     path('reports/', views.reports_dashboard, name='reports_dashboard'),
@@ -104,10 +114,24 @@ urlpatterns = [
     # path('autocomplete/state/', views.autocomplete_state, name='autocomplete_state'),
     path('autocomplete/city/', views.autocomplete_city, name='autocomplete_city'),
     path('autocomplete/seller/', views.autocomplete_seller, name='autocomplete_seller'),
-    path('get-states-by-country/', views.get_states_by_country, name='get_states_by_country'),
+    
+    # APIs para carga dinámica (deben ir ANTES de la API REST)
+    path('api/states-by-country/', views.get_states_by_country, name='api_states_by_country'),
+    path('api/fiscal-responsibilities-by-country/', views.get_fiscal_responsibilities_by_country, name='api_fiscal_responsibilities_by_country'),
+    path('api/countries-autocomplete/', views.countries_autocomplete, name='api_countries_autocomplete'),
+    path('api/states-autocomplete/', views.states_autocomplete, name='api_states_autocomplete'),
+    path('api/fiscal-responsibilities-autocomplete/', views.fiscal_responsibilities_autocomplete, name='api_fiscal_responsibilities_autocomplete'),
+    path('api/payment-terms-autocomplete/', views.payment_terms_autocomplete, name='api_payment_terms_autocomplete'),
     
     # APIs RESTful
     path('api/', include('sales.api.urls')),
+    
+    # URLs para gestión de contactos en wizard
+    path('clients/wizard/step4/<int:client_id>/', views.client_contacts_step, name='client_contacts_step'),
+    path('api/contacts/search/', views.search_contacts_api, name='search_contacts_api'),
+    path('api/clients/<int:client_id>/contacts/add/', views.add_contact_to_client, name='add_contact_to_client'),
+    path('api/clients/<int:client_id>/contacts/<int:relationship_id>/remove/', views.remove_contact_from_client, name='remove_contact_from_client'),
+    path('api/clients/<int:client_id>/contacts/create/', views.create_contact_for_client, name='create_contact_for_client'),
 
     # --- URLs PARA PUNTO DE VENTA (TPV) ---
 
@@ -135,6 +159,10 @@ urlpatterns = [
 
     # Búsqueda de clientes
     path('pos/client/search/', views.pos_client_search, name='pos_client_search'),
+    
+    # Gestión de clientes en TPV
+    path('pos/sale/<int:sale_id>/client/selection/', views.pos_client_selection, name='pos_client_selection'),
+    path('pos/sale/<int:sale_id>/client/quick-create/', views.pos_quick_client_create, name='pos_quick_client_create'),
 
     # Configuración
     path('pos/configuration/', views.pos_configuration, name='pos_configuration'),
@@ -165,4 +193,8 @@ urlpatterns = [
     path('payment-processors/create/', views.payment_processor_create, name='payment_processor_create'),
     path('payment-processors/<int:pk>/edit/', views.payment_processor_edit, name='payment_processor_edit'),
     path('payment-processors/<int:pk>/delete/', views.payment_processor_delete, name='payment_processor_delete'),
+    path('payment-terms/', RedirectView.as_view(url='/sales/config/payment-terms/', permanent=False)),
+    
+    # Redirecciones para compatibilidad
+    path('price-lists/', RedirectView.as_view(url='/sales/config/price-lists/', permanent=False)),
 ] 

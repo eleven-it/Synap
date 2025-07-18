@@ -1,0 +1,533 @@
+{% extends 'core/core_app_base.html' %}
+{% load i18n %}
+
+{% block extra_css %}
+<style>
+    /* Inspirado en sales_order_form.html */
+    .form-input {
+        border: none;
+        border-bottom: 2px solid #e5e7eb;
+        background: transparent;
+        outline: none;
+        font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+        font-size: 0.95em;
+        color: #222;
+        transition: border-color 0.2s;
+        padding: 0.25rem 0.25rem 0.25rem 0.25rem;
+    }
+    .form-input:focus {
+        border-bottom: 2.5px solid #667eea;
+        background: transparent;
+    }
+    .form-input:disabled {
+        background: #f3f4f6;
+        color: #b0b0b0;
+        border-bottom: 2px dashed #cbd5e1;
+    }
+    .autocomplete-dropdown {
+        position: absolute;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        z-index: 9999;
+        max-height: 200px;
+        overflow-y: auto;
+        border-top: none;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        font-size: 0.95em;
+    }
+    .autocomplete-item {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f8fafc;
+        color: #374151;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover, .autocomplete-item.selected {
+        background-color: #667eea;
+        color: #fff;
+    }
+    .autocomplete-badge {
+        background: #f1f5f9;
+        color: #64748b;
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        font-size: 0.75em;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+    .btn-primary {
+        background: linear-gradient(to right, #ff9800, #ff5722);
+        color: #fff;
+        font-weight: bold;
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        font-size: 1em;
+        box-shadow: 0 2px 8px rgba(255,152,0,0.08);
+        transition: background 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .btn-secondary {
+        background: #fff;
+        color: #222;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        font-size: 1em;
+        transition: background 0.2s, color 0.2s;
+    }
+    .btn-secondary:hover {
+        background: #f3f4f6;
+    }
+    .logo-dropzone {
+        position: relative;
+        height: 7rem;
+        width: 7rem;
+        border-radius: 9999px;
+        background: linear-gradient(135deg, #ffe0b2 0%, #bbdefb 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        border: 2px dashed #90caf9;
+        cursor: pointer;
+        overflow: hidden;
+        margin-bottom: 0.5rem;
+    }
+    .logo-dropzone img {
+        height: 100%;
+        width: 100%;
+        object-fit: cover;
+        border-radius: 9999px;
+        border: 4px solid #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .logo-dropzone .overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(33,150,243,0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+    }
+    .logo-dropzone:hover .overlay { opacity: 1; }
+    .logo-dropzone .overlay span {
+        color: #1976d2;
+        font-size: 0.85em;
+        font-weight: 500;
+    }
+    .logo-remove-btn {
+        margin-top: 0.5rem;
+        color: #e53935;
+        font-size: 0.85em;
+        cursor: pointer;
+        background: none;
+        border: none;
+    }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        .form-input { color: #e2e8f0; background: transparent; border-bottom: 2px solid #334155; }
+        .form-input:focus { border-bottom: 2.5px solid #60a5fa; }
+        .autocomplete-dropdown { background: #334155; color: #f1f5f9; border-color: #475569; }
+        .autocomplete-item { background: #334155; color: #e2e8f0; border-bottom-color: #475569; }
+        .autocomplete-item:hover, .autocomplete-item.selected { background: #667eea; color: #fff; }
+        .btn-primary { background: linear-gradient(to right, #ff9800, #ff5722); color: #fff; }
+        .btn-secondary { background: #222; color: #fff; border-color: #475569; }
+        .btn-secondary:hover { background: #374151; }
+        .logo-dropzone { background: linear-gradient(135deg, #ffb74d 0%, #1976d2 100%); border-color: #1976d2; }
+        .logo-dropzone .overlay { background: rgba(33,150,243,0.18); }
+    }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+{% if error %}
+  <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 animate-fade-in" role="alert">
+    <span class="block sm:inline">{{ error }}</span>
+  </div>
+{% endif %}
+<form id="empresa-form" method="post" enctype="multipart/form-data" class="max-w-3xl mx-auto bg-white dark:bg-gray-900 rounded-xl shadow p-6 space-y-6" 
+      action="{% if empresa %}{% url 'core:empresa_detalle' empresa.id %}{% else %}{% url 'core:empresa_detalle' 0 %}{% endif %}">
+  {% csrf_token %}
+  <!-- Logo -->
+  <div class="flex flex-col items-center">
+    <div id="logo-dropzone" class="relative h-28 w-28 rounded-full bg-gradient-to-br from-orange-200 to-blue-200 flex items-center justify-center shadow-md overflow-hidden group cursor-pointer">
+      <img id="logo-preview" src="{% if empresa and empresa.logo %}{{ empresa.logo.url }}{% endif %}" alt="Logo" class="h-28 w-28 object-cover rounded-full transition-all duration-200" style="display: {% if empresa and empresa.logo %}block{% else %}none{% endif %};">
+      <svg id="logo-placeholder" class="absolute inset-0 m-auto w-14 h-14 text-blue-400 group-hover:text-orange-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: {% if empresa and empresa.logo %}none{% else %}block{% endif %};">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+      </svg>
+      <input id="logo-upload" name="logo" type="file" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
+      <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all pointer-events-none">
+        <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A2 2 0 0020 6.382V5a2 2 0 00-2-2H6a2 2 0 00-2 2v1.382a2 2 0 00.447 1.342L9 10m6 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6m11 0l-4 2-4-2"></path>
+        </svg>
+      </div>
+    </div>
+    <span class="text-xs text-gray-400 mt-2">{% trans 'Click or drag an image' %}</span>
+  </div>
+
+  <!-- Campos -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Company Name' %} *</label>
+      <input type="text" name="nombre" class="form-input w-full" required value="{{ empresa.nombre|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Business Name' %} *</label>
+      <input type="text" name="razon_social" class="form-input w-full" required value="{{ empresa.razon_social|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Country' %} *</label>
+      <div style="position:relative;">
+        <input type="text" name="pais" class="form-input w-full autocomplete-input" data-autocomplete-url="/core/api/countries/search/" required autocomplete="off" value="{{ empresa.pais|default_if_none:'' }}">
+        <input type="hidden" name="pais_id" class="autocomplete-id" value="{{ empresa.pais_id|default_if_none:'' }}">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'State/Province' %} *</label>
+      <div style="position:relative;">
+        <input type="text" name="state" class="form-input w-full autocomplete-input" data-autocomplete-url="/core/api/states/search/" required autocomplete="off" value="{{ empresa.state.name|default_if_none:'' }}">
+        <input type="hidden" name="state_id" class="autocomplete-id" value="{{ empresa.state.id|default_if_none:'' }}">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'City' %}</label>
+      <input type="text" name="ciudad" class="form-input w-full" value="{{ empresa.ciudad|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Address' %}</label>
+      <input type="text" name="direccion" class="form-input w-full" value="{{ empresa.direccion|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Phone' %}</label>
+      <input type="text" name="telefono" class="form-input w-full" value="{{ empresa.telefono|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Email' %}</label>
+      <input type="email" name="email" class="form-input w-full" value="{{ empresa.email|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Website' %}</label>
+      <input type="url" name="sitio_web" class="form-input w-full" value="{{ empresa.sitio_web|default_if_none:'' }}">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Tax ID' %} *</label>
+      <input type="text" name="identificador_fiscal" class="form-input w-full" required value="{{ empresa.identificador_fiscal|default_if_none:'' }}">
+      <span class="text-xs text-gray-400" id="cuit-help"></span>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Tax Responsibility Type' %} *</label>
+      <div style="position:relative;">
+        <input type="text" name="fiscal_responsibility" class="form-input w-full autocomplete-input" data-autocomplete-url="/core/api/fiscal-responsibilities/search/" required autocomplete="off" value="{{ empresa.fiscal_responsibility.name|default_if_none:'' }}">
+        <input type="hidden" name="fiscal_responsibility_id" class="autocomplete-id" value="{{ empresa.fiscal_responsibility.id|default_if_none:'' }}">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Currency' %} *</label>
+      <div style="position:relative;">
+        <input type="text" name="currency" class="form-input w-full autocomplete-input" data-autocomplete-url="/core/api/currency/search/" required autocomplete="off" value="{{ empresa.currency.name|default_if_none:'' }}">
+        <input type="hidden" name="currency_id" class="autocomplete-id" value="{{ empresa.currency.id|default_if_none:'' }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Botones -->
+  <div class="flex justify-end gap-2 mt-6">
+    <a href="{% url 'core:empresa_listar' %}" class="btn-secondary">{% trans 'Cancel' %}</a>
+    <button type="submit" class="btn-primary">
+      {% if empresa %}{% trans 'Save Changes' %}{% else %}{% trans 'Create Company' %}{% endif %}
+    </button>
+  </div>
+</form>
+
+<script>
+const dropZone = document.getElementById('logo-dropzone');
+const fileInput = document.getElementById('logo-upload');
+const previewImg = document.getElementById('logo-preview');
+const placeholder = document.getElementById('logo-placeholder');
+
+function showLogoPreview(file) {
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    alert('{% trans "Only image files are allowed (JPG, PNG, SVG, etc)." %}');
+    fileInput.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    previewImg.src = e.target.result;
+    previewImg.style.display = 'block';
+    placeholder.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+if (dropZone && fileInput) {
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('ring-2', 'ring-orange-400');
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('ring-2', 'ring-orange-400');
+  });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('ring-2', 'ring-orange-400');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      showLogoPreview(files[0]);
+    }
+  });
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      showLogoPreview(e.target.files[0]);
+    }
+  });
+  dropZone.addEventListener('click', () => fileInput.click());
+}
+
+// --- Autocomplete dependiente y validaciones ---
+// (Aquí iría la lógica de autocomplete, dependencias país/provincia, validación de CUIT/RFC/NIF, etc.)
+// Por brevedad, se asume que se reutiliza la lógica robusta ya implementada y se adapta a los nuevos campos y nombres.
+
+function initializeAutocomplete(input) {
+  const url = input.getAttribute('data-autocomplete-url');
+  const hiddenId = input.parentElement.querySelector('.autocomplete-id');
+  let dropdown = null;
+  let timeout = null;
+  let selectedValue = input.value || null;
+  let selectedId = hiddenId && hiddenId.value ? hiddenId.value : null;
+  let selectedIndex = -1;
+  let currentResults = [];
+
+  // Si hay valor inicial, mantenlo (para edición)
+  if (selectedValue && selectedId) {
+    input.value = selectedValue;
+    if (hiddenId) hiddenId.value = selectedId;
+  } else {
+    if (hiddenId) hiddenId.value = '';
+  }
+
+  function showLoadingIndicator() {
+    if (dropdown) dropdown.remove();
+    dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    dropdown.innerHTML = '<div class="autocomplete-item"><i class="fas fa-spinner fa-spin"></i> {% trans "Searching..." %}</div>';
+    positionDropdown(dropdown, input);
+    document.body.appendChild(dropdown);
+  }
+  function showNoResultsMessage(query) {
+    if (dropdown) dropdown.remove();
+    dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    dropdown.innerHTML = '<div class="autocomplete-item"><i class="fas fa-search"></i> {% trans "No results" %}</div>';
+    positionDropdown(dropdown, input);
+    document.body.appendChild(dropdown);
+    setTimeout(() => { if (dropdown) { dropdown.remove(); dropdown = null; } }, 2000);
+  }
+  function createDropdown(results) {
+    if (dropdown) dropdown.remove();
+    currentResults = results;
+    selectedIndex = -1;
+    dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-dropdown';
+    results.forEach((result, index) => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      item.setAttribute('data-index', index);
+      const textSpan = document.createElement('span');
+      textSpan.textContent = result.text || result.name;
+      textSpan.style.flex = '1';
+      item.appendChild(textSpan);
+      if (result.code) {
+        const codeBadge = document.createElement('span');
+        codeBadge.textContent = result.code;
+        codeBadge.className = 'autocomplete-badge';
+        item.appendChild(codeBadge);
+      }
+      item.addEventListener('mouseenter', function() {
+        if (selectedIndex !== index) { this.style.backgroundColor = '#f8fafc'; this.style.transform = 'translateX(2px)'; }
+      });
+      item.addEventListener('mouseleave', function() {
+        if (selectedIndex !== index) { this.style.backgroundColor = 'white'; this.style.transform = 'translateX(0)'; }
+      });
+      item.addEventListener('click', function() {
+        selectResult(result);
+      });
+      dropdown.appendChild(item);
+    });
+    positionDropdown(dropdown, input);
+    document.body.appendChild(dropdown);
+  }
+  function positionDropdown(dropdown, input) {
+    const rect = input.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = `${rect.bottom + scrollTop}px`;
+    dropdown.style.left = `${rect.left + scrollLeft}px`;
+    dropdown.style.width = `${rect.width}px`;
+    dropdown.style.zIndex = '9999';
+  }
+  function updateSelection() {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    items.forEach((item, index) => {
+      if (index === selectedIndex) {
+        item.style.backgroundColor = '#667eea';
+        item.style.color = 'white';
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.style.backgroundColor = 'white';
+        item.style.color = '#374151';
+      }
+    });
+  }
+  function handleKeyNavigation(e) {
+    if (!dropdown || currentResults.length === 0) return;
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection();
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelection();
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedIndex >= 0 && selectedIndex < currentResults.length) {
+          selectResult(currentResults[selectedIndex]);
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        if (dropdown) { dropdown.remove(); dropdown = null; selectedIndex = -1; }
+        break;
+    }
+  }
+  function showAllData() {
+    showLoadingIndicator();
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        if (data.results && data.results.length > 0) {
+          createDropdown(data.results);
+        } else {
+          showNoResultsMessage('');
+        }
+      })
+      .catch(error => { showNoResultsMessage(''); });
+  }
+  function selectResult(result) {
+    input.value = result.text || result.name;
+    if (hiddenId) {
+      hiddenId.value = result.id;
+      console.log('Set hiddenId', hiddenId.name, 'to', result.id);
+    }
+    selectedValue = input.value;
+    selectedId = result.id;
+    if (dropdown) { dropdown.remove(); dropdown = null; }
+  }
+  input.addEventListener('input', function() {
+    const query = this.value.trim();
+    if (timeout) clearTimeout(timeout);
+    if (dropdown) { dropdown.remove(); dropdown = null; }
+    selectedValue = null; selectedId = null; if (hiddenId) hiddenId.value = '';
+    if (query.length < 2) return;
+    showLoadingIndicator();
+    timeout = setTimeout(() => {
+      const params = new URLSearchParams({ q: query });
+      fetch(`${url}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.results && data.results.length > 0) {
+            createDropdown(data.results);
+          } else {
+            showNoResultsMessage(query);
+          }
+        })
+        .catch(error => { showNoResultsMessage(query); });
+    }, 300);
+  });
+  input.addEventListener('blur', function() {
+    setTimeout(() => {
+      if (!selectedId) {
+        input.value = '';
+        if (hiddenId) hiddenId.value = '';
+      }
+      if (dropdown) { dropdown.remove(); dropdown = null; }
+    }, 150);
+  });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowDown' && !this.value.trim() && !dropdown) {
+      e.preventDefault();
+      showAllData();
+      return;
+    }
+    if (dropdown && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Escape')) {
+      handleKeyNavigation(e);
+      return;
+    }
+  });
+  document.addEventListener('click', function(e) {
+    if (dropdown && !dropdown.contains(e.target) && e.target !== input) {
+      dropdown.remove();
+      dropdown = null;
+    }
+  });
+}
+
+function getSelectedCountryId() {
+  const paisInput = document.querySelector('input[name="pais"]');
+  if (!paisInput) return null;
+  const paisIdInput = paisInput.parentElement.querySelector('.autocomplete-id');
+  return paisIdInput && paisIdInput.value ? paisIdInput.value : null;
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.autocomplete-input').forEach(function(input) {
+    // Si es el campo de provincia/estado, personaliza la lógica
+    if (input.name === 'state') {
+      input.addEventListener('focus', function() {
+        // Actualiza la URL de búsqueda con el país seleccionado
+        const paisId = getSelectedCountryId();
+        let baseUrl = '/core/api/states/search/';
+        let url = baseUrl;
+        if (paisId) {
+          url += '?country_id=' + encodeURIComponent(paisId);
+        }
+        input.setAttribute('data-autocomplete-url', url);
+      });
+    }
+    initializeAutocomplete(input);
+  });
+
+  // Si el país cambia, limpia el campo estado
+  const paisInput = document.querySelector('input[name="pais"]');
+  if (paisInput) {
+    paisInput.addEventListener('input', function() {
+      const stateInput = document.querySelector('input[name="state"]');
+      const stateIdInput = stateInput && stateInput.parentElement.querySelector('.autocomplete-id');
+      if (stateInput) stateInput.value = '';
+      if (stateIdInput) stateIdInput.value = '';
+    });
+  }
+});
+</script>
+{% endblock %} 

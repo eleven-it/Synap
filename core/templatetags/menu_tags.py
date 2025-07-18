@@ -137,45 +137,4 @@ def render_user_menu():
     """
     Renderiza el menú de usuario para el sidebar de administración
     """
-    return {}
-
-@register.inclusion_tag('core/partials/breadcrumb.html')
-def render_breadcrumb(request):
-    """
-    Renderiza el breadcrumb dinámico
-    """
-    breadcrumbs = []
-    
-    if request and request.resolver_match:
-        # Agregar página principal
-        breadcrumbs.append({
-            'label': 'Dashboard',
-            'url': '/core/dashboard/',
-            'active': False
-        })
-        
-        # Agregar módulo actual
-        app_name = request.resolver_match.app_name
-        if app_name == 'core':
-            breadcrumbs.append({
-                'label': 'System',
-                'url': '/core/modules/',
-                'active': True
-            })
-        elif app_name in ['sales', 'purchases', 'inventory', 'accounting', 'tiendanube']:
-            module_names = {
-                'sales': 'Sales',
-                'purchases': 'Purchases', 
-                'inventory': 'Inventory',
-                'accounting': 'Accounting',
-                'tiendanube': 'TiendaNube'
-            }
-            breadcrumbs.append({
-                'label': module_names.get(app_name, app_name.title()),
-                'url': f'/{app_name}/',
-                'active': True
-            })
-    
-    return {
-        'breadcrumbs': breadcrumbs
-    } 
+    return {} 

@@ -1,0 +1,67 @@
+{% extends 'sales/sales_base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block page_title %}{{ is_create|yesno:'Nueva Condición de Pago,Editar Condición de Pago' }}{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-xl mx-auto bg-white dark:bg-gray-900 shadow rounded-lg p-8 mt-8">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        {{ is_create|yesno:'Nueva Condición de Pago,Editar Condición de Pago' }}
+    </h2>
+    <form method="post" autocomplete="off">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <div class="flex justify-between mt-6">
+            <a href="{% url 'sales:payment_term_list' %}" class="btn-secondary">Cancelar</a>
+            <button type="submit" class="btn-primary">
+                {{ is_create|yesno:'Crear,Guardar Cambios' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.btn-primary {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    border: none;
+    color: white;
+    padding: 0.45rem 1.4rem;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: 0 1px 4px rgba(249, 115, 22, 0.07);
+}
+.btn-primary:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.13);
+}
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    border: none;
+    padding: 0.45rem 1.4rem;
+    border-radius: 7px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.btn-secondary:hover {
+    background: #e5e7eb;
+    transform: scale(1.03);
+}
+</style>
+{% endblock %} 

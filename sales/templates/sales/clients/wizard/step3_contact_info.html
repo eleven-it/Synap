@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Nuevo Cliente" %} - {% trans "Paso 3" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: #f8fafc;
+        font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+    }
+    .wizard-container {
+        max-width: 680px;
+        margin: 48px auto 0 auto;
+        padding: 2rem 2.5rem 2.5rem 2.5rem;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+        font-size: 0.75rem; /* text-xs */
+        border: 1px solid #e2e8f0;
+        min-height: 420px;
+        display: flex;
+        flex-direction: column;
+    }
+    @media (max-width: 768px) {
+        .wizard-container { 
+            max-width: 95vw; 
+            padding: 1.5rem 1.25rem 2rem 1.25rem; 
+            margin: 24px auto 0 auto;
+        }
+    }
+    .wizard-progress-bar {
+        width: 100%;
+        background: #f1f5f9;
+        border-radius: 6px;
+        height: 4px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    .wizard-progress-bar-inner {
+        background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
+        height: 100%;
+        width: 60%;
+        border-radius: 6px;
+        transition: width 0.4s cubic-bezier(.4,0,.2,1);
+    }
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+    }
+    .wizard-step {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-weight: 500;
+        min-width: 40px;
+        text-align: center;
+        opacity: 0.7;
+        transition: all 0.2s ease;
+    }
+    .wizard-step.active {
+        color: #f97316;
+        font-weight: 600;
+        opacity: 1;
+    }
+    .wizard-step-circle {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 50%;
+        background: #fff;
+        border: 1.5px solid #e2e8f0;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin: 0 auto 0.25rem auto;
+        transition: all 0.2s ease;
+    }
+    .wizard-step.active .wizard-step-circle {
+        background: #f97316;
+        color: #fff;
+        border: 1.5px solid #f97316;
+        transform: scale(1.05);
+    }
+    .wizard-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .wizard-title {
+        font-size: 1.25rem; /* text-xl */
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.025em;
+        line-height: 1.3;
+    }
+    .wizard-desc {
+        font-size: 0.875rem; /* text-sm */
+        color: #64748b;
+        font-weight: 400;
+        line-height: 1.5;
+    }
+    .form-section {
+        margin-bottom: 2rem;
+    }
+    .form-section-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 1rem;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        opacity: 0.8;
+    }
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    @media (max-width: 768px) {
+        .form-grid { 
+            grid-template-columns: 1fr; 
+            gap: 0.75rem;
+        }
+    }
+    .form-group {
+        margin-bottom: 0.75rem;
+        position: relative;
+    }
+    .form-group label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.25rem;
+        display: block;
+        letter-spacing: 0.01em;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        color: #1f2937;
+        transition: all 0.15s ease;
+        outline: none;
+        font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        border-color: #f97316;
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+        background: #fff;
+    }
+    .form-group .help-block {
+        font-size: 0.7rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #f1f5f9;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+        border: none;
+        color: white;
+        padding: 0.625rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        letter-spacing: 0.01em;
+        outline: none;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(249, 115, 22, 0.2);
+    }
+    .btn-secondary {
+        background: #f8fafc;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        padding: 0.625rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        outline: none;
+    }
+    .btn-secondary:hover, .btn-secondary:focus {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+    }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        body { background: #0f172a; }
+        .wizard-container { 
+            background: #1e293b; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2); 
+            border-color: #334155; 
+        }
+        .wizard-title { color: #f8fafc; }
+        .wizard-desc { color: #cbd5e1; }
+        .form-section-title { color: #94a3b8; }
+        .form-group input, .form-group select, .form-group textarea { 
+            background: #334155; 
+            color: #f1f5f9; 
+            border-color: #475569; 
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+            background: #475569; 
+            color: #fff; 
+            border-color: #f97316; 
+        }
+        .form-actions {
+            border-top-color: #475569;
+        }
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+            border-color: #475569;
+        }
+        .btn-secondary:hover, .btn-secondary:focus {
+            background: #475569;
+            border-color: #64748b;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'core/partials/crud_subheader.html' with title='Nuevo Cliente' action_url='/sales/clients/' action_label='Volver a la lista' show_toggle=False show_counter=False %}
+
+<div class="wizard-container">
+    <!-- Barra de progreso -->
+    <div class="wizard-progress-bar">
+        <div class="wizard-progress-bar-inner"></div>
+    </div>
+    
+    <!-- Indicadores de pasos -->
+    <div class="wizard-steps">
+        <div class="wizard-step">
+            <div class="wizard-step-circle">1</div>
+            <span>{% trans "Tipo" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">2</div>
+            <span>{% trans "Datos" %}</span>
+        </div>
+        <div class="wizard-step active">
+            <div class="wizard-step-circle">3</div>
+            <span>{% trans "Contacto" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">4</div>
+            <span>{% trans "Contactos" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">5</div>
+            <span>{% trans "Resumen" %}</span>
+        </div>
+    </div>
+    
+    <form method="post" id="wizard-form" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="3">
+        
+        <div class="wizard-header">
+            <h2 class="wizard-title">{% trans "Contacto y Configuración" %}</h2>
+            <p class="wizard-desc">{% trans "Completa los datos de contacto y configuración del cliente." %}</p>
+        </div>
+        
+        <div class="form-section">
+            {{ form|crispy }}
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" class="btn-secondary" onclick="window.location.href='{% url 'sales:wizard_step' step=2 %}'">
+                <i class="fas fa-arrow-left"></i> {% trans "Anterior" %}
+            </button>
+            <button type="submit" class="btn-primary">
+                {% trans "Siguiente" %}
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %} 

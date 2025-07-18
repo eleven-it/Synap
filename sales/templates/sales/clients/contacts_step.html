@@ -1,0 +1,781 @@
+{% extends "theme/base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Contact Management" %} - {% trans "Client Wizard" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .contact-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        background: white;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    }
+    
+    .contact-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .contact-card.dark {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    
+    .relationship-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+    }
+    
+    .relationship-primary { background: #dbeafe; color: #1e40af; }
+    .relationship-secondary { background: #f3e8ff; color: #7c3aed; }
+    .relationship-billing { background: #fef3c7; color: #d97706; }
+    .relationship-technical { background: #dcfce7; color: #166534; }
+    .relationship-decision_maker { background: #fce7f3; color: #be185d; }
+    .relationship-representative { background: #e0e7ff; color: #3730a3; }
+    .relationship-other { background: #f3f4f6; color: #374151; }
+    
+    .dark .relationship-primary { background: #1e3a8a; color: #dbeafe; }
+    .dark .relationship-secondary { background: #581c87; color: #f3e8ff; }
+    .dark .relationship-billing { background: #92400e; color: #fef3c7; }
+    .dark .relationship-technical { background: #14532d; color: #dcfce7; }
+    .dark .relationship-decision_maker { background: #831843; color: #fce7f3; }
+    .dark .relationship-representative { background: #312e81; color: #e0e7ff; }
+    .dark .relationship-other { background: #374151; color: #f3f4f6; }
+    
+    .view-toggle {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .view-toggle button {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        background: white;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .view-toggle button.active {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+    }
+    
+    .dark .view-toggle button {
+        background: #374151;
+        border-color: #4b5563;
+        color: #f9fafb;
+    }
+    
+    .dark .view-toggle button.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+    }
+    
+    .contacts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1rem;
+    }
+    
+    .contacts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .contact-list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        background: white;
+        transition: all 0.2s;
+    }
+    
+    .contact-list-item:hover {
+        background: #f9fafb;
+    }
+    
+    .dark .contact-list-item {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    
+    .dark .contact-list-item:hover {
+        background: #374151;
+    }
+    
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        z-index: 50;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .dark .search-results {
+        background: #1f2937;
+        border-color: #374151;
+    }
+    
+    .search-result-item {
+        padding: 0.75rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f3f4f6;
+        transition: background 0.2s;
+    }
+    
+    .search-result-item:hover {
+        background: #f9fafb;
+    }
+    
+    .dark .search-result-item {
+        border-bottom-color: #374151;
+    }
+    
+    .dark .search-result-item:hover {
+        background: #374151;
+    }
+    
+    .add-contact-form {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .dark .add-contact-form {
+        background: #1e293b;
+        border-color: #334155;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6b7280;
+    }
+    
+    .dark .empty-state {
+        color: #9ca3af;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Contact Management" %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Step 4 of 5 - Manage client contacts" %}
+                    </p>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="w-64">
+                    <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        <span>{% trans "Progress" %}</span>
+                        <span>80%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-gradient-to-r from-orange-400 to-orange-600 h-2 rounded-full transition-all duration-500" style="width: 80%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Client Type Info -->
+        <div class="mb-8 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                </svg>
+                <div>
+                    <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        {% if client_type == 'individual' %}
+                            {% trans "Individual Client" %}
+                        {% else %}
+                            {% trans "Company Client" %}
+                        {% endif %}
+                    </h3>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                        {% if client_type == 'individual' %}
+                            {% trans "For individual clients, you can add additional contacts like family members or legal representatives." %}
+                        {% else %}
+                            {% trans "For company clients, you can add multiple contacts for different roles and departments." %}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New Contact Form -->
+        <div class="add-contact-form">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                {% trans "Add New Contact" %}
+            </h3>
+            
+            <form id="addContactForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Contact Name" %} *
+                        </label>
+                        <input type="text" name="name" required
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white"
+                               placeholder="{% trans 'Enter contact name...' %}">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Email" %}
+                        </label>
+                        <input type="email" name="email"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white"
+                               placeholder="contact@example.com">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Phone" %}
+                        </label>
+                        <input type="tel" name="phone"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white"
+                               placeholder="+1 234 567 8900">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Position" %}
+                        </label>
+                        <input type="text" name="position"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white"
+                               placeholder="{% trans 'Job title or position...' %}">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {% trans "Relationship Type" %}
+                        </label>
+                        <select name="relationship_type"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white">
+                            <option value="primary">{% trans "Primary Contact" %}</option>
+                            <option value="secondary" selected>{% trans "Secondary Contact" %}</option>
+                            <option value="billing">{% trans "Billing Contact" %}</option>
+                            <option value="technical">{% trans "Technical Contact" %}</option>
+                            <option value="decision_maker">{% trans "Decision Maker" %}</option>
+                            <option value="representative">{% trans "Representative" %}</option>
+                            <option value="other">{% trans "Other" %}</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end">
+                    <button type="submit" 
+                            class="px-4 py-2 bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-lg hover:from-orange-500 hover:to-orange-700 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105">
+                        {% trans "Add Contact" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Search Existing Contacts -->
+        <div class="mb-8">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                {% trans "Search Existing Contacts" %}
+            </h3>
+            
+            <div class="relative">
+                <input type="text" id="searchContacts" 
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:text-white"
+                       placeholder="{% trans 'Search contacts by name, email, or company...' %}">
+                
+                <div id="searchResults" class="search-results hidden"></div>
+            </div>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="view-toggle">
+            <button id="kanbanView" class="active">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+                </svg>
+                {% trans "Kanban" %}
+            </button>
+            <button id="listView">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                {% trans "List" %}
+            </button>
+        </div>
+
+        <!-- Contacts Display -->
+        <div id="contactsContainer">
+            <!-- Kanban View -->
+            <div id="kanbanContainer" class="contacts-grid">
+                {% for relationship in existing_contacts %}
+                <div class="contact-card p-4" data-relationship-id="{{ relationship.id }}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex-1">
+                            <h4 class="font-medium text-gray-900 dark:text-white">
+                                {{ relationship.contact.display_name }}
+                            </h4>
+                            {% if relationship.contact.position %}
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ relationship.contact.position }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        <span class="relationship-badge relationship-{{ relationship.relationship_type }}">
+                            {{ relationship.get_relationship_type_display }}
+                        </span>
+                    </div>
+                    
+                    <div class="space-y-2 mb-4">
+                        {% if relationship.contact.email %}
+                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
+                                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+                            </svg>
+                            {{ relationship.contact.email }}
+                        </div>
+                        {% endif %}
+                        
+                        {% if relationship.contact.phone %}
+                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path>
+                            </svg>
+                            {{ relationship.contact.phone }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex justify-end">
+                        <button onclick="removeContact({{ relationship.id }})" 
+                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                            {% trans "Remove" %}
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-span-full">
+                    <div class="empty-state">
+                        <svg class="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                            {% trans "No contacts yet" %}
+                        </h3>
+                        <p class="text-gray-500 dark:text-gray-400">
+                            {% trans "Add contacts to manage relationships with this client." %}
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- List View -->
+            <div id="listContainer" class="contacts-list hidden">
+                {% for relationship in existing_contacts %}
+                <div class="contact-list-item" data-relationship-id="{{ relationship.id }}">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex-1">
+                            <h4 class="font-medium text-gray-900 dark:text-white">
+                                {{ relationship.contact.display_name }}
+                            </h4>
+                            {% if relationship.contact.position %}
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ relationship.contact.position }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="flex items-center space-x-4">
+                            {% if relationship.contact.email %}
+                            <span class="text-sm text-gray-600 dark:text-gray-300">
+                                {{ relationship.contact.email }}
+                            </span>
+                            {% endif %}
+                            
+                            {% if relationship.contact.phone %}
+                            <span class="text-sm text-gray-600 dark:text-gray-300">
+                                {{ relationship.contact.phone }}
+                            </span>
+                            {% endif %}
+                            
+                            <span class="relationship-badge relationship-{{ relationship.relationship_type }}">
+                                {{ relationship.get_relationship_type_display }}
+                            </span>
+                        </div>
+                        
+                        <button onclick="removeContact({{ relationship.id }})" 
+                                class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                            {% trans "Remove" %}
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-state">
+                    <svg class="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                        {% trans "No contacts yet" %}
+                    </h3>
+                    <p class="text-gray-500 dark:text-gray-400">
+                        {% trans "Add contacts to manage relationships with this client." %}
+                    </p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex justify-between mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <button onclick="previousStep()" 
+                    class="px-6 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200">
+                {% trans "Previous" %}
+            </button>
+            
+            <button onclick="nextStep()" 
+                    class="px-6 py-2 bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-lg hover:from-orange-500 hover:to-orange-700 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105">
+                {% trans "Next Step" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let clientId = '{{ client_id }}';
+let clientType = '{{ client_type }}';
+
+// View Toggle
+document.getElementById('kanbanView').addEventListener('click', function() {
+    document.getElementById('kanbanView').classList.add('active');
+    document.getElementById('listView').classList.remove('active');
+    document.getElementById('kanbanContainer').classList.remove('hidden');
+    document.getElementById('listContainer').classList.add('hidden');
+});
+
+document.getElementById('listView').addEventListener('click', function() {
+    document.getElementById('listView').classList.add('active');
+    document.getElementById('kanbanView').classList.remove('active');
+    document.getElementById('listContainer').classList.remove('hidden');
+    document.getElementById('kanbanContainer').classList.add('hidden');
+});
+
+// Add Contact Form
+document.getElementById('addContactForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch(`/sales/api/clients/${clientId}/contacts/create/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Contact added successfully!', 'success');
+            addContactToDisplay(data.contact);
+            this.reset();
+        } else {
+            showToast(data.error || 'Error adding contact', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error adding contact', 'error');
+    });
+});
+
+// Search Contacts
+let searchTimeout;
+document.getElementById('searchContacts').addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const query = this.value;
+    
+    if (query.length < 2) {
+        document.getElementById('searchResults').classList.add('hidden');
+        return;
+    }
+    
+    searchTimeout = setTimeout(() => {
+        fetch(`/core/api/contacts/search/?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            displaySearchResults(data.results);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    }, 300);
+});
+
+function displaySearchResults(results) {
+    const container = document.getElementById('searchResults');
+    
+    if (results.length === 0) {
+        container.innerHTML = '<div class="p-4 text-gray-500 dark:text-gray-400">No contacts found</div>';
+    } else {
+        container.innerHTML = results.map(contact => `
+            <div class="search-result-item" onclick="addExistingContact(${contact.id})">
+                <div class="font-medium text-gray-900 dark:text-white">${contact.name}</div>
+                ${contact.email ? `<div class="text-sm text-gray-500 dark:text-gray-400">${contact.email}</div>` : ''}
+                ${contact.position ? `<div class="text-sm text-gray-500 dark:text-gray-400">${contact.position}</div>` : ''}
+            </div>
+        `).join('');
+    }
+    
+    container.classList.remove('hidden');
+}
+
+// Hide search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#searchContacts') && !e.target.closest('#searchResults')) {
+        document.getElementById('searchResults').classList.add('hidden');
+    }
+});
+
+function addExistingContact(contactId) {
+    const relationshipType = 'secondary'; // Default
+    
+    fetch(`/sales/api/clients/${clientId}/contacts/add/`, {
+        method: 'POST',
+        body: JSON.stringify({
+            contact_id: contactId,
+            relationship_type: relationshipType
+        }),
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Contact added successfully!', 'success');
+            addContactToDisplay(data.contact);
+            document.getElementById('searchContacts').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+        } else {
+            showToast(data.error || 'Error adding contact', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error adding contact', 'error');
+    });
+}
+
+function removeContact(relationshipId) {
+    if (!confirm('Are you sure you want to remove this contact?')) {
+        return;
+    }
+    
+    fetch(`/sales/api/clients/${clientId}/contacts/${relationshipId}/remove/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Contact removed successfully!', 'success');
+            document.querySelector(`[data-relationship-id="${relationshipId}"]`).remove();
+        } else {
+            showToast(data.error || 'Error removing contact', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Error removing contact', 'error');
+    });
+}
+
+function addContactToDisplay(contact) {
+    const relationshipId = Date.now(); // Temporary ID
+    
+    // Add to kanban view
+    const kanbanCard = document.createElement('div');
+    kanbanCard.className = 'contact-card p-4';
+    kanbanCard.setAttribute('data-relationship-id', relationshipId);
+    kanbanCard.innerHTML = `
+        <div class="flex justify-between items-start mb-3">
+            <div class="flex-1">
+                <h4 class="font-medium text-gray-900 dark:text-white">${contact.name}</h4>
+                ${contact.position ? `<p class="text-sm text-gray-500 dark:text-gray-400">${contact.position}</p>` : ''}
+            </div>
+            <span class="relationship-badge relationship-${contact.relationship_type}">
+                ${getRelationshipTypeDisplay(contact.relationship_type)}
+            </span>
+        </div>
+        
+        <div class="space-y-2 mb-4">
+            ${contact.email ? `
+            <div class="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"></path>
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"></path>
+                </svg>
+                ${contact.email}
+            </div>
+            ` : ''}
+            
+            ${contact.phone ? `
+            <div class="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path>
+                </svg>
+                ${contact.phone}
+            </div>
+            ` : ''}
+        </div>
+        
+        <div class="flex justify-end">
+            <button onclick="removeContact(${relationshipId})" 
+                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                Remove
+            </button>
+        </div>
+    `;
+    
+    // Remove empty state if exists
+    const emptyState = document.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+    
+    document.getElementById('kanbanContainer').appendChild(kanbanCard);
+    
+    // Add to list view
+    const listItem = document.createElement('div');
+    listItem.className = 'contact-list-item';
+    listItem.setAttribute('data-relationship-id', relationshipId);
+    listItem.innerHTML = `
+        <div class="flex items-center space-x-4">
+            <div class="flex-1">
+                <h4 class="font-medium text-gray-900 dark:text-white">${contact.name}</h4>
+                ${contact.position ? `<p class="text-sm text-gray-500 dark:text-gray-400">${contact.position}</p>` : ''}
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                ${contact.email ? `<span class="text-sm text-gray-600 dark:text-gray-300">${contact.email}</span>` : ''}
+                ${contact.phone ? `<span class="text-sm text-gray-600 dark:text-gray-300">${contact.phone}</span>` : ''}
+                <span class="relationship-badge relationship-${contact.relationship_type}">
+                    ${getRelationshipTypeDisplay(contact.relationship_type)}
+                </span>
+            </div>
+            
+            <button onclick="removeContact(${relationshipId})" 
+                    class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm font-medium">
+                Remove
+            </button>
+        </div>
+    `;
+    
+    document.getElementById('listContainer').appendChild(listItem);
+}
+
+function getRelationshipTypeDisplay(type) {
+    const types = {
+        'primary': 'Primary Contact',
+        'secondary': 'Secondary Contact',
+        'billing': 'Billing Contact',
+        'technical': 'Technical Contact',
+        'decision_maker': 'Decision Maker',
+        'representative': 'Representative',
+        'other': 'Other'
+    };
+    return types[type] || type;
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    
+    toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg mb-2 transform transition-all duration-300 translate-x-full`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+        toast.classList.remove('translate-x-full');
+    }, 100);
+    
+    // Animate out and remove
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => {
+            container.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function previousStep() {
+    // Navigate to previous step
+    window.location.href = `/sales/clients/wizard/step3/${clientId}/`;
+}
+
+function nextStep() {
+    // Navigate to next step
+    window.location.href = `/sales/clients/wizard/step5/${clientId}/`;
+}
+</script>
+{% endblock %} 

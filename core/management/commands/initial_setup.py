@@ -87,46 +87,54 @@ class Command(BaseCommand):
         
         try:
             with transaction.atomic():
-                # 1. Aplicar migraciones
-                if not options['skip_migrations']:
-                    self.apply_migrations()
+                # 1. Crear roles base
+                self.create_base_roles()
+
+                # 2. Sincronizar usuarios con Firebase
+                self.sync_firebase_users()
+
+                # 3. Verificar existencia de usuario administrador
+                from core.models import UsuarioExtendido, Rol
+                admin_role = Rol.objects.filter(nombre__iexact="administrador").first()
+                admin_exists = False
+                if admin_role:
+                    admin_exists = UsuarioExtendido.objects.filter(roles=admin_role).exists()
                 
-                # 2. Crear empresa y sucursal por defecto
-                empresa, branch = self.setup_company_and_branch(options)
-                
-                # 3. Poblar datos geográficos
-                self.populate_geographic_data()
-                
+                if not admin_exists:
+                    self.stdout.write(self.style.WARNING('⚠️  No existe usuario administrador. Ejecutando creación de usuario...'))
+                    call_command('crear_usuario')
+                    self.stdout.write(self.style.SUCCESS('✅ Usuario creado. Asignando roles predeterminados...'))
+                    call_command('asignar_roles_predeterminados')
+                else:
+                    self.stdout.write(self.style.SUCCESS('✅ Usuario administrador encontrado. Asignando roles predeterminados...'))
+                    call_command('asignar_roles_predeterminados')
+
                 # 4. Sincronizar permisos
                 self.sync_permissions()
-                
-                # 5. Crear roles base
-                self.create_base_roles()
-                
-                # 6. Sincronizar usuarios con Firebase
-                if not options['skip_firebase_sync']:
-                    self.sync_firebase_users()
-                
-                # 7. Asignar roles predeterminados
-                self.assign_default_roles()
-                
-                # 8. Configurar módulos del sistema
+
+                # 4b. Inicializar permisos y grupo administraNET
+                self.init_adminet_permissions()
+
+                # 5. Crear empresa y sucursal por defecto (usando create_default_empresa)
+                empresa_nombre = options.get('empresa_nombre')
+                branch_nombre = options.get('branch_nombre')
+                if not empresa_nombre:
+                    empresa_nombre = input('Nombre de la empresa: ').strip() or 'Empresa Principal'
+                if not branch_nombre:
+                    branch_nombre = input('Nombre de la sucursal principal: ').strip() or 'Sucursal Principal'
+                empresa_identificador = options.get('empresa_identificador') or 'EMP-001'
+                branch_codigo = options.get('branch_codigo') or 'BRANCH-001'
+                call_command(
+                    'create_default_empresa',
+                    empresa_nombre=empresa_nombre,
+                    empresa_identificador=empresa_identificador,
+                    branch_nombre=branch_nombre,
+                    branch_codigo=branch_codigo
+                )
+
+                # 6. Inicializar módulos del sistema
                 self.setup_system_modules()
-                
-                # 9. Configurar contabilidad
-                if not options['skip_accounting']:
-                    self.setup_accounting(empresa, options)
-                
-                # 10. Configurar métodos de pago
-                if not options['skip_payment_methods']:
-                    self.setup_payment_methods(empresa, branch)
-                
-                # 11. Asignar sucursales a administradores
-                self.assign_branches_to_admins()
-                
-                # 12. Verificar integridad del sistema
-                self.verify_system_integrity()
-                
+
             self.stdout.write(self.style.SUCCESS('\n✅ Puesta en marcha completada exitosamente!'))
             self.print_summary()
             
@@ -415,3 +423,10 @@ class Command(BaseCommand):
         self.stdout.write('   3. Configurar integraciones externas')
         self.stdout.write('   4. Realizar pruebas del sistema')
         self.stdout.write('   5. Configurar respaldos automáticos') 
+
+    def init_adminet_permissions(self):
+        """Inicializar permisos y grupo administraNET"""
+        self.stdout.write('🔐 Inicializando permisos y grupo administraNET...')
+        from django.core.management import call_command
+        call_command('init_adminet_permissions', verbosity=0)
+        self.stdout.write(self.style.SUCCESS('  ✅ Permisos y grupo administraNET inicializados')) 

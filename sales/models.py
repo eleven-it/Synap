@@ -9,7 +9,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.core.cache import cache
 import re
 from core.mixins import ContactableMixin
-from core.models import BusinessEntity
+from core.models import BusinessEntity, Country, State, Empresa, UsuarioExtendido
 
 # --- CONSTANTES DE ESTADOS ---
 class SalesOrderStates:
@@ -152,6 +152,12 @@ class Client(BusinessEntity):
     Hereda de BusinessEntity para funcionalidad común
     """
     
+    # Campo interno para integración administraNET
+    id_administraNET = models.IntegerField(
+        null=True, blank=True, db_index=True, unique=True, editable=False,
+        help_text='ID original de administraNET para sincronización'
+    )
+    
     # Tipo de cliente
     type = models.CharField(
         max_length=16,
@@ -184,6 +190,16 @@ class Client(BusinessEntity):
     
     # Información fiscal específica
     fiscal_conditions = models.CharField(_("Fiscal Conditions"), max_length=100, blank=True, null=True)
+    
+    # Responsabilidad fiscal
+    fiscal_responsibility = models.ForeignKey(
+        'core.FiscalResponsibility',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_('Responsabilidad Fiscal'),
+        help_text=_('Tipo de responsabilidad fiscal del cliente')
+    )
     
     # Configuración de ventas
     default_price_list = models.ForeignKey('PriceList', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Default Price List"))
@@ -226,6 +242,12 @@ class Client(BusinessEntity):
     is_prospect = models.BooleanField(default=False, verbose_name=_('Is Prospect'))
     is_vip = models.BooleanField(default=False, verbose_name=_('VIP Customer'))
     
+    country = models.CharField(_('Country'), max_length=100, blank=True, null=True)
+    state = models.CharField(_('State/Province'), max_length=100, blank=True, null=True)
+    
+    country_temp = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, related_name='+', verbose_name=_('Country (temp)'))
+    state_temp = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True, related_name='+', verbose_name=_('State/Province (temp)'))
+    
     class Meta:
         verbose_name = _('Client')
         verbose_name_plural = _('Clients')
@@ -239,6 +261,28 @@ class Client(BusinessEntity):
     
     def __str__(self):
         return f"{self.code} - {self.name}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generar código si no existe
+        if not self.code:
+            self.code = self.generate_client_code()
+        super().save(*args, **kwargs)
+    
+    def generate_client_code(self):
+        """Genera un código único para el cliente siguiendo el formato CLI-XXXXX, incremental global"""
+        from django.db.models import Max
+        last_code = Client.objects.filter(code__startswith='CLI-').aggregate(
+            max_code=Max('code')
+        )['max_code']
+        if last_code:
+            try:
+                last_number = int(last_code.split('-')[-1])
+                new_number = last_number + 1
+            except (ValueError, IndexError):
+                new_number = 1
+        else:
+            new_number = 1
+        return f'CLI-{new_number}'
     
     def clean(self):
         """Validaciones específicas del cliente"""
@@ -342,18 +386,31 @@ class PriceListItem(models.Model):
 
 # --- CONDICIONES DE PAGO ---
 class PaymentTerm(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='payment_terms')
+    code = models.CharField(max_length=32)
     name = models.CharField(max_length=128)
+    type = models.CharField(max_length=16, choices=[('standard', 'Estándar'), ('installment', 'Cuotas'), ('custom', 'Personalizada')], default='standard')
+    payment_days = models.IntegerField(default=0, help_text="Días totales de vencimiento")
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(UsuarioExtendido, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_by = models.ForeignKey(UsuarioExtendido, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('empresa', 'code')
+        ordering = ['empresa', 'name']
 
     def __str__(self):
-        return self.name
+        return f"{self.code} - {self.name}"
 
 class PaymentTermLine(models.Model):
     payment_term = models.ForeignKey(PaymentTerm, on_delete=models.CASCADE, related_name='lines')
-    percent = models.DecimalField(max_digits=5, decimal_places=2)
-    days = models.IntegerField()
     sequence = models.IntegerField(default=1)
+    days = models.IntegerField()
+    percent = models.DecimalField(max_digits=5, decimal_places=2)
+    description = models.CharField(max_length=128, blank=True, null=True)
 
 # --- SALES ORDER Y LÍNEAS ---
 class SalesOrder(models.Model):
@@ -923,7 +980,7 @@ class POSSale(models.Model):
     state = models.CharField(_("State"), max_length=16, choices=POSSALE_STATES, default='draft')
     
     # Relaciones con empresa y sucursal (multiempresa/multisucursal)
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
     branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
     
     # Sesión y operador
@@ -1039,7 +1096,7 @@ class POSSaleLine(models.Model):
     product_variant = models.ForeignKey('inventory.ProductVariant', on_delete=models.PROTECT, verbose_name=_("Product"))
     
     # Relaciones con empresa y sucursal (multiempresa/multisucursal)
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
     branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
     
     # Cantidad y precio
@@ -1110,7 +1167,7 @@ class POSPayment(models.Model):
     sale = models.ForeignKey(POSSale, on_delete=models.CASCADE, related_name='payments', verbose_name=_("Sale"))
     
     # Relaciones con empresa y sucursal (multiempresa/multisucursal)
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
     branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
     
     payment_method = models.CharField(_("Payment Method"), max_length=20, choices=PAYMENT_METHODS)
@@ -1189,7 +1246,7 @@ class POSPromotion(models.Model):
     promotion_type = models.CharField(_("Promotion Type"), max_length=20, choices=PROMOTION_TYPES)
     
     # Relaciones con empresa y sucursal (multiempresa/multisucursal)
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
+    empresa = models.ForeignKey(Empresa, on_delete=models.PROTECT, verbose_name=_("Company"), null=True, blank=True)
     branch = models.ForeignKey('core.Branch', on_delete=models.PROTECT, verbose_name=_("Branch"), null=True, blank=True)
     
     # Configuración
@@ -1352,14 +1409,14 @@ class PaymentMethod(models.Model):
     supported_countries = models.JSONField(_("Supported Countries"), default=list, blank=True, help_text=_("List of supported country codes"))
     
     # Relaciones multiempresa/multisucursal
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, verbose_name=_("Company"))
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, verbose_name=_("Company"))
     branches = models.ManyToManyField('core.Branch', blank=True, verbose_name=_("Branches"), help_text=_("Branches where this payment method is available"))
     
     # Auditoría
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey('core.UsuarioExtendido', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_payment_methods')
-    updated_by = models.ForeignKey('core.UsuarioExtendido', on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_payment_methods')
+    created_by = models.ForeignKey(UsuarioExtendido, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_payment_methods')
+    updated_by = models.ForeignKey(UsuarioExtendido, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_payment_methods')
     
     class Meta:
         verbose_name = _('Payment Method')
@@ -1478,7 +1535,7 @@ class PaymentProcessor(models.Model):
     config = models.JSONField(_("Configuration"), default=dict, blank=True)
     
     # Relaciones
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, verbose_name=_("Company"))
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, verbose_name=_("Company"))
     
     # Auditoría
     created_at = models.DateTimeField(auto_now_add=True)

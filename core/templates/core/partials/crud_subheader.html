@@ -1,0 +1,84 @@
+{% comment %}
+Parcial reutilizable para subheader de CRUDs Synap
+Parámetros esperados en el contexto:
+- title: Título del CRUD (ej: 'Clientes')
+- search_placeholder: Placeholder del input de búsqueda
+- action_url: URL del botón principal
+- action_label: Texto del botón principal
+- action_icon: SVG opcional para el botón
+- show_toggle: Mostrar toggle lista/kanban (True/False)
+- show_counter: Mostrar contador (True/False)
+- counter_text: Texto para el contador (ej: 'clientes')
+- slot_filtros: HTML opcional para filtros adicionales
+- alpine_scope: nombre del scope Alpine.js (por defecto 'crudSubheader')
+
+Requiere que el contexto Alpine.js tenga:
+- searchQuery
+- filterFunction (opcional)
+- filteredItems (array)
+- allItems (array)
+- viewMode ("kanban" o "list") si show_toggle
+
+Ejemplo de uso:
+{% include 'core/partials/crud_subheader.html' with title='Clientes' search_placeholder='Buscar clientes...' action_url='/sales/clients/wizard/' action_label='Nuevo Cliente' show_toggle=True show_counter=True counter_text='clientes' %}
+{% endcomment %}
+
+<div class="bg-white dark:bg-gray-800 fixed top-16 left-0 w-full z-30">
+    <div class="max-w-7xl mx-auto">
+        <div class="flex flex-col md:flex-row md:items-center py-2 gap-2 w-full">
+            <!-- Título -->
+            <div class="flex items-center flex-shrink-0" style="min-width: 0;">
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap m-0 p-0">
+                    {{ title }}
+                </h1>
+            </div>
+            <!-- Búsqueda, toggle, contador, filtros -->
+            <div class="flex-1 flex items-center justify-center min-w-0 gap-4">
+                {% if search_placeholder %}
+                <div class="relative w-full max-w-xs md:max-w-sm lg:max-w-md" style="min-width: 180px; max-width: 320px;">
+                    <input 
+                        type="text" 
+                        x-model="searchQuery" 
+                        @input.debounce.300ms="filterFunction ? filterFunction() : null"
+                        :placeholder="'{{ search_placeholder|default:'Buscar...' }}'"
+                        class="block w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded-md leading-5 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    >
+                    <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                        <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                {% endif %}
+                {% if show_toggle %}
+                <!-- Toggle de vista lista/kanban -->
+                <div class="flex items-center gap-1 ml-2">
+                    <button @click="viewMode = 'kanban'" :class="viewMode === 'kanban' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'" class="p-1 rounded transition" title="Kanban view">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="13" width="7" height="7" rx="1.5"/><rect x="3" y="13" width="7" height="7" rx="1.5"/></svg>
+                    </button>
+                    <button @click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'" class="p-1 rounded transition" title="List view">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="2" rx="1"/><rect x="4" y="11" width="16" height="2" rx="1"/><rect x="4" y="16" width="16" height="2" rx="1"/></svg>
+                    </button>
+                </div>
+                {% endif %}
+                {% if show_counter %}
+                <span class="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="`${filteredItems.length} / ${allItems.length} {{ counter_text }}`"></span>
+                {% endif %}
+                {% if slot_filtros %}{{ slot_filtros|safe }}{% endif %}
+            </div>
+            <!-- Acción principal -->
+            <div class="flex items-center flex-shrink-0" style="min-width: 0;">
+                <a href="{{ action_url }}"
+                   class="flex items-center space-x-2 text-sm px-4 py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow hover:from-orange-500 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 transition">
+                    {% if action_icon %}{{ action_icon|safe }}{% else %}
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    {% endif %}
+                    <span>{{ action_label }}</span>
+                </a>
+            </div>
+        </div>
+        {% if slot_chips %}{{ slot_chips|safe }}{% endif %}
+    </div>
+</div> 

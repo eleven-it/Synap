@@ -1,0 +1,600 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Plantilla de Toggle de Integración AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <!-- CSRF Token -->
+    {% csrf_token %}
+    
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 font-sans">{% trans "Integration Toggle" %}</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 font-sans">{% trans "Activate or deactivate the administraNET integration" %}</p>
+        </div>
+        
+        <!-- Estado de la integración -->
+        <div class="flex flex-wrap gap-3">
+            {% if integration_status.is_active %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Active" %}
+                </span>
+            {% else %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Inactive" %}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Panel principal de control -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Control principal -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Integration Control" %}</h2>
+                
+                <!-- Estado actual -->
+                <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 mb-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Current Status" %}</h3>
+                        <div id="current-status-indicator" class="w-4 h-4 rounded-full {% if integration_status.is_active %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Integration" %}:</span>
+                            <span class="{% if integration_status.is_active %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %} font-semibold">
+                                {% if integration_status.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Last Sync" %}:</span>
+                            <span class="text-gray-900 dark:text-gray-100">
+                                {% if integration_status.last_sync %}
+                                    {{ integration_status.last_sync|date:'Y-m-d H:i' }}
+                                {% else %}
+                                    {% trans "Never" %}
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Sync Interval" %}:</span>
+                            <span class="text-gray-900 dark:text-gray-100">{{ integration_status.sync_interval }} {% trans "minutes" %}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Logging" %}:</span>
+                            <span class="{% if integration_status.enable_logging %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {% if integration_status.enable_logging %}{% trans "Enabled" %}{% else %}{% trans "Disabled" %}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Botones de control -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% if integration_status.is_active %}
+                        <!-- Botón de desactivación -->
+                        <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
+                            <h3 class="text-sm font-semibold text-red-900 dark:text-red-100 mb-2 font-sans">{% trans "Deactivate Integration" %}</h3>
+                            <p class="text-xs text-red-700 dark:text-red-300 mb-3">{% trans "Stop synchronization and disable the integration" %}</p>
+                            <button type="button" onclick="toggleIntegration('deactivate')" 
+                                    class="w-full py-3 px-4 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 transition-all shadow-sm">
+                                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path>
+                                </svg>
+                                {% trans "Deactivate" %}
+                            </button>
+                        </div>
+                        
+                        <!-- Botón de desactivación forzada -->
+                        <div class="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <h3 class="text-sm font-semibold text-orange-900 dark:text-orange-100 mb-2 font-sans">{% trans "Force Deactivate" %}</h3>
+                            <p class="text-xs text-orange-700 dark:text-orange-300 mb-3">{% trans "Force deactivation even if syncs are running" %}</p>
+                            <button type="button" onclick="forceToggle('deactivate')" 
+                                    class="w-full py-3 px-4 bg-orange-600 text-white text-sm font-semibold rounded-lg hover:bg-orange-700 transition-all shadow-sm">
+                                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                                {% trans "Force Deactivate" %}
+                            </button>
+                        </div>
+                    {% else %}
+                        <!-- Botón de activación -->
+                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                            <h3 class="text-sm font-semibold text-green-900 dark:text-green-100 mb-2 font-sans">{% trans "Activate Integration" %}</h3>
+                            <p class="text-xs text-green-700 dark:text-green-300 mb-3">{% trans "Start synchronization and enable the integration" %}</p>
+                            <button type="button" onclick="toggleIntegration('activate')" 
+                                    class="w-full py-3 px-4 bg-green-600 text-white text-sm font-semibold rounded-lg hover:bg-green-700 transition-all shadow-sm">
+                                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                {% trans "Activate" %}
+                            </button>
+                        </div>
+                        
+                        <!-- Botón de activación forzada -->
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2 font-sans">{% trans "Force Activate" %}</h3>
+                            <p class="text-xs text-blue-700 dark:text-blue-300 mb-3">{% trans "Force activation without connection test" %}</p>
+                            <button type="button" onclick="forceToggle('activate')" 
+                                    class="w-full py-3 px-4 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all shadow-sm">
+                                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                                {% trans "Force Activate" %}
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Estadísticas de sincronización -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Sync Statistics" %}</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Total Syncs" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ sync_stats.total_syncs }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                                <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Successful" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ sync_stats.successful_syncs }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                                <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Failed" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ sync_stats.failed_syncs }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                                <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Success Rate" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ sync_stats.success_rate }}%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico de rendimiento -->
+                <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 font-sans">{% trans "Performance Overview" %}</h3>
+                    <div class="flex items-center justify-between text-xs">
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-green-500 rounded"></div>
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Success" %}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-red-500 rounded"></div>
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Failed" %}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-3 h-3 bg-blue-500 rounded"></div>
+                            <span class="text-gray-600 dark:text-gray-400">{% trans "Running" %}</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 h-4 bg-gray-200 dark:bg-neutral-600 rounded-full overflow-hidden">
+                        {% if sync_stats.total_syncs > 0 %}
+                            <div class="h-full bg-green-500" style="width: {{ sync_stats.successful_syncs|div:sync_stats.total_syncs|mul:100 }}%"></div>
+                            <div class="h-full bg-red-500 -mt-4" style="width: {{ sync_stats.failed_syncs|div:sync_stats.total_syncs|mul:100 }}%; margin-left: {{ sync_stats.successful_syncs|div:sync_stats.total_syncs|mul:100 }}%"></div>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">{% trans "Last" %} {{ sync_stats.period_days }} {% trans "days" %}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar con información y acciones -->
+        <div class="space-y-6">
+            <!-- Estado del sistema -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "System Status" %}</h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Database Connection" %}</span>
+                        <div id="system-db-status" class="w-3 h-3 rounded-full {% if system_status.database_connected %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Sync Service" %}</span>
+                        <div id="system-sync-status" class="w-3 h-3 rounded-full {% if system_status.sync_service_running %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Logging Active" %}</span>
+                        <div id="system-log-status" class="w-3 h-3 rounded-full {% if system_status.logging_active %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Configuration" %}</span>
+                        <div id="system-config-status" class="w-3 h-3 rounded-full {% if system_status.config_exists %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    </div>
+                </div>
+                
+                <button type="button" onclick="refreshSystemStatus()" 
+                        class="w-full mt-4 py-2 px-3 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-700 transition-all">
+                    {% trans "Refresh Status" %}
+                </button>
+            </div>
+
+            <!-- Historial de cambios -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Status History" %}</h3>
+                
+                <div class="space-y-3">
+                    {% for change in status_history %}
+                    <div class="bg-white dark:bg-neutral-700 p-3 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-gray-900 dark:text-gray-100 font-sans">
+                                {% if change.action == 'activated' %}{% trans "Activated" %}{% else %}{% trans "Deactivated" %}{% endif %}
+                            </span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ change.timestamp }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-600 dark:text-gray-400">{{ change.user }}</span>
+                            <div class="w-2 h-2 rounded-full {% if change.action == 'activated' %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ change.reason }}</p>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4 text-gray-500 dark:text-gray-400">
+                        <p class="text-xs">{% trans "No status changes recorded" %}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Quick Actions" %}</h3>
+                
+                <div class="space-y-3">
+                    <button type="button" onclick="refreshStatus()" 
+                            class="w-full py-2 px-3 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        {% trans "Refresh Status" %}
+                    </button>
+                    
+                    <button type="button" onclick="exportStatusReport()" 
+                            class="w-full py-2 px-3 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        {% trans "Export Report" %}
+                    </button>
+                    
+                    <button type="button" onclick="showConfirmationDialog()" 
+                            class="w-full py-2 px-3 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        {% trans "Emergency Stop" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmación -->
+<div id="confirmation-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+    <div class="bg-white dark:bg-neutral-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Confirm Action" %}</h3>
+        <p id="confirmation-message" class="text-sm text-gray-600 dark:text-gray-400 mb-6"></p>
+        <div class="flex gap-3">
+            <button type="button" id="confirm-yes" 
+                    class="flex-1 py-2 px-4 bg-red-600 text-white text-sm font-semibold rounded hover:bg-red-700 transition-all">
+                {% trans "Yes, Continue" %}
+            </button>
+            <button type="button" onclick="hideConfirmationDialog()" 
+                    class="flex-1 py-2 px-4 bg-gray-600 text-white text-sm font-semibold rounded hover:bg-gray-700 transition-all">
+                {% trans "Cancel" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+// Variables globales
+let currentAction = null;
+let isProcessing = false;
+
+// Función para mostrar toast
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    toast.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg text-sm font-sans animate-slide-in`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('animate-slide-out');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Función para actualizar indicador de estado
+function updateStatusIndicator(isActive) {
+    const indicator = document.getElementById('current-status-indicator');
+    if (indicator) {
+        indicator.className = `w-4 h-4 rounded-full ${isActive ? 'bg-green-500' : 'bg-red-500'}`;
+    }
+}
+
+// Función para toggle de integración
+async function toggleIntegration(action) {
+    if (isProcessing) {
+        showToast('{% trans "Operation in progress" %}', 'warning');
+        return;
+    }
+    
+    const confirmMessage = action === 'activate' 
+        ? '{% trans "Are you sure you want to activate the integration?" %}'
+        : '{% trans "Are you sure you want to deactivate the integration?" %}';
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    isProcessing = true;
+    currentAction = action;
+    
+    try {
+        const response = await fetch('', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: `action=${action}`
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            updateStatusIndicator(result.new_status);
+            
+            // Recargar página después de un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast(result.message, 'error');
+            
+            // Mostrar detalles adicionales si están disponibles
+            if (result.connection_error) {
+                showToast('{% trans "Connection test failed. Check your configuration." %}', 'warning');
+            }
+        }
+        
+    } catch (error) {
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Toggle error:', error);
+    } finally {
+        isProcessing = false;
+        currentAction = null;
+    }
+}
+
+// Función para force toggle
+async function forceToggle(action) {
+    if (isProcessing) {
+        showToast('{% trans "Operation in progress" %}', 'warning');
+        return;
+    }
+    
+    const confirmMessage = action === 'activate' 
+        ? '{% trans "Are you sure you want to force activate the integration? This will skip connection tests." %}'
+        : '{% trans "Are you sure you want to force deactivate the integration? This will stop all running syncs." %}';
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    isProcessing = true;
+    currentAction = `force_${action}`;
+    
+    try {
+        const response = await fetch('{% url "adminet:force_toggle" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: `action=${action}`
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(result.message, 'success');
+            updateStatusIndicator(result.new_status);
+            
+            // Recargar página después de un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast(result.message, 'error');
+        }
+        
+    } catch (error) {
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Force toggle error:', error);
+    } finally {
+        isProcessing = false;
+        currentAction = null;
+    }
+}
+
+// Función para refrescar estado del sistema
+async function refreshSystemStatus() {
+    try {
+        const response = await fetch('{% url "adminet:adminet_status" %}');
+        const data = await response.json();
+        
+        // Actualizar indicadores de estado
+        document.getElementById('system-db-status').className = `w-3 h-3 rounded-full ${data.database_connected ? 'bg-green-500' : 'bg-red-500'}`;
+        document.getElementById('system-sync-status').className = `w-3 h-3 rounded-full ${data.sync_service_running ? 'bg-green-500' : 'bg-red-500'}`;
+        document.getElementById('system-log-status').className = `w-3 h-3 rounded-full ${data.logging_active ? 'bg-green-500' : 'bg-red-500'}`;
+        
+        showToast('{% trans "System status updated" %}', 'success');
+    } catch (error) {
+        showToast('{% trans "Error checking system status" %}', 'error');
+    }
+}
+
+// Función para refrescar estado de integración
+async function refreshStatus() {
+    try {
+        const response = await fetch('{% url "adminet:integration_status" %}');
+        const result = await response.json();
+        
+        if (result.success) {
+            updateStatusIndicator(result.status.is_active);
+            showToast('{% trans "Integration status updated" %}', 'success');
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (error) {
+        showToast('{% trans "Error refreshing status" %}', 'error');
+    }
+}
+
+// Función para exportar reporte
+function exportStatusReport() {
+    const report = `Integration Status Report\n`;
+    report += `Generated: ${new Date().toLocaleString()}\n\n`;
+    report += `Current Status: ${document.getElementById('current-status-indicator').classList.contains('bg-green-500') ? 'Active' : 'Inactive'}\n`;
+    report += `Last Sync: ${document.querySelector('[data-last-sync]')?.textContent || 'Never'}\n`;
+    report += `Sync Interval: ${document.querySelector('[data-sync-interval]')?.textContent || '30 minutes'}\n`;
+    
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'integration_status_report.txt';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showToast('{% trans "Report exported successfully" %}', 'success');
+}
+
+// Funciones para modal de confirmación
+function showConfirmationDialog() {
+    const modal = document.getElementById('confirmation-modal');
+    const message = document.getElementById('confirmation-message');
+    const confirmBtn = document.getElementById('confirm-yes');
+    
+    message.textContent = '{% trans "This will immediately stop all synchronization processes. Are you sure?" %}';
+    confirmBtn.onclick = () => {
+        forceToggle('deactivate');
+        hideConfirmationDialog();
+    };
+    
+    modal.classList.remove('hidden');
+}
+
+function hideConfirmationDialog() {
+    const modal = document.getElementById('confirmation-modal');
+    modal.classList.add('hidden');
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar estado del sistema al cargar
+    refreshSystemStatus();
+    
+    // Auto-refresh cada 60 segundos
+    setInterval(refreshSystemStatus, 60000);
+});
+</script>
+
+<style>
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-out {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-out {
+    animation: slide-out 0.3s ease-in;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+{% endblock %} 

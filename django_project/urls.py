@@ -38,6 +38,8 @@ urlpatterns.extend([
     path('reports/', include('reports.urls', namespace='reports')),
     path('sales/', include('sales.urls', namespace='sales')),
     path('api/sales/', include('sales.api.urls')),
+    path('core/api/', include('core.api.urls', namespace='core_api')),
+    path('administraNET_integration/', include('administraNET_integration.urls', namespace='administraNET_integration')),
 ])
 
 # URLs de módulos dinámicos
@@ -49,9 +51,7 @@ except ImportError:
     # Fallback: URLs estáticas si el sistema de módulos no está disponible
     urlpatterns.extend([
         path("inventory/", include("inventory.urls", namespace="inventory")),    
-        path("clientes/", include("clientes.urls", namespace="clientes")),
-        path('tiendanube/', include('tiendanube.urls', namespace='tiendanube')),
-        path('sales/', include('sales.urls', namespace='sales')),
+        path("sales/", include("sales.urls", namespace="sales")),
         path('api/sales/', include('sales.api.urls')),
         path('purchases/', include('purchases.urls', namespace='purchases')),
         path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),

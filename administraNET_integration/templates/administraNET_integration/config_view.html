@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Configuración completa de integración AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 p-6 space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white font-sans">{% trans "AdministraNET Integration Configuration" %}</h1>
+                <p class="text-sm text-gray-600 dark:text-gray-300 font-sans mt-1">{% trans "Configure connection parameters, synchronization settings, and advanced options for the AdministraNET integration." %}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full {% if config.is_active %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    <span class="text-xs font-medium {% if config.is_active %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if config.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="mb-4 p-3 rounded-lg {% if message.tags == 'success' %}bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200{% elif message.tags == 'error' %}bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200{% else %}bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200{% endif %} text-sm font-sans">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Configuración de Conexión -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"/>
+            </svg>
+            {% trans "Database Connection" %}
+        </h2>
+        
+        <form id="connection-form" class="space-y-4" method="post">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="host" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Host / IP Address" %}</label>
+                    <input type="text" id="host" name="host" value="{{ config.host|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="192.168.1.100 o localhost">
+                </div>
+                <div>
+                    <label for="port" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Port" %}</label>
+                    <input type="number" id="port" name="port" value="{{ config.port|default:'3306' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="3306" min="1" max="65535">
+                </div>
+                <div>
+                    <label for="database_name" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Database Name" %}</label>
+                    <input type="text" id="database_name" name="database_name" value="{{ config.database_name|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="administraNET_prod">
+                </div>
+                <div>
+                    <label for="user" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Username" %}</label>
+                    <input type="text" id="user" name="user" value="{{ config.username|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="admin_user">
+                </div>
+                <div class="md:col-span-2">
+                    <label for="password" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Password" %}</label>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" value="{{ config.password|default:'' }}" 
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans pr-10" 
+                               placeholder="••••••••">
+                        <button type="button" id="toggle-password" tabindex="-1" 
+                                class="absolute inset-y-0 right-0 px-2 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none">
+                            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+                <button type="submit" class="px-6 py-2 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 font-sans">
+                    {% trans "Save Connection" %}
+                </button>
+                <button type="button" id="test-connection" class="px-6 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                    {% trans "Test Connection" %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Configuración de Sincronización -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            {% trans "Synchronization Settings" %}
+        </h2>
+        
+        <form id="sync-form" class="space-y-4" method="post">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="is_active" class="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">
+                        <input type="checkbox" id="is_active" name="is_active" {% if config.is_active %}checked{% endif %} 
+                               class="rounded border-gray-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-400">
+                        {% trans "Enable Integration" %}
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Activate or deactivate the entire integration" %}</p>
+                </div>
+                <div>
+                    <label for="sync_interval" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Sync Interval (minutes)" %}</label>
+                    <input type="number" id="sync_interval" name="sync_interval" value="{{ config.sync_interval|default:'30' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           min="1" max="1440">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "How often to run automatic synchronization (1-1440 minutes)" %}</p>
+                </div>
+            </div>
+            
+            <div class="pt-4">
+                <button type="submit" class="px-6 py-2 rounded-md bg-gradient-to-r from-green-400 to-green-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-green-400 font-sans">
+                    {% trans "Save Sync Settings" %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Configuración de Logs -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            {% trans "Logging Configuration" %}
+        </h2>
+        
+        <form id="logging-form" class="space-y-4" method="post">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="enable_logging" class="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">
+                        <input type="checkbox" id="enable_logging" name="enable_logging" {% if config.enable_logging %}checked{% endif %} 
+                               class="rounded border-gray-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-400">
+                        {% trans "Enable Logging" %}
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Record all synchronization operations" %}</p>
+                </div>
+                <div>
+                    <label for="log_level" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Log Level" %}</label>
+                    <select id="log_level" name="log_level" 
+                            class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans">
+                        <option value="DEBUG" {% if config.log_level == 'DEBUG' %}selected{% endif %}>Debug</option>
+                        <option value="INFO" {% if config.log_level == 'INFO' %}selected{% endif %}>Info</option>
+                        <option value="WARNING" {% if config.log_level == 'WARNING' %}selected{% endif %}>Warning</option>
+                        <option value="ERROR" {% if config.log_level == 'ERROR' %}selected{% endif %}>Error</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Level of detail for log entries" %}</p>
+                </div>
+            </div>
+            
+            <div class="pt-4">
+                <button type="submit" class="px-6 py-2 rounded-md bg-gradient-to-r from-purple-400 to-purple-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-purple-400 font-sans">
+                    {% trans "Save Logging Settings" %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Información del Sistema -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {% trans "System Information" %}
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Last Sync" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ config.last_sync|date:'Y-m-d H:i'|default:'Never' }}
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Created" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ config.created_at|date:'Y-m-d H:i'|default:'-' }}
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Last Updated" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ config.updated_at|date:'Y-m-d H:i'|default:'-' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones Rápidas -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            {% trans "Quick Actions" %}
+        </h2>
+        
+        <div class="flex flex-wrap gap-3">
+            <a href="{% url 'adminet:adminet_manual_sync' %}" class="px-4 py-2 rounded-md bg-gradient-to-r from-indigo-400 to-indigo-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all font-sans">
+                {% trans "Manual Sync" %}
+            </a>
+            <a href="{% url 'adminet:adminet_sync_history' %}" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                {% trans "View Sync History" %}
+            </a>
+            <a href="{% url 'adminet:adminet_mappings' %}" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                {% trans "Manage Mappings" %}
+            </a>
+            <a href="{% url 'adminet:adminet_validation' %}" class="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                {% trans "Run Validations" %}
+            </a>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+</div>
+
+<script>
+// Toggle password visibility
+const toggleBtn = document.getElementById('toggle-password');
+const passwordInput = document.getElementById('password');
+const eyeIcon = document.getElementById('eye-icon');
+let visible = false;
+
+toggleBtn.addEventListener('click', function() {
+    visible = !visible;
+    passwordInput.type = visible ? 'text' : 'password';
+    eyeIcon.innerHTML = visible
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.528A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.956 9.956 0 01-4.442 5.568M15 12a3 3 0 11-6 0 3 3 0 016 0z" />'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
+});
+
+// Test connection functionality
+document.getElementById('test-connection').addEventListener('click', function() {
+    const button = this;
+    const originalText = button.textContent;
+    button.textContent = '{% trans "Testing..." %}';
+    button.disabled = true;
+    
+    // Simulate connection test (replace with actual AJAX call)
+    setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+        showToast('{% trans "Connection test completed. Check logs for details." %}', 'info');
+    }, 2000);
+});
+
+// Form submission feedback
+document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', function() {
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = '{% trans "Saving..." %}';
+        submitBtn.disabled = true;
+        
+        setTimeout(() => {
+            submitBtn.textContent = originalText;
+            submitBtn.disabled = false;
+        }, 1000);
+    });
+});
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `p-4 rounded-lg shadow-lg text-sm font-sans mb-2 transition-all duration-300 transform translate-x-full ${
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'error' ? 'bg-red-500 text-white' :
+        type === 'warning' ? 'bg-yellow-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    toast.textContent = message;
+    
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
+    
+    setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Microinteractions
+const links = document.querySelectorAll('a');
+links.forEach(link => {
+    link.addEventListener('mousedown', () => link.classList.add('scale-95'));
+    link.addEventListener('mouseup', () => link.classList.remove('scale-95'));
+    link.addEventListener('mouseleave', () => link.classList.remove('scale-95'));
+});
+</script>
+{% endblock %} 

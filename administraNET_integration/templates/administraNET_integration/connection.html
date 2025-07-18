@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Configuración de conexión AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-4xl mx-auto mt-8 p-6 space-y-6">
+    
+    <!-- Header -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white font-sans">{% trans "Connection Settings" %}</h1>
+                <p class="text-sm text-gray-600 dark:text-gray-300 font-sans mt-1">{% trans "Configure the database connection parameters for AdministraNET integration." %}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-3 h-3 rounded-full {% if connection_status %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                    <span class="text-xs font-medium {% if connection_status %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if connection_status %}{% trans "Connected" %}{% else %}{% trans "Disconnected" %}{% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="mb-4 p-3 rounded-lg {% if message.tags == 'success' %}bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200{% elif message.tags == 'error' %}bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200{% else %}bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200{% endif %} text-sm font-sans">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Estado de Conexión -->
+    {% if config %}
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            {% trans "Connection Status" %}
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Database" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ database_info.name|default:'-' }}
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Version" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ version_info|default:'-' }}
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Connection String" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium text-xs truncate" title="{{ config.get_connection_string }}">
+                    {{ config.get_connection_string }}
+                </div>
+            </div>
+        </div>
+        
+        {% if connection_error %}
+        <div class="mt-4 p-3 rounded-lg bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 text-sm font-sans">
+            <div class="font-semibold">{% trans "Connection Error:" %}</div>
+            <div class="mt-1">{{ connection_error }}</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Formulario de Configuración -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            {% trans "Database Configuration" %}
+        </h2>
+        
+        <form id="connection-form" class="space-y-4" method="post">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="host" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Host / IP Address" %}</label>
+                    <input type="text" id="host" name="host" value="{{ config.host|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="192.168.1.100 o localhost" required>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Server hostname or IP address" %}</p>
+                </div>
+                <div>
+                    <label for="port" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Port" %}</label>
+                    <input type="number" id="port" name="port" value="{{ config.port|default:'3306' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="3306" min="1" max="65535" required>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "MySQL port (default: 3306)" %}</p>
+                </div>
+                <div>
+                    <label for="database_name" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Database Name" %}</label>
+                    <input type="text" id="database_name" name="database_name" value="{{ config.database_name|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="administraNET_prod" required>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Name of the AdministraNET database" %}</p>
+                </div>
+                <div>
+                    <label for="user" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Username" %}</label>
+                    <input type="text" id="user" name="user" value="{{ config.username|default:'' }}" 
+                           class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans" 
+                           placeholder="admin_user" required>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "MySQL username" %}</p>
+                </div>
+                <div class="md:col-span-2">
+                    <label for="password" class="block text-xs font-medium text-gray-700 dark:text-gray-300 font-sans">{% trans "Password" %}</label>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" value="{{ config.password|default:'' }}" 
+                               class="mt-1 block w-full rounded-md border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 text-xs focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans pr-10" 
+                               placeholder="••••••••">
+                        <button type="button" id="toggle-password" tabindex="-1" 
+                                class="absolute inset-y-0 right-0 px-2 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none">
+                            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Leave empty to keep current password" %}</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+                <button type="submit" class="px-6 py-2 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 font-sans">
+                    {% trans "Save Configuration" %}
+                </button>
+                <button type="button" id="test-connection" class="px-6 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all font-sans">
+                    {% trans "Test Connection" %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Información del Sistema -->
+    <div class="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 font-sans flex items-center gap-2">
+            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+            {% trans "System Information" %}
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Total Configurations" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">{{ total_configs|default:0 }}</div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Active Configurations" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">{{ active_configs|default:0 }}</div>
+            </div>
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3">
+                <div class="text-gray-500 dark:text-gray-400">{% trans "Last Sync" %}</div>
+                <div class="text-gray-900 dark:text-white font-medium">
+                    {{ config.last_sync|date:'Y-m-d H:i'|default:'Never' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+</div>
+
+<script>
+// Toggle password visibility
+const toggleBtn = document.getElementById('toggle-password');
+const passwordInput = document.getElementById('password');
+const eyeIcon = document.getElementById('eye-icon');
+let visible = false;
+
+toggleBtn.addEventListener('click', function() {
+    visible = !visible;
+    passwordInput.type = visible ? 'text' : 'password';
+    eyeIcon.innerHTML = visible
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.528A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.956 9.956 0 01-4.442 5.568M15 12a3 3 0 11-6 0 3 3 0 016 0z" />'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />';
+});
+
+// Test connection functionality
+document.getElementById('test-connection').addEventListener('click', function() {
+    const button = this;
+    const originalText = button.textContent;
+    button.textContent = '{% trans "Testing..." %}';
+    button.disabled = true;
+    
+    // Real AJAX call to test connection
+    fetch('{% url "adminet:adminet_connection" %}test-connection/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('{% trans "Connection successful!" %} Database: ' + (data.database_info?.name || 'Unknown'), 'success');
+        } else {
+            showToast('{% trans "Connection failed:" %} ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        showToast('{% trans "Error testing connection:" %} ' + error.message, 'error');
+    })
+    .finally(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+    });
+});
+
+// Form submission feedback
+document.getElementById('connection-form').addEventListener('submit', function(e) {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = '{% trans "Saving..." %}';
+    submitBtn.disabled = true;
+    
+    // Re-enable after a delay (form will redirect)
+    setTimeout(() => {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }, 2000);
+});
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `p-4 rounded-lg shadow-lg text-sm font-sans mb-2 transition-all duration-300 transform translate-x-full ${
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'error' ? 'bg-red-500 text-white' :
+        type === 'warning' ? 'bg-yellow-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    toast.textContent = message;
+    
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
+    
+    setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+    setTimeout(() => {
+        toast.classList.add('translate-x-full');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 4000);
+}
+
+// Microinteractions
+const links = document.querySelectorAll('a');
+links.forEach(link => {
+    link.addEventListener('mousedown', () => link.classList.add('scale-95'));
+    link.addEventListener('mouseup', () => link.classList.remove('scale-95'));
+    link.addEventListener('mouseleave', () => link.classList.remove('scale-95'));
+});
+
+// Auto-refresh connection status every 30 seconds
+setInterval(() => {
+    fetch('{% url "adminet:adminet_connection" %}connection-info/')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update connection status indicator
+            const statusIndicator = document.querySelector('.w-3.h-3.rounded-full');
+            const statusText = document.querySelector('.text-xs.font-medium');
+            
+            if (data.is_active) {
+                statusIndicator.classList.remove('bg-red-500');
+                statusIndicator.classList.add('bg-green-500');
+                statusText.classList.remove('text-red-600', 'dark:text-red-400');
+                statusText.classList.add('text-green-600', 'dark:text-green-400');
+                statusText.textContent = '{% trans "Connected" %}';
+            } else {
+                statusIndicator.classList.remove('bg-green-500');
+                statusIndicator.classList.add('bg-red-500');
+                statusText.classList.remove('text-green-600', 'dark:text-green-400');
+                statusText.classList.add('text-red-600', 'dark:text-red-400');
+                statusText.textContent = '{% trans "Disconnected" %}';
+            }
+        }
+    })
+    .catch(error => {
+        console.log('Error refreshing connection status:', error);
+    });
+}, 30000);
+</script>
+{% endblock %} 

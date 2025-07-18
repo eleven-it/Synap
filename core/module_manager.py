@@ -113,8 +113,8 @@ class ModuleManager:
                     config.last_activated = timezone.now()
                     config.save()
                 
-                # Agregar a módulos activos
-                self.active_modules.add(module_name)
+                # Recargar módulos activos desde la base de datos
+                self.load_modules()
                 
                 # Ejecutar hooks de activación
                 self._execute_module_hooks(module_name, 'module_activated', user=user)
@@ -140,8 +140,8 @@ class ModuleManager:
                 config.last_deactivated = timezone.now()
                 config.save()
                 
-                # Remover de módulos activos
-                self.active_modules.discard(module_name)
+                # Recargar módulos activos desde la base de datos
+                self.load_modules()
                 
                 # Ejecutar hooks de desactivación
                 self._execute_module_hooks(module_name, 'module_deactivated', user=user)

@@ -94,7 +94,7 @@ def menu_context(request):
     user = getattr(request, "user", None)
     
     # Obtener apps visibles para el usuario
-    apps_menu = apps_visibles_para_usuario(user)
+    apps_menu = apps_visibles_para_usuario(user, request)
     
     # Determinar qué sidebar mostrar según la app actual
     current_app_id = None
@@ -112,6 +112,8 @@ def menu_context(request):
             current_app_id = 'sales'
         elif app_name == 'accounting':
             current_app_id = 'accounting'
+        elif app_name == 'administraNET_integration':
+            current_app_id = 'administraNET_integration'
     
     # Obtener submenús de la app actual con permisos procesados
     current_sidebar_items = []
@@ -123,7 +125,7 @@ def menu_context(request):
             permisos_usuario = set()
         
         # Obtener submenús filtrados por permisos
-        current_sidebar_items = obtener_submenus_por_app(current_app_id, permisos_usuario)
+        current_sidebar_items = obtener_submenus_por_app(current_app_id, permisos_usuario, request)
 
     return {
         "apps_menu": apps_menu,
@@ -185,4 +187,22 @@ def purchases_menu_context(request):
 
     return {
         "purchases_sidebar_items": purchases_sidebar_items
+    }
+
+def administraNET_integration_menu_context(request):
+    """
+    Procesa el contexto para el menú lateral del módulo de administraNET_integration.
+    Mantenido para compatibilidad.
+    """
+    user = getattr(request, "user", None)
+    administraNET_integration_sidebar_items = []
+    
+    if user and getattr(user, "is_authenticated", False):
+        if request.resolver_match and request.resolver_match.app_name == 'administraNET_integration':
+            app = obtener_app_por_id("administraNET_integration")
+            if app and app.get("submenus"):
+                administraNET_integration_sidebar_items = app["submenus"]
+
+    return {
+        "administraNET_integration_sidebar_items": administraNET_integration_sidebar_items
     }

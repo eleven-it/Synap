@@ -150,22 +150,6 @@
         <!-- Contenido principal -->
         <main class="app-content flex-1 transition-all duration-300 no-sidebar">
             <div class="p-8">
-                <!-- Breadcrumb dinámico -->
-                {% if current_app_id %}
-                <nav class="breadcrumb">
-                    <div class="breadcrumb-item">
-                        <a href="/" class="hover:text-gray-900 transition-colors">{% trans "Home" %}</a>
-                    </div>
-                    {% for app in apps_menu %}
-                        {% if app.id == current_app_id %}
-                            <div class="breadcrumb-item active">
-                                <span class="material-icons text-sm">{{ app.icono_svg|safe }}</span>
-                                {{ app.nombre }}
-                            </div>
-                        {% endif %}
-                    {% endfor %}
-                </nav>
-                {% endif %}
                 <!-- Logo de empresa eliminado -->
                 <!-- Contenido de la página -->
                 {% block content %}{% endblock content %}

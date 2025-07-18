@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Detalle de log de sincronización AdministraNET <-> Synap #}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <!-- Header con navegación -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+            <div class="flex items-center gap-3 mb-2">
+                <a href="{% url 'adminet:adminet_sync_history' %}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                </a>
+                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Sync Log Detail" %}</h1>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 font-sans">{% trans "Detailed information about this synchronization operation" %}</p>
+        </div>
+        
+        <!-- Estado y acciones rápidas -->
+        <div class="flex flex-wrap gap-3">
+            {% if log.status == 'SUCCESS' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Success" %}
+                </span>
+            {% elif log.status == 'ERROR' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Error" %}
+                </span>
+            {% elif log.status == 'RUNNING' %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                    <svg class="w-4 h-4 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    {% trans "Running" %}
+                </span>
+            {% endif %}
+            
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                {{ log.get_sync_type_display }}
+            </span>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="mb-6 p-4 rounded-lg bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-sm font-sans border border-green-200 dark:border-green-800">
+                <div class="flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    {{ message }}
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Información principal -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Información básica -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Basic Information" %}</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-sans">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Started At" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">{{ log.started_at|date:'Y-m-d H:i:s' }}</div>
+                    </div>
+                    {% if log.completed_at %}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Completed At" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">{{ log.completed_at|date:'Y-m-d H:i:s' }}</div>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Duration" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">
+                            {% if log.duration %}
+                                {{ log.duration|floatformat:1 }} {% trans "seconds" %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Sync Type" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">{{ log.get_sync_type_display }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estadísticas de registros -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Record Statistics" %}</h2>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ log.records_processed|default:0 }}</div>
+                        <div class="text-xs text-blue-600 dark:text-blue-400 font-medium">{% trans "Processed" %}</div>
+                    </div>
+                    <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ log.records_created|default:0 }}</div>
+                        <div class="text-xs text-green-600 dark:text-green-400 font-medium">{% trans "Created" %}</div>
+                    </div>
+                    <div class="text-center p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                        <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{{ log.records_updated|default:0 }}</div>
+                        <div class="text-xs text-yellow-600 dark:text-yellow-400 font-medium">{% trans "Updated" %}</div>
+                    </div>
+                    <div class="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <div class="text-2xl font-bold text-red-600 dark:text-red-400">{{ log.records_deleted|default:0 }}</div>
+                        <div class="text-xs text-red-600 dark:text-red-400 font-medium">{% trans "Deleted" %}</div>
+                    </div>
+                    <div class="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div class="text-2xl font-bold text-gray-600 dark:text-gray-400">{{ log.records_failed|default:0 }}</div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400 font-medium">{% trans "Failed" %}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detalles y errores -->
+            {% if log.details or log.error_message %}
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Details & Errors" %}</h2>
+                
+                {% if log.error_message %}
+                <div class="mb-4">
+                    <label class="block text-xs font-medium text-red-700 dark:text-red-300 mb-2">{% trans "Error Message" %}</label>
+                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                        <pre class="text-sm text-red-800 dark:text-red-200 font-mono whitespace-pre-wrap">{{ log.error_message }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if log.details %}
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Additional Details" %}</label>
+                    <div class="bg-gray-100 dark:bg-neutral-700 border border-gray-200 dark:border-neutral-600 rounded-lg p-4">
+                        <pre class="text-sm text-gray-800 dark:text-gray-200 font-mono whitespace-pre-wrap">{{ log.details|pprint }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar con acciones -->
+        <div class="space-y-6">
+            <!-- Acciones rápidas -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Quick Actions" %}</h3>
+                <div class="space-y-3">
+                    {% if log.status == 'ERROR' %}
+                    <form method="post" class="w-full">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="retry">
+                        <button type="submit" class="w-full py-3 px-4 rounded-md bg-gradient-to-r from-orange-400 to-orange-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-orange-400">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            {% trans "Retry Sync" %}
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    <form method="post" class="w-full">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="download">
+                        <button type="submit" class="w-full py-3 px-4 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            {% trans "Download Log" %}
+                        </button>
+                    </form>
+                    
+                    <a href="{% url 'adminet:adminet_sync_history' %}" class="block w-full py-3 px-4 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                        {% trans "Back to History" %}
+                    </a>
+                </div>
+            </div>
+
+            <!-- Información del sistema -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "System Info" %}</h3>
+                <div class="space-y-3 text-sm font-sans">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Log ID" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100 font-mono">{{ log.pk }}</div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Status" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">{{ log.get_status_display }}</div>
+                    </div>
+                    {% if log.details %}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Details Count" %}</label>
+                        <div class="text-gray-900 dark:text-gray-100">{{ log.details|length }} {% trans "items" %}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Progreso visual (si está ejecutándose) -->
+            {% if log.status == 'RUNNING' %}
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Progress" %}</h3>
+                <div class="space-y-3">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 60%"></div>
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400 text-center">
+                        {% trans "Synchronization in progress..." %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh si está ejecutándose
+    {% if log.status == 'RUNNING' %}
+    setTimeout(() => {
+        window.location.reload();
+    }, 10000); // Refresh cada 10 segundos
+    {% endif %}
+
+    // Efectos hover en botones
+    const buttons = document.querySelectorAll('button, a');
+    buttons.forEach(button => {
+        button.addEventListener('mousedown', () => button.classList.add('scale-95'));
+        button.addEventListener('mouseup', () => button.classList.remove('scale-95'));
+        button.addEventListener('mouseleave', () => button.classList.remove('scale-95'));
+    });
+
+    // Confirmación para retry
+    const retryForm = document.querySelector('form[action*="retry"]');
+    if (retryForm) {
+        retryForm.addEventListener('submit', function(e) {
+            if (!confirm('{% trans "Are you sure you want to retry this synchronization?" %}')) {
+                e.preventDefault();
+            }
+        });
+    }
+});
+
+// Función para mostrar toasts
+function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-lg shadow-lg text-sm font-sans transform transition-all duration-300 ${
+        type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+    }`;
+    toast.innerText = message;
+    
+    const container = document.getElementById('toast-container');
+    container.appendChild(toast);
+    
+    // Animación de entrada
+    setTimeout(() => toast.classList.add('translate-x-0'), 100);
+    
+    // Auto-remover después de 3 segundos
+    setTimeout(() => {
+        toast.classList.add('translate-x-full', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+</script>
+
+<style>
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+#toast-container > div {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+#toast-container > div.translate-x-0 {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+}
+
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+</style>
+{% endblock %} 

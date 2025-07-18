@@ -80,6 +80,16 @@ class ModuleToggleView(LoginRequiredMixin, PermissionRequiredMixin, View):
     def post(self, request, module_name):
         action = request.POST.get('action')
         
+        # Verificar si es un módulo core
+        try:
+            module = ModuleConfig.objects.get(name=module_name)
+            if module.is_core and action == 'deactivate':
+                messages.error(request, _('Core modules cannot be deactivated as they are essential for system operation.'))
+                return redirect(f"{reverse('core:module_list')}?reload=true")
+        except ModuleConfig.DoesNotExist:
+            messages.error(request, _('Module not found.'))
+            return redirect(f"{reverse('core:module_list')}?reload=true")
+        
         if action == 'activate':
             success, message = module_manager.activate_module(module_name, user=request.user)
             if success:
@@ -97,7 +107,8 @@ class ModuleToggleView(LoginRequiredMixin, PermissionRequiredMixin, View):
         else:
             messages.error(request, _('Invalid action specified.'))
         
-        return redirect('core:module_list')
+        # Redirigir con parámetro para forzar recarga completa
+        return redirect(f"{reverse('core:module_list')}?reload=true")
 
 
 class ModuleBulkActionView(LoginRequiredMixin, PermissionRequiredMixin, View):
@@ -110,7 +121,7 @@ class ModuleBulkActionView(LoginRequiredMixin, PermissionRequiredMixin, View):
         
         if not modules:
             messages.error(request, _('No modules selected.'))
-            return redirect('core:module_list')
+            return redirect(f"{reverse('core:module_list')}?reload=true")
         
         if action == 'activate':
             self.activate_modules(request, modules)
@@ -119,7 +130,7 @@ class ModuleBulkActionView(LoginRequiredMixin, PermissionRequiredMixin, View):
         else:
             messages.error(request, _('Invalid action specified.'))
         
-        return redirect('core:module_list')
+        return redirect(f"{reverse('core:module_list')}?reload=true")
     
     def activate_modules(self, request, modules):
         """Activa múltiples módulos"""
@@ -146,12 +157,35 @@ class ModuleBulkActionView(LoginRequiredMixin, PermissionRequiredMixin, View):
         """Desactiva múltiples módulos"""
         success_count = 0
         error_count = 0
+        core_modules_blocked = []
+        
+        # Filtrar módulos core que no se pueden desactivar
+        for module_name in modules:
+            try:
+                module = ModuleConfig.objects.get(name=module_name)
+                if module.is_core:
+                    core_modules_blocked.append(module_name)
+                    continue
+            except ModuleConfig.DoesNotExist:
+                continue
+        
+        # Mostrar mensaje si hay módulos core bloqueados
+        if core_modules_blocked:
+            core_names = ', '.join(core_modules_blocked)
+            messages.warning(request, f'Core modules cannot be deactivated: {core_names}')
+        
+        # Filtrar solo módulos no-core para desactivar
+        non_core_modules = [m for m in modules if m not in core_modules_blocked]
+        
+        if not non_core_modules:
+            messages.error(request, _('No non-core modules selected for deactivation.'))
+            return
         
         # Obtener orden de desactivación
-        deactivation_order = dependency_manager.get_deactivation_order(modules)
+        deactivation_order = dependency_manager.get_deactivation_order(non_core_modules)
         
         for module in deactivation_order:
-            if module in modules:
+            if module in non_core_modules:
                 success, message = module_manager.deactivate_module(module, user=request.user)
                 if success:
                     success_count += 1
@@ -352,7 +386,8 @@ class ModuleAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
         success, message = module_manager.activate_module(module_name, user=request.user)
         return JsonResponse({
             'success': success,
-            'message': message
+            'message': message,
+            'reload_page': True  # Indicar que se debe recargar la página
         })
     
     def deactivate_module(self, request):
@@ -364,5 +399,6 @@ class ModuleAPIView(LoginRequiredMixin, PermissionRequiredMixin, View):
         success, message = module_manager.deactivate_module(module_name, user=request.user)
         return JsonResponse({
             'success': success,
-            'message': message
+            'message': message,
+            'reload_page': True  # Indicar que se debe recargar la página
         }) 

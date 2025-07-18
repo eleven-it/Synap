@@ -15,7 +15,12 @@ from django.contrib.auth import get_user_model
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_project.settings')
 django.setup()
 
+import sys, os
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) )
+
 from core.models import Empresa, UsuarioExtendido
+
+print("[DEBUG] Script iniciado. cwd:", __import__('os').getcwd())
 
 def test_empresa_crud_refactorizado():
     """Prueba completa del CRUD de empresas refactorizado"""
@@ -25,15 +30,18 @@ def test_empresa_crud_refactorizado():
     # Crear cliente de prueba
     client = Client()
     
-    # Crear usuario de prueba usando el modelo correcto
-    user = UsuarioExtendido.objects.create(
-        email='test@example.com',
-        password='testpass123',
-        is_active=True
-    )
-    
-    # Autenticar usuario
+    # Usar usuario existente para login
+    login_email = 'paredes.seba@gmail.com'
+    print("Buscando usuario en la base de datos...")
+    try:
+        user = UsuarioExtendido.objects.get(email=login_email)
+        print("Usuario encontrado, autenticando...")
+    except UsuarioExtendido.DoesNotExist:
+        print(f"❌ Usuario '{login_email}' no encontrado. Abortando test.")
+        return
+    # Autenticar usuario existente
     client.force_login(user)
+    print("Usuario autenticado correctamente.")
     
     print("\n📋 1. PRUEBA DE LISTADO DE EMPRESAS")
     print("-" * 40)
@@ -51,7 +59,7 @@ def test_empresa_crud_refactorizado():
     print("-" * 40)
     
     # Probar vista de creación
-    response = client.get('/core/empresa/crear/')
+    response = client.get('/core/empresas/crear/')
     if response.status_code == 200:
         print("✅ Formulario de creación: OK")
         print(f"   - Status: {response.status_code}")
@@ -59,14 +67,41 @@ def test_empresa_crud_refactorizado():
     else:
         print(f"❌ Formulario de creación: ERROR - Status {response.status_code}")
     
-    # Crear empresa de prueba
+    # Buscar IDs reales para los campos obligatorios
+    from core.models import State, FiscalResponsibility, Country
+    from core.models.currency import Currency
+    
+    country = None
+    state = None
+    fiscal_responsibility = None
+    currency = None
+    
+    # Buscar país Argentina
+    try:
+        country = Country.objects.filter(name__icontains='argentina').first()
+    except Exception:
+        country = None
+    # Buscar provincia Mendoza (puedes cambiar por otra si lo deseas)
+    state = State.objects.filter(name__icontains='mendoza').first()
+    # Buscar tipo de responsabilidad Responsable Inscripto
+    fiscal_responsibility = FiscalResponsibility.objects.filter(name__icontains='inscripto').first()
+    # Buscar moneda Peso
+    currency = Currency.objects.filter(name__icontains='peso').first()
+    
+    print(f"IDs usados: country={country.id if country else None}, state={state.id if state else None}, fiscal_responsibility={fiscal_responsibility.id if fiscal_responsibility else None}, currency={currency.id if currency else None}")
+    
     empresa_data = {
         'nombre': 'Empresa Test Refactorizada',
+        'razon_social': 'Empresa Test Refactorizada S.A.',
         'identificador_fiscal': '20-12345678-9',
         'email': 'test@empresa.com',
         'telefono': '+54 11 1234-5678',
         'direccion': 'Calle Test 123',
-        'pais': 'Argentina',
+        'country_name': country.name if country else '',  # Para el input visible (autocomplete)
+        'country_id': str(country.id) if country else '',      # Para el input oculto (ID FK)
+        'state_id': str(state.id) if state else '',
+        'fiscal_responsibility_id': str(fiscal_responsibility.id) if fiscal_responsibility else '',
+        'currency_id': str(currency.id) if currency else '',
         'ciudad': 'Buenos Aires',
         'activa': True
     }
@@ -80,16 +115,27 @@ def test_empresa_crud_refactorizado():
     )
     empresa_data['logo'] = logo_file
     
-    response = client.post('/core/empresa/crear/', empresa_data, follow=True)
+    # Eliminar empresa de prueba si ya existe
+    Empresa.objects.filter(nombre='Empresa Test Refactorizada').delete()
+
+    response = client.post('/core/empresas/crear/', empresa_data, follow=True)
     if response.status_code == 200:
         print("✅ Creación de empresa: OK")
         print(f"   - Status: {response.status_code}")
         
-        # Verificar que la empresa se creó
+        # Verificar que la empresa se creó y tiene el país asignado correctamente
         empresa = Empresa.objects.filter(nombre='Empresa Test Refactorizada').first()
         if empresa:
             print(f"   - Empresa creada: {empresa.nombre} (ID: {empresa.id})")
             print(f"   - Logo guardado: {empresa.logo.name if empresa.logo else 'No'}")
+            print(f"   - País (FK): {empresa.country.name if empresa.country else 'None'} (ID: {empresa.country.id if empresa.country else 'None'})")
+            print(f"   - País legacy: {empresa.pais}")
+            print(f"   - Provincia: {empresa.state}")
+            print(f"   - Tipo de responsabilidad: {empresa.fiscal_responsibility}")
+            print(f"   - Moneda: {empresa.currency}")
+            print(f"   - Razón social: {empresa.razon_social}")
+            assert empresa.country is not None, "El país no fue asignado correctamente (country FK es None)"
+            assert empresa.country.id == country.id, f"El país asignado no coincide: esperado {country.id}, obtenido {empresa.country.id}"
         else:
             print("   - ⚠️  Empresa no encontrada en BD")
     else:
@@ -102,7 +148,7 @@ def test_empresa_crud_refactorizado():
     empresa = Empresa.objects.filter(nombre='Empresa Test Refactorizada').first()
     if empresa:
         # Probar vista de edición
-        response = client.get(f'/core/empresa/{empresa.id}/editar/')
+        response = client.get(f'/core/empresas/{empresa.id}/editar/')
         if response.status_code == 200:
             print("✅ Formulario de edición: OK")
             print(f"   - Status: {response.status_code}")
@@ -110,19 +156,23 @@ def test_empresa_crud_refactorizado():
         else:
             print(f"❌ Formulario de edición: ERROR - Status {response.status_code}")
         
-        # Editar empresa
+        # Editar empresa (cambiar país a otro si existe)
+        otro_pais = Country.objects.exclude(id=country.id).first()
         empresa_data_edit = {
             'nombre': 'Empresa Test Refactorizada - Editada',
             'identificador_fiscal': '20-87654321-0',
             'email': 'editado@empresa.com',
             'telefono': '+54 11 8765-4321',
             'direccion': 'Calle Editada 456',
-            'pais': 'Argentina',
+            'country_name': otro_pais.name if otro_pais else country.name,
+            'country_id': str(otro_pais.id) if otro_pais else str(country.id),
+            'state_id': str(state.id) if state else '',
+            'fiscal_responsibility_id': str(fiscal_responsibility.id) if fiscal_responsibility else '',
+            'currency_id': str(currency.id) if currency else '',
             'ciudad': 'Córdoba',
             'activa': True
         }
-        
-        response = client.post(f'/core/empresa/{empresa.id}/editar/', empresa_data_edit, follow=True)
+        response = client.post(f'/core/empresas/{empresa.id}/editar/', empresa_data_edit, follow=True)
         if response.status_code == 200:
             print("✅ Edición de empresa: OK")
             print(f"   - Status: {response.status_code}")
@@ -131,6 +181,9 @@ def test_empresa_crud_refactorizado():
             empresa.refresh_from_db()
             print(f"   - Nombre actualizado: {empresa.nombre}")
             print(f"   - Email actualizado: {empresa.email}")
+            print(f"   - País actualizado (FK): {empresa.country.name if empresa.country else 'None'} (ID: {empresa.country.id if empresa.country else 'None'})")
+            assert empresa.country is not None, "El país no fue asignado correctamente en edición (country FK es None)"
+            assert empresa.country.id == (otro_pais.id if otro_pais else country.id), f"El país asignado en edición no coincide: esperado {otro_pais.id if otro_pais else country.id}, obtenido {empresa.country.id}"
         else:
             print(f"❌ Edición de empresa: ERROR - Status {response.status_code}")
     else:
@@ -183,10 +236,14 @@ def test_empresa_crud_refactorizado():
     print("   - Diseño Figma aplicado correctamente")
     print("   - UX mejorada con animaciones y microinteracciones")
     
-    # Limpiar datos de prueba
-    if empresa:
-        empresa.delete()
-    user.delete()
+    # Limpiar datos de prueba (COMENTADO para usar base real)
+    # if empresa:
+    #     empresa.delete()
+    # user.delete() # This line was removed as per the edit hint
 
 if __name__ == "__main__":
-    test_empresa_crud_refactorizado() 
+    try:
+        test_empresa_crud_refactorizado()
+    except Exception as e:
+        import traceback
+        print("\n❌ ERROR DURANTE EL TEST:\n" + traceback.format_exc()) 

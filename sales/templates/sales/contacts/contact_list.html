@@ -195,10 +195,12 @@
                     </p>
                 </div>
                 <div class="flex space-x-3">
+                    {% comment %}
                     <a href="{% url 'sales:contact_create' %}" class="btn-primary">
                         <i class="fas fa-plus mr-2"></i>
                         {% trans "New Contact" %}
                     </a>
+                    {% endcomment %}
                 </div>
             </div>
         </div>
@@ -428,10 +430,12 @@
             <p class="empty-text">
                 {% trans "Get started by creating your first contact or adjust your search filters." %}
             </p>
+            {% comment %}
             <a href="{% url 'sales:contact_create' %}" class="btn-primary">
                 <i class="fas fa-plus mr-2"></i>
                 {% trans "Create First Contact" %}
             </a>
+            {% endcomment %}
         </div>
         {% endif %}
     </div>

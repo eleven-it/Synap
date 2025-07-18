@@ -1,0 +1,45 @@
+{% load i18n %}
+<div class="product-card bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fade-in flex flex-col">
+    <!-- Imagen del producto -->
+    <div class="h-32 w-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+        {% if product.images.first %}
+            <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}" class="object-cover h-full w-full transition-transform duration-200 hover:scale-105">
+        {% else %}
+            <span class="material-icons text-gray-400 text-5xl">image_not_supported</span>
+        {% endif %}
+    </div>
+    <!-- Info principal -->
+    <div class="flex-1 p-4 flex flex-col gap-1">
+        <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate" title="{{ product.name }}">{{ product.name }}</h3>
+            <span class="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded px-2 py-0.5">{{ product.sku }}</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Brand" %}:</span>
+            <span class="text-xs font-medium text-blue-600 dark:text-blue-300">{{ product.brand.name|default:"-" }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Unit" %}:</span>
+            <span class="text-xs font-medium text-purple-600 dark:text-purple-300">{{ product.uom.name }}</span>
+        </div>
+        <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Price" %}:</span>
+            <span class="text-sm font-bold text-green-600 dark:text-green-300">{{ product.price|floatformat:2 }} {{ product.price_currency }}</span>
+        </div>
+    </div>
+    <!-- Acciones rápidas -->
+    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            {% if perms.inventory.change_product %}
+            <a href="{% url 'inventory:product_update' product.pk %}" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-transform duration-150 hover:scale-110" title="{% trans 'Edit' %}">
+                <span class="material-icons">edit</span>
+            </a>
+            {% endif %}
+            {% if perms.inventory.delete_product %}
+            <a href="{% url 'inventory:product_delete' product.pk %}" class="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-transform duration-150 hover:scale-110" title="{% trans 'Delete' %}">
+                <span class="material-icons">delete</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div> 

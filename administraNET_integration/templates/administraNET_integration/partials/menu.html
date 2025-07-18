@@ -1,0 +1,23 @@
+{% load i18n %}
+
+<div class="w-full flex justify-center gap-6 px-10 py-8">
+  {% if administraNET_integration_menu %}
+    {% for submenu in administraNET_integration_menu %}
+      <div class="bg-white rounded-2xl shadow-md flex flex-col min-w-[220px] max-w-xs px-6 py-5 items-start border border-gray-100">
+        <span class="inline-block mb-4 px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-bold uppercase tracking-widest select-none">
+          {{ submenu.seccion }}
+        </span>
+        <div class="flex flex-col gap-2 w-full">
+          {% for item in submenu.items %}
+            <a href="{{ item.url }}" class="flex items-center gap-3 text-base text-gray-700 hover:text-indigo-600 font-medium px-2 py-2 rounded-lg transition group w-full">
+              {% if item.icon %}
+                <span class="material-icons text-lg text-gray-400 group-hover:text-indigo-500">{{ item.icon }}</span>
+              {% endif %}
+              <span class="flex-1">{{ item.label }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  {% endif %}
+</div> 

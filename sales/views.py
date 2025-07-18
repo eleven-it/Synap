@@ -14,6 +14,8 @@ from django.core.paginator import Paginator
 from django.utils.translation import gettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import (
     Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
@@ -26,10 +28,17 @@ from .api.serializers import (
     ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
     PaymentSerializer, DeliveryOrderSerializer
 )
-from core.models import Currency
-from inventory.models import ProductVariant
-from .forms import ClientForm, ClientSearchForm, PaymentMethodForm, PaymentProcessorForm
+from core.models import Currency, State, FiscalResponsibility, Country
+from inventory.models import ProductVariant, Warehouse
+from .forms import (
+    ClientWizardStep1Form, ClientWizardStep2Form, ClientWizardStep3Form,
+    ContactSearchForm, ContactRelationshipForm,
+    PaymentMethodForm, PaymentProcessorForm, POSClientSelectionForm,
+    ContactManagementForm, PaymentTermForm, PaymentTermLineForm
+)
 from core.models import UsuarioExtendido
+from django.contrib.contenttypes.models import ContentType
+from core.models import Contact, ContactRelationship
 
 
 
@@ -125,46 +134,6 @@ def client_list(request):
 
 
 @login_required
-def client_create(request):
-    """Crear nuevo cliente"""
-    if request.method == 'POST':
-        # Lógica para crear cliente
-        name = request.POST.get('name')
-        tax_id = request.POST.get('tax_id')
-        email = request.POST.get('email')
-        phone = request.POST.get('phone')
-        type = request.POST.get('type')
-        credit_limit = request.POST.get('credit_limit', 0)
-        origin = request.POST.get('origin')
-        tiendanube_customer_id = request.POST.get('tiendanube_customer_id')
-        is_active = request.POST.get('is_active') == 'on'
-        
-        try:
-            client = Client.objects.create(
-                name=name,
-                tax_id=tax_id,
-                email=email,
-                phone=phone,
-                type=type,
-                credit_limit=Decimal(credit_limit) if credit_limit else Decimal('0.00'),
-                origin=origin,
-                tiendanube_customer_id=tiendanube_customer_id,
-                is_active=is_active
-            )
-            messages.success(request, f'Cliente "{client.name}" creado correctamente.')
-            return redirect('sales:client_detail', pk=client.pk)
-        except Exception as e:
-            messages.error(request, f'Error al crear cliente: {str(e)}')
-    
-    context = {
-        'payment_terms': PaymentTerm.objects.filter(is_active=True),
-        'price_lists': PriceList.objects.filter(is_active=True),
-    }
-    
-    return render(request, 'sales/clients/client_form.html', context)
-
-
-@login_required
 def client_detail(request, pk):
     """Detalle del cliente"""
     client = get_object_or_404(Client, pk=pk)
@@ -204,39 +173,6 @@ def client_detail(request, pk):
     }
     
     return render(request, 'sales/clients/client_detail.html', context)
-
-
-@login_required
-def client_edit(request, pk):
-    """Editar cliente"""
-    client = get_object_or_404(Client, pk=pk)
-    
-    if request.method == 'POST':
-        # Lógica para actualizar cliente
-        client.name = request.POST.get('name')
-        client.tax_id = request.POST.get('tax_id')
-        client.email = request.POST.get('email')
-        client.phone = request.POST.get('phone')
-        client.type = request.POST.get('type')
-        client.credit_limit = Decimal(request.POST.get('credit_limit', 0))
-        client.origin = request.POST.get('origin')
-        client.tiendanube_customer_id = request.POST.get('tiendanube_customer_id')
-        client.is_active = request.POST.get('is_active') == 'on'
-        
-        try:
-            client.save()
-            messages.success(request, f'Cliente "{client.name}" actualizado correctamente.')
-            return redirect('sales:client_detail', pk=client.pk)
-        except Exception as e:
-            messages.error(request, f'Error al actualizar cliente: {str(e)}')
-    
-    context = {
-        'client': client,
-        'payment_terms': PaymentTerm.objects.filter(is_active=True),
-        'price_lists': PriceList.objects.filter(is_active=True),
-    }
-    
-    return render(request, 'sales/clients/client_form.html', context)
 
 
 @login_required
@@ -818,17 +754,99 @@ def price_list_item_edit(request, pk):
 def price_list_item_delete(request, pk):
     return render(request, 'sales/config/price_list_detail.html')
 
+@login_required
 def payment_term_create(request):
-    return render(request, 'sales/config/payment_terms_list.html')
+    if request.method == 'POST':
+        form = PaymentTermForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Condición de pago creada correctamente.'))
+            return redirect('sales:payment_term_list')
+    else:
+        form = PaymentTermForm()
+    return render(request, 'sales/config/payment_terms_form.html', {'form': form, 'is_create': True})
 
-def payment_term_detail(request, pk):
-    return render(request, 'sales/config/payment_terms_detail.html')
-
+@login_required
 def payment_term_edit(request, pk):
-    return render(request, 'sales/config/payment_terms_list.html')
+    payment_term = get_object_or_404(PaymentTerm, pk=pk)
+    if request.method == 'POST':
+        form = PaymentTermForm(request.POST, instance=payment_term)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Condición de pago actualizada correctamente.'))
+            return redirect('sales:payment_term_list')
+    else:
+        form = PaymentTermForm(instance=payment_term)
+    return render(request, 'sales/config/payment_terms_form.html', {'form': form, 'payment_term': payment_term, 'is_create': False})
 
+@login_required
 def payment_term_delete(request, pk):
-    return render(request, 'sales/config/payment_terms_list.html')
+    payment_term = get_object_or_404(PaymentTerm, pk=pk)
+    if request.method == 'POST':
+        payment_term.delete()
+        messages.success(request, _('Condición de pago eliminada correctamente.'))
+        return redirect('sales:payment_term_list')
+    return render(request, 'sales/config/payment_terms_confirm_delete.html', {'payment_term': payment_term})
+
+@login_required
+def payment_term_detail(request, pk):
+    payment_term = get_object_or_404(PaymentTerm, pk=pk)
+    return render(request, 'sales/config/payment_terms_detail.html', {'payment_term': payment_term})
+
+@login_required
+def payment_terms_activate(request, pk):
+    payment_term = get_object_or_404(PaymentTerm, pk=pk)
+    payment_term.is_active = True
+    payment_term.save()
+    messages.success(request, _('Condición de pago activada correctamente.'))
+    return redirect(reverse('sales:payment_term_detail', args=[pk]))
+
+@login_required
+def payment_terms_deactivate(request, pk):
+    payment_term = get_object_or_404(PaymentTerm, pk=pk)
+    payment_term.is_active = False
+    payment_term.save()
+    messages.success(request, _('Condición de pago desactivada correctamente.'))
+    return redirect(reverse('sales:payment_term_detail', args=[pk]))
+
+@login_required
+def payment_term_line_create(request, payment_term_id):
+    payment_term = get_object_or_404(PaymentTerm, pk=payment_term_id)
+    if request.method == 'POST':
+        form = PaymentTermLineForm(request.POST)
+        if form.is_valid():
+            line = form.save(commit=False)
+            line.payment_term = payment_term
+            line.save()
+            messages.success(request, _('Línea agregada correctamente.'))
+            return redirect('sales:payment_term_detail', pk=payment_term_id)
+    else:
+        form = PaymentTermLineForm()
+    return render(request, 'sales/config/payment_term_line_form.html', {'form': form, 'payment_term': payment_term, 'is_create': True})
+
+@login_required
+def payment_term_line_edit(request, pk):
+    line = get_object_or_404(PaymentTermLine, pk=pk)
+    payment_term = line.payment_term
+    if request.method == 'POST':
+        form = PaymentTermLineForm(request.POST, instance=line)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Línea actualizada correctamente.'))
+            return redirect('sales:payment_term_detail', pk=payment_term.pk)
+    else:
+        form = PaymentTermLineForm(instance=line)
+    return render(request, 'sales/config/payment_term_line_form.html', {'form': form, 'payment_term': payment_term, 'is_create': False})
+
+@login_required
+def payment_term_line_delete(request, pk):
+    line = get_object_or_404(PaymentTermLine, pk=pk)
+    payment_term = line.payment_term
+    if request.method == 'POST':
+        line.delete()
+        messages.success(request, _('Línea eliminada correctamente.'))
+        return redirect('sales:payment_term_detail', pk=payment_term.pk)
+    return render(request, 'sales/config/payment_term_line_confirm_delete.html', {'line': line, 'payment_term': payment_term})
 
 
 class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
@@ -837,7 +855,7 @@ class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     template_name = 'sales/clients/client_list.html'
     context_object_name = 'clients'
     permission_required = 'sales.view_client'
-    paginate_by = 20
+    paginate_by = 50
     
     def get_queryset(self):
         queryset = Client.objects.all()
@@ -912,6 +930,47 @@ class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         # Solo pasar los campos válidos
         context['search_form'] = ClientSearchForm(self.request.GET)
         return context
+    
+    def render_to_response(self, context, **response_kwargs):
+        """Soporte para formato JSON para búsqueda predictiva"""
+        if self.request.GET.get('format') == 'json':
+            clients_data = []
+            for client in context['clients']:
+                if hasattr(client.country, 'name'):
+                    country_name = client.country.name
+                elif isinstance(client.country, str):
+                    country_name = client.country
+                else:
+                    country_name = None
+                assigned_seller_id = getattr(client, 'assigned_seller_id', None)
+                assigned_seller_name = None
+                if hasattr(client, 'assigned_seller') and getattr(client, 'assigned_seller', None):
+                    assigned_seller_name = getattr(client.assigned_seller, 'nombre', None)
+                clients_data.append({
+                    'id': client.id,
+                    'name': client.name,
+                    'email': client.email,
+                    'phone': client.phone,
+                    'tax_id': client.tax_id,
+                    'type': client.type,
+                    'type_display': client.get_type_display(),
+                    'is_active': client.is_active,
+                    'is_customer': client.is_customer,
+                    'city': client.city,
+                    'country_name': country_name,
+                    'assigned_seller': assigned_seller_id,
+                    'assigned_seller_name': assigned_seller_name,
+                })
+            
+            return JsonResponse({
+                'clients': clients_data,
+                'total': context['total_clients'],
+                'active': context['active_clients'],
+                'customers': context['customer_clients'],
+                'suppliers': context['supplier_clients'],
+            })
+        
+        return super().render_to_response(context, **response_kwargs)
 
 
 class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
@@ -935,54 +994,6 @@ class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         context['total_invoices'] = Invoice.objects.filter(client=self.object).count()
         context['total_payments'] = Payment.objects.filter(client=self.object).count()
         return context
-
-
-class ClientCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    """Vista para crear cliente"""
-    model = Client
-    form_class = ClientForm
-    template_name = 'sales/clients/client_form.html'
-    permission_required = 'sales.add_client'
-    success_url = reverse_lazy('sales:client_list')
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['payment_terms'] = PaymentTerm.objects.filter(is_active=True)
-        context['price_lists'] = PriceList.objects.filter(is_active=True)
-        return context
-    
-    def form_valid(self, form):
-        messages.success(self.request, _('Client created successfully.'))
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, _('Error creating client. Please check the form.'))
-        return super().form_invalid(form)
-
-
-class ClientUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
-    """Vista para editar cliente"""
-    model = Client
-    form_class = ClientForm
-    template_name = 'sales/clients/client_form.html'
-    permission_required = 'sales.change_client'
-    
-    def get_success_url(self):
-        return reverse('sales:client_detail', kwargs={'pk': self.object.pk})
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['payment_terms'] = PaymentTerm.objects.filter(is_active=True)
-        context['price_lists'] = PriceList.objects.filter(is_active=True)
-        return context
-    
-    def form_valid(self, form):
-        messages.success(self.request, _('Client updated successfully.'))
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, _('Error updating client. Please check the form.'))
-        return super().form_invalid(form)
 
 
 class ClientDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
@@ -1120,37 +1131,12 @@ def autocomplete_seller(request):
     
     results = [{
         'id': seller.id,
-        'text': f"{seller.nombre} ({seller.email})",
+        'text': f"{seller.name} ({seller.email})",
         'email': seller.email
     } for seller in sellers]
     
     return JsonResponse({'results': results})
 
-
-def get_states_by_country(request):
-    """Obtener estados por país"""
-    country_id = request.GET.get('country_id')
-    
-    if not country_id:
-        return JsonResponse({'states': []})
-    
-    try:
-        from core.models import State
-        states = State.objects.filter(
-            country_id=country_id,
-            is_active=True
-        ).order_by('name')
-        
-        results = [{
-            'id': state.id,
-            'text': state.name,
-            'code': state.code
-        } for state in states]
-        
-        return JsonResponse({'states': results})
-    except Exception as e:
-        # Si hay algún error, devolver lista vacía
-        return JsonResponse({'states': []})
 
 # --- VISTAS PARA PUNTO DE VENTA (TPV) ---
 
@@ -1180,7 +1166,6 @@ from .api.serializers import (
 )
 from core.models import Currency
 from inventory.models import ProductVariant, Warehouse
-from .forms import ClientForm, ClientSearchForm
 
 
 
@@ -1495,25 +1480,147 @@ def pos_session_report(request, session_id):
 
 @login_required
 def pos_client_search(request):
-    """
-    Búsqueda de clientes para TPV
-    """
+    """Búsqueda de clientes para TPV"""
     query = request.GET.get('q', '')
+    search_type = request.GET.get('type', 'document')
     
-    if query:
-        clients = Client.objects.filter(
-            name__icontains=query,
-            is_customer=True
-        )[:10]
-    else:
-        clients = []
+    if len(query) < 2:
+        return JsonResponse({'results': []})
     
-    context = {
-        'clients': clients,
-        'query': query,
-    }
+    clients = Client.objects.filter(is_active=True)
     
-    return render(request, 'sales/pos/client_search.html', context)
+    if search_type == 'document':
+        clients = clients.filter(document_number__icontains=query)
+    elif search_type == 'name':
+        clients = clients.filter(name__icontains=query)
+    elif search_type == 'email':
+        clients = clients.filter(email__icontains=query)
+    elif search_type == 'phone':
+        clients = clients.filter(phone__icontains=query)
+    
+    results = []
+    for client in clients[:10]:  # Limitar a 10 resultados
+        results.append({
+            'id': client.id,
+            'name': client.name,
+            'document_number': client.document_number,
+            'email': client.email,
+            'phone': client.phone,
+            'type': client.type,
+            'fiscal_responsibility': client.fiscal_responsibility.name if client.fiscal_responsibility else None,
+            'display_text': f"{client.name} - {client.document_number}"
+        })
+    
+    return JsonResponse({'results': results})
+
+@login_required
+def pos_client_selection(request, sale_id):
+    """
+    Vista para selección de cliente en TPV
+    Permite seleccionar cliente existente o crear cliente ocasional
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        
+        if request.method == 'POST':
+            form = POSClientSelectionForm(request.POST)
+            if form.is_valid():
+                client_data = form.get_client_data()
+                
+                if client_data['type'] == 'existing':
+                    # Cliente existente
+                    sale.client = client_data['client']
+                    sale.is_occasional_client = False
+                    sale.occasional_client_data = None
+                else:
+                    # Cliente ocasional
+                    sale.client = None
+                    sale.is_occasional_client = True
+                    sale.occasional_client_data = client_data['client_data']
+                
+                sale.save()
+                messages.success(request, _('Cliente asignado correctamente.'))
+                return JsonResponse({'success': True, 'redirect': reverse('sales:pos_sale_detail', kwargs={'sale_id': sale.id})})
+            else:
+                return JsonResponse({'success': False, 'errors': form.errors})
+        else:
+            form = POSClientSelectionForm()
+        
+        context = {
+            'form': form,
+            'sale': sale,
+            'clients': Client.objects.filter(is_active=True).order_by('name')[:50]  # Primeros 50 para el dropdown
+        }
+        
+        return render(request, 'sales/pos/client_selection.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error al seleccionar cliente: {str(e)}')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+@login_required
+def pos_quick_client_create(request, sale_id):
+    """
+    Creación rápida de cliente desde TPV
+    """
+    try:
+        sale = get_object_or_404(POSSale, id=sale_id, session__operator=request.user)
+        
+        if request.method == 'POST':
+            # Crear cliente con datos mínimos
+            name = request.POST.get('name')
+            document_number = request.POST.get('document_number')
+            email = request.POST.get('email', '')
+            phone = request.POST.get('phone', '')
+            
+            if not name or not document_number:
+                return JsonResponse({'success': False, 'error': 'Nombre y documento son requeridos'})
+            
+            # Verificar si ya existe un cliente con ese documento
+            existing_client = Client.objects.filter(document_number=document_number).first()
+            if existing_client:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'Ya existe un cliente con ese documento',
+                    'existing_client': {
+                        'id': existing_client.id,
+                        'name': existing_client.name,
+                        'document_number': existing_client.document_number
+                    }
+                })
+            
+            # Crear cliente
+            client = Client.objects.create(
+                name=name,
+                document_number=document_number,
+                email=email,
+                phone=phone,
+                type='individual',  # Por defecto persona
+                is_active=True
+            )
+            
+            # Asignar a la venta
+            sale.client = client
+            sale.is_occasional_client = False
+            sale.occasional_client_data = None
+            sale.save()
+            
+            return JsonResponse({
+                'success': True,
+                'client': {
+                    'id': client.id,
+                    'name': client.name,
+                    'document_number': client.document_number,
+                    'email': client.email,
+                    'phone': client.phone
+                },
+                'message': f'Cliente "{client.name}" creado y asignado correctamente.'
+            })
+        
+        return JsonResponse({'success': False, 'error': 'Método no permitido'})
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 @csrf_exempt
@@ -1988,3 +2095,719 @@ def payment_processor_delete(request, pk):
     except Exception as e:
         messages.error(request, f"Error al eliminar procesador: {str(e)}")
         return redirect('sales:payment_processor_list')
+
+
+def client_contacts_step(request, client_id=None):
+    """Vista para el paso de gestión de contactos en el wizard"""
+    if request.method == 'POST':
+        form = ContactManagementForm(request.POST)
+        if form.is_valid():
+            # Obtener el cliente (si existe)
+            client = None
+            if client_id:
+                try:
+                    client = Client.objects.get(id=client_id)
+                except Client.DoesNotExist:
+                    return JsonResponse({'error': 'Cliente no encontrado'}, status=404)
+            
+            # Crear el contacto y la relación
+            try:
+                contact, relationship = form.save_contact(client)
+                return JsonResponse({
+                    'success': True,
+                    'contact': {
+                        'id': contact.id,
+                        'name': contact.display_name,
+                        'email': contact.email,
+                        'phone': contact.phone,
+                        'position': contact.position,
+                        'relationship_type': relationship.relationship_type,
+                        'relationship_id': relationship.id,
+                    }
+                })
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+        else:
+            return JsonResponse({'error': 'Datos inválidos', 'errors': form.errors}, status=400)
+    else:
+        form = ContactManagementForm()
+    
+    # Obtener contactos existentes si es edición
+    existing_contacts = []
+    if client_id:
+        try:
+            client = Client.objects.get(id=client_id)
+            existing_contacts = client.get_contacts()
+        except Client.DoesNotExist:
+            pass
+    
+    context = {
+        'form': form,
+        'existing_contacts': existing_contacts,
+        'client_id': client_id,
+    }
+    
+    return render(request, 'sales/clients/contacts_step.html', context)
+
+
+def search_contacts_api(request):
+    """API para buscar contactos existentes"""
+    query = request.GET.get('q', '')
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    contacts = Contact.objects.filter(
+        models.Q(name__icontains=query) |
+        models.Q(first_name__icontains=query) |
+        models.Q(last_name__icontains=query) |
+        models.Q(email__icontains=query) |
+        models.Q(company_name__icontains=query)
+    ).filter(is_active=True)[:10]
+    
+    results = []
+    for contact in contacts:
+        results.append({
+            'id': contact.id,
+            'name': contact.display_name,
+            'email': contact.email,
+            'phone': contact.phone,
+            'position': contact.position,
+            'company_name': contact.company_name,
+        })
+    
+    return JsonResponse({'results': results})
+
+
+def add_contact_to_client(request, client_id):
+    """API para agregar un contacto a un cliente"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        client = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        return JsonResponse({'error': 'Client not found'}, status=404)
+    
+    contact_id = request.POST.get('contact_id')
+    relationship_type = request.POST.get('relationship_type', 'secondary')
+    
+    if not contact_id:
+        return JsonResponse({'error': 'Contact ID is required'}, status=400)
+    
+    try:
+        contact = Contact.objects.get(id=contact_id)
+    except Contact.DoesNotExist:
+        return JsonResponse({'error': 'Contact not found'}, status=404)
+    
+    # Verificar que no exista ya la relación
+    if client.has_contact(contact, relationship_type):
+        return JsonResponse({'error': 'Contact already has this relationship type'}, status=400)
+    
+    # Agregar la relación
+    relationship = client.add_contact(contact, relationship_type)
+    
+    return JsonResponse({
+        'success': True,
+        'relationship_id': relationship.id,
+        'contact': {
+            'id': contact.id,
+            'name': contact.display_name,
+            'email': contact.email,
+            'phone': contact.phone,
+            'position': contact.position,
+            'relationship_type': relationship_type,
+        }
+    })
+
+
+def remove_contact_from_client(request, client_id, relationship_id):
+    """API para remover un contacto de un cliente"""
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        client = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        return JsonResponse({'error': 'Client not found'}, status=404)
+    
+    try:
+        relationship = ContactRelationship.objects.get(
+            id=relationship_id,
+            content_type=ContentType.objects.get_for_model(Client),
+            object_id=client_id
+        )
+        relationship.delete()
+        return JsonResponse({'success': True})
+    except ContactRelationship.DoesNotExist:
+        return JsonResponse({'error': 'Relationship not found'}, status=404)
+
+
+def create_contact_for_client(request, client_id):
+    """API para crear un nuevo contacto y agregarlo al cliente"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        client = Client.objects.get(id=client_id)
+    except Client.DoesNotExist:
+        return JsonResponse({'error': 'Client not found'}, status=404)
+    
+    # Crear el nuevo contacto
+    contact_data = {
+        'name': request.POST.get('name'),
+        'email': request.POST.get('email'),
+        'phone': request.POST.get('phone'),
+        'position': request.POST.get('position'),
+        'company_name': client.name if client.type == 'company' else '',
+        'empresa': client.empresa,
+    }
+    
+    # Validar datos requeridos
+    if not contact_data['name']:
+        return JsonResponse({'error': 'Contact name is required'}, status=400)
+    if not contact_data['email'] and not contact_data['phone']:
+        return JsonResponse({'error': 'Contact must have email or phone'}, status=400)
+    
+    # Crear el contacto
+    contact = Contact.objects.create(**contact_data)
+    
+    # Agregar la relación
+    relationship_type = request.POST.get('relationship_type', 'secondary')
+    relationship = client.add_contact(contact, relationship_type)
+    
+    return JsonResponse({
+        'success': True,
+        'contact': {
+            'id': contact.id,
+            'name': contact.display_name,
+            'email': contact.email,
+            'phone': contact.phone,
+            'position': contact.position,
+            'relationship_type': relationship_type,
+        }
+    })
+
+
+# --- WIZARD DE CLIENTES MULTI-STEP (NUEVO FLUJO) ---
+
+@login_required
+def client_wizard_view(request):
+    """Vista principal del wizard multi-step de creación de clientes (nuevo flujo)"""
+    if request.method == 'POST':
+        step = request.POST.get('step', '1')
+        if step == '1':
+            return process_wizard_step1(request)
+        elif step == '2':
+            return process_wizard_step2(request)
+        elif step == '3':
+            return process_wizard_step3(request)
+        elif step == '4':
+            return process_wizard_step4(request)
+        elif step == '5':
+            return process_wizard_step5(request)
+    return show_wizard_step1(request)
+
+
+def show_wizard_step1(request):
+    """Paso 1: Selección de tipo de cliente"""
+    form = ClientWizardStep1Form()
+    context = {
+        'form': form,
+        'step': 1,
+        'total_steps': 5,
+        'step_title': _('Tipo de Cliente'),
+        'step_description': _('Selecciona el tipo de cliente'),
+    }
+    return render(request, 'sales/clients/wizard/step1_client_type.html', context)
+
+
+def process_wizard_step1(request):
+    """Procesar paso 1: Solo tipo de cliente"""
+    form = ClientWizardStep1Form(request.POST)
+    if form.is_valid():
+        # Guardar solo el tipo de cliente
+        request.session['wizard_data'] = {'step1': {'client_type': form.cleaned_data['client_type']}}
+        return redirect('sales:wizard_step', step=2)
+    else:
+        context = {
+            'form': form,
+            'step': 1,
+            'total_steps': 5,
+            'step_title': _('Tipo de Cliente'),
+            'step_description': _('Selecciona el tipo de cliente'),
+        }
+        return render(request, 'sales/clients/wizard/step1_client_type.html', context)
+
+
+def show_wizard_step2(request):
+    """Paso 2: Datos principales según tipo"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    client_type = step1_data.get('client_type', 'individual')
+    
+    # Pre-llenar con datos del paso anterior si existen
+    initial_data = {'client_type': client_type}
+    if step1_data:
+        initial_data.update(step1_data)
+    
+    # Pre-llenar país y estado según la empresa activa del usuario
+    if hasattr(request.user, 'empresa_activa') and request.user.empresa_activa:
+        empresa = request.user.empresa_activa
+        if empresa.pais:
+            initial_data['country'] = empresa.pais
+        if empresa.ciudad:
+            initial_data['state'] = empresa.ciudad
+    
+    form = ClientWizardStep2Form(initial=initial_data)
+    form.request = request  # Pasar el request al formulario
+    
+    context = {
+        'form': form,
+        'step': 2,
+        'total_steps': 5,
+        'step_title': _('Datos del Cliente'),
+        'step_description': _('Completa los datos fundamentales del cliente según el tipo seleccionado.'),
+        'client_type': client_type,
+    }
+    return render(request, 'sales/clients/wizard/step2_basic_info.html', context)
+
+
+def process_wizard_step2(request):
+    """Procesar paso 2: Datos principales"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    client_type = step1_data.get('client_type', 'individual')
+    
+    # Pre-llenar con datos del paso anterior
+    initial_data = {'client_type': client_type}
+    if step1_data:
+        initial_data.update(step1_data)
+    
+    form = ClientWizardStep2Form(request.POST, initial=initial_data)
+    form.request = request  # Pasar el request al formulario
+    
+    # Debug: Imprimir información del formulario
+    print(f"POST data: {request.POST}")
+    print(f"Form is valid: {form.is_valid()}")
+    if not form.is_valid():
+        print(f"Form errors: {form.errors}")
+        print(f"Form non_field_errors: {form.non_field_errors()}")
+    
+    if form.is_valid():
+        wizard_data['step2'] = form.cleaned_data
+        request.session['wizard_data'] = wizard_data
+        print(f"Wizard data saved: {wizard_data}")
+        return redirect('sales:wizard_step', step=3)
+    else:
+        context = {
+            'form': form,
+            'step': 2,
+            'total_steps': 5,
+            'step_title': _('Datos del Cliente'),
+            'step_description': _('Completa los datos fundamentales del cliente según el tipo seleccionado.'),
+            'client_type': client_type,
+        }
+        return render(request, 'sales/clients/wizard/step2_basic_info.html', context)
+
+
+def show_wizard_step3(request):
+    """Paso 3: Configuración comercial y contacto"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    step2_data = wizard_data.get('step2', {})
+    client_type = step1_data.get('client_type', 'individual')
+    form = ClientWizardStep3Form(initial=step2_data)
+    context = {
+        'form': form,
+        'step': 3,
+        'total_steps': 5,
+        'step_title': _('Configuración Comercial y Contacto'),
+        'step_description': _('Completa la configuración comercial y datos de contacto.'),
+        'client_type': client_type,
+    }
+    return render(request, 'sales/clients/wizard/step3_contact_info.html', context)
+
+
+def process_wizard_step3(request):
+    """Procesar paso 3: Configuración comercial y contacto"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    client_type = step1_data.get('client_type', 'individual')
+    form = ClientWizardStep3Form(request.POST)
+    if form.is_valid():
+        wizard_data['step3'] = form.cleaned_data
+        request.session['wizard_data'] = wizard_data
+        return redirect('sales:wizard_step', step=4)
+    else:
+        context = {
+            'form': form,
+            'step': 3,
+            'total_steps': 5,
+            'step_title': _('Configuración Comercial y Contacto'),
+            'step_description': _('Completa la configuración comercial y datos de contacto.'),
+            'client_type': client_type,
+        }
+        return render(request, 'sales/clients/wizard/step3_contact_info.html', context)
+
+
+def show_wizard_step4(request):
+    """Paso 4: Contactos relacionados"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    client_type = step1_data.get('client_type', 'individual')
+    # Obtener contactos relacionados (si el cliente ya existe)
+    client_id = request.session.get('wizard_client_id')
+    related_contacts = []
+    if client_id:
+        try:
+            client = Client.objects.get(id=client_id)
+            related_contacts = client.get_contacts_by_type()
+        except Client.DoesNotExist:
+            pass
+    contact_form = ContactManagementForm()
+    search_form = ContactSearchForm()
+    relationship_form = ContactRelationshipForm()
+    requires_primary_contact = client_type == 'company'
+    has_primary_contact = any(
+        contact.get('relationship_type') == 'primary' 
+        for contact in related_contacts
+    )
+    context = {
+        'step': 4,
+        'total_steps': 5,
+        'step_title': _('Contactos Relacionados'),
+        'step_description': _('Agrega contactos relacionados al cliente'),
+        'client_type': client_type,
+        'contact_form': contact_form,
+        'search_form': search_form,
+        'relationship_form': relationship_form,
+        'related_contacts': related_contacts,
+        'requires_primary_contact': requires_primary_contact,
+        'has_primary_contact': has_primary_contact,
+        'can_proceed': not requires_primary_contact or has_primary_contact,
+    }
+    return render(request, 'sales/clients/wizard/step4_contacts.html', context)
+
+
+def process_wizard_step4(request):
+    """Procesar paso 4: Contactos relacionados"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    client_type = step1_data.get('client_type', 'individual')
+    requires_primary_contact = client_type == 'company'
+    if requires_primary_contact:
+        client_id = request.session.get('wizard_client_id')
+        has_primary_contact = False
+        if client_id:
+            try:
+                client = Client.objects.get(id=client_id)
+                has_primary_contact = client.get_contacts_by_type().filter(
+                    relationship_type='primary'
+                ).exists()
+            except Client.DoesNotExist:
+                pass
+        if not has_primary_contact:
+            messages.error(request, _('Las empresas deben tener al menos un contacto principal.'))
+            return redirect('sales:wizard_step', step=4)
+    return redirect('sales:wizard_step', step=5)
+
+
+def show_wizard_step5(request):
+    """Paso 5: Resumen y confirmación"""
+    wizard_data = request.session.get('wizard_data', {})
+    step1_data = wizard_data.get('step1', {})
+    step2_data = wizard_data.get('step2', {})
+    step3_data = wizard_data.get('step3', {})
+    context = {
+        'step': 5,
+        'total_steps': 5,
+        'step_title': _('Resumen y Confirmación'),
+        'step_description': _('Revisa la información y confirma la creación'),
+        'client_type': step1_data.get('client_type', 'individual'),
+        'step1_data': step1_data,
+        'step2_data': step2_data,
+        'step3_data': step3_data,
+    }
+    return render(request, 'sales/clients/wizard/step5_summary.html', context)
+
+
+def process_wizard_step5(request):
+    """Procesar paso 5: Crear cliente final"""
+    wizard_data = request.session.get('wizard_data', {})
+    if not wizard_data:
+        messages.error(request, _('No hay datos del wizard. Por favor, comienza de nuevo.'))
+        return redirect('sales:client_wizard')
+    try:
+        all_data = {}
+        for step_data in wizard_data.values():
+            all_data.update(step_data)
+        # Usar el form adecuado para crear el cliente
+        form = ClientWizardStep2Form(all_data)
+        if form.is_valid():
+            client = form.save(commit=False)
+            if hasattr(request.user, 'empresa_activa') and request.user.empresa_activa:
+                client.empresa = request.user.empresa_activa
+            client.save()
+            if 'wizard_data' in request.session:
+                del request.session['wizard_data']
+            messages.success(request, _('Cliente creado exitosamente.'))
+            return redirect('sales:client_detail', pk=client.pk)
+        else:
+            messages.error(request, _('Error al crear el cliente. Por favor, revisa los datos.'))
+            return redirect('sales:client_wizard')
+    except Exception as e:
+        messages.error(request, f'Error inesperado: {str(e)}')
+        return redirect('sales:client_wizard')
+
+
+@login_required
+def wizard_step_navigation(request, step):
+    if step == 1:
+        return show_wizard_step1(request)
+    elif step == 2:
+        return show_wizard_step2(request)
+    elif step == 3:
+        return show_wizard_step3(request)
+    elif step == 4:
+        return show_wizard_step4(request)
+    elif step == 5:
+        return show_wizard_step5(request)
+    else:
+        return redirect('sales:client_wizard')
+
+
+# APIs para carga dinámica de datos
+@login_required
+@require_http_methods(['GET'])
+def get_states_by_country(request):
+    """API para obtener estados por país"""
+    country_id = request.GET.get('country_id')
+    
+    if not country_id:
+        return JsonResponse({'states': []})
+    
+    try:
+        states = State.objects.filter(
+            country_id=country_id,
+            is_active=True
+        ).values('id', 'name')
+        
+        return JsonResponse({'states': list(states)})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['GET'])
+def get_fiscal_responsibilities_by_country(request):
+    """API para obtener responsabilidades fiscales por país"""
+    country_id = request.GET.get('country_id')
+    country_name = request.GET.get('country_name')
+    
+    if not country_id and not country_name:
+        return JsonResponse({'responsibilities': []})
+    
+    try:
+        if country_id:
+            # Búsqueda por ID
+            responsibilities = FiscalResponsibility.objects.filter(
+                country_id=country_id,
+                is_active=True
+            ).values('id', 'name', 'code', 'description')
+        elif country_name:
+            # Búsqueda por nombre de país
+            responsibilities = FiscalResponsibility.objects.filter(
+                country__name__icontains=country_name,
+                is_active=True
+            ).values('id', 'name', 'code', 'description')
+        else:
+            responsibilities = []
+        
+        return JsonResponse({'responsibilities': list(responsibilities)})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['GET'])
+def countries_autocomplete(request):
+    """API para autocomplete de países"""
+    query = request.GET.get('q', '').strip()
+    
+    try:
+        if query:
+            # Búsqueda más flexible: por nombre, código o nombre en español
+            countries = Country.objects.filter(
+                models.Q(name__icontains=query) |
+                models.Q(name_es__icontains=query) |
+                models.Q(code__icontains=query),
+                is_active=True
+            ).values('id', 'name', 'code', 'name_es')[:10]  # Limitar a 10 resultados
+        else:
+            # Si no hay consulta, devolver todos los países activos
+            countries = Country.objects.filter(
+                is_active=True
+            ).values('id', 'name', 'code', 'name_es')[:20]  # Limitar a 20 resultados para la lista completa
+        
+        results = []
+        for country in countries:
+            # Priorizar el nombre en español si está disponible
+            display_name = country.get('name_es') or country['name']
+            results.append({
+                'id': country['id'],
+                'text': display_name,
+                'code': country['code'],
+                'original_name': country['name']
+            })
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['GET'])
+def states_autocomplete(request):
+    """API para autocomplete de estados/provincias"""
+    query = request.GET.get('q', '').strip()
+    country_name = request.GET.get('country', '').strip()
+    
+    try:
+        states_query = State.objects.filter(is_active=True)
+        
+        # Si se especifica un país, filtrar por él
+        if country_name:
+            states_query = states_query.filter(
+                models.Q(country__name__icontains=country_name) |
+                models.Q(country__name_es__icontains=country_name) |
+                models.Q(country__code__icontains=country_name)
+            )
+        
+        if query:
+            # Si hay consulta, filtrar por ella
+            states_query = states_query.filter(
+                models.Q(name__icontains=query) |
+                models.Q(name_es__icontains=query) |
+                models.Q(code__icontains=query)
+            )
+            limit = 10
+        else:
+            # Si no hay consulta, devolver todos los estados del país (si se especificó)
+            limit = 20
+        
+        states = states_query.values('id', 'name', 'code', 'name_es', 'country__name', 'country__name_es')[:limit]
+        
+        results = []
+        for state in states:
+            # Priorizar nombres en español si están disponibles
+            state_name = state.get('name_es') or state['name']
+            country_name_display = state.get('country__name_es') or state['country__name']
+            
+            results.append({
+                'id': state['id'],
+                'text': f"{state_name}, {country_name_display}",
+                'name': state_name,
+                'code': state['code'],
+                'country': country_name_display,
+                'original_name': state['name']
+            })
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['GET'])
+def fiscal_responsibilities_autocomplete(request):
+    """API para autocomplete de responsabilidades fiscales"""
+    query = request.GET.get('q', '').strip()
+    country_name = request.GET.get('country', '').strip()
+    
+    try:
+        responsibilities_query = FiscalResponsibility.objects.filter(is_active=True)
+        
+        # Si se especifica un país, filtrar por él
+        if country_name:
+            responsibilities_query = responsibilities_query.filter(
+                models.Q(country__name__icontains=country_name) |
+                models.Q(country__name_es__icontains=country_name) |
+                models.Q(country__code__icontains=country_name)
+            )
+        
+        if query:
+            # Si hay consulta, filtrar por ella
+            responsibilities_query = responsibilities_query.filter(
+                models.Q(name__icontains=query) |
+                models.Q(code__icontains=query) |
+                models.Q(description__icontains=query)
+            )
+            limit = 10
+        else:
+            # Si no hay consulta, devolver todas las responsabilidades del país (si se especificó)
+            limit = 20
+        
+        responsibilities = responsibilities_query.values(
+            'id', 'name', 'code', 'description', 
+            'country__name', 'country__name_es'
+        )[:limit]
+        
+        results = []
+        for resp in responsibilities:
+            country_name_display = resp.get('country__name_es') or resp['country__name']
+            
+            results.append({
+                'id': resp['id'],
+                'text': f"{resp['name']} ({resp['code']})",
+                'name': resp['name'],
+                'code': resp['code'],
+                'description': resp['description'],
+                'country': country_name_display
+            })
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+class ClientCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Client
+    form_class = ClientWizardStep1Form  # Puedes ajustar el formulario según corresponda
+    template_name = 'sales/clients/client_form.html'
+    permission_required = 'sales.add_client'
+    success_url = reverse_lazy('sales:client_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, _('Cliente creado correctamente.'))
+        return super().form_valid(form)
+
+class ClientUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Client
+    form_class = ClientWizardStep1Form  # Puedes ajustar el formulario según corresponda
+    template_name = 'sales/clients/client_form.html'
+    permission_required = 'sales.change_client'
+    success_url = reverse_lazy('sales:client_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, _('Cliente actualizado correctamente.'))
+        return super().form_valid(form)
+
+@login_required
+@require_http_methods(['GET'])
+def payment_terms_autocomplete(request):
+    """API para autocomplete de condiciones de pago"""
+    query = request.GET.get('q', '').strip()
+    try:
+        if query:
+            payment_terms = PaymentTerm.objects.filter(
+                models.Q(name__icontains=query) | models.Q(description__icontains=query),
+                is_active=True
+            ).values('id', 'name')[:10]
+        else:
+            payment_terms = PaymentTerm.objects.filter(is_active=True).values('id', 'name')[:20]
+        results = [
+            {'id': pt['id'], 'text': pt['name']} for pt in payment_terms
+        ]
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

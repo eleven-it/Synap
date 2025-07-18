@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{# Panel principal de integración AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-7xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "AdministraNET Integration" %}</h1>
+    
+    <!-- Métricas principales -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-gradient-to-r from-blue-100 to-blue-300 dark:from-blue-900 dark:to-blue-700 rounded-lg p-4 flex flex-col items-center shadow">
+            <span class="text-xs text-gray-700 dark:text-gray-200 font-sans">{% trans "Products" %}</span>
+            <span class="text-2xl font-bold text-blue-700 dark:text-blue-200 font-sans">{{ products_count }}</span>
+        </div>
+        <div class="bg-gradient-to-r from-orange-100 to-orange-300 dark:from-orange-900 dark:to-orange-700 rounded-lg p-4 flex flex-col items-center shadow">
+            <span class="text-xs text-gray-700 dark:text-gray-200 font-sans">{% trans "Clients" %}</span>
+            <span class="text-2xl font-bold text-orange-700 dark:text-orange-200 font-sans">{{ clients_count }}</span>
+        </div>
+        <div class="bg-gradient-to-r from-green-100 to-green-300 dark:from-green-900 dark:to-green-700 rounded-lg p-4 flex flex-col items-center shadow">
+            <span class="text-xs text-gray-700 dark:text-gray-200 font-sans">{% trans "Sync Status" %}</span>
+            {% if connection_status %}
+                <span class="text-2xl font-bold text-green-700 dark:text-green-200 font-sans">OK</span>
+            {% else %}
+                <span class="text-2xl font-bold text-red-700 dark:text-red-200 font-sans">Error</span>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Información de conexión -->
+    <div class="mb-6 text-xs text-gray-700 dark:text-gray-200 font-sans">
+        <div class="flex flex-wrap gap-4 items-center">
+            <div>
+                <span class="font-semibold">{% trans "Adminet DB" %}:</span>
+                {{ adminet_db_name|default:'-' }}
+            </div>
+            <div>
+                <span class="font-semibold">{% trans "Version" %}:</span>
+                {{ adminet_db_version|default:'-' }}
+            </div>
+            <div>
+                <span class="font-semibold">{% trans "Last Sync" %}:</span>
+                {{ last_sync|date:'Y-m-d H:i'|default:'-' }}
+            </div>
+        </div>
+        {% if connection_error %}
+            <div class="mt-2 p-2 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+                <span class="font-semibold">{% trans "Connection error:" %}</span> {{ connection_error }}
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Menú de navegación -->
+    {% include 'administraNET_integration/partials/menu.html' %}
+    
+    <!-- Botones de acción principales -->
+    <div class="flex flex-col md:flex-row gap-4 mt-6">
+        <a href="{% url 'adminet:sync_settings' %}" class="flex-1 py-3 px-4 rounded-md bg-gradient-to-r from-orange-400 to-orange-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all text-center font-sans">
+            {% trans "Sync Settings" %}
+        </a>
+        <a href="{% url 'adminet:adminet_manual_sync' %}" class="flex-1 py-3 px-4 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all text-center font-sans">
+            {% trans "Manual Sync" %}
+        </a>
+    </div>
+    
+    <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+</div>
+
+<script>
+const links = document.querySelectorAll('a');
+links.forEach(link => {
+    link.addEventListener('mousedown', () => link.classList.add('scale-95'));
+    link.addEventListener('mouseup', () => link.classList.remove('scale-95'));
+    link.addEventListener('mouseleave', () => link.classList.remove('scale-95'));
+});
+</script>
+{% endblock %} 

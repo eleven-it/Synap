@@ -29,24 +29,6 @@
         </div>
     </div>
 
-    <!-- Breadcrumb -->
-    <nav class="mb-6">
-        <ol class="flex items-center space-x-2 text-sm text-gray-500">
-            {% for item in breadcrumb %}
-                <li>
-                    {% if not forloop.last %}
-                        <a href="{{ item.url }}" class="hover:text-orange-600">{{ item.name }}</a>
-                        <svg class="w-4 h-4 inline mx-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                        </svg>
-                    {% else %}
-                        <span class="text-gray-900 dark:text-white">{{ item.name }}</span>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ol>
-    </nav>
-
     <!-- Account Types Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for account_type in account_types %}

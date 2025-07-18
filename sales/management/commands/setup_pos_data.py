@@ -60,7 +60,7 @@ class Command(BaseCommand):
         company = Empresa.objects.get(id=company_id)
         branch = Branch.objects.get(id=branch_id)
 
-        self.stdout.write(f'Configurando TPV para empresa: {company.nombre}')
+        self.stdout.write(f'Configurando TPV para empresa: {company.name}')
         self.stdout.write(f'Sucursal: {branch.name}')
 
         # 1. Crear terminales de punto de venta

@@ -1,0 +1,821 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Nuevo Cliente" %} - {% trans "Paso 4" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: #f8fafc;
+        font-family: 'Inter', 'Roboto', system-ui, sans-serif;
+    }
+    .wizard-container {
+        max-width: 680px;
+        margin: 48px auto 0 auto;
+        padding: 2rem 2.5rem 2.5rem 2.5rem;
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1);
+        font-size: 0.75rem; /* text-xs */
+        border: 1px solid #e2e8f0;
+        min-height: 420px;
+        display: flex;
+        flex-direction: column;
+    }
+    @media (max-width: 768px) {
+        .wizard-container { 
+            max-width: 95vw; 
+            padding: 1.5rem 1.25rem 2rem 1.25rem; 
+            margin: 24px auto 0 auto;
+        }
+    }
+    .wizard-progress-bar {
+        width: 100%;
+        background: #f1f5f9;
+        border-radius: 6px;
+        height: 4px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    .wizard-progress-bar-inner {
+        background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);
+        height: 100%;
+        width: 80%;
+        border-radius: 6px;
+        transition: width 0.4s cubic-bezier(.4,0,.2,1);
+    }
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 2rem;
+    }
+    .wizard-step {
+        font-size: 0.75rem;
+        color: #94a3b8;
+        font-weight: 500;
+        min-width: 40px;
+        text-align: center;
+        opacity: 0.7;
+        transition: all 0.2s ease;
+    }
+    .wizard-step.active {
+        color: #f97316;
+        font-weight: 600;
+        opacity: 1;
+    }
+    .wizard-step-circle {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 50%;
+        background: #fff;
+        border: 1.5px solid #e2e8f0;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin: 0 auto 0.25rem auto;
+        transition: all 0.2s ease;
+    }
+    .wizard-step.active .wizard-step-circle {
+        background: #f97316;
+        color: #fff;
+        border: 1.5px solid #f97316;
+        transform: scale(1.05);
+    }
+    .wizard-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .wizard-title {
+        font-size: 1.25rem; /* text-xl */
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.025em;
+        line-height: 1.3;
+    }
+    .wizard-desc {
+        font-size: 0.875rem; /* text-sm */
+        color: #64748b;
+        font-weight: 400;
+        line-height: 1.5;
+    }
+    .form-section {
+        margin-bottom: 2rem;
+    }
+    .form-section-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 1rem;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        opacity: 0.8;
+    }
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    @media (max-width: 768px) {
+        .form-grid { 
+            grid-template-columns: 1fr; 
+            gap: 0.75rem;
+        }
+    }
+    .form-group {
+        margin-bottom: 0.75rem;
+        position: relative;
+    }
+    .form-group label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.25rem;
+        display: block;
+        letter-spacing: 0.01em;
+    }
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: #fff;
+        color: #1f2937;
+        transition: all 0.15s ease;
+        outline: none;
+        font-family: inherit;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+        border-color: #f97316;
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+        background: #fff;
+    }
+    .form-group .help-block {
+        font-size: 0.7rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    .form-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #f1f5f9;
+    }
+    .btn-primary {
+        background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+        border: none;
+        color: white;
+        padding: 0.625rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        letter-spacing: 0.01em;
+        outline: none;
+    }
+    .btn-primary:hover, .btn-primary:focus {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(249, 115, 22, 0.2);
+    }
+    .btn-secondary {
+        background: #f8fafc;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        padding: 0.625rem 1.5rem;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        outline: none;
+    }
+    .btn-secondary:hover, .btn-secondary:focus {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+    }
+    .btn-add {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        outline: none;
+    }
+    .btn-add:hover, .btn-add:focus {
+        background: #2563eb;
+        transform: translateY(-1px);
+    }
+    .btn-remove {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 500;
+        font-size: 0.625rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        outline: none;
+    }
+    .btn-remove:hover, .btn-remove:focus {
+        background: #dc2626;
+        transform: translateY(-1px);
+    }
+    .contact-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.15s ease;
+    }
+    .contact-card:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+    .contact-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.75rem;
+    }
+    .contact-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .contact-avatar {
+        width: 2rem;
+        height: 2rem;
+        background: #3b82f6;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .contact-details h4 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+        line-height: 1.3;
+    }
+    .contact-details p {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin: 0.125rem 0 0 0;
+    }
+    .contact-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .relationship-badge {
+        font-size: 0.625rem;
+        font-weight: 500;
+        padding: 0.125rem 0.375rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    .relationship-primary {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .relationship-secondary {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    .relationship-billing {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .relationship-technical {
+        background: #fce7f3;
+        color: #be185d;
+    }
+    .relationship-decision_maker {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    .relationship-representative {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    .relationship-other {
+        background: #f3f4f6;
+        color: #374151;
+    }
+    .contact-data {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+    }
+    .contact-data-item {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: #64748b;
+    }
+    .contact-data-item svg {
+        width: 0.875rem;
+        height: 0.875rem;
+        flex-shrink: 0;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #64748b;
+    }
+    .empty-state svg {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem auto;
+        opacity: 0.5;
+    }
+    .empty-state h3 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 0.5rem;
+    }
+    .empty-state p {
+        font-size: 0.75rem;
+        margin: 0;
+    }
+    .alert {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 6px;
+        padding: 0.75rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    .alert svg {
+        width: 1rem;
+        height: 1rem;
+        color: #f59e0b;
+        flex-shrink: 0;
+        margin-top: 0.125rem;
+    }
+    .alert-content h3 {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #92400e;
+        margin: 0 0 0.25rem 0;
+    }
+    .alert-content p {
+        font-size: 0.75rem;
+        color: #a16207;
+        margin: 0;
+        line-height: 1.4;
+    }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+        body { background: #0f172a; }
+        .wizard-container { 
+            background: #1e293b; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2); 
+            border-color: #334155; 
+        }
+        .wizard-title { color: #f8fafc; }
+        .wizard-desc { color: #cbd5e1; }
+        .form-section-title { color: #94a3b8; }
+        .form-group input, .form-group select, .form-group textarea { 
+            background: #334155; 
+            color: #f1f5f9; 
+            border-color: #475569; 
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+            background: #475569; 
+            color: #fff; 
+            border-color: #f97316; 
+        }
+        .form-actions {
+            border-top-color: #475569;
+        }
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+            border-color: #475569;
+        }
+        .btn-secondary:hover, .btn-secondary:focus {
+            background: #475569;
+            border-color: #64748b;
+        }
+        .contact-card {
+            background: #334155;
+            border-color: #475569;
+        }
+        .contact-card:hover {
+            background: #475569;
+            border-color: #64748b;
+        }
+        .contact-details h4 {
+            color: #f1f5f9;
+        }
+        .contact-details p {
+            color: #94a3b8;
+        }
+        .contact-data-item {
+            color: #94a3b8;
+        }
+        .empty-state {
+            color: #94a3b8;
+        }
+        .empty-state h3 {
+            color: #cbd5e1;
+        }
+        .alert {
+            background: #451a03;
+            border-color: #f59e0b;
+        }
+        .alert-content h3 {
+            color: #fbbf24;
+        }
+        .alert-content p {
+            color: #fcd34d;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'core/partials/crud_subheader.html' with title='Nuevo Cliente' action_url='/sales/clients/' action_label='Volver a la lista' show_toggle=False show_counter=False %}
+
+<div class="wizard-container">
+    <!-- Barra de progreso -->
+    <div class="wizard-progress-bar">
+        <div class="wizard-progress-bar-inner"></div>
+    </div>
+    
+    <!-- Indicadores de pasos -->
+    <div class="wizard-steps">
+        <div class="wizard-step">
+            <div class="wizard-step-circle">1</div>
+            <span>{% trans "Tipo" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">2</div>
+            <span>{% trans "Datos" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">3</div>
+            <span>{% trans "Contacto" %}</span>
+        </div>
+        <div class="wizard-step active">
+            <div class="wizard-step-circle">4</div>
+            <span>{% trans "Contactos" %}</span>
+        </div>
+        <div class="wizard-step">
+            <div class="wizard-step-circle">5</div>
+            <span>{% trans "Resumen" %}</span>
+        </div>
+    </div>
+    
+    <form method="post" id="wizard-form" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="4">
+        
+        <div class="wizard-header">
+            <h2 class="wizard-title">{% trans "Gestión de Contactos" %}</h2>
+            <p class="wizard-desc">{% trans "Agrega contactos relacionados al cliente para facilitar la comunicación." %}</p>
+        </div>
+        
+        <!-- Alert para empresas sin contacto principal -->
+        {% if requires_primary_contact and not has_primary_contact %}
+        <div class="alert">
+            <svg fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <div class="alert-content">
+                <h3>{% trans "Contacto Principal Requerido" %}</h3>
+                <p>{% trans "Las empresas deben tener al menos un contacto principal. Agrega un contacto con tipo 'Contacto Principal'." %}</p>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="form-section">
+            <div class="form-section-title">{% trans "Nuevo Contacto" %}</div>
+            
+            <form id="newContactForm">
+                {% csrf_token %}
+                <div class="form-grid">
+                    {{ contact_form.name|as_crispy_field }}
+                    {{ contact_form.email|as_crispy_field }}
+                </div>
+                <div class="form-grid">
+                    {{ contact_form.phone|as_crispy_field }}
+                    {{ contact_form.position|as_crispy_field }}
+                </div>
+                <div class="form-grid">
+                    {{ contact_form.relationship_type|as_crispy_field }}
+                    <div class="form-group">
+                        <label for="{{ contact_form.notes.id_for_label }}">{% trans "Notas" %}</label>
+                        {{ contact_form.notes }}
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-add">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    {% trans "Agregar Contacto" %}
+                </button>
+            </form>
+        </div>
+        
+        <div class="form-section">
+            <div class="form-section-title">{% trans "Contactos Relacionados" %} ({{ related_contacts|length }})</div>
+            
+            <div id="contactsList">
+                {% for contact in related_contacts %}
+                <div class="contact-card" data-relationship-id="{{ contact.relationship_id }}">
+                    <div class="contact-header">
+                        <div class="contact-info">
+                            <div class="contact-avatar">
+                                {{ contact.name|first|upper }}
+                            </div>
+                            <div class="contact-details">
+                                <h4>{{ contact.name }}</h4>
+                                <p>{{ contact.position|default:"Sin cargo" }}</p>
+                            </div>
+                        </div>
+                        <div class="contact-actions">
+                            <span class="relationship-badge relationship-{{ contact.relationship_type }}">
+                                {{ contact.get_relationship_type_display }}
+                            </span>
+                            <button onclick="removeContact('{{ contact.relationship_id }}')" class="btn-remove">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {% if contact.email or contact.phone %}
+                    <div class="contact-data">
+                        {% if contact.email %}
+                        <div class="contact-data-item">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                            {{ contact.email }}
+                        </div>
+                        {% endif %}
+                        {% if contact.phone %}
+                        <div class="contact-data-item">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                            </svg>
+                            {{ contact.phone }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% empty %}
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <h3>{% trans "No hay contactos" %}</h3>
+                    <p>{% trans "Agrega contactos relacionados al cliente usando el formulario." %}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <button type="button" class="btn-secondary" onclick="window.location.href='{% url 'sales:wizard_step' step=3 %}'">
+                <i class="fas fa-arrow-left"></i> {% trans "Anterior" %}
+            </button>
+            <button type="submit" class="btn-primary" {% if requires_primary_contact and not has_primary_contact %}disabled{% endif %}>
+                {% trans "Siguiente" %}
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="fixed top-6 right-6 z-50 hidden px-4 py-3 rounded-lg shadow-lg text-white font-medium text-sm transition-all duration-300"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const newContactForm = document.getElementById('newContactForm');
+    const contactsList = document.getElementById('contactsList');
+    const toast = document.getElementById('toast');
+    
+    function showToast(message, type = 'success') {
+        toast.textContent = message;
+        toast.className = `fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-white font-medium text-sm transition-all duration-300 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+        toast.classList.remove('hidden');
+        
+        setTimeout(() => {
+            toast.classList.add('hidden');
+        }, 3000);
+    }
+    
+    function updateContactCount() {
+        const contacts = document.querySelectorAll('.contact-card');
+        const count = contacts.length;
+        const title = document.querySelector('.form-section-title');
+        title.textContent = `{% trans "Contactos Relacionados" %} (${count})`;
+    }
+    
+    function addContactToList(contactData) {
+        const contactHtml = `
+            <div class="contact-card" data-relationship-id="${contactData.relationship_id}">
+                <div class="contact-header">
+                    <div class="contact-info">
+                        <div class="contact-avatar">
+                            ${contactData.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="contact-details">
+                            <h4>${contactData.name}</h4>
+                            <p>${contactData.position || 'Sin cargo'}</p>
+                        </div>
+                    </div>
+                    <div class="contact-actions">
+                        <span class="relationship-badge relationship-${contactData.relationship_type}">
+                            ${getRelationshipTypeDisplay(contactData.relationship_type)}
+                        </span>
+                        <button onclick="removeContact('${contactData.relationship_id}')" class="btn-remove">
+                            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                ${(contactData.email || contactData.phone) ? `
+                <div class="contact-data">
+                    ${contactData.email ? `
+                    <div class="contact-data-item">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                        ${contactData.email}
+                    </div>
+                    ` : ''}
+                    ${contactData.phone ? `
+                    <div class="contact-data-item">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                        </svg>
+                        ${contactData.phone}
+                    </div>
+                    ` : ''}
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // Remover estado vacío si existe
+        const emptyState = contactsList.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        contactsList.insertAdjacentHTML('beforeend', contactHtml);
+        updateContactCount();
+        newContactForm.reset();
+    }
+    
+    function getRelationshipTypeDisplay(type) {
+        const types = {
+            'primary': '{% trans "Contacto Principal" %}',
+            'secondary': '{% trans "Contacto Secundario" %}',
+            'billing': '{% trans "Contacto de Facturación" %}',
+            'technical': '{% trans "Contacto Técnico" %}',
+            'decision_maker': '{% trans "Tomador de Decisiones" %}',
+            'representative': '{% trans "Representante" %}',
+            'other': '{% trans "Otro" %}'
+        };
+        return types[type] || type;
+    }
+    
+    newContactForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        
+        fetch('{% url "sales:client_contacts_step" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addContactToList(data.contact);
+                showToast('{% trans "Contacto agregado exitosamente" %}', 'success');
+            } else {
+                showToast(data.error || '{% trans "Error al agregar contacto" %}', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('{% trans "Error de conexión" %}', 'error');
+        });
+    });
+    
+    updateContactCount();
+});
+
+function removeContact(relationshipId) {
+    if (confirm('{% trans "¿Estás seguro de que quieres eliminar este contacto?" %}')) {
+        fetch(`{% url 'sales:remove_contact_from_client' client_id=0 relationship_id=0 %}`.replace('0', '{{ client_id }}').replace('0', relationshipId), {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const contactCard = document.querySelector(`[data-relationship-id="${relationshipId}"]`);
+                if (contactCard) {
+                    contactCard.remove();
+                    
+                    // Si no quedan contactos, mostrar estado vacío
+                    const contacts = document.querySelectorAll('.contact-card');
+                    if (contacts.length === 0) {
+                        const contactsList = document.getElementById('contactsList');
+                        contactsList.innerHTML = `
+                            <div class="empty-state">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
+                                <h3>{% trans "No hay contactos" %}</h3>
+                                <p>{% trans "Agrega contactos relacionados al cliente usando el formulario." %}</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Actualizar contador
+                    const title = document.querySelector('.form-section-title');
+                    const count = contacts.length - 1;
+                    title.textContent = `{% trans "Contactos Relacionados" %} (${count})`;
+                    
+                    showToast('{% trans "Contacto eliminado exitosamente" %}', 'success');
+                }
+            } else {
+                showToast(data.error || '{% trans "Error al eliminar contacto" %}', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('{% trans "Error de conexión" %}', 'error');
+        });
+    }
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `fixed top-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-white font-medium text-sm transition-all duration-300 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
+}
+</script>
+{% endblock %} 

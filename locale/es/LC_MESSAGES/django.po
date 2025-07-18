@@ -18541,3 +18541,196 @@ msgstr ""
 #~ msgstr ""
 #~ "Bienvenido al dashboard de inventario. Aquí puedes ver el estado actual "
 #~ "del stock por producto y ubicación."
+
+#: core/templates/core/system_config/empresa_list.html
+#: core/templates/core/system_config/empresa_detail.html
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Companies"
+msgstr "Empresas"
+
+#: core/templates/core/system_config/empresa_list.html
+#: core/templates/core/system_config/empresa_detail.html
+msgid "New Company"
+msgstr "Nueva Empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Create First Company"
+msgstr "Crear Primera Empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "company"
+msgstr "empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Active"
+msgstr "Activa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Inactive"
+msgstr "Inactiva"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Edit company"
+msgstr "Editar empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Edit"
+msgstr "Editar"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "View branches"
+msgstr "Ver sucursales"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Branches"
+msgstr "Sucursales"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "View company details"
+msgstr "Ver ficha de la empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Details"
+msgstr "Ficha"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Activate/deactivate company"
+msgstr "Activar/desactivar empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "No companies registered"
+msgstr "No hay empresas registradas"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Start by creating your first company to manage your business efficiently."
+msgstr "Comienza creando tu primera empresa para gestionar tu negocio de manera eficiente."
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Company activated"
+msgstr "Empresa activada"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Company deactivated"
+msgstr "Empresa desactivada"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Error updating status"
+msgstr "Error al actualizar el estado"
+
+#: core/templates/core/system_config/empresa_list.html
+msgid "Are you sure you want to delete the company"
+msgstr "¿Estás seguro de que deseas eliminar la empresa"
+
+#: core/templates/core/system_config/empresa_list.html
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "This action cannot be undone."
+msgstr "Esta acción no se puede deshacer."
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Company Name"
+msgstr "Nombre de la empresa"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Business Name"
+msgstr "Razón social"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Country"
+msgstr "País"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "State/Province"
+msgstr "Provincia/Estado"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "City"
+msgstr "Ciudad"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Address"
+msgstr "Dirección"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Phone"
+msgstr "Teléfono"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Email"
+msgstr "Email"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Website"
+msgstr "Sitio web"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Tax ID"
+msgstr "CUIT/RFC/NIF"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Tax Responsibility Type"
+msgstr "Tipo de responsabilidad"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Currency"
+msgstr "Moneda"
+
+#: core/templates/core/system_config/empresa_detail.html
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Save Changes"
+msgstr "Guardar cambios"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Create Company"
+msgstr "Crear empresa"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Click or drag an image"
+msgstr "Haz click o arrastra una imagen"
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Only image files are allowed (JPG, PNG, SVG, etc)."
+msgstr "Solo se permiten archivos de imagen (JPG, PNG, SVG, etc)."
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "Searching..."
+msgstr "Buscando..."
+
+#: core/templates/core/system_config/empresa_detail.html
+msgid "No results"
+msgstr "Sin resultados"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Confirm Deletion"
+msgstr "Confirmar Eliminación"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Delete company?"
+msgstr "¿Eliminar empresa?"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "What will be deleted?"
+msgstr "¿Qué se eliminará?"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "All company data"
+msgstr "Todos los datos de la empresa"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Associated configurations"
+msgstr "Configuraciones asociadas"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Logo and related files"
+msgstr "Logo y archivos relacionados"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "This action is permanent"
+msgstr "Esta acción es permanente"
+
+#: core/templates/core/system_config/empresa_confirm_delete.html
+msgid "Yes, delete company"
+msgstr "Sí, eliminar empresa"

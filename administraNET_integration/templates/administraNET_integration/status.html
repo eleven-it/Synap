@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{# Estado de integración AdministraNET - Synap #}
+
+{% block app_content %}
+<div class="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Integration Status" %}</h1>
+    <div class="mb-4">
+        <div class="flex items-center gap-2 mb-2">
+            {% if connection_status %}
+                <span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+                <span class="text-xs text-green-700 dark:text-green-200 font-sans">{% trans "Connected to AdministraNET" %}</span>
+            {% else %}
+                <span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
+                <span class="text-xs text-red-700 dark:text-red-200 font-sans">{% trans "Not connected" %}</span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-2 mb-2">
+            <span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+            <span class="text-xs text-gray-700 dark:text-gray-200 font-sans">{% trans "Connected to Synap DB" %}</span>
+        </div>
+    </div>
+    <div class="mb-4 text-xs text-gray-700 dark:text-gray-200 font-sans">
+        <div class="flex flex-wrap gap-4 items-center">
+            <div>
+                <span class="font-semibold">{% trans "DB Name" %}:</span> {{ db_name|default:'-' }}
+            </div>
+            <div>
+                <span class="font-semibold">{% trans "Version" %}:</span> {{ db_version|default:'-' }}
+            </div>
+            <div>
+                <span class="font-semibold">{% trans "Tables" %}:</span> {{ db_tables|default:'-' }}
+            </div>
+            <div>
+                <span class="font-semibold">{% trans "Size (MB)" %}:</span> {{ db_size|default:'-' }}
+            </div>
+        </div>
+        {% if connection_error %}
+            <div class="mt-2 p-2 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200">
+                <span class="font-semibold">{% trans "Connection error:" %}</span> {{ connection_error }}
+            </div>
+        {% endif %}
+    </div>
+    <button class="w-full py-2 px-4 rounded-md bg-gradient-to-r from-blue-400 to-blue-600 text-white text-sm font-semibold shadow-sm hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-400 font-sans">
+        {% trans "Run Diagnostics" %}
+    </button>
+    <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+</div>
+<script>
+const btn = document.querySelector('button');
+btn.addEventListener('mousedown', () => btn.classList.add('scale-95'));
+btn.addEventListener('mouseup', () => btn.classList.remove('scale-95'));
+btn.addEventListener('mouseleave', () => btn.classList.remove('scale-95'));
+</script>
+{% endblock %} 

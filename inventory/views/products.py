@@ -2,17 +2,19 @@ from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.urls import reverse_lazy
 from django.db import transaction
+from django.db.models import Q
 from ..models import Product, Category, ProductImage
 from ..forms import ProductForm
 from core.utils.utils import require_empresa_activa
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
+from django.views import View
 
 class ProductListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     model = Product
     template_name = 'inventory/product_list.html'
     context_object_name = 'products'
     permission_required = 'inventory.ver_product'
-    paginate_by = 20
+    paginate_by = 50  # Cambiado a 50 por página
 
     def dispatch(self, request, *args, **kwargs):
         empresa = request.user.empresa_activa
@@ -23,7 +25,21 @@ class ProductListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     def get_queryset(self):
         empresa = self.request.user.empresa_activa
         branch = self.request.user.branch_activa
-        return Product.objects.filter(empresa=empresa, branch=branch).prefetch_related('images', 'brand', 'uom')
+        queryset = Product.objects.filter(empresa=empresa, branch=branch).prefetch_related('images', 'brand', 'uom')
+        search = self.request.GET.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(sku__icontains=search) |
+                Q(description__icontains=search)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search'] = self.request.GET.get('search', '')
+        context['view_mode'] = self.request.GET.get('view', 'list')  # 'list' o 'kanban'
+        return context
 
 class ProductCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
     model = Product
@@ -143,3 +159,54 @@ class ProductDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView)
         context = super().get_context_data(**kwargs)
         context['title'] = "Confirm Delete Product"
         return context 
+
+class ProductSearchApiView(LoginRequiredMixin, View):
+    """API endpoint para búsqueda predictiva de productos en tiempo real"""
+    
+    def get(self, request):
+        empresa = request.user.empresa_activa
+        if not empresa or not empresa.activa:
+            return JsonResponse({'error': 'Access denied: company is inactive.'}, status=403)
+        
+        search = request.GET.get('q', '').strip()
+        branch = request.user.branch_activa
+        
+        # Construir queryset base
+        queryset = Product.objects.filter(
+            empresa=empresa, 
+            branch=branch
+        ).prefetch_related('images', 'brand', 'uom')
+        
+        # Aplicar filtro de búsqueda si se proporciona
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(sku__icontains=search) |
+                Q(description__icontains=search)
+            )
+        
+        # Limitar a un máximo razonable para performance
+        queryset = queryset[:2000]
+        
+        # Preparar datos para respuesta JSON
+        products_data = []
+        for product in queryset:
+            products_data.append({
+                'id': product.id,
+                'name': product.name,
+                'sku': product.sku,
+                'description': product.description or '',
+                'price': float(product.price),
+                'price_currency': product.price_currency.code if product.price_currency else '',
+                'brand_name': product.brand.name if product.brand else '',
+                'uom_name': product.uom.name if product.uom else '',
+                'image_url': product.images.first().image.url if product.images.first() else None,
+                'type': product.type,
+                # 'is_active': product.is_active,  # Eliminado porque no existe ese campo
+            })
+        
+        return JsonResponse({
+            'products': products_data,
+            'total_count': len(products_data),
+            'search_term': search
+        }) 

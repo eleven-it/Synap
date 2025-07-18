@@ -21,7 +21,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR("❌ No se encontró empresa. Ejecute primero setup_core_data"))
                 return
             
-            self.stdout.write(f"🏢 Usando empresa: {empresa.nombre}")
+            self.stdout.write(f"🏢 Usando empresa: {empresa.name}")
             
             # Obtener sucursal
             branch = Branch.objects.filter(empresa=empresa).first()

@@ -2,26 +2,50 @@
 {% load i18n %}
 
 {% block inventory_content %}
-<div class="bg-white p-6 rounded-lg shadow-md">
-    <div class="flex justify-between items-center mb-6">
-        <div>
-            <h1 class="text-2xl font-semibold text-gray-800">{% trans "Products" %}</h1>
-            <p class="text-sm text-gray-600 mt-1">
-                {% trans "Showing products for" %} <strong>{{ request.user.empresa_activa.nombre }}</strong>
-                {% if request.user.branch_activa %} - {{ request.user.branch_activa.name }}{% endif %}
-            </p>
+<div class="bg-white dark:bg-gray-900 p-4 md:p-6 rounded-lg shadow-md min-h-[60vh] animate-fade-in" x-data="productList()">
+    <!-- Subheader: título, búsqueda, toggle, contador, botón principal -->
+    <div class="flex flex-col md:flex-row md:items-center gap-2 mb-6 w-full">
+        <div class="flex items-center flex-shrink-0 min-w-0">
+            <h1 class="text-lg md:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap m-0 p-0">
+                {% trans "Products" %}
+            </h1>
         </div>
-        {% if perms.inventory.add_product %}
-        <a href="{% url 'inventory:product_create' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
-            <span class="material-icons mr-2">add</span>
-            {% trans "Create Product" %}
-        </a>
-        {% endif %}
+        <div class="flex-1 flex items-center justify-center min-w-0 gap-4">
+            <div class="relative w-full max-w-xs md:max-w-sm lg:max-w-md min-w-[180px] max-w-[320px]">
+                <input type="text" x-model="searchTerm" @input="debouncedSearch()" placeholder="{% trans 'Search products by name, SKU, description...' %}" class="block w-full pl-8 pr-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-xs md:text-sm" autocomplete="off">
+                <div class="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                    <span class="material-icons text-gray-400 text-base">search</span>
+                </div>
+                <!-- Spinner de carga -->
+                <div x-show="isLoading" class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                </div>
+            </div>
+            <!-- Toggle de vista -->
+            <div class="flex items-center gap-1 ml-2">
+                <button @click="viewMode = 'kanban'" :class="viewMode === 'kanban' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'" class="p-1 rounded transition" title="Kanban view">
+                    <span class="material-icons">view_module</span>
+                </button>
+                <button @click="viewMode = 'list'" :class="viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'" class="p-1 rounded transition" title="List view">
+                    <span class="material-icons">view_list</span>
+                </button>
+            </div>
+            <span class="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                <span x-text="`${startIndex}-${endIndex} / ${totalProducts} products`"></span>
+            </span>
+        </div>
+        <div class="flex items-center flex-shrink-0 min-w-0">
+            {% if perms.inventory.add_product %}
+            <a href="{% url 'inventory:product_create' %}" class="bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow transition-transform duration-150 hover:scale-105">
+                <span class="material-icons mr-2">add</span>
+                {% trans "Create Product" %}
+            </a>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Info Alert -->
-    {% if products.count < 5 %}
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div x-show="totalProducts < 5 && !isLoading" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 animate-fade-in">
         <div class="flex">
             <div class="flex-shrink-0">
                 <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
@@ -34,18 +58,69 @@
                 </h3>
                 <div class="mt-2 text-sm text-blue-700">
                     <p>
-                        {% trans "You are viewing" %} <strong>{{ products.count }}</strong> {% trans "products" %}. 
+                        {% trans "You are viewing" %} <strong x-text="totalProducts"></strong> {% trans "products" %}. 
                         {% trans "This may be due to company/branch filtering. Products are filtered by your active company and branch." %}
                     </p>
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
 
-    <div class="overflow-x-auto">
-        <table class="min-w-full text-sm text-gray-900">
-            <thead class="bg-gray-100 text-left text-xs uppercase font-semibold border-b">
+    <!-- Vista Kanban -->
+    <div x-show="viewMode === 'kanban'" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-fade-in">
+        <template x-for="product in currentPageProducts" :key="product.id">
+            <div class="product-card bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 animate-fade-in flex flex-col">
+                <!-- Imagen del producto -->
+                <div class="h-32 w-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                    <img x-show="product.image_url" :src="product.image_url" :alt="product.name" class="object-cover h-full w-full transition-transform duration-200 hover:scale-105">
+                    <span x-show="!product.image_url" class="material-icons text-gray-400 text-5xl">image_not_supported</span>
+                </div>
+                <!-- Info principal -->
+                <div class="flex-1 p-4 flex flex-col gap-1">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-white truncate" :title="product.name" x-text="product.name"></h3>
+                        <span class="text-xs font-mono text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 rounded px-2 py-0.5" x-text="product.sku"></span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Brand" %}:</span>
+                        <span class="text-xs font-medium text-blue-600 dark:text-blue-300" x-text="product.brand_name || '-'" ></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Unit" %}:</span>
+                        <span class="text-xs font-medium text-purple-600 dark:text-purple-300" x-text="product.uom_name"></span>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{% trans "Price" %}:</span>
+                        <span class="text-sm font-bold text-green-600 dark:text-green-300" x-text="`${product.price.toFixed(2)} ${product.price_currency}`"></span>
+                    </div>
+                </div>
+                <!-- Acciones rápidas -->
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        {% if perms.inventory.change_product %}
+                        <a :href="`/inventory/products/${product.id}/edit/`" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-transform duration-150 hover:scale-110" title="{% trans 'Edit' %}">
+                            <span class="material-icons">edit</span>
+                        </a>
+                        {% endif %}
+                        {% if perms.inventory.delete_product %}
+                        <a :href="`/inventory/products/${product.id}/delete/`" class="text-xs text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium transition-transform duration-150 hover:scale-110" title="{% trans 'Delete' %}">
+                            <span class="material-icons">delete</span>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </template>
+        <!-- Estado vacío -->
+        <div x-show="!isLoading && currentPageProducts.length === 0" class="col-span-full text-center p-6 text-gray-500 dark:text-gray-400">
+            <span x-text="searchTerm ? 'No products found matching your search.' : 'No products registered.'"></span>
+        </div>
+    </div>
+
+    <!-- Vista Lista -->
+    <div x-show="viewMode === 'list'" class="overflow-x-auto animate-fade-in">
+        <table class="min-w-full text-xs md:text-sm text-gray-900 dark:text-gray-100">
+            <thead class="bg-gray-100 dark:bg-gray-800 text-left text-xs uppercase font-semibold border-b">
                 <tr>
                     <th class="px-4 py-3">{% trans "Image" %}</th>
                     <th class="px-4 py-3">{% trans "SKU" %}</th>
@@ -57,44 +132,178 @@
                 </tr>
             </thead>
             <tbody>
-                {% for product in products %}
-                <tr class="border-t hover:bg-gray-50">
-                    <td class="px-4 py-2">
-                        {% if product.images.first %}
-                            <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}" class="h-10 w-10 object-cover rounded">
-                        {% else %}
-                            <div class="h-10 w-10 bg-gray-200 rounded flex items-center justify-center">
+                <template x-for="product in currentPageProducts" :key="product.id">
+                    <tr class="border-t hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                        <td class="px-4 py-2">
+                            <img x-show="product.image_url" :src="product.image_url" :alt="product.name" class="h-10 w-10 object-cover rounded">
+                            <div x-show="!product.image_url" class="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
                                 <span class="material-icons text-gray-400">image_not_supported</span>
                             </div>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-2">{{ product.sku }}</td>
-                    <td class="px-4 py-2 font-medium">{{ product.name }}</td>
-                    <td class="px-4 py-2">{{ product.brand.name|default:"-" }}</td>
-                    <td class="px-4 py-2 text-right">{{ product.price|floatformat:2 }} {{ product.price_currency }}</td>
-                    <td class="px-4 py-2">{{ product.uom.name }}</td>
-                    <td class="px-4 py-2 text-center">
-                        <div class="flex justify-center space-x-2">
-                            {% if perms.inventory.change_product %}
-                            <a href="{% url 'inventory:product_update' product.pk %}" class="text-blue-500 hover:text-blue-700" title="{% trans 'Edit' %}">
-                                <span class="material-icons">edit</span>
-                            </a>
-                            {% endif %}
-                            {% if perms.inventory.delete_product %}
-                            <a href="{% url 'inventory:product_delete' product.pk %}" class="text-red-500 hover:text-red-700" title="{% trans 'Delete' %}">
-                                <span class="material-icons">delete</span>
-                            </a>
-                            {% endif %}
-                        </div>
+                        </td>
+                        <td class="px-4 py-2 font-mono" x-text="product.sku"></td>
+                        <td class="px-4 py-2 font-medium" x-text="product.name"></td>
+                        <td class="px-4 py-2" x-text="product.brand_name || '-'" ></td>
+                        <td class="px-4 py-2 text-right" x-text="`${product.price.toFixed(2)} ${product.price_currency}`"></td>
+                        <td class="px-4 py-2" x-text="product.uom_name"></td>
+                        <td class="px-4 py-2 text-center">
+                            <div class="flex justify-center space-x-2">
+                                {% if perms.inventory.change_product %}
+                                <a :href="`/inventory/products/${product.id}/edit/`" class="text-blue-500 hover:text-blue-700" title="{% trans 'Edit' %}">
+                                    <span class="material-icons">edit</span>
+                                </a>
+                                {% endif %}
+                                {% if perms.inventory.delete_product %}
+                                <a :href="`/inventory/products/${product.id}/delete/`" class="text-red-500 hover:text-red-700" title="{% trans 'Delete' %}">
+                                    <span class="material-icons">delete</span>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+                <!-- Estado vacío -->
+                <tr x-show="!isLoading && currentPageProducts.length === 0">
+                    <td colspan="7" class="text-center p-6 text-gray-500 dark:text-gray-400">
+                        <span x-text="searchTerm ? 'No products found matching your search.' : 'No products registered.'"></span>
                     </td>
                 </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center p-6 text-gray-500">{% trans "No products registered." %}</td>
-                </tr>
-                {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- Paginación dinámica -->
+    <div x-show="totalPages > 1" class="flex items-center justify-between py-4 border-t border-gray-200 dark:border-gray-700 mt-4 animate-fade-in">
+        <div class="text-xs text-gray-500 dark:text-gray-400">
+            <span x-text="`Showing ${startIndex} to ${endIndex} of ${totalProducts} results`"></span>
+        </div>
+        <div class="flex items-center gap-1">
+            <!-- Botón Primera página -->
+            <button @click="goToPage(1)" :disabled="currentPage === 1" class="pagination-btn" title="{% trans 'First page' %}">
+                <span class="material-icons text-xs">first_page</span>
+            </button>
+            <!-- Botón Anterior -->
+            <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1" class="pagination-btn" title="{% trans 'Previous page' %}">
+                <span class="material-icons text-xs">chevron_left</span>
+            </button>
+            <!-- Números de página -->
+            <div class="flex items-center gap-1">
+                <template x-for="page in visiblePages" :key="page">
+                    <button @click="goToPage(page)" :class="page === currentPage ? 'pagination-btn active' : 'pagination-btn'" x-text="page"></button>
+                </template>
+            </div>
+            <!-- Botón Siguiente -->
+            <button @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages" class="pagination-btn" title="{% trans 'Next page' %}">
+                <span class="material-icons text-xs">chevron_right</span>
+            </button>
+            <!-- Botón Última página -->
+            <button @click="goToPage(totalPages)" :disabled="currentPage === totalPages" class="pagination-btn" title="{% trans 'Last page' %}">
+                <span class="material-icons text-xs">last_page</span>
+            </button>
+        </div>
+    </div>
 </div>
+
+<style>
+.pagination-btn {
+    @apply px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs transition-all duration-200;
+    @apply bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300;
+    @apply hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500;
+}
+.pagination-btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+}
+.pagination-btn.active {
+    @apply bg-blue-500 text-white border-blue-500;
+}
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+function productList() {
+    return {
+        searchTerm: '{{ search }}',
+        viewMode: '{{ view_mode }}' || 'list',
+        products: [],
+        currentPage: 1,
+        itemsPerPage: 50,
+        isLoading: false,
+        searchTimeout: null,
+
+        get totalProducts() {
+            return this.products.length;
+        },
+
+        get totalPages() {
+            return Math.ceil(this.totalProducts / this.itemsPerPage);
+        },
+
+        get startIndex() {
+            return (this.currentPage - 1) * this.itemsPerPage + 1;
+        },
+
+        get endIndex() {
+            return Math.min(this.currentPage * this.itemsPerPage, this.totalProducts);
+        },
+
+        get currentPageProducts() {
+            const start = (this.currentPage - 1) * this.itemsPerPage;
+            const end = start + this.itemsPerPage;
+            return this.products.slice(start, end);
+        },
+
+        get visiblePages() {
+            const pages = [];
+            const start = Math.max(1, this.currentPage - 2);
+            const end = Math.min(this.totalPages, this.currentPage + 2);
+            
+            for (let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+            return pages;
+        },
+
+        debouncedSearch() {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => {
+                this.searchProducts();
+            }, 300);
+        },
+
+        async searchProducts() {
+            this.isLoading = true;
+            try {
+                const response = await fetch(`/inventory/api/products/search/?q=${encodeURIComponent(this.searchTerm)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.products = data.products;
+                    this.currentPage = 1; // Reset to first page on new search
+                } else {
+                    console.error('Error searching products:', response.statusText);
+                }
+            } catch (error) {
+                console.error('Error searching products:', error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        goToPage(page) {
+            if (page >= 1 && page <= this.totalPages) {
+                this.currentPage = page;
+            }
+        },
+
+        init() {
+            // Load initial products
+            this.searchProducts();
+        }
+    }
+}
+</script>
 {% endblock inventory_content %} 

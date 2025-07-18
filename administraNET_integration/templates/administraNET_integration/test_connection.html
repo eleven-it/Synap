@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Plantilla de Test de Conexión AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-6xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <!-- CSRF Token -->
+    {% csrf_token %}
+    
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 font-sans">{% trans "Connection Test" %}</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 font-sans">{% trans "Test and diagnose connection with administraNET database" %}</p>
+        </div>
+        
+        <!-- Estado de la conexión -->
+        <div class="flex flex-wrap gap-3">
+            {% if config %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Configured" %}
+                </span>
+            {% else %}
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                    <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                    {% trans "Not Configured" %}
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Panel principal de tests -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Tests de conexión -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Connection Tests" %}</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <!-- Test básico -->
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Basic Connection" %}</h3>
+                            <div id="basic-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                        </div>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{% trans "Test basic database connectivity" %}</p>
+                        <button type="button" onclick="runTest('basic')" 
+                                class="w-full py-2 px-3 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all">
+                            {% trans "Run Test" %}
+                        </button>
+                    </div>
+                    
+                    <!-- Test de tablas -->
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Tables Test" %}</h3>
+                            <div id="tables-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                        </div>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{% trans "Verify database tables and structure" %}</p>
+                        <button type="button" onclick="runTest('tables')" 
+                                class="w-full py-2 px-3 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-all">
+                            {% trans "Run Test" %}
+                        </button>
+                    </div>
+                    
+                    <!-- Test de queries -->
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Queries Test" %}</h3>
+                            <div id="queries-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                        </div>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{% trans "Test data queries and permissions" %}</p>
+                        <button type="button" onclick="runTest('queries')" 
+                                class="w-full py-2 px-3 bg-purple-600 text-white text-xs font-semibold rounded hover:bg-purple-700 transition-all">
+                            {% trans "Run Test" %}
+                        </button>
+                    </div>
+                    
+                    <!-- Test de rendimiento -->
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:shadow-md transition-all">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Performance Test" %}</h3>
+                            <div id="performance-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                        </div>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{% trans "Test connection performance and latency" %}</p>
+                        <button type="button" onclick="runTest('performance')" 
+                                class="w-full py-2 px-3 bg-orange-600 text-white text-xs font-semibold rounded hover:bg-orange-700 transition-all">
+                            {% trans "Run Test" %}
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Test completo -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100 font-sans">{% trans "Full Diagnostic" %}</h3>
+                            <p class="text-xs text-blue-700 dark:text-blue-300">{% trans "Run all tests and generate comprehensive report" %}</p>
+                        </div>
+                        <div id="full-status" class="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                    </div>
+                    <button type="button" onclick="runTest('full')" 
+                            class="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-semibold rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Run Full Diagnostic" %}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resultados de tests -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Test Results" %}</h2>
+                
+                <div id="test-results" class="space-y-4">
+                    <!-- Estado inicial -->
+                    <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <p class="text-sm">{% trans "No tests have been run yet. Click on any test above to start." %}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de conexión -->
+            {% if config %}
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Connection Information" %}</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 font-sans">{% trans "Database Settings" %}</h3>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Host" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100 font-mono">{{ config.host }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Port" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100 font-mono">{{ config.port }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Database" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100 font-mono">{{ config.database_name }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Username" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100 font-mono">{{ config.username }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3 font-sans">{% trans "Connection Status" %}</h3>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Active" %}:</span>
+                                <span class="{% if config.is_active %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                    {% if config.is_active %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Last Sync" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100">
+                                    {% if config.last_sync %}
+                                        {{ config.last_sync|date:'Y-m-d H:i' }}
+                                    {% else %}
+                                        {% trans "Never" %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Sync Interval" %}:</span>
+                                <span class="text-gray-900 dark:text-gray-100">{{ config.sync_interval }} {% trans "minutes" %}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600 dark:text-gray-400">{% trans "Logging" %}:</span>
+                                <span class="{% if config.enable_logging %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                    {% if config.enable_logging %}{% trans "Enabled" %}{% else %}{% trans "Disabled" %}{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar con información y acciones -->
+        <div class="space-y-6">
+            <!-- Estado del sistema -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "System Status" %}</h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Database Connection" %}</span>
+                        <div id="system-db-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Sync Service" %}</span>
+                        <div id="system-sync-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Logging Active" %}</span>
+                        <div id="system-log-status" class="w-3 h-3 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                    </div>
+                </div>
+                
+                <button type="button" onclick="checkSystemStatus()" 
+                        class="w-full mt-4 py-2 px-3 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-700 transition-all">
+                    {% trans "Refresh Status" %}
+                </button>
+            </div>
+
+            <!-- Historial de tests -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Recent Tests" %}</h3>
+                
+                <div class="space-y-3">
+                    {% for test in recent_tests %}
+                    <div class="bg-white dark:bg-neutral-700 p-3 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-semibold text-gray-900 dark:text-gray-100 font-sans">{{ test.test_type|title }}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ test.timestamp }}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-600 dark:text-gray-400">{{ test.user }}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs text-gray-500 dark:text-gray-400">{{ test.duration }}s</span>
+                                <div class="w-2 h-2 rounded-full {% if test.success %}bg-green-500{% else %}bg-red-500{% endif %}"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-4 text-gray-500 dark:text-gray-400">
+                        <p class="text-xs">{% trans "No recent tests" %}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Acciones rápidas -->
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Quick Actions" %}</h3>
+                
+                <div class="space-y-3">
+                    <button type="button" onclick="exportTestReport()" 
+                            class="w-full py-2 px-3 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        {% trans "Export Report" %}
+                    </button>
+                    
+                    <button type="button" onclick="runDiagnostic()" 
+                            class="w-full py-2 px-3 bg-purple-600 text-white text-xs font-semibold rounded hover:bg-purple-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        {% trans "Run Diagnostic" %}
+                    </button>
+                    
+                    <button type="button" onclick="clearResults()" 
+                            class="w-full py-2 px-3 bg-gray-600 text-white text-xs font-semibold rounded hover:bg-gray-700 transition-all">
+                        <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        {% trans "Clear Results" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+// Variables globales
+let currentTests = {};
+
+// Función para mostrar toast
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    toast.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg text-sm font-sans animate-slide-in`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('animate-slide-out');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Función para actualizar estado de test
+function updateTestStatus(testType, status) {
+    const statusElement = document.getElementById(`${testType}-status`);
+    if (statusElement) {
+        statusElement.className = `w-3 h-3 rounded-full ${status}`;
+    }
+}
+
+// Función para ejecutar test
+async function runTest(testType) {
+    if (currentTests[testType]) {
+        showToast('{% trans "Test already running" %}', 'warning');
+        return;
+    }
+    
+    // Actualizar UI
+    updateTestStatus(testType, 'bg-yellow-500 animate-pulse');
+    currentTests[testType] = true;
+    
+    try {
+        const response = await fetch('', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: `test_type=${testType}`
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            updateTestStatus(testType, 'bg-green-500');
+            showToast(result.message, 'success');
+            displayTestResult(testType, result);
+        } else {
+            updateTestStatus(testType, 'bg-red-500');
+            showToast(result.message, 'error');
+            displayTestResult(testType, result);
+        }
+        
+    } catch (error) {
+        updateTestStatus(testType, 'bg-red-500');
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Test error:', error);
+    } finally {
+        currentTests[testType] = false;
+    }
+}
+
+// Función para mostrar resultado de test
+function displayTestResult(testType, result) {
+    const resultsContainer = document.getElementById('test-results');
+    
+    // Remover estado inicial si existe
+    const initialState = resultsContainer.querySelector('.text-center');
+    if (initialState) {
+        initialState.remove();
+    }
+    
+    const resultElement = document.createElement('div');
+    resultElement.className = `bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 ${result.success ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}`;
+    
+    const timestamp = new Date().toLocaleString();
+    
+    resultElement.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">${testType.charAt(0).toUpperCase() + testType.slice(1)} Test</h4>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500 dark:text-gray-400">${timestamp}</span>
+                <div class="w-3 h-3 rounded-full ${result.success ? 'bg-green-500' : 'bg-red-500'}"></div>
+            </div>
+        </div>
+        <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">${result.message}</p>
+        ${result.details ? `
+        <div class="bg-gray-50 dark:bg-neutral-600 p-3 rounded text-xs">
+            <h5 class="font-semibold text-gray-900 dark:text-gray-100 mb-2">{% trans "Details" %}:</h5>
+            <pre class="text-gray-700 dark:text-gray-300 overflow-x-auto">${JSON.stringify(result.details, null, 2)}</pre>
+        </div>
+        ` : ''}
+    `;
+    
+    resultsContainer.insertBefore(resultElement, resultsContainer.firstChild);
+    
+    // Limitar a 5 resultados
+    const results = resultsContainer.children;
+    if (results.length > 5) {
+        resultsContainer.removeChild(results[results.length - 1]);
+    }
+}
+
+// Función para verificar estado del sistema
+async function checkSystemStatus() {
+    try {
+        const response = await fetch('{% url "adminet:adminet_status" %}');
+        const data = await response.json();
+        
+        // Actualizar indicadores de estado
+        document.getElementById('system-db-status').className = `w-3 h-3 rounded-full ${data.database_connected ? 'bg-green-500' : 'bg-red-500'}`;
+        document.getElementById('system-sync-status').className = `w-3 h-3 rounded-full ${data.sync_service_running ? 'bg-green-500' : 'bg-red-500'}`;
+        document.getElementById('system-log-status').className = `w-3 h-3 rounded-full ${data.logging_active ? 'bg-green-500' : 'bg-red-500'}`;
+        
+        showToast('{% trans "System status updated" %}', 'success');
+    } catch (error) {
+        showToast('{% trans "Error checking system status" %}', 'error');
+    }
+}
+
+// Función para exportar reporte
+function exportTestReport() {
+    const results = document.getElementById('test-results').children;
+    if (results.length === 0) {
+        showToast('{% trans "No test results to export" %}', 'warning');
+        return;
+    }
+    
+    // Crear reporte
+    let report = 'Connection Test Report\n';
+    report += 'Generated: ' + new Date().toLocaleString() + '\n\n';
+    
+    Array.from(results).forEach(result => {
+        const title = result.querySelector('h4').textContent;
+        const message = result.querySelector('p').textContent;
+        const timestamp = result.querySelector('.text-xs').textContent;
+        
+        report += `${title} (${timestamp})\n`;
+        report += `${message}\n\n`;
+    });
+    
+    // Descargar archivo
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'connection_test_report.txt';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showToast('{% trans "Report exported successfully" %}', 'success');
+}
+
+// Función para ejecutar diagnóstico
+async function runDiagnostic() {
+    try {
+        const response = await fetch('{% url "adminet:connection_diagnostic" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('{% trans "Diagnostic completed successfully" %}', 'success');
+            displayTestResult('diagnostic', result);
+        } else {
+            showToast(result.message, 'error');
+        }
+    } catch (error) {
+        showToast('{% trans "Error running diagnostic" %}', 'error');
+    }
+}
+
+// Función para limpiar resultados
+function clearResults() {
+    const resultsContainer = document.getElementById('test-results');
+    resultsContainer.innerHTML = `
+        <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-sm">{% trans "No tests have been run yet. Click on any test above to start." %}</p>
+        </div>
+    `;
+    
+    // Resetear estados
+    ['basic', 'tables', 'queries', 'performance', 'full'].forEach(type => {
+        updateTestStatus(type, 'bg-gray-300 dark:bg-gray-600');
+    });
+    
+    showToast('{% trans "Results cleared" %}', 'info');
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar estado del sistema al cargar
+    checkSystemStatus();
+    
+    // Auto-refresh cada 30 segundos
+    setInterval(checkSystemStatus, 30000);
+});
+</script>
+
+<style>
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-out {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-out {
+    animation: slide-out 0.3s ease-in;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+{% endblock %} 

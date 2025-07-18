@@ -17,6 +17,11 @@ from core.models import Branch
 from core.utils.utils import require_empresa_activa
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
+from core.models.fiscal_responsibility import FiscalResponsibility
+from core.models import State, Country
+import defusedxml.ElementTree as DefusedET
+from django.core.exceptions import ValidationError
+import bleach
 
 logger = logging.getLogger(__name__)
 
@@ -260,54 +265,105 @@ def historial_view(request):
 # Antes de usar auth o firestore, asegúrate de inicializar Firebase:
 get_firebase_app()
 
-class EmpresaForm(forms.ModelForm):
-    class Meta:
-        model = Empresa
-        fields = [
-            'nombre', 'identificador_fiscal', 'email', 'telefono', 'direccion',
-            'pais', 'ciudad', 'logo', 'activa'
-        ]
-        widgets = {
-            'activa': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
-        }
-
-# Vista para crear una nueva empresa
-def empresa_crear_view(request):
-    if request.method == 'POST':
-        form = EmpresaForm(request.POST, request.FILES)
-        if form.is_valid():
-            empresa = form.save()
-            return redirect('core:empresa_listar')
-    else:
-        form = EmpresaForm()
-    return render(request, 'core/system_config/empresa_form.html', {'form': form, 'empresa': None})
-
-@require_empresa_activa(lambda request, empresa_id, *a, **k: get_object_or_404(Empresa, id=empresa_id))
-def empresa_editar_view(request, empresa_id):
-    empresa = get_object_or_404(Empresa, id=empresa_id)
-    if request.method == 'POST':
-        # Si solo se envía el campo 'activa', actualizar directamente
-        if 'activa' in request.POST and len(request.POST) == 2:  # activa + csrf
-            empresa.activa = request.POST.get('activa') == 'on'
-            empresa.save()
-            return HttpResponse('OK')  # Respuesta simple para AJAX
-        elif 'activa' in request.POST and len(request.POST) == 3:  # activa + csrf + csrfmiddlewaretoken
-            empresa.activa = request.POST.get('activa') == 'on'
-            empresa.save()
-            return HttpResponse('OK')  # Respuesta simple para AJAX
-        
-        # Si se envían más campos, usar el formulario completo
-        form = EmpresaForm(request.POST, request.FILES, instance=empresa)
-        if form.is_valid():
-            form.save()
-            return redirect('core:empresa_listar')
-    else:
-        form = EmpresaForm(instance=empresa)
-    return render(request, 'core/system_config/empresa_form.html', {'form': form, 'empresa': empresa})
-
 def empresa_listar_view(request):
     empresas = Empresa.objects.all().order_by('nombre')
     return render(request, 'core/system_config/empresa_list.html', {'empresas': empresas})
+
+def empresa_detalle_view(request, empresa_id):
+    from core.models import Empresa
+    from django.forms.models import model_to_dict
+    context = {}
+    error = None
+    
+    # Si empresa_id es 0, es modo creación
+    if empresa_id == 0:
+        empresa = None
+        modo_creacion = True
+    else:
+        try:
+            empresa = Empresa.objects.get(id=empresa_id)
+            modo_creacion = False
+        except Empresa.DoesNotExist:
+            empresa = None
+            modo_creacion = True
+    
+    if request.method == 'POST':
+        data = request.POST.copy()
+        
+        if modo_creacion:
+            # Creación de empresa
+            empresa = Empresa()
+            for field in ['nombre', 'razon_social', 'identificador_fiscal', 'email', 'telefono', 'direccion', 'ciudad', 'sitio_web']:
+                if field in data:
+                    setattr(empresa, field, data.get(field))
+            
+            # ForeignKey por ID
+            try:
+                empresa.country_id = int(data.get('pais_id')) if data.get('pais_id') else None
+            except (ValueError, TypeError):
+                empresa.country_id = None
+            try:
+                empresa.state_id = int(data.get('state_id')) if data.get('state_id') else None
+            except (ValueError, TypeError):
+                empresa.state_id = None
+            try:
+                empresa.fiscal_responsibility_id = int(data.get('fiscal_responsibility_id')) if data.get('fiscal_responsibility_id') else None
+            except (ValueError, TypeError):
+                empresa.fiscal_responsibility_id = None
+            try:
+                empresa.currency_id = int(data.get('currency_id')) if data.get('currency_id') else None
+            except (ValueError, TypeError):
+                empresa.currency_id = None
+        else:
+            # Edición de empresa
+            for field in ['nombre', 'razon_social', 'identificador_fiscal', 'email', 'telefono', 'direccion', 'ciudad', 'sitio_web']:
+                if field in data:
+                    setattr(empresa, field, data.get(field))
+            
+            # ForeignKey por ID
+            try:
+                empresa.country_id = int(data.get('pais_id')) if data.get('pais_id') else None
+            except (ValueError, TypeError):
+                empresa.country_id = None
+            try:
+                empresa.state_id = int(data.get('state_id')) if data.get('state_id') else None
+            except (ValueError, TypeError):
+                empresa.state_id = None
+            try:
+                empresa.fiscal_responsibility_id = int(data.get('fiscal_responsibility_id')) if data.get('fiscal_responsibility_id') else None
+            except (ValueError, TypeError):
+                empresa.fiscal_responsibility_id = None
+            try:
+                empresa.currency_id = int(data.get('currency_id')) if data.get('currency_id') else None
+            except (ValueError, TypeError):
+                empresa.currency_id = None
+        
+        # Manejar logo
+        if 'logo' in request.FILES:
+            empresa.logo = request.FILES['logo']
+        
+        # Validar campos obligatorios
+        required_fields = ['nombre', 'razon_social', 'identificador_fiscal']
+        missing_fields = [field for field in required_fields if not getattr(empresa, field, None)]
+        
+        if missing_fields:
+            error = f"Faltan campos obligatorios: {', '.join(missing_fields)}"
+        else:
+            try:
+                empresa.save()
+                messages.success(request, _('Empresa guardada exitosamente.'))
+                return redirect('core:empresa_listar')
+            except Exception as e:
+                error = f"Error al guardar: {str(e)}"
+    
+    # Preparar contexto para el template
+    context = {
+        'empresa': empresa, 
+        'modo_creacion': modo_creacion,
+        'error': error
+    }
+    
+    return render(request, 'core/system_config/empresa_detail.html', context)
 
 def empresa_eliminar_view(request, empresa_id):
     empresa = get_object_or_404(Empresa, id=empresa_id)
@@ -323,6 +379,110 @@ def empresa_eliminar_view(request, empresa_id):
             messages.success(request, _('Company deleted successfully.'))
         return redirect('core:empresa_listar')
     return render(request, 'core/system_config/empresa_confirm_delete.html', {'empresa': empresa, 'tiene_dependencias': tiene_dependencias})
+
+def empresa_ficha_view(request, empresa_id=None):
+    from core.models import Empresa
+    from django.forms.models import model_to_dict
+    context = {}
+    error = None
+    if empresa_id:
+        empresa = Empresa.objects.get(id=empresa_id)
+        if request.method == 'POST':
+            data = request.POST.copy()
+            # Campos normales
+            for field in ['nombre', 'razon_social', 'identificador_fiscal', 'email', 'telefono', 'direccion', 'ciudad', 'sitio_web']:
+                if field in data:
+                    setattr(empresa, field, data.get(field))
+            # ForeignKey por ID (validar y convertir a int)
+            try:
+                empresa.country_id = int(data.get('country_id')) if data.get('country_id') else None
+            except (ValueError, TypeError):
+                empresa.country_id = None
+            try:
+                empresa.state_id = int(data.get('state_id')) if data.get('state_id') else None
+            except (ValueError, TypeError):
+                empresa.state_id = None
+            try:
+                empresa.fiscal_responsibility_id = int(data.get('fiscal_responsibility_id')) if data.get('fiscal_responsibility_id') else None
+            except (ValueError, TypeError):
+                empresa.fiscal_responsibility_id = None
+            try:
+                empresa.currency_id = int(data.get('currency_id')) if data.get('currency_id') else None
+            except (ValueError, TypeError):
+                empresa.currency_id = None
+            if 'logo' in request.FILES:
+                empresa.logo = request.FILES['logo']
+            # Validar campos obligatorios de referencia
+            required_ids = [empresa.country_id, empresa.state_id, empresa.fiscal_responsibility_id, empresa.currency_id]
+            if not all(required_ids):
+                campos = [
+                    (_('Nombre de la empresa'), empresa.nombre, '', 'nombre', False),
+                    (_('Razón Social'), empresa.razon_social, '', 'razon_social', False),
+                    (_('CUIT/RFC/NIF'), empresa.identificador_fiscal, _('Identificador fiscal según país'), 'identificador_fiscal', False),
+                    (_('Tipo de Responsabilidad'), empresa.fiscal_responsibility.name if empresa.fiscal_responsibility else '', _('Tipo de contribuyente según AFIP/SAT/etc'), 'fiscal_responsibility', False),
+                    (_('Dirección'), empresa.direccion, '', 'direccion', False),
+                    (_('Ciudad'), empresa.ciudad, '', 'ciudad', False),
+                    (_('Provincia/Estado'), empresa.state.name if empresa.state else '', '', 'state', False),
+                    (_('País'), empresa.country.name if empresa.country else '', '', 'country', False),
+                    (_('Teléfono'), empresa.telefono, '', 'telefono', False),
+                    (_('Email'), empresa.email, '', 'email', False),
+                    (_('Sitio web'), empresa.sitio_web if hasattr(empresa, 'sitio_web') else '', '', 'sitio_web', True),
+                ]
+                context = {'empresa': empresa, 'campos': campos, 'modo_creacion': False, 'error': _('Faltan campos obligatorios de referencia (país, provincia, responsabilidad fiscal o moneda).')}
+                return render(request, 'core/system_config/empresa_detail.html', context)
+            empresa.save()
+            return redirect('core:empresa_detalle', empresa_id=empresa.id)
+        # Campos para la ficha
+        campos = [
+            (_('Nombre de la empresa'), empresa.nombre, '', 'nombre', False),
+            (_('Razón Social'), empresa.razon_social, '', 'razon_social', False),
+            (_('CUIT/RFC/NIF'), empresa.identificador_fiscal, _('Identificador fiscal según país'), 'identificador_fiscal', False),
+            (_('Tipo de Responsabilidad'), empresa.fiscal_responsibility.name if empresa.fiscal_responsibility else '', _('Tipo de contribuyente según AFIP/SAT/etc'), 'fiscal_responsibility', False),
+            (_('Dirección'), empresa.direccion, '', 'direccion', False),
+            (_('Ciudad'), empresa.ciudad, '', 'ciudad', False),
+            (_('Provincia/Estado'), empresa.state.name if empresa.state else '', '', 'state', False),
+            (_('País'), empresa.country.name if empresa.country else '', '', 'country', False),
+            (_('Teléfono'), empresa.telefono, '', 'telefono', False),
+            (_('Email'), empresa.email, '', 'email', False),
+            (_('Sitio web'), empresa.sitio_web if hasattr(empresa, 'sitio_web') else '', '', 'sitio_web', True),
+        ]
+        context = {'empresa': empresa, 'campos': campos, 'modo_creacion': False}
+    else:
+        # Creación de empresa
+        if request.method == 'POST':
+            data = request.POST.copy()
+            empresa = Empresa()
+            for field in ['nombre', 'razon_social', 'identificador_fiscal', 'email', 'telefono', 'direccion', 'ciudad', 'sitio_web']:
+                if field in data:
+                    setattr(empresa, field, data.get(field))
+            if 'country_id' in data and data.get('country_id'):
+                empresa.country_id = data.get('country_id')
+            if 'state_id' in data and data.get('state_id'):
+                empresa.state_id = data.get('state_id')
+            if 'fiscal_responsibility_id' in data and data.get('fiscal_responsibility_id'):
+                empresa.fiscal_responsibility_id = data.get('fiscal_responsibility_id')
+            if 'currency_id' in data and data.get('currency_id'):
+                empresa.currency_id = data.get('currency_id')
+            if 'logo' in request.FILES:
+                empresa.logo = request.FILES['logo']
+            empresa.save()
+            return redirect('core:empresa_detalle', empresa_id=empresa.id)
+        # Campos vacíos para la ficha
+        campos = [
+            (_('Nombre de la empresa'), '', '', 'nombre', False),
+            (_('Razón Social'), '', '', 'razon_social', False),
+            (_('CUIT/RFC/NIF'), '', _('Identificador fiscal según país'), 'identificador_fiscal', False),
+            (_('Tipo de Responsabilidad'), '', _('Tipo de contribuyente según AFIP/SAT/etc'), 'fiscal_responsibility', False),
+            (_('Dirección'), '', '', 'direccion', False),
+            (_('Ciudad'), '', '', 'ciudad', False),
+            (_('Provincia/Estado'), '', '', 'state', False),
+            (_('País'), '', '', 'country', False),
+            (_('Teléfono'), '', '', 'telefono', False),
+            (_('Email'), '', '', 'email', False),
+            (_('Sitio web'), '', '', 'sitio_web', True),
+        ]
+        context = {'empresa': None, 'campos': campos, 'modo_creacion': True}
+    return render(request, 'core/system_config/empresa_detail.html', context)
 
 class BranchForm(forms.ModelForm):
     class Meta:

@@ -58,4 +58,5 @@ urlpatterns = [
     path('api/brands/create/', BrandQuickCreateApiView.as_view(), name='brand_quick_create_api'),
     path('api/categories/search/', CategorySearchApiView.as_view(), name='category_search_api'),
     path('api/subcategories/search/', SubcategorySearchApiView.as_view(), name='subcategory_search_api'),
+    path('api/products/search/', views.ProductSearchApiView.as_view(), name='product_search_api'),
 ]

@@ -33,24 +33,26 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
+    'corsheaders',
+    'crispy_forms',
+    'crispy_tailwind',
 
     # Apps propias
     'core',
     'login',
-    'clientes',
     'dashboard',
+    'sales',
     'inventory',
     'tiendanube',
     'django_celery_beat',
     'celery',
-    'crispy_forms',
-    'crispy_tailwind',
-    'sales',
     'accounting',
     'purchases',
     'reports',
     'mercadopago',
     'clover',
+    'administraNET_integration',
 ]
 
 MIDDLEWARE = [
@@ -112,6 +114,7 @@ TEMPLATES = [
                 'core.context_processors.inventory_menu_context',
                 'core.context_processors.tiendanube_menu_context',
                 'core.context_processors.purchases_menu_context',
+                'administraNET_integration.context_processors.administraNET_integration_menu',
             ],
         },
     },

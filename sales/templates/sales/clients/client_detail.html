@@ -422,10 +422,12 @@
                     {% endfor %}
                 </div>
                 <div class="mt-4">
+                    {% comment %}
                     <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" class="btn-primary">
                         <i class="fas fa-plus mr-2"></i>
                         {% trans "Add Contact" %}
                     </a>
+                    {% endcomment %}
                 </div>
             </div>
         </div>
@@ -441,10 +443,12 @@
                     <p class="text-gray-600 dark:text-gray-400 mb-4">
                         {% trans "No contacts have been added to this client yet." %}
                     </p>
+                    {% comment %}
                     <a href="{% url 'sales:contact_create_by_client' client_id=client.pk %}" class="btn-primary">
                         <i class="fas fa-plus mr-2"></i>
                         {% trans "Add First Contact" %}
                     </a>
+                    {% endcomment %}
                 </div>
             </div>
         </div>

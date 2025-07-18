@@ -1,18 +1,18 @@
 {% extends 'sales/sales_base.html' %}
 {% load static %}
 
-{% block page_title %}Condiciones de Pago {{ payment_terms.name }}{% endblock %}
+{% block page_title %}Condiciones de Pago {{ payment_term.name }}{% endblock %}
 
 {% block page_actions %}
-<a href="{% url 'sales:payment_terms_edit' payment_terms.pk %}" 
+<a href="{% url 'sales:payment_terms_edit' payment_term.pk %}"
    class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
     </svg>
     Editar
 </a>
-{% if payment_terms.is_active %}
-<a href="{% url 'sales:payment_terms_deactivate' payment_terms.pk %}" 
+{% if payment_term.is_active %}
+<a href="{% url 'sales:payment_terms_deactivate' payment_term.pk %}"
    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -20,7 +20,7 @@
     Desactivar
 </a>
 {% else %}
-<a href="{% url 'sales:payment_terms_activate' payment_terms.pk %}" 
+<a href="{% url 'sales:payment_terms_activate' payment_term.pk %}"
    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -38,7 +38,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">
-                        {{ payment_terms.name }}
+                        {{ payment_term.name }}
                     </h3>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         Condiciones de Pago
@@ -46,9 +46,9 @@
                 </div>
                 <div class="text-right">
                     <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
-                        {% if payment_terms.is_active %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                        {% if payment_term.is_active %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
                         {% else %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% endif %}">
-                        {% if payment_terms.is_active %}Activa{% else %}Inactiva{% endif %}
+                        {% if payment_term.is_active %}Activa{% else %}Inactiva{% endif %}
                     </span>
                 </div>
             </div>
@@ -62,19 +62,19 @@
                     <dl class="space-y-2">
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Nombre:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.name }}</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.name }}</dd>
                         </div>
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Código:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.code }}</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.code }}</dd>
                         </div>
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Tipo:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.get_type_display }}</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.get_type_display }}</dd>
                         </div>
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Días de Pago:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.payment_days }}</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.payment_days }}</dd>
                         </div>
                     </dl>
                 </div>
@@ -86,25 +86,25 @@
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Estado:</dt>
                             <dd class="text-sm font-medium text-gray-900 dark:text-white">
-                                {% if payment_terms.is_active %}Activa{% else %}Inactiva{% endif %}
+                                {% if payment_term.is_active %}Activa{% else %}Inactiva{% endif %}
                             </dd>
                         </div>
-                        {% if payment_terms.discount_percentage %}
+                        {% if payment_term.discount_percentage %}
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Descuento por Pago Anticipado:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.discount_percentage }}%</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.discount_percentage }}%</dd>
                         </div>
                         {% endif %}
-                        {% if payment_terms.discount_days %}
+                        {% if payment_term.discount_days %}
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Días para Descuento:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.discount_days }}</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.discount_days }}</dd>
                         </div>
                         {% endif %}
-                        {% if payment_terms.penalty_percentage %}
+                        {% if payment_term.penalty_percentage %}
                         <div class="flex justify-between">
                             <dt class="text-sm text-gray-500 dark:text-gray-400">Penalización por Atraso:</dt>
-                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_terms.penalty_percentage }}%</dd>
+                            <dd class="text-sm font-medium text-gray-900 dark:text-white">{{ payment_term.penalty_percentage }}%</dd>
                         </div>
                         {% endif %}
                     </dl>
@@ -112,13 +112,13 @@
             </div>
             
             <!-- Payment Terms Description -->
-            {% if payment_terms.description %}
+            {% if payment_term.description %}
             <div class="mt-6">
                 <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                     Descripción
                 </h4>
                 <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                    <p class="text-sm text-gray-900 dark:text-white">{{ payment_terms.description }}</p>
+                    <p class="text-sm text-gray-900 dark:text-white">{{ payment_term.description }}</p>
                 </div>
             </div>
             {% endif %}
@@ -127,64 +127,42 @@
 
     <!-- Payment Terms Schedule -->
     <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-6">
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
             <h3 class="text-lg font-medium text-gray-900 dark:text-white">Cronograma de Pagos</h3>
+            <a href="{% url 'sales:payment_term_line_create' payment_term.pk %}"
+               class="inline-flex items-center px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded shadow hover:bg-blue-700 transition">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Agregar Línea
+            </a>
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead class="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Número de Pago
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Días desde la Fecha
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Porcentaje
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Tipo
-                        </th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Descripción
-                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">N°</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Días</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Porcentaje</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {% for schedule in payment_terms.schedule.all %}
-                    <tr>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                {{ schedule.payment_number }}
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 dark:text-white">
-                                {{ schedule.days_from_date }}
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 dark:text-white">
-                                {{ schedule.percentage }}%
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 dark:text-white">
-                                {{ schedule.get_payment_type_display }}
-                            </div>
-                        </td>
-                        <td class="px-6 py-4">
-                            <div class="text-sm text-gray-900 dark:text-white">
-                                {{ schedule.description|default:"-" }}
-                            </div>
+                    {% for line in payment_term.lines.all %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.sequence }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.days }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ line.percent }}%</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'sales:payment_term_line_edit' line.pk %}"
+                               class="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-2 transition">Editar</a>
+                            <a href="{% url 'sales:payment_term_line_delete' line.pk %}"
+                               class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition">Eliminar</a>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                            No hay cronograma de pagos configurado
-                        </td>
+                        <td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">No hay líneas configuradas</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -203,7 +181,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Pedidos</p>
-                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_terms.sales_orders.count }}</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_term.sales_orders.count }}</p>
                 </div>
             </div>
         </div>
@@ -217,7 +195,7 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Facturas</p>
-                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_terms.invoices.count }}</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_term.invoices.count }}</p>
                 </div>
             </div>
         </div>
@@ -231,14 +209,14 @@
                 </div>
                 <div class="ml-4">
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Clientes</p>
-                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_terms.clients.count }}</p>
+                    <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ payment_term.clients.count }}</p>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Recent Usage -->
-    {% if payment_terms.sales_orders.exists or payment_terms.invoices.exists %}
+    {% if payment_term.sales_orders.exists or payment_term.invoices.exists %}
     <div class="bg-white dark:bg-gray-800 shadow rounded-lg mt-6">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 class="text-lg font-medium text-gray-900 dark:text-white">Uso Reciente</h3>
@@ -246,13 +224,13 @@
         <div class="p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Recent Sales Orders -->
-                {% if payment_terms.sales_orders.exists %}
+                {% if payment_term.sales_orders.exists %}
                 <div>
                     <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                         Pedidos Recientes
                     </h4>
                     <div class="space-y-3">
-                        {% for order in payment_terms.sales_orders.all|slice:":5" %}
+                        {% for order in payment_term.sales_orders.all|slice:":5" %}
                         <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <div>
                                 <p class="text-sm font-medium text-gray-900 dark:text-white">
@@ -273,13 +251,13 @@
                 {% endif %}
 
                 <!-- Recent Invoices -->
-                {% if payment_terms.invoices.exists %}
+                {% if payment_term.invoices.exists %}
                 <div>
                     <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
                         Facturas Recientes
                     </h4>
                     <div class="space-y-3">
-                        {% for invoice in payment_terms.invoices.all|slice:":5" %}
+                        {% for invoice in payment_term.invoices.all|slice:":5" %}
                         <div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                             <div>
                                 <p class="text-sm font-medium text-gray-900 dark:text-white">

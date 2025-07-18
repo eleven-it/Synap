@@ -7,342 +7,554 @@
 
 {% block extra_css %}
 <style>
-    .form-section {
-        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+/* Animaciones del wizard de Tiendanube */
+@keyframes fadeIn { 
+    from { opacity:0; transform:translateY(20px);} 
+    to { opacity:1; transform:translateY(0);} 
+}
+@keyframes slideUp { 
+    from { opacity:0; transform:translateY(40px);} 
+    to { opacity:1; transform:translateY(0);} 
+}
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.animate-fadeIn { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both; }
+.animate-slideUp { animation: slideUp 0.7s cubic-bezier(.4,0,.2,1) both; }
+.animate-bounce { animation: bounce 1s infinite; }
+
+/* Estilos de botones con feedback visual */
+.btn-wizard {
+    @apply bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-300 text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none;
+}
+.btn-wizard:active {
+    transform: scale(0.97);
+}
+
+/* Focus ring animado para inputs */
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #3b82f6, 0 1px 2px 0 rgba(0,0,0,0.05);
+    border-color: #3b82f6;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+/* Estilos para campos de formulario compactos */
+.form-field {
+    @apply mb-4;
+}
+.form-field label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+}
+.form-field input, .form-field select, .form-field textarea {
+    @apply w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-blue-500 transition;
+}
+
+/* Grid responsivo compacto */
+.form-grid {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .form-field label {
+        @apply text-gray-300;
     }
-    
-    .form-section h3 {
-        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    .form-field input, .form-field select, .form-field textarea {
+        @apply bg-gray-800 border-gray-600 text-white;
     }
-    
-    .form-section h3::before {
-        content: '';
-        @apply w-1 h-6 bg-gradient-to-b from-orange-400 to-orange-600 rounded-full mr-3;
-    }
-    
-    .form-row {
-        @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4;
-    }
-    
-    .form-group {
-        @apply space-y-2;
-    }
-    
-    .form-label {
-        @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
-    }
-    
-    .form-input {
-        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
-               dark:bg-gray-700 dark:text-white transition-all duration-200;
-    }
-    
-    .form-input:focus {
-        @apply transform scale-[1.02] shadow-lg;
-    }
-    
-    .form-select {
-        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
-               dark:bg-gray-700 dark:text-white transition-all duration-200;
-    }
-    
-    .form-textarea {
-        @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg 
-               focus:ring-2 focus:ring-orange-500 focus:border-orange-500 
-               dark:bg-gray-700 dark:text-white transition-all duration-200 resize-none;
-    }
-    
-    .btn-primary {
-        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-6 py-3 rounded-lg 
-               font-medium hover:from-orange-500 hover:to-orange-700 
-               transform hover:scale-105 transition-all duration-200 shadow-lg;
-    }
-    
-    .btn-secondary {
-        @apply bg-gray-500 text-white px-6 py-3 rounded-lg font-medium 
-               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
-    }
-    
-    .required-field::after {
-        content: ' *';
-        @apply text-red-500;
-    }
-    
-    .progress-bar {
-        @apply fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-400 to-orange-600 z-50;
-        transform: scaleX(0);
-        transform-origin: left;
-        transition: transform 0.3s ease;
-    }
-    
-    .progress-bar.active {
-        transform: scaleX(1);
-    }
-    
-    .form-tabs {
-        @apply flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-700 rounded-lg p-1;
-    }
-    
-    .form-tab {
-        @apply flex-1 text-center py-2 px-4 rounded-md text-sm font-medium transition-all duration-200;
-    }
-    
-    .form-tab.active {
-        @apply bg-white dark:bg-gray-600 text-orange-600 dark:text-orange-400 shadow-sm;
-    }
-    
-    .form-tab:not(.active) {
-        @apply text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white;
-    }
-    
-    .tab-content {
-        display: none;
-    }
-    
-    .tab-content.active {
-        display: block;
-        animation: fadeInUp 0.3s ease;
-    }
-    
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
+}
 </style>
 {% endblock %}
 
-{% block content %}
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <!-- Progress Bar -->
-    <div class="progress-bar" id="progressBar"></div>
+{% block sales_content %}
+{% with header_title=object|yesno:"Editar Cliente,Nuevo Cliente" %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 pt-20">
+    <!-- Toasts de notificación accesibles -->
+    {% if messages %}
+    <div class="fixed top-20 right-6 z-50 space-y-2 animate-fadeIn" role="status" aria-live="polite">
+        {% for message in messages %}
+        <div class="px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400"
+            tabindex="0"
+            {% if message.tags == 'success' %}style="background: linear-gradient(90deg, #22c55e, #16a34a);"{% elif message.tags == 'error' %}style="background: linear-gradient(90deg, #ef4444, #b91c1c);"{% else %}style="background: linear-gradient(90deg, #3b82f6, #6366f1);"{% endif %}>
+            <span aria-hidden="true">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-times-circle"></i>
+                {% else %}
+                    <i class="fas fa-info-circle"></i>
+                {% endif %}
+            </span>
+            <span class="font-medium">{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
     
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                        {% if object %}
-                            {% trans "Edit Client" %}
-                        {% else %}
-                            {% trans "New Client" %}
-                        {% endif %}
+    <!-- Subheader visual fijo -->
+    <nav class="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 fixed top-16 left-0 w-full z-30 shadow-sm border-b border-gray-200 dark:border-gray-700 animate-fadeIn" aria-label="Subheader">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row md:items-center py-2 gap-2 w-full mt-2">
+                <!-- Título alineado completamente a la izquierda -->
+                <div class="flex items-center flex-shrink-0 m-0 p-0" style="min-width: 0;">
+                    <h1 class="text-2xl font-bold text-white whitespace-nowrap m-0 p-0" tabindex="0">
+                        {{ header_title }}
                     </h1>
-                    <p class="mt-2 text-gray-600 dark:text-gray-400">
-                        {% if object %}
-                            {% trans "Update client information and settings" %}
-                        {% else %}
-                            {% trans "Create a new client with complete information" %}
-                        {% endif %}
-                    </p>
                 </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'sales:client_list' %}" class="btn-secondary">
-                        <i class="fas fa-arrow-left mr-2"></i>
-                        {% trans "Back to List" %}
+                <div class="flex-1"></div>
+                <!-- Botón alineado completamente a la derecha -->
+                <div class="flex items-center flex-shrink-0" style="min-width: 0;">
+                    <a href="{% url 'sales:client_list' %}"
+                       class="flex items-center space-x-2 text-sm px-4 py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow hover:from-orange-500 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 transition-transform transform hover:scale-105 active:scale-95 animate-fadeIn"
+                       aria-label="{% trans 'Volver a la lista' %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        <span>{% trans "Volver a la lista" %}</span>
                     </a>
                 </div>
             </div>
         </div>
+    </nav>
 
-        <!-- Form -->
-        <form method="post" id="clientForm" class="space-y-6">
-            {% csrf_token %}
-            
-            <!-- Form Tabs -->
-            <div class="form-tabs">
-                <button type="button" class="form-tab active" data-tab="basic">
-                    <i class="fas fa-user mr-2"></i>
-                    {% trans "Basic Info" %}
-                </button>
-                <button type="button" class="form-tab" data-tab="address">
-                    <i class="fas fa-map-marker-alt mr-2"></i>
-                    {% trans "Address" %}
-                </button>
-                <button type="button" class="form-tab" data-tab="commercial">
-                    <i class="fas fa-chart-line mr-2"></i>
-                    {% trans "Commercial" %}
-                </button>
-                <button type="button" class="form-tab" data-tab="settings">
-                    <i class="fas fa-cog mr-2"></i>
-                    {% trans "Settings" %}
-                </button>
+    <!-- Wizard Container - Copiado del diseño de Tiendanube -->
+    <div class="max-w-4xl mx-auto mt-12 px-4">
+        <!-- Mostrar código del cliente en edición -->
+        {% if object and object.code %}
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6 animate-fadeIn">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0">
+                        <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">{% trans "Client Code" %}</h3>
+                        <p class="text-lg font-mono font-bold text-blue-900 dark:text-blue-100">{{ object.code }}</p>
+                    </div>
+                </div>
+                <div class="flex-shrink-0">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                        {% trans "Auto-generated" %}
+                    </span>
+                </div>
             </div>
+        </div>
+        {% endif %}
+        
+        <!-- Progress Bar -->
+        <div class="w-full bg-gray-200 rounded-full h-2 mb-6">
+            <div id="wizardProgress" class="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        
+        <!-- Step Indicators -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300 step-indicator" data-step="1">
+                        <span class="step-number">1</span>
+                    </div>
+                    <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 -translate-y-1/2 step-connector"></div>
+                </div>
+                <span class="mt-2 text-xs font-medium step-label">{% trans "Basic Info" %}</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300 step-indicator" data-step="2">
+                        <span class="step-number">2</span>
+                    </div>
+                    <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 -translate-y-1/2 step-connector"></div>
+                </div>
+                <span class="mt-2 text-xs font-medium step-label">{% trans "Address" %}</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300 step-indicator" data-step="3">
+                        <span class="step-number">3</span>
+                    </div>
+                    <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 -translate-y-1/2 step-connector"></div>
+                </div>
+                <span class="mt-2 text-xs font-medium step-label">{% trans "Commercial" %}</span>
+            </div>
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300 step-indicator" data-step="4">
+                        <span class="step-number">4</span>
+                    </div>
+                </div>
+                <span class="mt-2 text-xs font-medium step-label">{% trans "Configuración" %}</span>
+            </div>
+        </div>
 
-            <!-- Basic Info Tab -->
-            <div class="tab-content active" id="basic-tab">
-                <div class="form-section">
-                    <h3>{% trans "Basic Information" %}</h3>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.name|as_crispy_field }}
-                        </div>
-                        
-                        <div class="form-group">
-                            {{ form.code|as_crispy_field }}
-                        </div>
-                        
-                        <div class="form-group">
-                            {{ form.contact_person|as_crispy_field }}
-                        </div>
+        <!-- Wizard Content -->
+        <div id="wizardStepContent" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8 animate-fadeIn">
+            <form method="post" id="clientForm" class="space-y-6" autocomplete="off" novalidate>
+                {% csrf_token %}
+                
+                <!-- Step 1: Basic Information -->
+                <div class="wizard-step-content" data-step="1">
+                    <div class="text-center mb-6 animate-fadeIn">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{% trans "Basic Information" %}</h2>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">{% trans "Enter the basic details of your client" %}</p>
                     </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.email|as_crispy_field }}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="form-field flex flex-col">
+                            <label for="{{ form.name.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "Nombre" %} *</label>
+                            <input type="text" name="name" id="{{ form.name.id_for_label }}" value="{{ form.name.value|default_if_none:'' }}" placeholder="{% trans 'Enter client name...' %}" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" required>
                         </div>
-                        
-                        <div class="form-group">
-                            {{ form.phone|as_crispy_field }}
+                        <div class="form-field flex flex-col md:col-span-2 lg:col-span-3">
+                            <label for="{{ form.email.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">Correo electrónico</label>
+                            <input type="email" name="email" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default_if_none:'' }}" placeholder="client@example.com" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
                         </div>
-                        
-                        <div class="form-group">
-                            {{ form.mobile|as_crispy_field }}
+                        <div class="form-field flex flex-col">
+                            <label for="{{ form.phone.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">Phone</label>
+                            <input type="text" name="phone" id="{{ form.phone.id_for_label }}" value="{{ form.phone.value|default_if_none:'' }}" placeholder="+1 234 567 8900" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
                         </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.website|as_crispy_field }}
+                        <div class="form-field flex flex-col">
+                            <label for="{{ form.mobile.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">Mobile</label>
+                            <input type="text" name="mobile" id="{{ form.mobile.id_for_label }}" value="{{ form.mobile.value|default_if_none:'' }}" placeholder="+1 234 567 8900" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
+                        </div>
+                        <div class="form-field flex flex-col md:col-span-2 lg:col-span-3">
+                            <label for="{{ form.website.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">Website</label>
+                            <input type="url" name="website" id="{{ form.website.id_for_label }}" value="{{ form.website.value|default_if_none:'' }}" placeholder="https://www.example.cc" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Address Tab -->
-            <div class="tab-content" id="address-tab">
-                <div class="form-section">
-                    <h3>{% trans "Address Information" %}</h3>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.country|as_crispy_field }}
-                        </div>
-                        
-                        <div class="form-group">
-                            {{ form.state|as_crispy_field }}
-                        </div>
-                        
-                        <div class="form-group">
-                            {{ form.city|as_crispy_field }}
-                        </div>
+                <!-- Step 2: Address Information -->
+                <div class="wizard-step-content hidden" data-step="2">
+                    <div class="text-center mb-6 animate-fadeIn">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{% trans "Address Information" %}</h2>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">{% trans "Enter the client's address details" %}</p>
                     </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.address|as_crispy_field }}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div class="form-field flex flex-col">
+                            <label for="id_country" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "Country" %} <span class="text-red-500">*</span></label>
+                            <select name="country" id="id_country" class="form-select w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white" required>
+                                <option value="">-- {% trans 'Select a country...' %} --</option>
+                                {% for c in form.country.field.queryset %}
+                                    <option value="{{ c.pk }}" {% if form.country.value|stringformat:'s' == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if form.country.errors %}
+                                <span class="text-red-500 text-xs mt-1 animate-fadeIn"><i class="fas fa-exclamation-circle mr-1"></i>{{ form.country.errors.0 }}</span>
+                            {% endif %}
                         </div>
-                        
-                        <div class="form-group">
-                            {{ form.postal_code|as_crispy_field }}
+                        <div class="form-field flex flex-col">
+                            <label for="id_state" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "State/Province" %}</label>
+                            <select name="state" id="id_state" class="form-select w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white">
+                                <option value="">-- {% trans 'Select a state/province...' %} --</option>
+                                {% for s in form.state.field.queryset %}
+                                    <option value="{{ s.pk }}" {% if form.state.value|stringformat:'s' == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if form.state.errors %}
+                                <span class="text-red-500 text-xs mt-1 animate-fadeIn"><i class="fas fa-exclamation-circle mr-1"></i>{{ form.state.errors.0 }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-field flex flex-col">
+                            <label for="{{ form.city.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "City" %}</label>
+                            <input type="text" name="city" id="{{ form.city.id_for_label }}" value="{{ form.city.value|default_if_none:'' }}" placeholder="{% trans 'Enter city name...' %}" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
+                            {% if form.city.errors %}
+                                <span class="text-red-500 text-xs mt-1 animate-fadeIn"><i class="fas fa-exclamation-circle mr-1"></i>{{ form.city.errors.0 }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-field flex flex-col md:col-span-2">
+                            <label for="{{ form.address.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "Address" %}</label>
+                            <textarea name="address" id="{{ form.address.id_for_label }}" rows="3" placeholder="{% trans 'Enter full address...' %}" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">{{ form.address.value|default_if_none:'' }}</textarea>
+                            {% if form.address.errors %}
+                                <span class="text-red-500 text-xs mt-1 animate-fadeIn"><i class="fas fa-exclamation-circle mr-1"></i>{{ form.address.errors.0 }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-field flex flex-col">
+                            <label for="{{ form.postal_code.id_for_label }}" class="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{% trans "Postal Code" %}</label>
+                            <input type="text" name="postal_code" id="{{ form.postal_code.id_for_label }}" value="{{ form.postal_code.value|default_if_none:'' }}" placeholder="{% trans '12345' %}" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500">
+                            {% if form.postal_code.errors %}
+                                <span class="text-red-500 text-xs mt-1 animate-fadeIn"><i class="fas fa-exclamation-circle mr-1"></i>{{ form.postal_code.errors.0 }}</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Commercial Tab -->
-            <div class="tab-content" id="commercial-tab">
-                <div class="form-section">
-                    <h3>{% trans "Commercial Information" %}</h3>
+                <!-- Step 3: Commercial Information -->
+                <div class="wizard-step-content hidden" data-step="3">
+                    <div class="text-center mb-6 animate-fadeIn">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{% trans "Commercial Information" %}</h2>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">{% trans "Enter commercial and tax information" %}</p>
+                    </div>
                     
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.tax_id|as_crispy_field }}
+                    <div class="form-grid">
+                        <div class="form-field animate-slideUp">
+                            <label for="{{ form.tax_id.id_for_label }}">{% trans "Tax ID" %}</label>
+                            {{ form.tax_id }}
                         </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        {{ form.notes|as_crispy_field }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Settings Tab -->
-            <div class="tab-content" id="settings-tab">
-                <div class="form-section">
-                    <h3>
-                        <i class="fas fa-cog mr-2"></i>
-                        {% trans "Settings & Configuration" %}
-                    </h3>
-                    <div class="form-row">
-                        <div class="form-group">
-                            {{ form.is_active|as_crispy_field }}
+                        <div class="form-field animate-slideUp md:col-span-2 lg:col-span-3" style="animation-delay:0.1s;">
+                            <label for="{{ form.notes.id_for_label }}">{% trans "Notes" %}</label>
+                            {{ form.notes }}
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Form Actions -->
-            <div class="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <a href="{% url 'sales:client_list' %}" class="btn-secondary">
-                    <i class="fas fa-times mr-2"></i>
-                    {% trans "Cancel" %}
-                </a>
-                <button type="submit" class="btn-primary">
-                    <i class="fas fa-save mr-2"></i>
-                    {% if object %}
-                        {% trans "Update Client" %}
-                    {% else %}
-                        {% trans "Create Client" %}
-                    {% endif %}
-                </button>
-            </div>
-        </form>
+                <!-- Step 4: Configuration -->
+                <div class="wizard-step-content hidden" data-step="4">
+                    <div class="text-center mb-6 animate-fadeIn">
+                        <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{% trans "Settings & Configuration" %}</h2>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm">{% trans "Configure client settings and preferences" %}</p>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-field animate-slideUp">
+                            <label for="{{ form.is_active.id_for_label }}" class="flex items-center">
+                                {{ form.is_active }}
+                                <span class="ml-2">{% trans "Active" %}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Buttons -->
+                <div class="flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700 animate-fadeIn">
+                    <button type="button" id="wizard-prev" class="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        {% trans "Previous" %}
+                    </button>
+                    <button type="button" id="wizard-next" class="btn-wizard">
+                        {% trans "Next" %}
+                    </button>
+                    <button type="submit" id="wizard-submit" class="btn-wizard hidden">
+                        {% if object %}{% trans "Update Client" %}{% else %}{% trans "Create Client" %}{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-6 right-6 z-50 hidden px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300"></div>
+    
+    <!-- Confetti Canvas -->
+    <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50" style="display:none;"></canvas>
 </div>
+{% endwith %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Tab functionality
-    const tabs = document.querySelectorAll('.form-tab');
-    const tabContents = document.querySelectorAll('.tab-content');
+    // Wizard state
+    let currentStep = 1;
+    const totalSteps = 4;
+    const progressSteps = [0, 25, 50, 75, 100];
     
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const targetTab = tab.dataset.tab;
+    // Elements
+    const progressBar = document.getElementById('wizardProgress');
+    const stepIndicators = document.querySelectorAll('.step-indicator');
+    const stepLabels = document.querySelectorAll('.step-label');
+    const stepContents = document.querySelectorAll('.wizard-step-content');
+    const prevBtn = document.getElementById('wizard-prev');
+    const nextBtn = document.getElementById('wizard-next');
+    const submitBtn = document.getElementById('wizard-submit');
+
+    // Update progress bar
+    function updateProgress() {
+        progressBar.style.width = progressSteps[currentStep] + '%';
+    }
+
+    // Update step indicators
+    function updateStepIndicators() {
+        stepIndicators.forEach((indicator, index) => {
+            const stepNumber = index + 1;
+            const stepNumberEl = indicator.querySelector('.step-number');
             
-            // Update active tab
-            tabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
+            indicator.classList.remove('bg-green-500', 'border-green-500', 'text-white', 'bg-blue-600', 'border-blue-600', 'animate-bounce', 'bg-white', 'border-gray-300', 'text-gray-400');
             
-            // Update active content
-            tabContents.forEach(content => {
-                content.classList.remove('active');
-                if (content.id === `${targetTab}-tab`) {
-                    content.classList.add('active');
-                }
-            });
+            if (currentStep > stepNumber) {
+                // Completed step
+                indicator.classList.add('bg-green-500', 'border-green-500', 'text-white');
+                stepNumberEl.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+            } else if (currentStep === stepNumber) {
+                // Current step
+                indicator.classList.add('bg-blue-600', 'border-blue-600', 'text-white', 'animate-bounce');
+                stepNumberEl.textContent = stepNumber;
+            } else {
+                // Future step
+                indicator.classList.add('bg-white', 'border-gray-300', 'text-gray-400');
+                stepNumberEl.textContent = stepNumber;
+            }
+        });
+
+        // Update labels
+        stepLabels.forEach((label, index) => {
+            const stepNumber = index + 1;
+            label.classList.remove('text-blue-700', 'text-green-600', 'text-gray-400');
+            
+            if (currentStep > stepNumber) {
+                label.classList.add('text-green-600');
+            } else if (currentStep === stepNumber) {
+                label.classList.add('text-blue-700');
+            } else {
+                label.classList.add('text-gray-400');
+            }
+        });
+    }
+
+    // Show step content
+    function showStep(step) {
+        stepContents.forEach((content, index) => {
+            const stepNumber = index + 1;
+            if (stepNumber === step) {
+                content.classList.remove('hidden');
+                content.classList.add('animate-fadeIn');
+            } else {
+                content.classList.add('hidden');
+                content.classList.remove('animate-fadeIn');
+            }
+        });
+
+        // Update buttons
+        prevBtn.disabled = step === 1;
+        nextBtn.classList.toggle('hidden', step === totalSteps);
+        submitBtn.classList.toggle('hidden', step !== totalSteps);
+
+        // Update progress and indicators
+        updateProgress();
+        updateStepIndicators();
+    }
+
+    // Navigation
+    prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+            currentStep--;
+            showStep(currentStep);
+        }
+    });
+
+    nextBtn.addEventListener('click', () => {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            showStep(currentStep);
+        }
+    });
+
+    // Click on step indicators
+    stepIndicators.forEach((indicator, index) => {
+        indicator.addEventListener('click', () => {
+            const stepNumber = index + 1;
+            if (stepNumber <= currentStep) {
+                currentStep = stepNumber;
+                showStep(currentStep);
+            }
         });
     });
-    
-    // Form progress bar
-    const form = document.getElementById('clientForm');
-    const progressBar = document.getElementById('progressBar');
-    
-    form.addEventListener('input', () => {
-        progressBar.classList.add('active');
-        setTimeout(() => {
-            progressBar.classList.remove('active');
-        }, 300);
-    });
-    
+
+    // Toast notification function
+    function showToast(msg, type='success') {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.className = `fixed top-6 right-6 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300 ${type==='success' ? 'bg-green-600' : 'bg-red-600'}`;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 3500);
+    }
+
+    // Confetti function
+    function launchConfetti() {
+        const canvas = document.getElementById('confettiCanvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        canvas.style.display = 'block';
+        const ctx = canvas.getContext('2d');
+        const pieces = Array.from({length: 120}, () => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * -canvas.height,
+            r: 6 + Math.random() * 8,
+            d: Math.random() * 50,
+            color: `hsl(${Math.random()*360},70%,60%)`,
+            tilt: Math.random() * 10 - 10
+        }));
+        let angle = 0;
+        function draw() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            angle += 0.01;
+            for (let i=0; i<pieces.length; i++) {
+                let p = pieces[i];
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                p.y += Math.cos(angle + p.d) + 2 + p.r/8;
+                p.x += Math.sin(angle) * 2;
+                if (p.y > canvas.height) {
+                    p.x = Math.random() * canvas.width;
+                    p.y = Math.random() * -20;
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+        setTimeout(() => { canvas.style.display = 'none'; }, 3500);
+    }
+
     // Form submission
+    const form = document.getElementById('clientForm');
     form.addEventListener('submit', function(e) {
         const submitBtn = form.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>{% trans "Saving..." %}';
+        
+        // Show success feedback
+        setTimeout(() => {
+            showToast('{% if object %}Client updated successfully!{% else %}Client created successfully!{% endif %}', 'success');
+            launchConfetti();
+        }, 1000);
     });
+
+    // --- Recarga dinámica de estados/provincias ---
+    const countrySelect = document.getElementById('id_country');
+    const stateSelect = document.getElementById('id_state');
+    const stateDefaultOption = stateSelect.querySelector('option');
+
+    countrySelect.addEventListener('change', function() {
+        const countryId = this.value;
+        stateSelect.innerHTML = '';
+        // Opción por defecto
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.textContent = '-- ' + (window.gettext ? window.gettext('Select a state/province...') : 'Selecciona un estado/provincia...') + ' --';
+        stateSelect.appendChild(defaultOpt);
+        if (!countryId) return;
+        // Loading visual
+        const loadingOpt = document.createElement('option');
+        loadingOpt.value = '';
+        loadingOpt.textContent = 'Cargando...';
+        stateSelect.appendChild(loadingOpt);
+        fetch(`/core/api/states/?country_id=${countryId}`)
+            .then(resp => resp.ok ? resp.json() : Promise.reject())
+            .then(data => {
+                stateSelect.innerHTML = '';
+                stateSelect.appendChild(defaultOpt);
+                if (data && data.results && data.results.length) {
+                    data.results.forEach(function(state) {
+                        const opt = document.createElement('option');
+                        opt.value = state.id;
+                        opt.textContent = state.name;
+                        stateSelect.appendChild(opt);
+                    });
+                }
+            })
+            .catch(() => {
+                stateSelect.innerHTML = '';
+                stateSelect.appendChild(defaultOpt);
+                const errorOpt = document.createElement('option');
+                errorOpt.value = '';
+                errorOpt.textContent = 'Error al cargar estados';
+                stateSelect.appendChild(errorOpt);
+            });
+    });
+
+    // Initialize
+    showStep(currentStep);
 });
 </script>
 {% endblock %} 

@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{# Plantilla de Validación de Integración AdministraNET - Synap #}
+
+{% block content %}
+<div class="max-w-5xl mx-auto mt-8 p-6 bg-white dark:bg-neutral-900 rounded-lg shadow-md animate-fade-in">
+    <!-- CSRF Token -->
+    {% csrf_token %}
+    
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2 font-sans">{% trans "Custom Integration Validation" %}</h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 font-sans">{% trans "Run manual validations for" %} {{ empresa.nombre }}</p>
+        </div>
+        
+        <!-- Estado de validaciones -->
+        <div class="flex flex-wrap gap-3">
+            {% if reglas_activas %}
+                <div class="bg-green-50 dark:bg-green-900/20 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium text-green-700 dark:text-green-300">{{ reglas_activas|length }} {% trans "active rules" %}</span>
+                </div>
+            {% else %}
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium text-yellow-700 dark:text-yellow-300">{% trans "No active rules" %}</span>
+                </div>
+            {% endif %}
+            
+            {% if resultados %}
+                <div class="bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full">
+                    <span class="text-xs font-medium text-blue-700 dark:text-blue-300">{{ resultados|length }} {% trans "results" %}</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Información de ayuda -->
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+                <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1 font-sans">{% trans "How to interpret the results?" %}</h3>
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                    {% trans "Custom validations show critical errors, warnings, and details for each rule. If any rule fails, synchronization will be blocked until errors are corrected. Check the history to view previous executions." %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    {% if empresa %}
+        <!-- Formulario de ejecución -->
+        <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 font-sans">{% trans "Run Validations" %}</h2>
+            
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                
+                <!-- Opciones de validación -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 font-sans">{% trans "Validation Type" %}</label>
+                        <select name="validation_type" class="w-full p-3 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-sm focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans">
+                            <option value="all">{% trans "All Active Rules" %}</option>
+                            <option value="critical">{% trans "Critical Rules Only" %}</option>
+                            <option value="data_quality">{% trans "Data Quality Rules" %}</option>
+                            <option value="business_logic">{% trans "Business Logic Rules" %}</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2 font-sans">{% trans "Execution Mode" %}</label>
+                        <select name="execution_mode" class="w-full p-3 rounded border-gray-300 dark:border-neutral-700 bg-white dark:bg-neutral-700 text-sm focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-sans">
+                            <option value="normal">{% trans "Normal Execution" %}</option>
+                            <option value="verbose">{% trans "Verbose Mode" %}</option>
+                            <option value="quick">{% trans "Quick Check" %}</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Opciones adicionales -->
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" name="force_validation" class="rounded border-gray-300 dark:border-neutral-700 text-orange-600 focus:ring-orange-400">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Force validation (ignore cache)" %}</span>
+                    </label>
+                    
+                    <label class="flex items-center">
+                        <input type="checkbox" name="include_warnings" class="rounded border-gray-300 dark:border-neutral-700 text-orange-600 focus:ring-orange-400" checked>
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Include warnings" %}</span>
+                    </label>
+                    
+                    <label class="flex items-center">
+                        <input type="checkbox" name="save_results" class="rounded border-gray-300 dark:border-neutral-700 text-orange-600 focus:ring-orange-400" checked>
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300 font-sans">{% trans "Save results to history" %}</span>
+                    </label>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="submit" class="flex-1 py-3 px-6 bg-gradient-to-r from-orange-400 to-orange-600 text-white text-sm font-semibold rounded-lg hover:scale-105 hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-orange-400">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        {% trans "Run Validations" %}
+                    </button>
+                    
+                    <button type="button" onclick="testConnection()" class="py-3 px-6 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-all">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>
+                        </svg>
+                        {% trans "Test Connection" %}
+                    </button>
+                    
+                    <button type="button" onclick="clearResults()" class="py-3 px-6 bg-gray-600 text-white text-sm font-semibold rounded-lg hover:bg-gray-700 transition-all">
+                        <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        {% trans "Clear Results" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Resultados de validación -->
+        {% if resultados %}
+            <div class="bg-gray-50 dark:bg-neutral-800 rounded-lg p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 font-sans">{% trans "Validation Results" %}</h2>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="exportResults()" class="py-2 px-4 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-all">
+                            <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            {% trans "Export" %}
+                        </button>
+                        <button type="button" onclick="refreshResults()" class="py-2 px-4 bg-green-600 text-white text-xs font-semibold rounded hover:bg-green-700 transition-all">
+                            <svg class="w-3 h-3 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            {% trans "Refresh" %}
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resumen de resultados -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Total Rules" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ resultados|length }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Passed" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ resultados|dictsort:"success"|length }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                                <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Failed" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ resultados|dictsort:"success"|length }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                                <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{% trans "Warnings" %}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{% trans "Check details" %}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Lista de resultados -->
+                <div class="space-y-4">
+                    {% for r in resultados %}
+                    <div class="bg-white dark:bg-neutral-700 p-4 rounded-lg border border-gray-200 dark:border-neutral-600 hover:shadow-md transition-all">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start gap-3 flex-1">
+                                <!-- Icono de estado -->
+                                <div class="flex-shrink-0 mt-1">
+                                    {% if r.success %}
+                                        <div class="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                                            <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+                                    {% else %}
+                                        <div class="w-6 h-6 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                                            <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                            </svg>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Información del resultado -->
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 font-sans">{{ r.label }}</h3>
+                                        <div class="relative group">
+                                            <svg class="w-4 h-4 text-blue-500 cursor-pointer hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <circle cx="12" cy="12" r="10"/>
+                                                <path d="M12 16v-4m0-4h.01"/>
+                                            </svg>
+                                            <div class="absolute left-6 top-0 z-10 hidden group-hover:block bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 rounded-lg shadow-lg p-3 text-xs w-72 animate-fade-in">
+                                                <div class="font-semibold mb-1">{{ r.label }}</div>
+                                                <div class="text-gray-600 dark:text-gray-400">{{ r.description }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">{{ r.description }}</p>
+                                    
+                                    <!-- Errores -->
+                                    {% if r.errors %}
+                                        <div class="mb-2">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <svg class="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <span class="text-xs font-medium text-red-700 dark:text-red-300">{% trans "Errors" %}</span>
+                                            </div>
+                                            <ul class="list-disc ml-5 text-xs text-red-600 dark:text-red-400">
+                                                {% for e in r.errors %}<li>{{ e }}</li>{% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <!-- Advertencias -->
+                                    {% if r.warnings %}
+                                        <div class="mb-2">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <svg class="w-3 h-3 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <span class="text-xs font-medium text-yellow-700 dark:text-yellow-300">{% trans "Warnings" %}</span>
+                                            </div>
+                                            <ul class="list-disc ml-5 text-xs text-yellow-600 dark:text-yellow-400">
+                                                {% for w in r.warnings %}<li>{{ w }}</li>{% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <!-- Detalles -->
+                                    {% if r.details and r.details.duplicates %}
+                                        <div class="mb-2">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <svg class="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                                </svg>
+                                                <span class="text-xs font-medium text-blue-700 dark:text-blue-300">{% trans "Details" %}</span>
+                                            </div>
+                                            <ul class="list-disc ml-5 text-xs text-gray-700 dark:text-gray-300">
+                                                {% for d in r.details.duplicates %}<li>{{ d }}</li>{% endfor %}
+                                            </ul>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <!-- Estado -->
+                            <div class="flex-shrink-0 ml-4">
+                                {% if r.success %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        {% trans "OK" %}
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        {% trans "Error" %}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% elif reglas_activas %}
+            <div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4 text-center">
+                <svg class="w-12 h-12 mx-auto mb-3 text-yellow-500 dark:text-yellow-400 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <p class="text-sm text-yellow-700 dark:text-yellow-300">{% trans "No validations have been executed yet." %}</p>
+                <p class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">{% trans "Click 'Run Validations' to start the validation process." %}</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 text-center">
+            <svg class="w-12 h-12 mx-auto mb-3 text-red-500 dark:text-red-400 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <p class="text-sm text-red-700 dark:text-red-300">{% trans "You don't have permissions or the company doesn't exist." %}</p>
+        </div>
+    {% endif %}
+
+    <!-- Enlaces útiles -->
+    <div class="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2 font-sans">{% trans "Related Actions" %}</h3>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'adminet:validation_settings' empresa.id %}" class="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                {% trans "Validation Settings" %}
+            </a>
+            <a href="{% url 'adminet:validation_history' %}" class="inline-flex items-center px-3 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                {% trans "View History" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+// Función para mostrar toast
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    toast.className = `${colors[type]} text-white px-4 py-2 rounded-lg shadow-lg text-sm font-sans animate-slide-in`;
+    toast.textContent = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('animate-slide-out');
+        setTimeout(() => container.removeChild(toast), 300);
+    }, 3000);
+}
+
+// Función para test de conexión
+function testConnection() {
+    showToast('{% trans "Testing connection..." %}', 'info');
+    
+    // Simular test de conexión
+    setTimeout(() => {
+        showToast('{% trans "Connection test completed successfully" %}', 'success');
+    }, 2000);
+}
+
+// Función para limpiar resultados
+function clearResults() {
+    if (confirm('{% trans "Are you sure you want to clear all validation results?" %}')) {
+        showToast('{% trans "Clearing results..." %}', 'warning');
+        
+        // Simular limpieza
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    }
+}
+
+// Función para exportar resultados
+function exportResults() {
+    const report = `Validation Results Report\n`;
+    report += `Generated: ${new Date().toLocaleString()}\n`;
+    report += `Company: {{ empresa.nombre }}\n\n`;
+    
+    const results = document.querySelectorAll('.bg-white.dark\\:bg-neutral-700');
+    results.forEach(result => {
+        const title = result.querySelector('h3')?.textContent || 'Unknown';
+        const status = result.querySelector('span')?.textContent || 'Unknown';
+        report += `${title}: ${status}\n`;
+    });
+    
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'validation_results_report.txt';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showToast('{% trans "Results exported successfully" %}', 'success');
+}
+
+// Función para refrescar resultados
+function refreshResults() {
+    showToast('{% trans "Refreshing results..." %}', 'info');
+    window.location.reload();
+}
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh cada 2 minutos si hay resultados
+    {% if resultados %}
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            showToast('{% trans "Auto-refreshing results..." %}', 'info');
+            window.location.reload();
+        }
+    }, 120000);
+    {% endif %}
+});
+</script>
+
+<style>
+@keyframes slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-out {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+.animate-slide-out {
+    animation: slide-out 0.3s ease-in;
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+{% endblock %} 

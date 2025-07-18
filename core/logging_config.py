@@ -43,7 +43,7 @@ LOGGING_CONFIG = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'synap_core.log'),
+            'filename': os.path.join('@/logs', 'synap_core.log'),
             'maxBytes': 1024*1024*10,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',
@@ -51,7 +51,7 @@ LOGGING_CONFIG = {
         'audit_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'audit.log'),
+            'filename': os.path.join('@/logs', 'audit.log'),
             'maxBytes': 1024*1024*20,  # 20MB
             'backupCount': 10,
             'formatter': 'audit',
@@ -59,7 +59,7 @@ LOGGING_CONFIG = {
         'security_file': {
             'level': 'WARNING',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'security.log'),
+            'filename': os.path.join('@/logs', 'security.log'),
             'maxBytes': 1024*1024*10,  # 10MB
             'backupCount': 5,
             'formatter': 'security',
@@ -67,7 +67,7 @@ LOGGING_CONFIG = {
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'errors.log'),
+            'filename': os.path.join('@/logs', 'errors.log'),
             'maxBytes': 1024*1024*10,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',
@@ -150,7 +150,7 @@ LOGGING_CONFIG_DEV = {
         'file': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': os.path.join('logs', 'synap_core_dev.log'),
+            'filename': os.path.join('@/logs', 'synap_core_dev.log'),
             'formatter': 'verbose',
         },
     },
@@ -189,7 +189,7 @@ LOGGING_CONFIG_PROD = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'synap_core.log'),
+            'filename': os.path.join('@/logs', 'synap_core.log'),
             'maxBytes': 1024*1024*50,  # 50MB
             'backupCount': 10,
             'formatter': 'verbose',
@@ -197,7 +197,7 @@ LOGGING_CONFIG_PROD = {
         'audit_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'audit.log'),
+            'filename': os.path.join('@/logs', 'audit.log'),
             'maxBytes': 1024*1024*100,  # 100MB
             'backupCount': 20,
             'formatter': 'json',
@@ -205,7 +205,7 @@ LOGGING_CONFIG_PROD = {
         'security_file': {
             'level': 'WARNING',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'security.log'),
+            'filename': os.path.join('@/logs', 'security.log'),
             'maxBytes': 1024*1024*50,  # 50MB
             'backupCount': 10,
             'formatter': 'json',
@@ -213,7 +213,7 @@ LOGGING_CONFIG_PROD = {
         'error_file': {
             'level': 'ERROR',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join('logs', 'errors.log'),
+            'filename': os.path.join('@/logs', 'errors.log'),
             'maxBytes': 1024*1024*50,  # 50MB
             'backupCount': 10,
             'formatter': 'verbose',

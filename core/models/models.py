@@ -10,13 +10,56 @@ from core.mixins import ContactableMixin
 
 class Empresa(models.Model):
     nombre = models.CharField(max_length=255, unique=True, verbose_name=_('Nombre de la empresa'))
+    razon_social = models.CharField(max_length=255, verbose_name=_('Razón Social'), null=False, blank=False)
     identificador_fiscal = models.CharField(max_length=32, unique=True, verbose_name=_('CUIT/RFC/NIF'))
     email = models.EmailField(blank=True, null=True, verbose_name=_('Email de contacto'))
     telefono = models.CharField(max_length=32, blank=True, null=True, verbose_name=_('Teléfono'))
     direccion = models.CharField(max_length=255, blank=True, null=True, verbose_name=_('Dirección'))
-    pais = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('País'))
+    
+    # Refactorizado: Usar ForeignKey en lugar de CharField para país
+    country = models.ForeignKey(
+        'Country',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_('País'),
+        help_text=_('País donde opera la empresa')
+    )
+    
+    # Mantener campo legacy para compatibilidad (se puede eliminar en futuras migraciones)
+    pais = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('País (legacy)'))
+    
     ciudad = models.CharField(max_length=64, blank=True, null=True, verbose_name=_('Ciudad'))
-    logo = models.ImageField(upload_to='empresas/logos/', blank=True, null=True, verbose_name=_('Logo'))
+    logo = models.FileField(
+        upload_to='empresas/logos/',
+        blank=True,
+        null=True,
+        verbose_name=_('Logo'),
+        help_text=_('Logo de la empresa (PNG, JPG, SVG, etc.)')
+    )
+    
+    # Responsabilidad fiscal
+    fiscal_responsibility = models.ForeignKey(
+        'FiscalResponsibility',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_('Responsabilidad Fiscal'),
+        help_text=_('Tipo de responsabilidad fiscal de la empresa')
+    )
+    
+    # Provincia/estado fiscal
+    state = models.ForeignKey(
+        'State',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_('Provincia/Estado'),
+        help_text=_('Provincia o estado fiscal de la empresa')
+    )
+
+    currency = models.ForeignKey('core.Currency', null=True, blank=True, on_delete=models.SET_NULL, verbose_name=_('Currency'), help_text=_('Official currency for all branches and products of this company'))
+
     activa = models.BooleanField(default=True, verbose_name=_('Empresa activa'))
     fecha_creacion = models.DateTimeField(default=timezone.now, verbose_name=_('Fecha de creación'))
     fecha_modificacion = models.DateTimeField(auto_now=True, verbose_name=_('Fecha de modificación'))
@@ -28,6 +71,25 @@ class Empresa(models.Model):
 
     def __str__(self):
         return self.nombre
+    
+    def save(self, *args, **kwargs):
+        # Sincronizar campo legacy con el nuevo campo country
+        if self.country and not self.pais:
+            self.pais = self.country.name
+        elif not self.country and self.pais:
+            # Intentar encontrar el país por nombre
+            try:
+                self.country = Country.objects.get(name__iexact=self.pais)
+            except Country.DoesNotExist:
+                pass
+        super().save(*args, **kwargs)
+    
+    @property
+    def pais_nombre(self):
+        """Obtiene el nombre del país desde la relación o el campo legacy"""
+        if self.country:
+            return self.country.name
+        return self.pais or ''
 
 
 class Permiso(models.Model):

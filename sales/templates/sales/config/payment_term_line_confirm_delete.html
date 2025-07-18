@@ -1,0 +1,20 @@
+{% extends 'sales/sales_base.html' %}
+
+{% block page_title %}Eliminar Línea del Cronograma{% endblock %}
+
+{% block sales_content %}
+<div class="max-w-lg mx-auto bg-white dark:bg-gray-900 shadow rounded-lg p-8 mt-8">
+    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">Eliminar Línea del Cronograma</h2>
+    <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
+        ¿Estás seguro de que deseas eliminar esta línea del cronograma de <span class="font-semibold">{{ payment_term.name }}</span>?
+        Esta acción no se puede deshacer.
+    </p>
+    <form method="post">
+        {% csrf_token %}
+        <div class="flex justify-between mt-6">
+            <a href="{% url 'sales:payment_term_detail' payment_term.pk %}" class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition">Cancelar</a>
+            <button type="submit" class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 transition">Eliminar</button>
+        </div>
+    </form>
+</div>
+{% endblock %} 
