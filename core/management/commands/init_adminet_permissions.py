@@ -47,7 +47,7 @@ class Command(BaseCommand):
             for codename, _ in PERMISSIONS:
                 perm = Permission.objects.get(codename=codename)
                 user.user_permissions.add(perm)
-            self.stdout.write(self.style.SUCCESS(f"Permisos asignados al superusuario: {user.username}"))
+            self.stdout.write(self.style.SUCCESS(f"Permisos asignados al superusuario: {user.email}"))
 
         self.stdout.write(self.style.SUCCESS("Inicialización de permisos administraNET completada."))
         self.stdout.write("Permisos definidos:")

@@ -1,6 +1,6 @@
 version: '3.8'
 
 services:
-  web:
+  app:
     ports:
       - "8002:8002"  # Desarrollo: expone 8002 como 8002 

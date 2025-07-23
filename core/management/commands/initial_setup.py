@@ -81,8 +81,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('🚀 Iniciando puesta en marcha del sistema Synap...\n'))
-        
-        if options['dry_run']:
+        self.dry_run = options.get('dry_run', False)
+        if self.dry_run:
             self.stdout.write(self.style.WARNING('🔍 MODO DRY-RUN: No se harán cambios reales\n'))
         
         try:
@@ -140,14 +140,14 @@ class Command(BaseCommand):
             
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'\n❌ Error durante la puesta en marcha: {e}'))
-            if not options['dry_run']:
+            if not self.dry_run:
                 self.stdout.write(self.style.ERROR('🔄 Los cambios han sido revertidos debido al error'))
             raise
 
     def apply_migrations(self):
         """Aplicar migraciones de la base de datos"""
         self.stdout.write('📋 Aplicando migraciones...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('migrate', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Migraciones aplicadas'))
 
@@ -166,7 +166,7 @@ class Command(BaseCommand):
                 empresa.delete()
                 self.stdout.write('  🔄 Empresa existente eliminada')
             
-            if not self.options['dry_run']:
+            if not self.dry_run:
                 empresa = Empresa.objects.create(
                     nombre=options['empresa_nombre'],
                     identificador_fiscal=options['empresa_identificador'],
@@ -188,7 +188,7 @@ class Command(BaseCommand):
                 branch.delete()
                 self.stdout.write('  🔄 Sucursal existente eliminada')
             
-            if not self.options['dry_run']:
+            if not self.dry_run:
                 branch = Branch.objects.create(
                     empresa=empresa,
                     name=options['branch_nombre'],
@@ -208,42 +208,42 @@ class Command(BaseCommand):
     def populate_geographic_data(self):
         """Poblar datos geográficos básicos"""
         self.stdout.write('🌍 Poblando datos geográficos...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('populate_countries_states', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Datos geográficos poblados'))
 
     def sync_permissions(self):
         """Sincronizar permisos desde constantes"""
         self.stdout.write('🔐 Sincronizando permisos...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('sincronizar_permisos', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Permisos sincronizados'))
 
     def create_base_roles(self):
         """Crear roles base del sistema"""
         self.stdout.write('👥 Creando roles base...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('crear_roles_base', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Roles base creados'))
 
     def sync_firebase_users(self):
         """Sincronizar usuarios con Firebase"""
         self.stdout.write('🔥 Sincronizando usuarios con Firebase...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('sincronizar_usuarios_firebase', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Usuarios sincronizados con Firebase'))
 
     def assign_default_roles(self):
         """Asignar roles predeterminados a usuarios"""
         self.stdout.write('🎭 Asignando roles predeterminados...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('asignar_roles_predeterminados', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Roles predeterminados asignados'))
 
     def setup_system_modules(self):
         """Configurar módulos del sistema"""
         self.stdout.write('⚙️ Configurando módulos del sistema...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('setup_modules', '--init', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Módulos del sistema configurados'))
 
@@ -251,7 +251,7 @@ class Command(BaseCommand):
         """Configurar contabilidad básica"""
         self.stdout.write('💰 Configurando contabilidad...')
         
-        if not self.options['dry_run']:
+        if not self.dry_run:
             # Configurar plan de cuentas
             call_command('setup_chart_of_accounts', 
                         empresa_nombre=empresa.nombre, 
@@ -287,7 +287,7 @@ class Command(BaseCommand):
         
         from sales.models import PaymentMethod
         
-        if not self.options['dry_run']:
+        if not self.dry_run:
             # Métodos de pago básicos
             payment_methods_data = [
                 {
@@ -365,7 +365,7 @@ class Command(BaseCommand):
     def assign_branches_to_admins(self):
         """Asignar sucursales a usuarios administradores"""
         self.stdout.write('👨‍💼 Asignando sucursales a administradores...')
-        if not self.options['dry_run']:
+        if not self.dry_run:
             call_command('asignar_sucursales_admins', verbosity=0)
         self.stdout.write(self.style.SUCCESS('  ✅ Sucursales asignadas a administradores'))
 
