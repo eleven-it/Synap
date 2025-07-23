@@ -64,3 +64,23 @@ if settings.DEBUG:
 
 # ⛔ Handler global de error 403    
 handler403 = "core.views.error_403_view"
+
+# Logistics web
+urlpatterns.extend([
+    path('logistics/', include('logistics.urls', namespace='logistics')),
+])
+
+# Finance web
+urlpatterns.extend([
+    path('finance/', include('finance.urls', namespace='finance')),
+])
+
+# Logistics API
+urlpatterns.extend([
+    path('api/logistics/', include('logistics.api_urls')),
+])
+
+# Finance API
+urlpatterns.extend([
+    path('api/finance/', include('finance.api_urls')),
+])

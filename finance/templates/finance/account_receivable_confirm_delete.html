@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-md mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow">
+  <h1 class="text-lg font-bold mb-4 text-red-600 dark:text-red-400">{% trans 'Delete Account Receivable' %}</h1>
+  <p class="mb-4">{% trans 'Are you sure you want to delete this account receivable?' %}</p>
+  <div class="mb-4">
+    <span class="font-semibold">{% trans 'Client' %}:</span> {{ accountreceivable.client }}<br>
+    <span class="font-semibold">{% trans 'Document Number' %}:</span> {{ accountreceivable.document_number }}
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <div class="flex gap-2 justify-end">
+      <button type="submit" class="btn btn-danger">{% trans 'Delete' %}</button>
+      <a href="{% url 'finance:account_receivable_detail' accountreceivable.id %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+    </div>
+  </form>
+</div>
+{% endblock %} 

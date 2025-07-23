@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-xl mx-auto p-4">
+  <h1 class="text-lg font-bold text-gray-900 dark:text-white mb-6">{% trans 'Logistics Costs' %}</h1>
+  <div class="bg-white dark:bg-gray-900 rounded shadow p-4 mb-4">
+    <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">{% trans 'Route' %} #{{ route.id }}</h2>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Driver:' %} {{ route.driver.name|default:'-' }}</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Vehicle:' %} {{ route.vehicle.name|default:'-' }}</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Total Distance:' %} {{ route_info.total_distance }} km</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Estimated Duration:' %} {{ route_info.estimated_duration }} h</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Stops:' %} {{ route_info.stops_count }} ({{ route_info.completed_stops }} {% trans 'delivered' %})</div>
+  </div>
+  <div class="bg-white dark:bg-gray-900 rounded shadow p-4 mb-4">
+    <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">{% trans 'Cost Breakdown' %}</h3>
+    {% if costs %}
+    <table class="min-w-full text-xs">
+      <tbody>
+        <tr>
+          <td class="px-2 py-1">{% trans 'Fuel Cost' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.fuel_cost|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td class="px-2 py-1">{% trans 'Driver Cost' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.driver_cost|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td class="px-2 py-1">{% trans 'Vehicle Cost' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.vehicle_cost|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td class="px-2 py-1">{% trans 'Toll Cost' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.toll_cost|floatformat:2 }}</td>
+        </tr>
+        <tr>
+          <td class="px-2 py-1">{% trans 'Other Costs' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.other_costs|floatformat:2 }}</td>
+        </tr>
+        <tr class="font-bold">
+          <td class="px-2 py-1">{% trans 'Total Cost' %}</td>
+          <td class="px-2 py-1 text-right">${{ costs.total_cost|floatformat:2 }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
+    <div class="text-center text-gray-400">{% trans 'No cost data available' %}</div>
+    {% endif %}
+    {% if cost_error %}
+    <div class="mt-2 text-xs text-red-600 dark:text-red-400">⚠ {{ cost_error }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %} 

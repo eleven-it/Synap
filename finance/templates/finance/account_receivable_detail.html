@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow">
+  <h1 class="text-lg font-bold mb-4">{% trans 'Account Receivable Detail' %}</h1>
+  <div class="space-y-2">
+    <div><span class="font-semibold">{% trans 'Client' %}:</span> {{ accountreceivable.client }}</div>
+    <div><span class="font-semibold">{% trans 'Document Type' %}:</span> {{ accountreceivable.document_type }}</div>
+    <div><span class="font-semibold">{% trans 'Document Number' %}:</span> {{ accountreceivable.document_number }}</div>
+    <div><span class="font-semibold">{% trans 'Date' %}:</span> {{ accountreceivable.date }}</div>
+    <div><span class="font-semibold">{% trans 'Due Date' %}:</span> {{ accountreceivable.due_date }}</div>
+    <div><span class="font-semibold">{% trans 'Amount' %}:</span> {{ accountreceivable.amount }}</div>
+    <div><span class="font-semibold">{% trans 'Balance' %}:</span> {{ accountreceivable.balance }}</div>
+    <div><span class="font-semibold">{% trans 'State' %}:</span> {{ accountreceivable.state }}</div>
+    <div><span class="font-semibold">{% trans 'Created At' %}:</span> {{ accountreceivable.created_at }}</div>
+    <div><span class="font-semibold">{% trans 'Updated At' %}:</span> {{ accountreceivable.updated_at }}</div>
+    {% block extra_fields %}{% endblock %}
+  </div>
+  <div class="mt-4 flex gap-2 justify-end">
+    <a href="{% url 'finance:account_receivable_edit' accountreceivable.id %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+    <a href="{% url 'finance:account_receivable_delete' accountreceivable.id %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+  </div>
+</div>
+{% endblock %} 

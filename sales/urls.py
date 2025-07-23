@@ -122,6 +122,8 @@ urlpatterns = [
     path('api/states-autocomplete/', views.states_autocomplete, name='api_states_autocomplete'),
     path('api/fiscal-responsibilities-autocomplete/', views.fiscal_responsibilities_autocomplete, name='api_fiscal_responsibilities_autocomplete'),
     path('api/payment-terms-autocomplete/', views.payment_terms_autocomplete, name='api_payment_terms_autocomplete'),
+    path('api/client-tags-autocomplete/', views.client_tags_autocomplete, name='client_tags_autocomplete'),
+    path('api/client-tags-create/', views.client_tags_create, name='client_tags_create'),
     
     # APIs RESTful
     path('api/', include('sales.api.urls')),
@@ -197,4 +199,29 @@ urlpatterns = [
     
     # Redirecciones para compatibilidad
     path('price-lists/', RedirectView.as_view(url='/sales/config/price-lists/', permanent=False)),
+
+    # CRUD de etiquetas de cliente
+    path('clients/tags/', views.ClientTagListView.as_view(), name='client_tag_list'),
+    path('clients/tags/create/', views.ClientTagCreateView.as_view(), name='client_tag_create'),
+    path('clients/tags/<int:pk>/edit/', views.ClientTagUpdateView.as_view(), name='client_tag_edit'),
+    path('clients/tags/<int:pk>/delete/', views.ClientTagDeleteView.as_view(), name='client_tag_delete'),
+    path('clients/tabs/create/', views.ClientFormTabsView.as_view(), name='client_create_tabs'),
+    path('clients/tabs/<int:pk>/edit/', views.ClientEditFormTabsView.as_view(), name='client_edit_tabs'),
+
+    # CRUD de terminales de punto de venta
+    path('terminals/', views.TerminalListView.as_view(), name='terminal_list'),
+    path('terminals/create/', views.TerminalCreateView.as_view(), name='terminal_create'),
+    path('terminals/<int:pk>/edit/', views.TerminalUpdateView.as_view(), name='terminal_edit'),
+    path('terminals/<int:pk>/delete/', views.TerminalDeleteView.as_view(), name='terminal_delete'),
+    # Nueva vista principal del TPV moderno
+    path('pos/main/', views.pos_main, name='pos_main'),
+    # Endpoint AJAX para búsqueda de productos en TPV
+    path('pos/api/products/', views.pos_api_products, name='pos_api_products'),
+    # Endpoint AJAX para agregar productos al carrito en TPV
+    path('pos/api/cart/add/', views.pos_api_cart_add, name='pos_api_cart_add'),
+    # Endpoints AJAX para actualizar y eliminar líneas del carrito en TPV
+    path('pos/api/cart/update/', views.pos_api_cart_update, name='pos_api_cart_update'),
+    path('pos/api/cart/remove/', views.pos_api_cart_remove, name='pos_api_cart_remove'),
+    # Endpoint AJAX para procesar el pago y cerrar la venta en TPV
+    path('pos/api/payment/', views.pos_api_payment, name='pos_api_payment'),
 ] 

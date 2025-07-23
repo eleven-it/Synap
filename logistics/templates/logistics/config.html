@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-lg font-bold mb-6 text-gray-900 dark:text-white">{% trans 'Logistics Module Configuration' %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    <div class="mb-6">
+      <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-2">{% trans 'Weather Integration' %}</h2>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Weather Provider' %}</label>
+        {{ form.weather_provider|as_crispy_field }}
+      </div>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Weather API Key' %}</label>
+        {{ form.weather_api_key|as_crispy_field }}
+        <small class="text-gray-400">{% trans 'Get your API key at openweathermap.org or your preferred provider.' %}</small>
+      </div>
+    </div>
+    <div class="mb-6">
+      <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-2">{% trans 'Tracking Integration' %}</h2>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Enable Traccar Integration' %}</label>
+        {{ form.use_traccar|as_crispy_field }}
+      </div>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Traccar API URL' %}</label>
+        {{ form.traccar_api_url|as_crispy_field }}
+      </div>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Traccar API Token' %}</label>
+        {{ form.traccar_api_token|as_crispy_field }}
+      </div>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Enable Smartphone Tracking' %}</label>
+        {{ form.use_smartphone_tracking|as_crispy_field }}
+      </div>
+    </div>
+    <div class="mb-6">
+      <h2 class="text-base font-semibold text-gray-700 dark:text-gray-200 mb-2">{% trans 'Maps Integration' %}</h2>
+      <div class="mb-2">
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Google Maps API Key' %}</label>
+        {{ form.google_maps_api_key|as_crispy_field }}
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="submit" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+        {% trans 'Save Configuration' %}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %} 

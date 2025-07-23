@@ -193,3 +193,51 @@ class ModuleConfig(models.Model):
         current_settings.update(new_settings)
         self.settings = current_settings
         self.save(update_fields=['settings', 'updated_at']) 
+
+    @classmethod
+    def get_active_nav_modules(cls):
+        """
+        Devuelve los módulos activos que deben aparecer en la navegación principal (navbar)
+        """
+        return cls.objects.filter(is_active=True, is_core=False).order_by('display_name')
+
+    @classmethod
+    def get_nav_menu_items(cls):
+        """
+        Devuelve una lista de diccionarios con los items de menú para el navbar y dropdown,
+        incluyendo submenús por cada módulo activo.
+        """
+        modules = cls.get_active_nav_modules()
+        items = []
+        for mod in modules:
+            items.append({
+                'name': mod.name,
+                'display_name': mod.display_name,
+                'url': f'/{mod.name}/',
+                'submenu': mod.get_nav_submenu_items() if hasattr(mod, 'get_nav_submenu_items') else [],
+            })
+        return items
+
+    def get_nav_submenu_items(self):
+        """
+        Devuelve los submenús para este módulo (puede ser extendido por cada app)
+        """
+        if self.name == 'logistics':
+            return [
+                {'label': 'Vehicles', 'url': '/logistics/vehicles/'},
+                {'label': 'Drivers', 'url': '/logistics/drivers/'},
+                {'label': 'Delivery Routes', 'url': '/logistics/deliveryroutes/'},
+                {'label': 'Delivery Stops', 'url': '/logistics/deliverystops/'},
+                {'label': 'Delivery Events', 'url': '/logistics/deliveryevents/'},
+            ]
+        elif self.name == 'finance':
+            return [
+                {'label': 'Accounts Receivable', 'url': '/finance/accounts-receivable/'},
+                {'label': 'Credit Limit Logs', 'url': '/finance/credit-limit-logs/'},
+                {'label': 'Financial Reports', 'url': '/finance/financial-reports/'},
+            ]
+        # Por defecto, un solo item principal
+        return [{
+            'label': self.display_name,
+            'url': f'/{self.name}/',
+        }] 

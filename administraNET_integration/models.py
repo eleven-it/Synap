@@ -487,6 +487,60 @@ class ValidationRuleConfig(models.Model):
         unique_together = ('empresa', 'rule_code')
         verbose_name = _('Validation Rule Config')
         verbose_name_plural = _('Validation Rule Configs')
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.empresa} - {self.rule_code} ({'Active' if self.is_active else 'Inactive'})"
+
+
+class SyncTimestampLog(models.Model):
+    """Log de conflictos de timestamp resueltos durante sincronización"""
+    sync_log = models.ForeignKey(SyncLog, on_delete=models.CASCADE, related_name='timestamp_conflicts')
+    record_type = models.CharField(_('Record Type'), max_length=50)  # PRODUCT, CUSTOMER, etc.
+    record_id = models.CharField(_('Record ID'), max_length=100)
+    synap_timestamp = models.DateTimeField(_('Synap Timestamp'))
+    adminet_timestamp = models.DateTimeField(_('administraNET Timestamp'))
+    winner = models.CharField(_('Winner'), max_length=20, choices=[
+        ('SYNAP_WINS', _('Synap Wins')),
+        ('ADMINET_WINS', _('administraNET Wins')),
+        ('NO_CHANGE', _('No Change'))
+    ])
+    fields_updated = models.JSONField(_('Fields Updated'), default=list)
+    created_at = models.DateTimeField(_('Created At'), auto_now_add=True)
+    
+    class Meta:
+        verbose_name = _('Sync Timestamp Log')
+        verbose_name_plural = _('Sync Timestamp Logs')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['sync_log', 'record_type']),
+            models.Index(fields=['winner']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.record_type} {self.record_id} - {self.winner} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+
+class SyncTimestampConfig(models.Model):
+    """Configuración de sincronización basada en timestamps"""
+    sync_type = models.CharField(_('Sync Type'), max_length=50, choices=[
+        ('PRODUCTS', _('Products')),
+        ('CUSTOMERS', _('Customers')),
+        ('STOCK', _('Stock')),
+        ('ORDERS', _('Orders')),
+    ])
+    enable_timestamp_resolution = models.BooleanField(_('Enable Timestamp Resolution'), default=True)
+    sync_all_fields = models.BooleanField(_('Sync All Fields'), default=True, help_text=_('Always synchronize all editable fields'))
+    log_conflicts = models.BooleanField(_('Log Conflicts'), default=True)
+    created_at = models.DateTimeField(_('Created At'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Updated At'), auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Sync Timestamp Config')
+        verbose_name_plural = _('Sync Timestamp Configs')
+        unique_together = ['sync_type']
+        ordering = ['sync_type']
+    
+    def __str__(self):
+        return f"{self.get_sync_type_display()} - {'Enabled' if self.enable_timestamp_resolution else 'Disabled'}"

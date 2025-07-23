@@ -1,0 +1,67 @@
+<div class="mb-2">
+    <h4 class="text-xs font-medium text-gray-900 dark:text-white mb-2">{% trans 'Related Contacts' %}</h4>
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs mb-2">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+                <th class="px-2 py-2">{% trans 'Name' %}</th>
+                <th class="px-2 py-2">{% trans 'Email' %}</th>
+                <th class="px-2 py-2">{% trans 'Phone' %}</th>
+                <th class="px-2 py-2">{% trans 'Position' %}</th>
+                <th class="px-2 py-2">{% trans 'Type' %}</th>
+                <th class="px-2 py-2">{% trans 'Primary' %}</th>
+                <th class="px-2 py-2 text-right">{% trans 'Actions' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for form in contact_formset.forms %}
+            <tr class="border-b border-gray-100 dark:border-gray-700">
+                <td class="px-2 py-1">{{ form.name }}</td>
+                <td class="px-2 py-1">{{ form.email }}</td>
+                <td class="px-2 py-1">{{ form.phone }}</td>
+                <td class="px-2 py-1">{{ form.position }}</td>
+                <td class="px-2 py-1">{{ form.relationship_type }}</td>
+                <td class="px-2 py-1 text-center">{{ form.is_primary }}</td>
+                <td class="px-2 py-1 text-right">
+                    {% if form.instance.pk %}
+                        <label class="inline-flex items-center">
+                            {{ form.DELETE }}
+                            <span class="ml-1 text-xs text-red-500">{% trans 'Delete' %}</span>
+                        </label>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {{ contact_formset.management_form }}
+    <button type="button" class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-synap-600 hover:bg-synap-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors" onclick="addContactFormRow()">
+        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+        {% trans 'Add Contact' %}
+    </button>
+</div>
+<script>
+function addContactFormRow() {
+    // Encuentra el último form y clónalo, actualizando los índices
+    const formsetPrefix = '{{ contact_formset.prefix }}';
+    const totalForms = document.getElementById('id_' + formsetPrefix + '-TOTAL_FORMS');
+    const tbody = document.querySelector('tbody');
+    const lastRow = tbody.querySelector('tr:last-child');
+    if (!lastRow) return;
+    const newRow = lastRow.cloneNode(true);
+    // Limpiar los valores de los inputs
+    newRow.querySelectorAll('input, select').forEach(function(input) {
+        if (input.type === 'checkbox' || input.type === 'radio') {
+            input.checked = false;
+        } else {
+            input.value = '';
+        }
+    });
+    // Actualizar los índices de los campos
+    const newIndex = parseInt(totalForms.value);
+    newRow.innerHTML = newRow.innerHTML.replace(new RegExp(formsetPrefix + '-\d+-', 'g'), formsetPrefix + '-' + newIndex + '-');
+    tbody.appendChild(newRow);
+    totalForms.value = newIndex + 1;
+}
+</script> 

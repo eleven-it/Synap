@@ -36,7 +36,7 @@ def stock_dashboard(request):
     # Construir queryset base
     quants = StockQuant.objects.select_related(
         'product', 'location', 'location__warehouse', 'branch'
-    ).filter(product__empresa=empresa)
+    ).filter(product__empresa=empresa, quantity__gt=0)
     
     # Aplicar filtros
     if branch_id:
@@ -128,7 +128,7 @@ def stock_dashboard_api(request):
     # Construir queryset
     quants = StockQuant.objects.select_related(
         'product', 'location', 'location__warehouse', 'branch'
-    ).filter(product__empresa=empresa)
+    ).filter(product__empresa=empresa, quantity__gt=0)
     
     # Aplicar filtros
     if branch_id:

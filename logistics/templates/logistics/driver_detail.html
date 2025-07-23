@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow">
+  <h1 class="text-lg font-bold mb-4">{% trans 'Driver Detail' %}</h1>
+  <div class="space-y-2">
+    <div><span class="font-semibold">{% trans 'Name' %}:</span> {{ driver.name }}</div>
+    <div><span class="font-semibold">{% trans 'Document Number' %}:</span> {{ driver.document_number }}</div>
+    <div><span class="font-semibold">{% trans 'Phone' %}:</span> {{ driver.phone }}</div>
+    <div><span class="font-semibold">{% trans 'Active' %}:</span> {% if driver.is_active %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</div>
+    <div><span class="font-semibold">{% trans 'Created At' %}:</span> {{ driver.created_at }}</div>
+    <div><span class="font-semibold">{% trans 'Updated At' %}:</span> {{ driver.updated_at }}</div>
+    {% block extra_fields %}{% endblock %}
+  </div>
+  <div class="mt-4 flex gap-2 justify-end">
+    <a href="{% url 'logistics:driver_edit' driver.id %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+    <a href="{% url 'logistics:driver_delete' driver.id %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+  </div>
+</div>
+{% endblock %} 

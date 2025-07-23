@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8">
+    <h1 class="text-lg font-semibold mb-4">{% trans 'Delivery Routes' %}</h1>
+    <div class="overflow-x-auto bg-white dark:bg-gray-900 rounded shadow">
+        <table class="min-w-full text-xs md:text-sm text-left">
+            <thead class="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                    <th class="px-2 py-2">{% trans 'Date' %}</th>
+                    <th class="px-2 py-2">{% trans 'Vehicle' %}</th>
+                    <th class="px-2 py-2">{% trans 'Driver' %}</th>
+                    <th class="px-2 py-2">{% trans 'State' %}</th>
+                    <th class="px-2 py-2">{% trans 'Notes' %}</th>
+                    <th class="px-2 py-2">{% trans 'Actions' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for route in routes %}
+                <tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td class="px-2 py-2">{{ route.date }}</td>
+                    <td class="px-2 py-2">{{ route.vehicle }}</td>
+                    <td class="px-2 py-2">{{ route.driver }}</td>
+                    <td class="px-2 py-2">{{ route.get_state_display }}</td>
+                    <td class="px-2 py-2">{{ route.notes|truncatechars:40 }}</td>
+                    <td class="px-2 py-2 flex gap-1">
+                        <a href="{% url 'logistics:deliveryroute_detail' route.pk %}" class="btn btn-xs btn-secondary">{% trans 'View' %}</a>
+                        <a href="{% url 'logistics:deliveryroute_update' route.pk %}" class="btn btn-xs btn-primary">{% trans 'Edit' %}</a>
+                        <a href="{% url 'logistics:deliveryroute_delete' route.pk %}" class="btn btn-xs btn-danger">{% trans 'Delete' %}</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center py-4">{% trans 'No delivery routes found.' %}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="mt-4">{% include 'theme/pagination.html' with page_obj=page_obj %}</div>
+    <div class="mt-4">
+        <a href="{% url 'logistics:deliveryroute_create' %}" class="btn btn-primary">{% trans 'Add Delivery Route' %}</a>
+        <a href="{% url 'logistics:driver_list' %}" class="btn btn-secondary ml-2">{% trans 'Back to Drivers' %}</a>
+    </div>
+</div>
+{% endblock %} 

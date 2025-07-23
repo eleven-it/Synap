@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="wizard-container max-w-2xl mx-auto mt-8">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-bold">{% trans 'Client Tags' %}</h2>
+        <a href="{% url 'sales:client_tag_create' %}" class="btn-primary">+ {% trans 'New Tag' %}</a>
+    </div>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+        {% if tags %}
+            <table class="min-w-full text-xs">
+                <thead>
+                    <tr class="text-left text-gray-500 dark:text-gray-400">
+                        <th class="py-2">{% trans 'Color' %}</th>
+                        <th class="py-2">{% trans 'Name' %}</th>
+                        <th class="py-2">{% trans 'Active' %}</th>
+                        <th class="py-2 text-right">{% trans 'Actions' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tag in tags %}
+                    <tr class="border-b border-gray-100 dark:border-gray-700">
+                        <td class="py-2">
+                            <span class="inline-block w-5 h-5 rounded-full border border-gray-200 align-middle" style="background: {{ tag.color }}"></span>
+                        </td>
+                        <td class="py-2">
+                            <span class="inline-block px-2 py-1 rounded text-xs font-semibold" style="background: {{ tag.color }}; color: #fff;">{{ tag.name }}</span>
+                        </td>
+                        <td class="py-2">
+                            {% if tag.is_active %}
+                                <span class="text-green-600 dark:text-green-400 font-bold">{% trans 'Yes' %}</span>
+                            {% else %}
+                                <span class="text-red-500 dark:text-red-400 font-bold">{% trans 'No' %}</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 text-right">
+                            <a href="{% url 'sales:client_tag_edit' tag.pk %}" class="text-blue-600 dark:text-blue-400 hover:underline mr-2">{% trans 'Edit' %}</a>
+                            <a href="{% url 'sales:client_tag_delete' tag.pk %}" class="text-red-600 dark:text-red-400 hover:underline">{% trans 'Delete' %}</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="text-center text-gray-400 py-8">
+                <i class="fas fa-tags text-3xl mb-2"></i>
+                <p>{% trans 'No tags found.' %}</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

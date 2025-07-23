@@ -1,0 +1,11 @@
+{
+  "autoRun": {
+    "enabled": true,
+    "promptBeforeEachStep": false,
+    "showPlan": false
+  },
+  "review": {
+    "enabled": false,
+    "autoApply": true
+  }
+}

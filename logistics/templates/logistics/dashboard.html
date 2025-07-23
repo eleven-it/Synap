@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-4">
+  <h1 class="text-lg font-bold mb-6 text-gray-900 dark:text-white">{% trans 'Logistics Dashboard' %}</h1>
+  
+  <!-- Weather Section -->
+  {% if weather_enabled and current_weather %}
+  <div class="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">{% trans 'Current Weather' %}</h2>
+      <div class="flex items-center space-x-2">
+        <img src="http://openweathermap.org/img/wn/{{ current_weather.icon }}@2x.png" alt="Weather" class="w-8 h-8">
+        <span class="text-lg font-bold text-gray-900 dark:text-white">{{ current_weather.temperature|floatformat:1 }}°C</span>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+      <div class="text-center">
+        <span class="text-gray-500 dark:text-gray-400">{% trans 'Feels Like' %}</span>
+        <div class="font-semibold text-gray-900 dark:text-white">{{ current_weather.feels_like|floatformat:1 }}°C</div>
+      </div>
+      <div class="text-center">
+        <span class="text-gray-500 dark:text-gray-400">{% trans 'Humidity' %}</span>
+        <div class="font-semibold text-gray-900 dark:text-white">{{ current_weather.humidity }}%</div>
+      </div>
+      <div class="text-center">
+        <span class="text-gray-500 dark:text-gray-400">{% trans 'Wind' %}</span>
+        <div class="font-semibold text-gray-900 dark:text-white">{{ current_weather.wind_speed }} m/s</div>
+      </div>
+      <div class="text-center">
+        <span class="text-gray-500 dark:text-gray-400">{% trans 'Visibility' %}</span>
+        <div class="font-semibold text-gray-900 dark:text-white">{{ current_weather.visibility|floatformat:0 }}m</div>
+      </div>
+    </div>
+    <div class="mt-2 text-center">
+      <span class="text-sm text-gray-600 dark:text-gray-300 capitalize">{{ current_weather.description }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Weather Alerts -->
+  {% if weather_enabled and weather_impact.weather_alerts %}
+  <div class="mb-6 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 rounded-lg p-4 border border-orange-200 dark:border-orange-800">
+    <h3 class="text-sm font-semibold text-orange-800 dark:text-orange-200 mb-2">{% trans 'Weather Alerts' %}</h3>
+    <div class="space-y-2">
+      {% for alert in weather_impact.weather_alerts %}
+      <div class="flex items-center space-x-2 text-xs">
+        <span class="w-2 h-2 bg-orange-500 rounded-full"></span>
+        <span class="text-orange-700 dark:text-orange-300">{{ alert.route }} - {{ alert.stop }}</span>
+        <span class="text-orange-600 dark:text-orange-400">{{ alert.description }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- KPIs Grid -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Routes Today' %}</span>
+      <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ routes_today }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Deliveries Completed' %}</span>
+      <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ deliveries_completed }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'In Progress' %}</span>
+      <span class="text-2xl font-bold text-orange-500 dark:text-orange-400">{{ deliveries_in_progress }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Delayed' %}</span>
+      <span class="text-2xl font-bold text-red-500 dark:text-red-400">{{ deliveries_delayed }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Out of Geofence' %}</span>
+      <span class="text-2xl font-bold text-pink-500 dark:text-pink-400">{{ deliveries_out_geofence }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Active Vehicles' %}</span>
+      <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ vehicles_active }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Route Efficiency' %}</span>
+      <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{{ route_efficiency|floatformat:1 }}</span>
+    </div>
+    {% if weather_enabled %}
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Weather Impact' %}</span>
+      <span class="text-2xl font-bold text-cyan-600 dark:text-cyan-400">{{ weather_impact.adverse_conditions_count }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Weather Forecast -->
+  {% if weather_enabled and weather_forecast %}
+  <div class="mb-6 bg-white dark:bg-gray-900 rounded shadow p-4">
+    <h2 class="text-base font-semibold mb-4 text-gray-800 dark:text-gray-100">{% trans '3-Day Forecast' %}</h2>
+    <div class="grid grid-cols-3 gap-4">
+      {% for forecast in weather_forecast|slice:":3" %}
+      <div class="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded">
+        <div class="text-xs text-gray-500 dark:text-gray-400">{{ forecast.datetime|date:"D" }}</div>
+        <img src="http://openweathermap.org/img/wn/{{ forecast.icon }}.png" alt="Weather" class="mx-auto w-8 h-8">
+        <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ forecast.temperature|floatformat:1 }}°C</div>
+        <div class="text-xs text-gray-600 dark:text-gray-300">{{ forecast.description }}</div>
+        <div class="text-xs text-gray-500 dark:text-gray-400">{{ forecast.pop|floatformat:0 }}% rain</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Incidents Table -->
+  <div class="bg-white dark:bg-gray-900 rounded shadow p-4 animate-fade-in-up">
+    <h2 class="text-base font-semibold mb-2 text-gray-800 dark:text-gray-100">{% trans 'Incidents' %}</h2>
+    <table class="min-w-full text-xs">
+      <thead>
+        <tr class="text-gray-500 dark:text-gray-300">
+          <th class="px-2 py-1">{% trans 'Route' %}</th>
+          <th class="px-2 py-1">{% trans 'Client' %}</th>
+          <th class="px-2 py-1">{% trans 'State' %}</th>
+          <th class="px-2 py-1">{% trans 'Details' %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in incidents %}
+        <tr class="border-b border-gray-100 dark:border-gray-800">
+          <td class="px-2 py-1">{{ i.route }}</td>
+          <td class="px-2 py-1">{{ i.client }}</td>
+          <td class="px-2 py-1">
+            <span class="px-2 py-0.5 rounded text-white {% if i.state == 'delayed' %}bg-red-500{% elif i.out_geofence %}bg-pink-500{% else %}bg-gray-400{% endif %}">
+              {{ i.state|capfirst }}{% if i.out_geofence %} + {% trans 'Out Geofence' %}{% endif %}
+            </span>
+          </td>
+          <td class="px-2 py-1">{{ i.details|default:'-' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-gray-400 text-center py-2">{% trans 'No incidents today.' %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out;
+}
+</style>
+{% endblock %} 

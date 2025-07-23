@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% trans 'Delivery Stops' %}</h1>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+      <thead class="bg-gray-50 dark:bg-gray-800">
+        <tr>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Route' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Order' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Client' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Address' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'State' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Actions' %}</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+        {% for stop in deliverystops %}
+        <tr>
+          <td class="px-2 py-2 whitespace-nowrap">{{ stop.route }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ stop.order }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ stop.client }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ stop.address }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ stop.state }}</td>
+          <td class="px-2 py-2 whitespace-nowrap flex gap-2">
+            <a href="{% url 'logistics:deliverystop_edit' stop.id %}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition">{% trans 'Edit' %}</a>
+            <a href="{% url 'logistics:deliverystop_delete' stop.id %}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800 transition">{% trans 'Delete' %}</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="px-2 py-2 text-center text-gray-500 dark:text-gray-400">{% trans 'No delivery stops found.' %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-4 flex justify-end">
+    <a href="{% url 'logistics:deliverystop_create' %}" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">{% trans 'Add Delivery Stop' %}</a>
+  </div>
+</div>
+{% endblock %} 

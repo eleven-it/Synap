@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="wizard-container max-w-lg mx-auto mt-8">
+    <h2 class="text-lg font-bold mb-2">{% trans 'Delete Tag' %}</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-4">
+        <p class="mb-2">{% trans 'Are you sure you want to delete this tag?' %}</p>
+        <div class="flex items-center gap-2 mb-2">
+            <span class="inline-block w-5 h-5 rounded-full border border-gray-200 align-middle" style="background: {{ object.color }}"></span>
+            <span class="inline-block px-2 py-1 rounded text-xs font-semibold" style="background: {{ object.color }}; color: #fff;">{{ object.name }}</span>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-actions flex justify-between mt-4">
+                <a href="{% url 'sales:client_tag_list' %}" class="btn-secondary">{% trans 'Cancel' %}</a>
+                <button type="submit" class="btn-primary">{% trans 'Delete' %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

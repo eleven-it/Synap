@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8">
+    <h1 class="text-lg font-semibold mb-4">{% trans 'Vehicle Detail' %}</h1>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4">
+        <table class="min-w-full text-xs md:text-sm">
+            <tr><th class="text-left pr-4 py-2">{% trans 'Company' %}</th><td>{{ vehicle.company }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'License Plate' %}</th><td>{{ vehicle.license_plate }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Type' %}</th><td>{{ vehicle.type }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Capacity (kg)' %}</th><td>{{ vehicle.capacity_kg }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Brand' %}</th><td>{{ vehicle.brand }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Model' %}</th><td>{{ vehicle.model }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Active' %}</th><td>{% if vehicle.is_active %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Created at' %}</th><td>{{ vehicle.created_at }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Updated at' %}</th><td>{{ vehicle.updated_at }}</td></tr>
+        </table>
+        <div class="mt-6 flex gap-2">
+            <a href="{% url 'logistics:vehicle_update' vehicle.pk %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+            <a href="{% url 'logistics:vehicle_delete' vehicle.pk %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+            <a href="{% url 'logistics:vehicle_list' %}" class="btn btn-secondary">{% trans 'Back to list' %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

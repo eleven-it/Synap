@@ -16,29 +16,37 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_GET
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
+import json
 
 from .models import (
     Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
     DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog,
     POSSession, POSTerminal, POSSale, POSPayment, POSPromotion,
-    PaymentMethod, PaymentProcessor
+    PaymentMethod, PaymentProcessor, ClientTag
 )
+from inventory.models import Brand, Subcategory, Product, ProductVariant, Warehouse, Category, StockQuant, StockMove
 from .api.serializers import (
     ClientSerializer, SalesOrderSerializer, InvoiceSerializer,
     PaymentSerializer, DeliveryOrderSerializer
 )
 from core.models import Currency, State, FiscalResponsibility, Country
-from inventory.models import ProductVariant, Warehouse
+from inventory.models import ProductVariant, Warehouse, Category, StockQuant, StockMove
 from .forms import (
     ClientWizardStep1Form, ClientWizardStep2Form, ClientWizardStep3Form,
     ContactSearchForm, ContactRelationshipForm,
     PaymentMethodForm, PaymentProcessorForm, POSClientSelectionForm,
-    ContactManagementForm, PaymentTermForm, PaymentTermLineForm
+    ContactManagementForm, PaymentTermForm, PaymentTermLineForm,
+    ClientTagForm, ClientForm, ClientAttachmentFormSet
 )
 from core.models import UsuarioExtendido
 from django.contrib.contenttypes.models import ContentType
 from core.models import Contact, ContactRelationship
+from django.contrib.messages.views import SuccessMessageMixin
+from .services import POSService, POSSaleService, POSIntegrationService
 
 
 
@@ -1182,14 +1190,28 @@ def pos_dashboard(request):
     
     # Obtener terminales disponibles
     terminals = POSTerminal.objects.filter(
-        branch=request.user.branch,
+        branch=request.user.branch_activa,
         is_active=True
     )
-    
+
+    # Estadísticas de ventas
+    if active_session:
+        completed_sales = active_session.sales.filter(state='completed')
+        completed_count = completed_sales.count()
+        completed_total = completed_sales.aggregate(total=models.Sum('total'))['total'] or 0
+        draft_count = active_session.sales.filter(state='draft').count()
+    else:
+        completed_count = 0
+        completed_total = 0
+        draft_count = 0
+
     context = {
         'active_session': active_session,
         'terminals': terminals,
-        'user_branch': request.user.branch,
+        'user_branch': request.user.branch_activa,
+        'completed_count': completed_count,
+        'completed_total': completed_total,
+        'draft_count': draft_count,
     }
     
     return render(request, 'sales/pos/dashboard.html', context)
@@ -1206,7 +1228,7 @@ def pos_session_open(request):
         terminal = get_object_or_404(POSTerminal, id=terminal_id)
         
         try:
-            pos_service = POSService(request.user, request.user.branch, terminal)
+            pos_service = POSService(request.user, request.user.branch_activa, terminal)
             session = pos_service.open_session(opening_amount)
             
             messages.success(request, f'Sesión {session.number} abierta correctamente')
@@ -1230,7 +1252,7 @@ def pos_session_close(request):
         session = get_object_or_404(POSSession, id=session_id, operator=request.user)
         
         try:
-            pos_service = POSService(request.user, request.user.branch, session.pos_terminal)
+            pos_service = POSService(request.user, request.user.branch_activa, session.pos_terminal)
             pos_service.current_session = session
             closed_session = pos_service.close_session(closing_amount)
             
@@ -1261,11 +1283,14 @@ def pos_sale_new(request):
     # Crear nueva venta
     sale_service = POSSaleService(active_session)
     sale = sale_service.create_sale()
-    
+
+    from .models import PriceList
+    price_list = PriceList.objects.filter(is_active=True).first()
+
     context = {
         'sale': sale,
         'session': active_session,
-        'price_list': active_session.branch.default_price_list,
+        'price_list': price_list,
     }
     
     return render(request, 'sales/pos/sale_new.html', context)
@@ -1692,7 +1717,7 @@ def pos_configuration(request):
     """
     Configuración del TPV
     """
-    terminals = POSTerminal.objects.filter(branch=request.user.branch)
+    terminals = POSTerminal.objects.filter(branch=request.user.branch_activa)
     promotions = POSPromotion.objects.filter(is_active=True)
     
     context = {
@@ -2811,3 +2836,492 @@ def payment_terms_autocomplete(request):
         return JsonResponse({'results': results})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+class ClientTagListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+    model = ClientTag
+    template_name = 'sales/clients/tags/tag_list.html'
+    context_object_name = 'tags'
+    permission_required = 'sales.view_clienttag'
+    paginate_by = 50
+
+    def get_queryset(self):
+        empresa = self.request.user.empresa_activa
+        return ClientTag.objects.filter(empresa=empresa).order_by('name')
+
+class ClientTagCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = ClientTag
+    form_class = ClientTagForm
+    template_name = 'sales/clients/tags/tag_form.html'
+    permission_required = 'sales.add_clienttag'
+    success_url = reverse_lazy('sales:client_tag_list')
+
+    def form_valid(self, form):
+        form.instance.empresa = self.request.user.empresa_activa
+        return super().form_valid(form)
+
+class ClientTagUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = ClientTag
+    form_class = ClientTagForm
+    template_name = 'sales/clients/tags/tag_form.html'
+    permission_required = 'sales.change_clienttag'
+    success_url = reverse_lazy('sales:client_tag_list')
+
+class ClientTagDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+    model = ClientTag
+    template_name = 'sales/clients/tags/tag_confirm_delete.html'
+    permission_required = 'sales.delete_clienttag'
+    success_url = reverse_lazy('sales:client_tag_list')
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        self.object.is_active = False
+        self.object.save()
+        return super().delete(request, *args, **kwargs)
+
+class ClientFormTabsView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    model = Client
+    form_class = ClientForm
+    template_name = 'sales/clients/client_form_tabs.html'
+    permission_required = 'sales.add_client'
+    success_url = reverse_lazy('sales:client_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['empresa'] = getattr(self.request.user, 'empresa_activa', None)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['client'] = self.object if hasattr(self, 'object') and self.object else None
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data()
+        if form.is_valid():
+            self.object = form.save()
+            return super().form_valid(form)
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
+
+class ClientEditFormTabsView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+    model = Client
+    form_class = ClientForm
+    template_name = 'sales/clients/client_form_tabs.html'
+    permission_required = 'sales.change_client'
+    success_url = reverse_lazy('sales:client_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['empresa'] = getattr(self.request.user, 'empresa_activa', None)
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['client'] = self.object
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data()
+        if form.is_valid():
+            self.object = form.save()
+            return super().form_valid(form)
+        else:
+            return self.render_to_response(self.get_context_data(form=form))
+
+@require_GET
+def client_tags_autocomplete(request):
+    empresa = getattr(request.user, 'empresa_activa', None)
+    q = request.GET.get('q', '').strip()
+    if not empresa:
+        return JsonResponse({'results': []})
+    tags_qs = ClientTag.objects.filter(empresa=empresa, is_active=True)
+    if q:
+        tags_qs = tags_qs.filter(name__icontains=q)
+    tags = tags_qs.order_by('name')[:10]
+    results = [
+        {'id': tag.id, 'text': tag.name, 'color': tag.color} for tag in tags
+    ]
+    return JsonResponse({'results': results})
+
+@csrf_exempt
+@require_POST
+def client_tags_create(request):
+    empresa = getattr(request.user, 'empresa_activa', None)
+    if not empresa:
+        return JsonResponse({'success': False, 'error': 'No company'})
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        name = data.get('name', '').strip()
+        if not name:
+            return JsonResponse({'success': False, 'error': 'No name'})
+        tag, created = ClientTag.objects.get_or_create(empresa=empresa, name=name, defaults={'color': '#f97316', 'is_active': True})
+        return JsonResponse({'success': True, 'tag': {'id': tag.id, 'name': tag.name, 'color': tag.color}})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+class SuperuserOrPermissionRequiredMixin(PermissionRequiredMixin):
+    def has_permission(self):
+        return self.request.user.is_superuser or super().has_permission()
+
+class TerminalListView(SuperuserOrPermissionRequiredMixin, ListView):
+    model = POSTerminal
+    template_name = 'sales/terminals/terminal_list.html'
+    context_object_name = 'terminals'
+    permission_required = 'sales.view_posterminal'
+    paginate_by = 20
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        context['show_config_button'] = (
+            user.is_superuser or
+            user.groups.filter(name__in=['Administrador', 'Supervisor de Ventas']).exists()
+        )
+        return context
+
+class TerminalCreateView(SuperuserOrPermissionRequiredMixin, SuccessMessageMixin, CreateView):
+    model = POSTerminal
+    template_name = 'sales/terminals/terminal_form.html'
+    fields = ['name', 'code', 'branch', 'fiscal_printer', 'fiscal_number', 'electronic_invoice', 'receipt_printer', 'ticket_width', 'barcode_scanner', 'scale_integration', 'scale_port', 'is_active']
+    permission_required = 'sales.add_posterminal'
+    success_url = reverse_lazy('sales:terminal_list')
+    success_message = 'Terminal creada correctamente.'
+
+class TerminalUpdateView(SuperuserOrPermissionRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = POSTerminal
+    template_name = 'sales/terminals/terminal_form.html'
+    fields = ['name', 'code', 'branch', 'fiscal_printer', 'fiscal_number', 'electronic_invoice', 'receipt_printer', 'ticket_width', 'barcode_scanner', 'scale_integration', 'scale_port', 'is_active']
+    permission_required = 'sales.change_posterminal'
+    success_url = reverse_lazy('sales:terminal_list')
+    success_message = 'Terminal actualizada correctamente.'
+
+class TerminalDeleteView(SuperuserOrPermissionRequiredMixin, SuccessMessageMixin, DeleteView):
+    model = POSTerminal
+    template_name = 'sales/terminals/terminal_confirm_delete.html'
+    permission_required = 'sales.delete_posterminal'
+    success_url = reverse_lazy('sales:terminal_list')
+    success_message = 'Terminal eliminada correctamente.'
+
+@login_required
+def pos_main(request):
+    # Obtener sesión activa
+    session = POSSession.objects.filter(operator=request.user, state='open').first()
+    if not session:
+        return redirect('sales:pos_dashboard')
+
+    # Filtros seleccionados
+    selected_category_id = request.GET.get('category')
+    selected_subcategory_id = request.GET.get('subcategory')
+    selected_brand_id = request.GET.get('brand')
+
+    # Obtener filtros activos
+    categories = Category.objects.filter(is_active=True)
+    brands = Brand.objects.filter(is_active=True)
+    # Subcategorías: solo de la categoría seleccionada, o todas si no hay filtro
+    if selected_category_id:
+        subcategories = Subcategory.objects.filter(is_active=True, category_id=selected_category_id)
+    else:
+        subcategories = Subcategory.objects.filter(is_active=True)
+
+    # Filtrar productos padres según los filtros
+    products_qs = Product.objects.filter(is_published=True)
+    if selected_category_id:
+        products_qs = products_qs.filter(category_id=selected_category_id)
+    if selected_subcategory_id:
+        products_qs = products_qs.filter(subcategory_id=selected_subcategory_id)
+    if selected_brand_id:
+        products_qs = products_qs.filter(brand_id=selected_brand_id)
+
+    # Carrito (venta en borrador de la sesión)
+    draft_sale = POSSale.objects.filter(session=session, state='draft').first()
+    cart_lines = draft_sale.lines.all() if draft_sale else []
+    cart_subtotal = sum(line.subtotal for line in cart_lines)
+    cart_discount = sum(getattr(line, 'discount_amount', 0) for line in cart_lines)
+    cart_total = cart_subtotal - cart_discount
+
+    # Métodos de pago
+    payment_methods = PaymentMethod.objects.filter(is_active=True)
+
+    def decimal_to_float(obj):
+        if isinstance(obj, list):
+            return [decimal_to_float(i) for i in obj]
+        elif isinstance(obj, dict):
+            return {k: decimal_to_float(v) for k, v in obj.items()}
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        return obj
+
+    # Productos para el grid
+    product_list = []
+    for p in products_qs:
+        # Variantes activas con stock > 0
+        variants_qs = p.variants.filter(is_active=True)
+        variants_with_stock = []
+        for v in variants_qs:
+            stock_v = StockQuant.objects.filter(product=v.product, location__branch=session.branch).first()
+            stock_qty = float(stock_v.available_quantity) if stock_v else 0
+            if stock_qty > 0:
+                variants_with_stock.append({
+                    'id': v.id,
+                    'sku': v.sku,
+                    'price': float(v.price),
+                    'stock': stock_qty,
+                    'attributes': list(v.attributes.values('attribute__name', 'value')),
+                })
+        has_variants = len(variants_with_stock) > 0
+        # Stock del producto padre (si no tiene variantes)
+        stock_total = 0
+        if not has_variants:
+            stock_p = StockQuant.objects.filter(product=p, location__branch=session.branch).first()
+            stock_total = float(stock_p.available_quantity) if stock_p else 0
+        else:
+            stock_total = sum(v['stock'] for v in variants_with_stock)
+        # Imagen principal
+        image_url = p.images.first().image.url if hasattr(p, 'images') and p.images.exists() else ''
+        # Diccionario para el grid
+        product_list.append({
+            'id': p.id,
+            'name': p.name,
+            'code': p.sku,
+            'price': float(p.price),
+            'image_url': image_url,
+            'stock': stock_total,
+            'category_id': p.category_id,
+            'subcategory_id': p.subcategory_id,
+            'brand_id': p.brand_id,
+            'has_multiple_variants': has_variants,
+            'variants': variants_with_stock,
+            'attributes': [],  # Se puede poblar si se requiere
+        })
+
+    context = {
+        'user': request.user,
+        'session': session,
+        'categories': categories,
+        'subcategories': subcategories,
+        'brands': brands,
+        'selected_category_id': selected_category_id,
+        'selected_subcategory_id': selected_subcategory_id,
+        'selected_brand_id': selected_brand_id,
+        'products': json.dumps(decimal_to_float(product_list)),
+        'cart_lines': cart_lines,
+        'cart_subtotal': cart_subtotal,
+        'cart_discount': cart_discount,
+        'cart_total': cart_total,
+        'payment_methods': payment_methods,
+    }
+    return render(request, 'sales/pos/base_pos.html', context)
+
+@login_required
+@require_GET
+def pos_api_products(request):
+    search = request.GET.get('search', '')
+    category = request.GET.get('category')
+    qs = ProductVariant.objects.filter(is_active=True)
+    if search:
+        qs = qs.filter(
+            Q(product__name__icontains=search) |
+            Q(sku__icontains=search) |
+            Q(product__description__icontains=search)
+        )
+    if category:
+        qs = qs.filter(product__category_id=category)
+    products = [{
+        'id': p.id,
+        'name': p.product.name,
+        'code': p.sku,
+        'price': float(getattr(p, 'price', 0)),
+        'image_url': p.product.images.first().image.url if hasattr(p.product, 'images') and p.product.images.exists() else '',
+    } for p in qs[:30]]
+    return JsonResponse({'products': products})
+
+@login_required
+@require_POST
+def pos_api_cart_add(request):
+    import json as pyjson
+    session = POSSession.objects.filter(operator=request.user, state='open').first()
+    if not session:
+        return JsonResponse({'error': 'No hay sesión activa'}, status=400)
+    draft_sale = POSSale.objects.filter(session=session, state='draft').first()
+    if not draft_sale:
+        from .models import PriceList
+        price_list = PriceList.objects.filter(is_active=True).first()
+        draft_sale = POSSale.objects.create(session=session, operator=request.user, price_list=price_list, state='draft')
+    data = pyjson.loads(request.body)
+    product_id = data.get('product_id')
+    quantity = data.get('quantity', 1)
+    is_variant = data.get('is_variant', False)
+    from inventory.models import Product, ProductVariant, StockQuant
+    if is_variant:
+        product = ProductVariant.objects.filter(id=product_id, is_active=True).first()
+        if not product:
+            return JsonResponse({'error': 'Variante no encontrada'}, status=404)
+        # Validar stock disponible (en la sucursal de la sesión)
+        stock_quant = StockQuant.objects.filter(product=product, location__branch=session.branch).first()
+        available = float(stock_quant.available_quantity) if stock_quant else 0
+        # Sumar cantidad ya en carrito
+        line = draft_sale.lines.filter(product_variant=product).first()
+        qty_in_cart = line.quantity if line else 0
+        if available < quantity + qty_in_cart:
+            return JsonResponse({'error': f'Stock insuficiente. Disponible: {available}, en carrito: {qty_in_cart}'}, status=400)
+        # Agregar o actualizar línea
+        if line:
+            line.quantity += quantity
+            line.save()
+        else:
+            draft_sale.lines.create(product_variant=product, quantity=quantity, unit_price=float(product.price), subtotal=quantity * float(product.price))
+    else:
+        # Producto padre sin variantes
+        product = Product.objects.filter(id=product_id, is_published=True).first()
+        if not product:
+            return JsonResponse({'error': 'Producto no encontrado'}, status=404)
+        # Buscar o crear variante default
+        variant = product.variants.filter(is_active=True).first()
+        if not variant:
+            # Crear variante default
+            from inventory.models import ProductVariant
+            variant = ProductVariant.objects.create(
+                product=product,
+                sku=product.sku or f"{product.id}-default",
+                price=product.price,
+                is_active=True
+            )
+        # Validar stock disponible (en la sucursal de la sesión)
+        stock_quant = StockQuant.objects.filter(product=variant.product, location__branch=session.branch).first()
+        available = float(stock_quant.available_quantity) if stock_quant else 0
+        # Sumar cantidad ya en carrito
+        line = draft_sale.lines.filter(product_variant=variant).first()
+        qty_in_cart = line.quantity if line else 0
+        if available < quantity + qty_in_cart:
+            return JsonResponse({'error': f'Stock insuficiente. Disponible: {available}, en carrito: {qty_in_cart}'}, status=400)
+        # Agregar o actualizar línea
+        if line:
+            line.quantity += quantity
+            line.save()
+        else:
+            draft_sale.lines.create(product_variant=variant, quantity=quantity, unit_price=float(variant.price), subtotal=quantity * float(variant.price))
+    draft_sale.recalculate_totals()
+    cart_lines = draft_sale.lines.all()
+    cart = [{
+        'id': l.id,
+        'product': l.product_variant.product.name if l.product_variant else l.description,
+        'quantity': l.quantity,
+        'subtotal': float(l.subtotal),
+    } for l in cart_lines]
+    return JsonResponse({
+        'success': True,
+        'cart': cart,
+        'cart_subtotal': float(cart_subtotal) if 'cart_subtotal' in locals() else 0,
+        'cart_discount': float(cart_discount) if 'cart_discount' in locals() else 0,
+        'cart_total': float(cart_total) if 'cart_total' in locals() else 0,
+    })
+
+@require_POST
+def pos_api_cart_update(request):
+    import json
+    session = POSSession.objects.filter(operator=request.user, state='open').first()
+    if not session:
+        return JsonResponse({'error': 'No hay sesión activa'}, status=400)
+    draft_sale = POSSale.objects.filter(session=session, state='draft').first()
+    if not draft_sale:
+        return JsonResponse({'error': 'No hay venta en borrador'}, status=400)
+    data = json.loads(request.body)
+    line_id = data.get('line_id')
+    quantity = data.get('quantity')
+    discount = data.get('discount')
+    price = data.get('price')
+    note = data.get('note')
+    line = draft_sale.lines.filter(id=line_id).first()
+    if not line:
+        return JsonResponse({'error': 'Línea no encontrada'}, status=404)
+    if quantity is not None:
+        line.quantity = quantity
+    if discount is not None:
+        line.discount_percentage = discount
+    if price is not None:
+        line.unit_price = price
+    if note is not None:
+        line.note = note
+    line.subtotal = line.quantity * line.unit_price * (1 - (line.discount_percentage or 0) / 100)
+    line.save()
+    draft_sale.recalculate_totals()
+    cart_lines = draft_sale.lines.all()
+    cart = [{
+        'id': l.id,
+        'product': l.product_variant.product.name,
+        'quantity': l.quantity,
+        'subtotal': float(l.subtotal),
+    } for l in cart_lines]
+    return JsonResponse({'success': True, 'cart': cart})
+
+@require_POST
+def pos_api_cart_remove(request):
+    import json
+    session = POSSession.objects.filter(operator=request.user, state='open').first()
+    if not session:
+        return JsonResponse({'error': 'No hay sesión activa'}, status=400)
+    draft_sale = POSSale.objects.filter(session=session, state='draft').first()
+    if not draft_sale:
+        return JsonResponse({'error': 'No hay venta en borrador'}, status=400)
+    data = json.loads(request.body)
+    line_id = data.get('line_id')
+    line = draft_sale.lines.filter(id=line_id).first()
+    if not line:
+        return JsonResponse({'error': 'Línea no encontrada'}, status=404)
+    line.delete()
+    draft_sale.recalculate_totals()
+    cart_lines = draft_sale.lines.all()
+    cart = [{
+        'id': l.id,
+        'product': l.product_variant.product.name,
+        'quantity': l.quantity,
+        'subtotal': float(l.subtotal),
+    } for l in cart_lines]
+    return JsonResponse({'success': True, 'cart': cart})
+
+@require_POST
+def pos_api_payment(request):
+    import json
+    from inventory.models import StockQuant, StockMove
+    session = POSSession.objects.filter(operator=request.user, state='open').first()
+    if not session:
+        return JsonResponse({'error': 'No hay sesión activa'}, status=400)
+    draft_sale = POSSale.objects.filter(session=session, state='draft').first()
+    if not draft_sale:
+        return JsonResponse({'error': 'No hay venta en borrador'}, status=400)
+    data = json.loads(request.body)
+    payments = data.get('payments', [])
+    total_paid = sum(float(p.get('amount', 0)) for p in payments)
+    if abs(total_paid - draft_sale.total) > 0.01:
+        return JsonResponse({'error': 'El monto pagado no coincide con el total de la venta'}, status=400)
+    # Validar stock antes de completar la venta
+    for line in draft_sale.lines.all():
+        stock_quant = StockQuant.objects.filter(product=line.product_variant, location__branch=session.branch).first()
+        available = stock_quant.available_quantity if stock_quant else 0
+        if available < line.quantity:
+            return JsonResponse({'error': f'Stock insuficiente para {line.product_variant.name}. Disponible: {available}'}, status=400)
+    # Registrar pagos
+    for p in payments:
+        draft_sale.payments.create(
+            payment_method=p.get('method'),
+            amount=p.get('amount'),
+            reference=p.get('reference', ''),
+            notes=p.get('notes', '')
+        )
+    # Descontar stock y crear movimientos
+    for line in draft_sale.lines.all():
+        stock_quant = StockQuant.objects.filter(product=line.product_variant, location__branch=session.branch).first()
+        if stock_quant:
+            stock_quant.available_quantity -= line.quantity
+            stock_quant.save()
+        StockMove.objects.create(
+            product=line.product_variant,
+            quantity=-line.quantity,
+            location=stock_quant.location if stock_quant else None,
+            origin='POS',
+            sale=draft_sale
+        )
+    draft_sale.state = 'completed'
+    draft_sale.completed_at = timezone.now()
+    draft_sale.save()
+    return JsonResponse({'success': True, 'sale_number': draft_sale.number, 'total_paid': float(draft_sale.total)})

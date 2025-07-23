@@ -112,4 +112,23 @@
         margin-top: 0.1rem;
     }
 </style>
+{% endblock %}
+{% block extra_js %}
+    <script src="/static/sales/js/autocomplete.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar autocomplete para payment_terms si existe el campo
+        var paymentTermsField = document.getElementById('id_payment_terms');
+        if (paymentTermsField) {
+            // Usar el mismo patrón de los otros autocompletes
+            createAutocompleteDropdown(
+                paymentTermsField,
+                '/sales/api/payment-terms-autocomplete/',
+                function(result) {
+                    paymentTermsField.value = result.text;
+                }
+            );
+        }
+    });
+    </script>
 {% endblock %} 

@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div id="creditlimitlog-form-wrapper" class="max-w-xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans opacity-0 translate-y-4 transition-all duration-500">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% trans 'Credit Limit Log' %}</h1>
+  <form method="post" enctype="multipart/form-data" class="space-y-3" id="creditlimitlog-form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Client' %}</label>
+      {{ form.client|as_crispy_field }}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Old Limit' %}</label>
+      {{ form.old_limit|as_crispy_field }}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'New Limit' %}</label>
+      {{ form.new_limit|as_crispy_field }}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Changed By' %}</label>
+      {{ form.changed_by|as_crispy_field }}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Changed At' %}</label>
+      {{ form.changed_at|as_crispy_field }}
+    </div>
+    {% block extra_fields %}{% endblock %}
+    <div class="flex justify-end gap-2 mt-2">
+      <button type="submit" id="creditlimitlog-save-btn" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+        {% trans 'Save' %}
+      </button>
+    </div>
+  </form>
+  <div id="creditlimitlog-toast" class="fixed bottom-4 right-4 z-50 hidden">
+    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm flex items-center">
+      <svg class="h-5 w-5 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+      <span id="creditlimitlog-toast-message" class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Credit limit log saved successfully' %}</span>
+      <button type="button" onclick="hideCreditLimitLogToast()" class="ml-auto text-gray-400 hover:text-gray-600" title="{% trans 'Close' %}">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    document.getElementById('creditlimitlog-form-wrapper').classList.remove('opacity-0', 'translate-y-4');
+    document.getElementById('creditlimitlog-form-wrapper').classList.add('opacity-100', 'translate-y-0');
+  }, 100);
+  document.querySelectorAll('#creditlimitlog-form input, #creditlimitlog-form select').forEach(input => {
+    input.addEventListener('focus', function() {
+      this.classList.add('ring-2', 'ring-orange-400', 'border-orange-400');
+    });
+    input.addEventListener('blur', function() {
+      this.classList.remove('ring-2', 'ring-orange-400', 'border-orange-400');
+    });
+  });
+  document.getElementById('creditlimitlog-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    showCreditLimitLogToast('{% trans "Credit limit log saved successfully" %}');
+  });
+});
+function showCreditLimitLogToast(message) {
+  const toast = document.getElementById('creditlimitlog-toast');
+  const toastMessage = document.getElementById('creditlimitlog-toast-message');
+  toastMessage.textContent = message;
+  toast.classList.remove('hidden');
+  setTimeout(hideCreditLimitLogToast, 3000);
+}
+function hideCreditLimitLogToast() {
+  document.getElementById('creditlimitlog-toast').classList.add('hidden');
+}
+</script>
+{% endblock %} 

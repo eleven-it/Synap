@@ -1,0 +1,97 @@
+{% load static i18n %}
+<aside id="filtersSidebar" class="w-56 h-screen bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-4 overflow-y-auto" style="scrollbar-width: thin;">
+    <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{% trans 'Filters' %}</h3>
+    <!-- Categoría -->
+    <div class="filter-section" data-section="category">
+        <button type="button" class="w-full flex justify-between items-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase mb-1 focus:outline-none" onclick="toggleFilterSection('category')">
+            <span>{% trans 'Category' %}</span>
+            <span class="material-icons transition-transform" id="icon-category">expand_more</span>
+        </button>
+        <div class="filter-options flex flex-col gap-1" id="options-category">
+            <a href="?" class="px-3 py-2 rounded-lg text-xs font-medium transition {% if not selected_category_id %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %} block">{% trans 'All' %}</a>
+            {% for category in categories %}
+                <a href="?category={{ category.id }}{% if selected_brand_id %}&brand={{ selected_brand_id }}{% endif %}{% if selected_subcategory_id %}&subcategory={{ selected_subcategory_id }}{% endif %}"
+                   class="px-3 py-2 rounded-lg text-xs font-medium transition block {% if category.id|stringformat:'s' == selected_category_id|stringformat:'s' %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                    <span class="material-icons mr-2 align-middle">category</span>{{ category.name }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    <!-- Subcategoría -->
+    <div class="filter-section" data-section="subcategory">
+        <button type="button" class="w-full flex justify-between items-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase mb-1 focus:outline-none" onclick="toggleFilterSection('subcategory')">
+            <span>{% trans 'Subcategory' %}</span>
+            <span class="material-icons transition-transform" id="icon-subcategory">expand_more</span>
+        </button>
+        <div class="filter-options flex flex-col gap-1" id="options-subcategory">
+            <a href="?{% if selected_category_id %}category={{ selected_category_id }}{% endif %}{% if selected_brand_id %}&brand={{ selected_brand_id }}{% endif %}"
+               class="px-3 py-2 rounded-lg text-xs font-medium transition block {% if not selected_subcategory_id %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">{% trans 'All' %}</a>
+            {% for subcategory in subcategories %}
+                <a href="?{% if selected_category_id %}category={{ selected_category_id }}&{% endif %}subcategory={{ subcategory.id }}{% if selected_brand_id %}&brand={{ selected_brand_id }}{% endif %}"
+                   class="px-3 py-2 rounded-lg text-xs font-medium transition block {% if subcategory.id|stringformat:'s' == selected_subcategory_id|stringformat:'s' %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                    <span class="material-icons mr-2 align-middle">label</span>{{ subcategory.name }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    <!-- Marca -->
+    <div class="filter-section" data-section="brand">
+        <button type="button" class="w-full flex justify-between items-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase mb-1 focus:outline-none" onclick="toggleFilterSection('brand')">
+            <span>{% trans 'Brand' %}</span>
+            <span class="material-icons transition-transform" id="icon-brand">expand_more</span>
+        </button>
+        <div class="filter-options flex flex-col gap-1" id="options-brand">
+            <a href="?{% if selected_category_id %}category={{ selected_category_id }}{% endif %}{% if selected_subcategory_id %}&subcategory={{ selected_subcategory_id }}{% endif %}"
+               class="px-3 py-2 rounded-lg text-xs font-medium transition block {% if not selected_brand_id %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">{% trans 'All' %}</a>
+            {% for brand in brands %}
+                <a href="?{% if selected_category_id %}category={{ selected_category_id }}&{% endif %}{% if selected_subcategory_id %}subcategory={{ selected_subcategory_id }}&{% endif %}brand={{ brand.id }}"
+                   class="px-3 py-2 rounded-lg text-xs font-medium transition block {% if brand.id|stringformat:'s' == selected_brand_id|stringformat:'s' %}bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200{% else %}text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700{% endif %}">
+                    <span class="material-icons mr-2 align-middle">store</span>{{ brand.name }}
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+</aside>
+<script>
+// Sidebar: scroll propio ya está aplicado con overflow-y-auto y h-screen
+// Colapsar/expandir secciones
+function toggleFilterSection(section) {
+    // Colapsar todas las secciones menos la seleccionada
+    document.querySelectorAll('.filter-section').forEach(function(div) {
+        var sec = div.getAttribute('data-section');
+        var options = document.getElementById('options-' + sec);
+        var icon = document.getElementById('icon-' + sec);
+        if (sec === section) {
+            // Toggle la seleccionada
+            var isCollapsed = options.style.display === 'none';
+            options.style.display = isCollapsed ? 'flex' : 'none';
+            icon.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+        } else {
+            // Colapsar las demás
+            options.style.display = 'none';
+            icon.style.transform = 'rotate(-90deg)';
+        }
+    });
+}
+// Al seleccionar un filtro, colapsar las otras secciones automáticamente
+// Inicializar: solo la sección activa expandida
+window.addEventListener('DOMContentLoaded', function() {
+    var active = null;
+    if ({{ selected_category_id|default:'null' }}) active = 'category';
+    else if ({{ selected_subcategory_id|default:'null' }}) active = 'subcategory';
+    else if ({{ selected_brand_id|default:'null' }}) active = 'brand';
+    else active = 'category';
+    document.querySelectorAll('.filter-section').forEach(function(div) {
+        var sec = div.getAttribute('data-section');
+        var options = document.getElementById('options-' + sec);
+        var icon = document.getElementById('icon-' + sec);
+        if (sec === active) {
+            options.style.display = 'flex';
+            icon.style.transform = 'rotate(0deg)';
+        } else {
+            options.style.display = 'none';
+            icon.style.transform = 'rotate(-90deg)';
+        }
+    });
+});
+</script> 

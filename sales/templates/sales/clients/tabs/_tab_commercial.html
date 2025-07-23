@@ -1,0 +1,23 @@
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+        {{ form.credit_limit|as_crispy_field }}
+    </div>
+    <div>
+        {{ form.payment_terms|as_crispy_field }}
+    </div>
+    <div>
+        {{ form.default_price_list|as_crispy_field }}
+    </div>
+    <div>
+        {{ form.sales_person|as_crispy_field }}
+    </div>
+    <div>
+        {{ form.default_discount|as_crispy_field }}
+    </div>
+    <div>
+        {{ form.customer_category|as_crispy_field }}
+    </div>
+    <div class="md:col-span-2">
+        {{ form.tags|as_crispy_field }}
+    </div>
+</div> 

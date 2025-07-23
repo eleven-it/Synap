@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow">
+  <h1 class="text-lg font-bold mb-4">{% trans 'Vehicle Detail' %}</h1>
+  <div class="space-y-2">
+    <div><span class="font-semibold">{% trans 'License Plate' %}:</span> {{ vehicle.license_plate }}</div>
+    <div><span class="font-semibold">{% trans 'Type' %}:</span> {{ vehicle.type }}</div>
+    <div><span class="font-semibold">{% trans 'Capacity (kg)' %}:</span> {{ vehicle.capacity_kg }}</div>
+    <div><span class="font-semibold">{% trans 'Brand' %}:</span> {{ vehicle.brand }}</div>
+    <div><span class="font-semibold">{% trans 'Model' %}:</span> {{ vehicle.model }}</div>
+    <div><span class="font-semibold">{% trans 'Active' %}:</span> {% if vehicle.is_active %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</div>
+    <div><span class="font-semibold">{% trans 'Created At' %}:</span> {{ vehicle.created_at }}</div>
+    <div><span class="font-semibold">{% trans 'Updated At' %}:</span> {{ vehicle.updated_at }}</div>
+    {% block extra_fields %}{% endblock %}
+  </div>
+  <div class="mt-4 flex gap-2 justify-end">
+    <a href="{% url 'logistics:vehicle_edit' vehicle.id %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+    <a href="{% url 'logistics:vehicle_delete' vehicle.id %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+  </div>
+</div>
+{% endblock %} 

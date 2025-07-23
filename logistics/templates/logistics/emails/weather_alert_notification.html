@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerta Meteorológica</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #2196f3;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .alert-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #1976d2;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin: 5px 0 0 0;
+        }
+        .weather-info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .weather-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .weather-item {
+            text-align: center;
+            padding: 10px;
+            background-color: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+        .weather-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .weather-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1976d2;
+            margin-top: 5px;
+        }
+        .route-details {
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 5px 0;
+        }
+        .detail-row:last-child {
+            margin-bottom: 0;
+        }
+        .label {
+            font-weight: 600;
+            color: #555;
+        }
+        .value {
+            color: #333;
+        }
+        .recommendations {
+            background-color: #fff3e0;
+            border: 1px solid #ffb74d;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .recommendations h3 {
+            color: #f57c00;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+        .recommendations ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .recommendations li {
+            margin-bottom: 5px;
+            color: #e65100;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #2196f3;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 0 10px;
+        }
+        .btn:hover {
+            background-color: #1976d2;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px;
+            }
+            .weather-grid {
+                grid-template-columns: 1fr;
+            }
+            .detail-row {
+                flex-direction: column;
+                text-align: left;
+            }
+            .value {
+                margin-top: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="alert-icon">🌦️</div>
+            <h1 class="title">Alerta Meteorológica</h1>
+            <p class="subtitle">Condiciones meteorológicas que afectan la ruta de entrega</p>
+        </div>
+
+        <div class="weather-info">
+            <h3>Condiciones Actuales</h3>
+            <div class="weather-grid">
+                <div class="weather-item">
+                    <div class="weather-label">Temperatura</div>
+                    <div class="weather-value">{{ data.temperature|floatformat:1 }}°C</div>
+                </div>
+                <div class="weather-item">
+                    <div class="weather-label">Viento</div>
+                    <div class="weather-value">{{ data.wind_speed|floatformat:1 }} m/s</div>
+                </div>
+                <div class="weather-item">
+                    <div class="weather-label">Visibilidad</div>
+                    <div class="weather-value">{{ data.visibility|floatformat:0 }}m</div>
+                </div>
+                <div class="weather-item">
+                    <div class="weather-label">Condición</div>
+                    <div class="weather-value">{{ data.weather_conditions|title }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="route-details">
+            <h3>Información de la Ruta</h3>
+            <div class="detail-row">
+                <span class="label">Ruta ID:</span>
+                <span class="value">#{{ data.route_id }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Conductor:</span>
+                <span class="value">{{ data.driver_name }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Vehículo:</span>
+                <span class="value">{{ data.vehicle_plate }}</span>
+            </div>
+        </div>
+
+        {% if data.recommendations %}
+        <div class="recommendations">
+            <h3>📋 Recomendaciones</h3>
+            <ul>
+                {% for recommendation in data.recommendations %}
+                <li>{{ recommendation }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="actions">
+            <a href="{{ base_url }}/logistics/routes/{{ data.route_id }}/" class="btn">Ver Ruta</a>
+            <a href="{{ base_url }}/logistics/simulator/?route_id={{ data.route_id }}" class="btn">Simular Ruta</a>
+        </div>
+
+        <div class="footer">
+            <p>Este es un mensaje automático del sistema de logística de {{ company_name }}.</p>
+            <p>Enviado el {{ timestamp|date:"d/m/Y H:i" }}</p>
+        </div>
+    </div>
+</body>
+</html> 

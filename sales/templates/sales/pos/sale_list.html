@@ -1,0 +1,42 @@
+{% extends 'sales/sales_base.html' %}
+{% load i18n %}
+{% block content %}
+<div class="p-6">
+    <h1 class="text-xl font-bold mb-4 font-sans text-gray-900 dark:text-white">{% trans 'Sales List' %}</h1>
+    <div class="overflow-x-auto rounded-lg shadow bg-white dark:bg-gray-900">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+            <thead class="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                    <th class="px-4 py-2 text-left font-semibold">{% trans 'Number' %}</th>
+                    <th class="px-4 py-2 text-left font-semibold">{% trans 'Date' %}</th>
+                    <th class="px-4 py-2 text-left font-semibold">{% trans 'Client' %}</th>
+                    <th class="px-4 py-2 text-left font-semibold">{% trans 'Total' %}</th>
+                    <th class="px-4 py-2 text-left font-semibold">{% trans 'Status' %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                {% for sale in sales %}
+                <tr class="hover:bg-orange-50 dark:hover:bg-gray-800 transition">
+                    <td class="px-4 py-2">{{ sale.number }}</td>
+                    <td class="px-4 py-2">{{ sale.created_at|date:'SHORT_DATETIME_FORMAT' }}</td>
+                    <td class="px-4 py-2">{{ sale.client }}</td>
+                    <td class="px-4 py-2 text-orange-600 font-bold">${{ sale.total|floatformat:2 }}</td>
+                    <td class="px-4 py-2">
+                        <span class="inline-block px-2 py-1 rounded-full text-xs font-semibold
+                            {% if sale.state == 'completed' %}bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200
+                            {% elif sale.state == 'draft' %}bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200
+                            {% else %}bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200{% endif %}">
+                            {{ sale.get_state_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-gray-400 dark:text-gray-500 py-6">{% trans 'No sales found.' %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %} 

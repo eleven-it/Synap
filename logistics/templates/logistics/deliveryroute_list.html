@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-4">
+  <h1 class="text-base lg:text-lg font-bold text-gray-900 dark:text-white">{% trans 'Delivery Routes' %}</h1>
+  <div class="flex gap-2">
+    <form method="post" action="{% url 'logistics:deliveryroute_plan' %}" id="plan-routes-form">
+      {% csrf_token %}
+      <button type="submit" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h3m4 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2h6"></path></svg>
+        {% trans 'Plan Routes' %}
+      </button>
+    </form>
+    <form method="post" action="{% url 'logistics:deliveryroute_plan' %}" id="plan-routes-ai-form">
+      {% csrf_token %}
+      <input type="hidden" name="use_ai" value="1">
+      <button type="submit" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-cyan-400 to-blue-600 hover:scale-105 hover:shadow-lg hover:from-cyan-500 hover:to-blue-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 transition-all duration-200">
+        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m4 4v-2a2 2 0 00-2-2h-1a2 2 0 00-2 2v2m6 4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2z"></path></svg>
+        {% trans 'Optimize with AI' %}
+      </button>
+    </form>
+  </div>
+</div>
+
+{# Toast de feedback visual #}
+<div id="toast-messages" class="fixed top-4 right-4 z-50 space-y-2">
+  {% if messages %}
+    {% for message in messages %}
+      <div class="toast-message bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg px-4 py-3 flex items-center animate-fade-in-up opacity-0">
+        {% if message.tags == 'success' %}
+          <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+        {% elif message.tags == 'error' %}
+          <svg class="h-5 w-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-4h2v2h-2v-2zm0-8h2v6h-2V6z" clip-rule="evenodd"></path></svg>
+        {% elif message.tags == 'info' %}
+          <svg class="h-5 w-5 text-blue-500 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10A8 8 0 11 2 10a8 8 0 0116 0zm-7 4a1 1 0 102 0 1 1 0 00-2 0zm0-8a1 1 0 012 0v4a1 1 0 01-2 0V6z" clip-rule="evenodd"></path></svg>
+        {% endif %}
+        <span class="text-xs font-medium text-gray-900 dark:text-white">{{ message }}</span>
+        <button type="button" onclick="this.parentElement.classList.add('hidden')" class="ml-auto text-gray-400 hover:text-gray-600" title="{% trans 'Close' %}">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+    {% endfor %}
+  {% endif %}
+</div>
+
+<div class="max-w-4xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow animate-fade-in-up opacity-0" id="deliveryroute-table-wrapper">
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <thead class="bg-gray-50 dark:bg-gray-800">
+        <tr class="text-xs text-gray-500 dark:text-gray-300">
+          <th class="px-2 py-1">{% trans 'ID' %}</th>
+          <th class="px-2 py-1">{% trans 'Vehicle' %}</th>
+          <th class="px-2 py-1">{% trans 'Driver' %}</th>
+          <th class="px-2 py-1">{% trans 'Date' %}</th>
+          <th class="px-2 py-1">{% trans 'State' %}</th>
+          <th class="px-2 py-1">{% trans 'Optimized' %}</th>
+          <th class="px-2 py-1">{% trans 'Actions' %}</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+        {% for route in routes %}
+        <tr class="border-b border-gray-100 dark:border-gray-800">
+          <td class="px-2 py-1">{{ route.id }}</td>
+          <td class="px-2 py-1">{{ route.vehicle }}</td>
+          <td class="px-2 py-1">{{ route.driver }}</td>
+          <td class="px-2 py-1">{{ route.date|date:'Y-m-d' }}</td>
+          <td class="px-2 py-1">{{ route.state|capfirst }}</td>
+          <td class="px-2 py-1">
+            {% if route.optimized %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded bg-gradient-to-r from-cyan-400 to-blue-600 text-white text-xs font-semibold animate-pulse cursor-pointer group relative" title="{% trans 'This route was optimized by AI for maximum efficiency.' %}">
+                <svg class="h-4 w-4 mr-1 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m4 4v-2a2 2 0 00-2-2h-1a2 2 0 00-2 2v2m6 4H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2z"></path></svg>
+                {% trans 'Optimized by AI' %}
+                <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded px-2 py-1 shadow-lg z-50">{% trans 'This route was optimized by AI for maximum efficiency.' %}</span>
+              </span>
+            {% else %}
+              <span class="inline-block px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-500 text-xs">{% trans 'Manual' %}</span>
+            {% endif %}
+          </td>
+          <td class="px-2 py-1 flex gap-2">
+            <a href="{% url 'logistics:deliveryroute_edit' route.id %}" class="text-blue-600 hover:underline">{% trans 'Edit' %}</a>
+            <a href="{% url 'logistics:deliveryroute_delete' route.id %}" class="text-red-600 hover:underline">{% trans 'Delete' %}</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-gray-400 text-center py-2">{% trans 'No routes found.' %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-4 flex justify-end">
+    <a href="{% url 'logistics:deliveryroute_create' %}" class="btn btn-primary">{% trans 'Add Delivery Route' %}</a>
+  </div>
+</div>
+
+<script>
+// Animación de entrada para tabla y toasts
+window.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    document.getElementById('deliveryroute-table-wrapper').classList.remove('opacity-0');
+    document.getElementById('deliveryroute-table-wrapper').classList.add('opacity-100');
+    document.querySelectorAll('.toast-message').forEach(el => {
+      el.classList.remove('opacity-0');
+      el.classList.add('opacity-100');
+    });
+  }, 100);
+
+  // Ocultar toasts automáticamente
+  setTimeout(() => {
+    document.querySelectorAll('.toast-message').forEach(el => {
+      el.classList.add('hidden');
+    });
+  }, 3500);
+});
+
+// Recarga automática tras planificar rutas
+const planForm = document.getElementById('plan-routes-form');
+if (planForm) {
+  planForm.addEventListener('submit', function() {
+    setTimeout(() => { window.location.reload(); }, 1200);
+  });
+}
+</script>
+
+<style>
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(0.4,0,0.2,1) both;
+}
+</style>
+{% endblock %} 

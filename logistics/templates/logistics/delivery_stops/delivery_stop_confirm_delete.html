@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8 max-w-lg mx-auto">
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-6">
+        <h1 class="text-lg font-semibold mb-4 text-red-600 dark:text-red-400">{% trans 'Delete Delivery Stop' %}</h1>
+        <p class="mb-4">{% blocktrans with pk=object.pk %}Are you sure you want to delete the delivery stop <strong>#{{ pk }}</strong>?{% endblocktrans %}</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="flex gap-2 mt-4">
+                <button type="submit" class="btn btn-danger">{% trans 'Confirm Delete' %}</button>
+                <a href="{% url 'logistics:deliverystop_detail' object.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

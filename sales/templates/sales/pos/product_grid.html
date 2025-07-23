@@ -1,0 +1,21 @@
+{% load static i18n %}
+<section class="flex-1 p-4">
+    <div class="flex items-center mb-4 gap-2">
+        <input type="text" id="product-search" class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:ring-2 focus:ring-orange-500" placeholder="{% trans 'Buscar producto por nombre, código o descripción...' %}">
+        <button class="px-4 py-2 rounded bg-gradient-to-r from-orange-400 to-orange-600 text-white font-semibold shadow hover:from-orange-500 hover:to-orange-700 transition" onclick="searchProducts()">{% trans 'Buscar' %}</button>
+    </div>
+    <div class="product-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+</section>
+
+<!-- Modal de selección de variante -->
+<div id="variant-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-md relative">
+        <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onclick="closeVariantModal()">
+            <span class="material-icons">close</span>
+        </button>
+        <h3 class="text-lg font-bold mb-4 text-gray-800 dark:text-white">{% trans 'Selecciona una variante' %}</h3>
+        <div id="variant-attributes" class="mb-4"></div>
+        <div id="variant-options" class="flex flex-col gap-2"></div>
+        <button id="variant-add-btn" class="mt-4 w-full px-4 py-2 rounded bg-gradient-to-r from-orange-400 to-orange-600 text-white font-semibold shadow hover:from-orange-500 hover:to-orange-700 transition" disabled>{% trans 'Agregar al carrito' %}</button>
+    </div>
+</div> 

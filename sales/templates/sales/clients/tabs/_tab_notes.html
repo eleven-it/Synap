@@ -1,0 +1,11 @@
+<div class="grid grid-cols-1 gap-4">
+    <div>
+        {{ form.notes|as_crispy_field }}
+    </div>
+    <div>
+        <!-- Placeholder para archivos adjuntos -->
+        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Attachments' %}</label>
+        <input type="file" multiple class="form-input text-xs" />
+        <p class="text-xs text-gray-400 mt-1">{% trans 'You can upload multiple files.' %}</p>
+    </div>
+</div> 

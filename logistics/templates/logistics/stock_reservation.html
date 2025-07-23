@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-xl mx-auto p-4">
+  <h1 class="text-lg font-bold text-gray-900 dark:text-white mb-6">{% trans 'Stock Reservation' %}</h1>
+  <div class="bg-white dark:bg-gray-900 rounded shadow p-4 mb-4">
+    <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100 mb-2">{% trans 'Delivery Stop' %} #{{ delivery_stop.id }}</h2>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Client:' %} {{ delivery_stop.client.name|default:'-' }}</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Address:' %} {{ delivery_stop.address }}</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Scheduled Time:' %} {{ delivery_stop.scheduled_time|date:'d/m/Y H:i' }}</div>
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Stock Reserved:' %} <span class="font-semibold">{% if stock_reserved %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</span></div>
+    {% if stock_reserved_at %}
+    <div class="mb-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Reserved At:' %} {{ stock_reserved_at|date:'d/m/Y H:i' }}</div>
+    {% endif %}
+  </div>
+  <div class="bg-white dark:bg-gray-900 rounded shadow p-4 mb-4">
+    <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2">{% trans 'Products' %}</h3>
+    <table class="min-w-full text-xs">
+      <thead>
+        <tr>
+          <th class="px-2 py-1 text-left">{% trans 'Product' %}</th>
+          <th class="px-2 py-1 text-right">{% trans 'Quantity' %}</th>
+          <th class="px-2 py-1 text-right">{% trans 'Unit Price' %}</th>
+          <th class="px-2 py-1 text-right">{% trans 'Total' %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td class="px-2 py-1">{{ product.name }}</td>
+          <td class="px-2 py-1 text-right">{{ product.quantity }}</td>
+          <td class="px-2 py-1 text-right">${{ product.unit_price|floatformat:2 }}</td>
+          <td class="px-2 py-1 text-right">${{ product.total|floatformat:2 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center text-gray-400">{% trans 'No products found' %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not stock_reserved %}
+  <form method="post" action="" class="mt-4">
+    {% csrf_token %}
+    <button type="submit" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+      {% trans 'Reserve Stock' %}
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %} 

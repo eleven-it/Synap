@@ -248,6 +248,8 @@ class Client(BusinessEntity):
     country_temp = models.ForeignKey(Country, on_delete=models.SET_NULL, null=True, blank=True, related_name='+', verbose_name=_('Country (temp)'))
     state_temp = models.ForeignKey(State, on_delete=models.SET_NULL, null=True, blank=True, related_name='+', verbose_name=_('State/Province (temp)'))
     
+    tags = models.ManyToManyField('ClientTag', blank=True, related_name='clients', verbose_name=_('Tags'))
+    
     class Meta:
         verbose_name = _('Client')
         verbose_name_plural = _('Clients')
@@ -1558,3 +1560,61 @@ class PaymentProcessor(models.Model):
         """Establecer valor de configuración"""
         self.config[key] = value
         self.save(update_fields=['config'])
+
+class ClientAttachment(models.Model):
+    """
+    Adjuntos de cliente (documentos, archivos, imágenes, etc.)
+    Permite asociar múltiples archivos a un cliente, con soporte multiempresa
+    """
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='client_attachments', verbose_name=_('Company'))
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name='attachments', verbose_name=_('Client'))
+    file = models.FileField(_('File'), upload_to='clients/attachments/')
+    file_name = models.CharField(_('File Name'), max_length=255)
+    file_size = models.PositiveIntegerField(_('File Size (bytes)'), null=True, blank=True)
+    description = models.TextField(_('Description'), blank=True)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name=_('Uploaded By'))
+    uploaded_at = models.DateTimeField(_('Uploaded At'), auto_now_add=True)
+    is_active = models.BooleanField(_('Active'), default=True)
+
+    class Meta:
+        verbose_name = _('Client Attachment')
+        verbose_name_plural = _('Client Attachments')
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['empresa', 'client', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.client} - {self.file_name}"
+
+    def save(self, *args, **kwargs):
+        # Calcula automáticamente el tamaño del archivo
+        if self.file and not self.file_size:
+            try:
+                self.file_size = self.file.size
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
+
+    @property
+    def file_size_mb(self):
+        if self.file_size:
+            return round(self.file_size / (1024 * 1024), 2)
+        return 0
+
+class ClientTag(models.Model):
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='client_tags', verbose_name=_('Company'))
+    name = models.CharField(_('Tag Name'), max_length=64)
+    color = models.CharField(_('Color'), max_length=16, blank=True, default='#f97316', help_text=_('Color for visual badge'))
+    is_active = models.BooleanField(_('Active'), default=True)
+    created_at = models.DateTimeField(_('Created At'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('Updated At'), auto_now=True)
+
+    class Meta:
+        unique_together = ('empresa', 'name')
+        verbose_name = _('Client Tag')
+        verbose_name_plural = _('Client Tags')
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name

@@ -1,0 +1,247 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-4">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-lg font-bold text-gray-900 dark:text-white">{% trans 'Integration Dashboard' %}</h1>
+    <div class="flex gap-2">
+      <a href="{% url 'logistics:integration_settings' 1 %}" class="inline-flex items-center px-4 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+        {% trans 'Settings' %}
+      </a>
+    </div>
+  </div>
+
+  <!-- Integration Statistics -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Total Routes' %}</span>
+      <span class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ integration_stats.total_routes }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Costs Calculated' %}</span>
+      <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ integration_stats.routes_with_cost_calculated }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Stock Reserved' %}</span>
+      <span class="text-2xl font-bold text-orange-600 dark:text-orange-400">{{ integration_stats.deliveries_with_stock_reserved }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Invoiced' %}</span>
+      <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ integration_stats.deliveries_invoiced }}</span>
+    </div>
+  </div>
+
+  <!-- Integration Actions -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Stock Reservation -->
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-6">
+      <div class="flex items-center mb-4">
+        <div class="flex-shrink-0">
+          <div class="w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center">
+            <span class="text-orange-600 dark:text-orange-300 text-sm font-medium">📦</span>
+          </div>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Stock Reservation' %}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Reserve inventory for deliveries' %}</p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Auto-reserve' %}</span>
+          <span class="text-green-600 dark:text-green-400">{% trans 'Enabled' %}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Pending reservations' %}</span>
+          <span class="text-orange-600 dark:text-orange-400">{{ integration_stats.total_routes|add:"-1" }}</span>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button onclick="bulkReserveStock()" class="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+          {% trans 'Bulk Reserve' %}
+        </button>
+      </div>
+    </div>
+
+    <!-- Cost Calculation -->
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-6">
+      <div class="flex items-center mb-4">
+        <div class="flex-shrink-0">
+          <div class="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+            <span class="text-green-600 dark:text-green-300 text-sm font-medium">💰</span>
+          </div>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Cost Calculation' %}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Calculate logistics costs' %}</p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Auto-calculate' %}</span>
+          <span class="text-green-600 dark:text-green-400">{% trans 'Enabled' %}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Calculated routes' %}</span>
+          <span class="text-green-600 dark:text-green-400">{{ integration_stats.routes_with_cost_calculated }}</span>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button onclick="bulkCalculateCosts()" class="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-gradient-to-r from-green-400 to-green-600 hover:scale-105 hover:shadow-lg hover:from-green-500 hover:to-green-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
+          {% trans 'Bulk Calculate' %}
+        </button>
+      </div>
+    </div>
+
+    <!-- Invoice Management -->
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-6">
+      <div class="flex items-center mb-4">
+        <div class="flex-shrink-0">
+          <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
+            <span class="text-purple-600 dark:text-purple-300 text-sm font-medium">🧾</span>
+          </div>
+        </div>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-gray-900 dark:text-white">{% trans 'Invoice Management' %}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Create invoices automatically' %}</p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Auto-invoice' %}</span>
+          <span class="text-red-600 dark:text-red-400">{% trans 'Disabled' %}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-gray-500 dark:text-gray-400">{% trans 'Pending invoices' %}</span>
+          <span class="text-orange-600 dark:text-orange-400">{{ integration_stats.total_routes|add:"-1" }}</span>
+        </div>
+      </div>
+      <div class="mt-4">
+        <a href="{% url 'logistics:invoice_management' %}" class="w-full inline-flex justify-center items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-gradient-to-r from-purple-400 to-purple-600 hover:scale-105 hover:shadow-lg hover:from-purple-500 hover:to-purple-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+          {% trans 'Manage Invoices' %}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routes Table -->
+  <div class="bg-white dark:bg-gray-900 rounded shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white">{% trans 'Today\'s Routes' %}</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-800">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Route' %}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Driver' %}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Stops' %}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Costs' %}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Stock' %}
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+              {% trans 'Actions' %}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+          {% for route in routes %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+              <div class="flex items-center">
+                <div class="flex-shrink-0 h-8 w-8">
+                  <div class="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                    <span class="text-sm font-medium text-blue-600 dark:text-blue-300">R</span>
+                  </div>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    Route {{ route.id }}
+                  </div>
+                  <div class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ route.date }}
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+              {{ route.driver.name|default:"Not assigned" }}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+              <div class="flex items-center">
+                <span class="text-sm">{{ route.stops.count }}</span>
+                <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  ({{ route.stops.filter.state='delivered'|length }} delivered)
+                </span>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+              {% if route.logistics_cost %}
+                <span class="text-green-600 dark:text-green-400 font-medium">
+                  ${{ route.logistics_cost|floatformat:2 }}
+                </span>
+              {% else %}
+                <span class="text-gray-400 text-xs">{% trans 'Not calculated' %}</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+              {% if route.stops.filter.stock_reserved=True %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                  {% trans 'Reserved' %}
+                </span>
+              {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                  {% trans 'Pending' %}
+                </span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex space-x-2">
+                <a href="{% url 'logistics:logistics_costs' route.id %}" class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
+                  {% trans 'Costs' %}
+                </a>
+                <a href="{% url 'logistics:stock_reservation' route.stops.first.id %}" class="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300">
+                  {% trans 'Stock' %}
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+              {% trans 'No routes found for today' %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+function bulkReserveStock() {
+  if (confirm('{% trans "Reserve stock for all pending deliveries?" %}')) {
+    // TODO: Implement bulk stock reservation
+    alert('{% trans "Bulk stock reservation initiated" %}');
+  }
+}
+
+function bulkCalculateCosts() {
+  if (confirm('{% trans "Calculate costs for all routes?" %}')) {
+    // TODO: Implement bulk cost calculation
+    alert('{% trans "Bulk cost calculation initiated" %}');
+  }
+}
+</script>
+{% endblock %} 

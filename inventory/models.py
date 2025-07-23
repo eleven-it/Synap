@@ -198,6 +198,9 @@ class Product(models.Model):
     # Tags para categorización y sincronización
     tags = models.CharField(_('Tags'), max_length=255, blank=True, help_text=_('Comma-separated tags for categorization and sync control'))
 
+    # Control de sincronización con administraNET
+    last_synced_with_adminet = models.DateTimeField(_('Last Synced with administraNET'), null=True, blank=True, help_text=_('Timestamp of last successful sync with administraNET'))
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

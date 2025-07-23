@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega Retrasada</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #ff6b35;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .alert-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #d32f2f;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin: 5px 0 0 0;
+        }
+        .details {
+            background-color: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .label {
+            font-weight: 600;
+            color: #555;
+        }
+        .value {
+            color: #333;
+            text-align: right;
+        }
+        .delay-warning {
+            background-color: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #c62828;
+        }
+        .actions {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #ff6b35;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 0 10px;
+        }
+        .btn:hover {
+            background-color: #e55a2b;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #666;
+            font-size: 14px;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px;
+            }
+            .detail-row {
+                flex-direction: column;
+                text-align: left;
+            }
+            .value {
+                text-align: left;
+                margin-top: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="alert-icon">🚨</div>
+            <h1 class="title">Entrega Retrasada</h1>
+            <p class="subtitle">Se ha detectado un retraso en la entrega programada</p>
+        </div>
+
+        <div class="details">
+            <div class="detail-row">
+                <span class="label">Cliente:</span>
+                <span class="value">{{ data.client_name }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Dirección:</span>
+                <span class="value">{{ data.address }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Hora Programada:</span>
+                <span class="value">{{ data.scheduled_time|date:"H:i" }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Hora Actual:</span>
+                <span class="value">{{ data.current_time|date:"H:i" }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="label">Ruta ID:</span>
+                <span class="value">#{{ data.route_id }}</span>
+            </div>
+        </div>
+
+        <div class="delay-warning">
+            <strong>⚠️ Retraso Detectado:</strong> La entrega lleva {{ data.delay_minutes }} minutos de retraso.
+        </div>
+
+        <div class="actions">
+            <a href="{{ base_url }}/logistics/routes/{{ data.route_id }}/" class="btn">Ver Ruta</a>
+            <a href="{{ base_url }}/logistics/stops/{{ data.stop_id }}/" class="btn">Ver Detalles</a>
+        </div>
+
+        <div class="footer">
+            <p>Este es un mensaje automático del sistema de logística de {{ company_name }}.</p>
+            <p>Enviado el {{ timestamp|date:"d/m/Y H:i" }}</p>
+        </div>
+    </div>
+</body>
+</html> 

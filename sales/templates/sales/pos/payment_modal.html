@@ -1,0 +1,70 @@
+{% load static i18n %}
+<div id="payment-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 hidden">
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg w-full max-w-md p-6 relative">
+        <button class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" onclick="closePaymentModal()">&times;</button>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{% trans 'Pago' %}</h3>
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Importe a Pagar' %}</label>
+            <input type="number" id="payment-amount" class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm" value="{{ cart_total|floatformat:2 }}" min="0" step="0.01" readonly>
+        </div>
+        <div class="mb-4 flex items-center gap-2">
+            <input type="checkbox" id="split-payment" class="form-checkbox" onchange="toggleSplitPayment()">
+            <label for="split-payment" class="text-xs text-gray-700 dark:text-gray-300">{% trans 'Dividir cuenta entre varios métodos/clientes' %}</label>
+        </div>
+        <div id="single-payment-row" class="mb-4">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans 'Método de Pago' %}</label>
+            <select id="payment-method" class="w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm">
+                {% for method in payment_methods %}
+                <option value="{{ method.code }}">{{ method.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="split-payment-rows" class="mb-4 hidden">
+            <div id="split-rows-container"></div>
+            <button type="button" class="mt-2 px-3 py-1 rounded bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200 text-xs font-semibold" onclick="addSplitRow()">+ {% trans 'Agregar método' %}</button>
+            <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">{% trans 'Total asignado:' %} <span id="split-total">0.00</span> / <span id="split-total-max">{{ cart_total|floatformat:2 }}</span></div>
+        </div>
+        <div class="mb-4 flex items-center gap-2">
+            <input type="checkbox" id="rounding" class="form-checkbox">
+            <label for="rounding" class="text-xs text-gray-700 dark:text-gray-300">{% trans 'Redondear al céntimo más cercano' %}</label>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold" onclick="closePaymentModal()">{% trans 'Cancelar' %}</button>
+            <button class="px-4 py-2 rounded bg-gradient-to-r from-orange-400 to-orange-600 text-white font-semibold shadow hover:from-orange-500 hover:to-orange-700 transition" onclick="confirmPayment()">{% trans 'Confirmar Pago' %}</button>
+        </div>
+    </div>
+</div>
+<script>
+function toggleSplitPayment() {
+    const split = document.getElementById('split-payment').checked;
+    document.getElementById('single-payment-row').classList.toggle('hidden', split);
+    document.getElementById('split-payment-rows').classList.toggle('hidden', !split);
+    if (split && document.getElementById('split-rows-container').children.length === 0) {
+        addSplitRow();
+    }
+    updateSplitTotal();
+}
+function addSplitRow() {
+    const container = document.getElementById('split-rows-container');
+    const idx = container.children.length;
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 mb-1 split-payment-row';
+    row.innerHTML = `
+        <select class="split-method px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs">
+            {% for method in payment_methods %}
+            <option value="{{ method.code }}">{{ method.name }}</option>
+            {% endfor %}
+        </select>
+        <input type="number" class="split-amount w-20 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs" min="0" step="0.01" value="0" oninput="updateSplitTotal()">
+        <button type="button" class="text-xs text-red-500" onclick="this.parentElement.remove(); updateSplitTotal();">&times;</button>
+    `;
+    container.appendChild(row);
+}
+function updateSplitTotal() {
+    let sum = 0;
+    document.querySelectorAll('.split-amount').forEach(input => {
+        sum += parseFloat(input.value) || 0;
+    });
+    document.getElementById('split-total').innerText = sum.toFixed(2);
+}
+</script> 

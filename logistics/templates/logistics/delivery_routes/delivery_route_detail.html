@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8">
+    <h1 class="text-lg font-semibold mb-4">{% trans 'Delivery Route Detail' %}</h1>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4">
+        <table class="min-w-full text-xs md:text-sm">
+            <tr><th class="text-left pr-4 py-2">{% trans 'Date' %}</th><td>{{ route.date }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Vehicle' %}</th><td>{{ route.vehicle }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Driver' %}</th><td>{{ route.driver }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'State' %}</th><td>{{ route.get_state_display }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Notes' %}</th><td>{{ route.notes }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Created at' %}</th><td>{{ route.created_at }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Updated at' %}</th><td>{{ route.updated_at }}</td></tr>
+        </table>
+        <div class="mt-6 flex gap-2">
+            <a href="{% url 'logistics:deliveryroute_update' route.pk %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+            <a href="{% url 'logistics:deliveryroute_delete' route.pk %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+            <a href="{% url 'logistics:deliveryroute_list' %}" class="btn btn-secondary">{% trans 'Back to list' %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

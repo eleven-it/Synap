@@ -1,23 +1,32 @@
+{# Dropdown de módulos dinámico #}
 {% load i18n %}
-
-<div class="w-full flex justify-center gap-6 px-10 py-8">
-  {% if module.submenus %}
-    {% for submenu in module.submenus %}
-      <div class="bg-white rounded-2xl shadow-md flex flex-col min-w-[220px] max-w-xs px-6 py-5 items-start border border-gray-100">
-        <span class="inline-block mb-4 px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-bold uppercase tracking-widest select-none">
-          {{ submenu.seccion }}
-        </span>
-        <div class="flex flex-col gap-2 w-full">
-          {% for item in submenu.items %}
-            <a href="{{ item.url }}" class="flex items-center gap-3 text-base text-gray-700 hover:text-indigo-600 font-medium px-2 py-2 rounded-lg transition group w-full">
-              {% if item.icon %}
-                <span class="material-icons text-lg text-gray-400 group-hover:text-indigo-500">{{ item.icon }}</span>
-              {% endif %}
-              <span class="flex-1">{{ item.label }}</span>
-            </a>
-          {% endfor %}
-        </div>
-      </div>
+{% with nav_modules=ModuleConfig.get_nav_menu_items %}
+<li class="relative group">
+  <button class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 hover:text-orange-600 focus:outline-none">
+    <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+    {% trans 'Modules' %}
+    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+  </button>
+  <ul class="absolute left-0 z-20 mt-2 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded shadow-lg py-1 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200">
+    {% for mod in nav_modules %}
+      <li class="group relative">
+        <a href="{{ mod.url }}" class="flex items-center px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-gray-800 hover:text-orange-600 transition-colors">
+          {{ mod.display_name }}
+          {% if mod.submenu and mod.submenu|length > 0 %}
+            <svg class="w-3 h-3 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          {% endif %}
+        </a>
+        {% if mod.submenu and mod.submenu|length > 0 %}
+          <ul class="absolute left-full top-0 mt-0 ml-1 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded shadow-lg py-1 opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity duration-200">
+            {% for sub in mod.submenu %}
+              <li>
+                <a href="{{ sub.url }}" class="block px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-orange-50 dark:hover:bg-gray-800 hover:text-orange-600 transition-colors">{{ sub.label }}</a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </li>
     {% endfor %}
-  {% endif %}
-</div> 
+  </ul>
+</li>
+{% endwith %} 

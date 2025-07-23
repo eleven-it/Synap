@@ -4,7 +4,7 @@ from django.utils import timezone
 from decimal import Decimal
 from typing import List, Dict, Optional
 
-from .models import SalesOrder, SalesOrderLine, SalesOrderStates, Invoice, InvoiceLine
+from .models import SalesOrder, SalesOrderLine, SalesOrderStates, Invoice, InvoiceLine, POSSession, POSSale, PriceList
 from inventory.models import (
     StockMove, StockQuant, StockReservation, Location, 
     Product, ProductVariant, Warehouse
@@ -874,15 +874,16 @@ class POSSaleService:
     
     def create_sale(self, client=None, is_occasional=False, occasional_data=None):
         """Crear nueva venta"""
+        # Obtener la primera lista de precios activa
+        price_list = PriceList.objects.filter(is_active=True).first()
         sale = POSSale.objects.create(
             session=self.session,
             operator=self.session.operator,
             client=client,
             is_occasional_client=is_occasional,
             occasional_client_data=occasional_data or {},
-            price_list=self.session.branch.default_price_list
+            price_list=price_list
         )
-        
         return sale
     
     def add_product(self, sale, product_data, quantity=1, discount_percentage=0):

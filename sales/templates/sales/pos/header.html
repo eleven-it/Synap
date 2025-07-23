@@ -1,0 +1,25 @@
+{% load static i18n %}
+<header class="flex items-center justify-between h-16 px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+    <div class="flex items-center gap-4">
+        <img src="{% static 'images/synap-logo.png' %}" alt="Synap" class="h-8 w-auto">
+        <span class="text-lg font-bold text-gray-900 dark:text-white">TPV</span>
+        {% if session and session.branch %}
+        <span class="ml-4 text-sm text-gray-700 dark:text-gray-300">{% trans 'Sucursal:' %} <strong>{{ session.branch.name }}</strong></span>
+        {% endif %}
+        {% if session and session.pos_terminal %}
+        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{% trans 'Terminal:' %} <strong>{{ session.pos_terminal.name }}</strong></span>
+        {% endif %}
+    </div>
+    <div class="flex items-center gap-4">
+        <button class="px-3 py-1 rounded bg-gradient-to-r from-orange-400 to-orange-600 text-white font-semibold shadow hover:from-orange-500 hover:to-orange-700 transition">{% trans 'Apertura/Cierre de Caja' %}</button>
+        <a href="{% url 'sales:pos_sale_list' %}" class="text-sm text-blue-600 hover:underline">{% trans 'Órdenes Pendientes' %}</a>
+        <a href="{% url 'sales:pos_session_list' %}" class="text-sm text-blue-600 hover:underline">{% trans 'Historial de Ventas' %}</a>
+        <span class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm">{{ user.nombre }}</span>
+        <label class="ml-2 flex items-center cursor-pointer">
+            <input id="dark-mode-switch" type="checkbox" class="sr-only">
+            <span class="w-9 h-5 flex items-center bg-gray-300 rounded-full p-1">
+                <span class="dot w-4 h-4 bg-white rounded-full shadow transform transition"></span>
+            </span>
+        </label>
+    </div>
+</header> 

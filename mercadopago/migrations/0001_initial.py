@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
             options={
                 'verbose_name': 'MercadoPago Configuration',
                 'verbose_name_plural': 'MercadoPago Configurations',
-                'ordering': ['empresa__nombre'],
+                'ordering': ['empresa'],
             },
         ),
         migrations.CreateModel(

@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8">
+    <h1 class="text-lg font-semibold mb-4">{% trans 'Delivery Event Detail' %}</h1>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4">
+        <table class="min-w-full text-xs md:text-sm">
+            <tr><th class="text-left pr-4 py-2">{% trans 'Stop' %}</th><td>{{ event.stop }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Timestamp' %}</th><td>{{ event.timestamp|date:'SHORT_DATETIME_FORMAT' }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Type' %}</th><td>{{ event.get_event_type_display }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Location' %}</th><td>{{ event.location }}</td></tr>
+            <tr><th class="text-left pr-4 py-2">{% trans 'Description' %}</th><td>{{ event.description }}</td></tr>
+        </table>
+        <div class="flex gap-2 mt-6">
+            <a href="{% url 'logistics:deliveryevent_update' event.pk %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+            <a href="{% url 'logistics:deliveryevent_delete' event.pk %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+            <a href="{% url 'logistics:deliveryevent_list' %}" class="btn btn-secondary">{% trans 'Back to list' %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

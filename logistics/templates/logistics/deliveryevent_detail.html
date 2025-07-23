@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% trans 'Delivery Event Detail' %}</h1>
+  <div class="space-y-2 text-xs">
+    <div><span class="font-semibold">{% trans 'Stop' %}:</span> {{ deliveryevent.stop }}</div>
+    <div><span class="font-semibold">{% trans 'Event Type' %}:</span> {{ deliveryevent.event_type }}</div>
+    <div><span class="font-semibold">{% trans 'Timestamp' %}:</span> {{ deliveryevent.timestamp }}</div>
+    <div><span class="font-semibold">{% trans 'Notes' %}:</span> {{ deliveryevent.notes }}</div>
+    <div><span class="font-semibold">{% trans 'Created At' %}:</span> {{ deliveryevent.created_at }}</div>
+    <div><span class="font-semibold">{% trans 'Updated At' %}:</span> {{ deliveryevent.updated_at }}</div>
+    {% block extra_fields %}{% endblock %}
+  </div>
+  <div class="mt-4 flex gap-2 justify-end">
+    <a href="{% url 'logistics:deliveryevent_edit' deliveryevent.id %}" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">{% trans 'Edit' %}</a>
+    <a href="{% url 'logistics:deliveryevent_delete' deliveryevent.id %}" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-red-400 to-red-600 hover:from-red-500 hover:to-red-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">{% trans 'Delete' %}</a>
+  </div>
+</div>
+{% endblock %} 

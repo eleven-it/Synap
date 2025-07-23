@@ -228,7 +228,7 @@
                             </p>
                         </div>
                         <div class="text-end">
-                            <a href="{% url 'pos_dashboard' %}" class="pos-button secondary">
+                            <a href="{% url 'sales:pos_dashboard' %}" class="pos-button secondary">
                                 <i class="fas fa-arrow-left me-2"></i>
                                 {% trans "Volver" %}
                             </a>
@@ -573,7 +573,7 @@
     }
     
     function searchProducts(searchTerm, searchType) {
-        fetch('{% url "pos_product_search" %}', {
+        fetch('{% url "sales:pos_product_search" %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -951,7 +951,7 @@
             paymentData.card_type = document.getElementById('cardType').value;
         }
         
-        fetch(`{% url 'pos_sale_complete' sale.id %}`, {
+        fetch(`{% url 'sales:pos_sale_complete' sale.id %}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -967,7 +967,7 @@
             if (data.success) {
                 showSuccess('Venta completada correctamente');
                 setTimeout(function() {
-                    window.location.href = '{% url "pos_sale_new" %}';
+                    window.location.href = '{% url "sales:pos_sale_new" %}';
                 }, 2000);
             } else {
                 showError(data.error || 'Error al completar la venta');
@@ -995,7 +995,7 @@
             'Cancelar Venta',
             '¿Está seguro de que desea cancelar esta venta? Esta acción no se puede deshacer.',
             function() {
-                window.location.href = '{% url "pos_dashboard" %}';
+                window.location.href = '{% url "sales:pos_dashboard" %}';
             }
         );
     }

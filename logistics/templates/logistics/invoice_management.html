@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-4">
+  <h1 class="text-lg font-bold text-gray-900 dark:text-white mb-6">{% trans 'Invoice Management' %}</h1>
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Pending Invoices' %}</span>
+      <span class="text-2xl font-bold text-orange-600 dark:text-orange-400">{{ invoice_stats.pending_invoices }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Total Invoiced' %}</span>
+      <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ invoice_stats.total_invoiced }}</span>
+    </div>
+    <div class="bg-white dark:bg-gray-900 rounded shadow p-4 flex flex-col items-center animate-fade-in-up">
+      <span class="text-xs text-gray-500 dark:text-gray-300">{% trans 'Total Revenue' %}</span>
+      <span class="text-2xl font-bold text-purple-600 dark:text-purple-400">${{ invoice_stats.total_revenue|floatformat:2 }}</span>
+    </div>
+  </div>
+  <div class="bg-white dark:bg-gray-900 rounded shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-white">{% trans 'Deliveries Pending Invoice' %}</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-800">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Delivery' %}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Client' %}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Route' %}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Delivered At' %}</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans 'Actions' %}</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+          {% for delivery in deliveries %}
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">#{{ delivery.id }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ delivery.client.name|default:'-' }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">#{{ delivery.route.id }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ delivery.delivered_time|date:'d/m/Y H:i' }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <form method="post" action="" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-gradient-to-r from-purple-400 to-purple-600 hover:scale-105 hover:shadow-lg hover:from-purple-500 hover:to-purple-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+                  {% trans 'Create Invoice' %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">{% trans 'No deliveries pending invoice' %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %} 

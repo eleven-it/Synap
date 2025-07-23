@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% if form.instance.pk %}{% trans 'Edit Geofence' %}{% else %}{% trans 'Add Geofence' %}{% endif %}</h1>
+  <form method="post" id="geofence-form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="mb-2">
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Name' %}</label>
+      {{ form.name|as_crispy_field }}
+    </div>
+    <div class="mb-2">
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Description' %}</label>
+      {{ form.description|as_crispy_field }}
+    </div>
+    <div class="mb-2">
+      <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Draw geofence on map' %}</label>
+      <div id="geofence-map" class="w-full h-80 rounded shadow mb-2"></div>
+      <div class="flex gap-2 mt-2">
+        <button type="button" id="draw-circle" class="px-3 py-1 text-xs rounded bg-blue-500 text-white">{% trans 'Draw Circle' %}</button>
+        <button type="button" id="draw-polygon" class="px-3 py-1 text-xs rounded bg-orange-500 text-white">{% trans 'Draw Polygon' %}</button>
+        <button type="button" id="clear-shape" class="px-3 py-1 text-xs rounded bg-gray-400 text-white">{% trans 'Clear' %}</button>
+      </div>
+    </div>
+    {{ form.center_lat }}
+    {{ form.center_lng }}
+    {{ form.radius_m }}
+    {{ form.polygon }}
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="submit" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:scale-105 hover:shadow-lg hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+        {% trans 'Save' %}
+      </button>
+    </div>
+  </form>
+</div>
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=drawing"></script>
+<script>
+let map, drawingManager, currentShape = null;
+function initGeofenceMap() {
+  map = new google.maps.Map(document.getElementById('geofence-map'), {
+    center: { lat: {{ form.center_lat.value|default:0 }}, lng: {{ form.center_lng.value|default:0 }} },
+    zoom: 13,
+    mapId: document.body.classList.contains('dark') ? 'a3efe1c035bad51b' : undefined
+  });
+  drawingManager = new google.maps.drawing.DrawingManager({
+    drawingControl: false,
+    drawingMode: null,
+    circleOptions: { fillColor: '#10b981', fillOpacity: 0.2, strokeWeight: 2, clickable: false },
+    polygonOptions: { fillColor: '#f59e42', fillOpacity: 0.2, strokeWeight: 2, clickable: false }
+  });
+  drawingManager.setMap(map);
+  document.getElementById('draw-circle').onclick = () => { drawingManager.setDrawingMode(google.maps.drawing.OverlayType.CIRCLE); };
+  document.getElementById('draw-polygon').onclick = () => { drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON); };
+  document.getElementById('clear-shape').onclick = clearShape;
+  google.maps.event.addListener(drawingManager, 'overlaycomplete', function(e) {
+    clearShape();
+    currentShape = e.overlay;
+    if (e.type === 'circle') {
+      document.getElementById('id_center_lat').value = currentShape.getCenter().lat();
+      document.getElementById('id_center_lng').value = currentShape.getCenter().lng();
+      document.getElementById('id_radius_m').value = currentShape.getRadius();
+      document.getElementById('id_polygon').value = '';
+    } else if (e.type === 'polygon') {
+      const coords = currentShape.getPath().getArray().map(p => [p.lng(), p.lat()]);
+      document.getElementById('id_polygon').value = JSON.stringify({ type: 'Polygon', coordinates: [coords] });
+      document.getElementById('id_center_lat').value = '';
+      document.getElementById('id_center_lng').value = '';
+      document.getElementById('id_radius_m').value = '';
+    }
+    drawingManager.setDrawingMode(null);
+  });
+  // Si ya hay geofence, dibujarla
+  if ({{ form.center_lat.value|default:'null' }} && {{ form.center_lng.value|default:'null' }} && {{ form.radius_m.value|default:'null' }}) {
+    currentShape = new google.maps.Circle({
+      map: map,
+      center: { lat: parseFloat({{ form.center_lat.value|default:0 }}), lng: parseFloat({{ form.center_lng.value|default:0 }}) },
+      radius: parseFloat({{ form.radius_m.value|default:0 }}),
+      fillColor: '#10b981', fillOpacity: 0.2, strokeWeight: 2
+    });
+    map.fitBounds(currentShape.getBounds());
+  } else if ({{ form.polygon.value|default:'""' }}.length > 0) {
+    try {
+      const poly = JSON.parse({{ form.polygon.value|safe }});
+      if (poly && poly.coordinates) {
+        currentShape = new google.maps.Polygon({
+          map: map,
+          paths: poly.coordinates[0].map(([lng,lat]) => ({ lat, lng })),
+          fillColor: '#f59e42', fillOpacity: 0.2, strokeWeight: 2
+        });
+        const bounds = new google.maps.LatLngBounds();
+        poly.coordinates[0].forEach(([lng,lat]) => bounds.extend({ lat, lng }));
+        map.fitBounds(bounds);
+      }
+    } catch(e) {}
+  }
+}
+function clearShape() {
+  if (currentShape) { currentShape.setMap(null); currentShape = null; }
+  document.getElementById('id_center_lat').value = '';
+  document.getElementById('id_center_lng').value = '';
+  document.getElementById('id_radius_m').value = '';
+  document.getElementById('id_polygon').value = '';
+}
+document.addEventListener('DOMContentLoaded', initGeofenceMap);
+</script>
+{% endblock %} 

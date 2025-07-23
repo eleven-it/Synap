@@ -49,7 +49,7 @@ APPS_MENU = [
             {
                 "seccion": _("Sales Operations"),
                 "items": [
-                    {"label": _("Point of Sale (TPV)"), "url": "sales:tpv_main", "icon": "point_of_sale", "permission": "sales.view_pos"},
+                    {"label": _("Point of Sale (TPV)"), "url": "sales:pos_dashboard", "icon": "point_of_sale", "permission": "sales.view_pos"},
                     {"label": _("Orders"), "url": "sales:sales_order_list", "icon": "assignment", "permission": "sales.ver_order"},
                     {"label": _("Create Order"), "url": "sales:sales_order_create", "icon": "add_box", "permission": "sales.crear_order"},
                 ]
@@ -82,6 +82,7 @@ APPS_MENU = [
                     {"label": _("Reports"), "url": "sales:reports_dashboard", "icon": "bar_chart", "permission": "sales.ver_report"},
                     {"label": _("Price Lists"), "url": "sales:price_list_list", "icon": "price_change", "permission": "sales.ver_price_list"},
                     {"label": _("Payment Terms"), "url": "sales:payment_term_list", "icon": "schedule", "permission": "sales.ver_payment_term"},
+                    {"label": _("POS Terminals"), "url": "sales:terminal_list", "icon": "terminal", "permission": "sales.view_posterminal"}
                 ]
             }
         ]
@@ -1092,6 +1093,77 @@ APPS_MENU = [
             }
         ]
     },
+    {
+        "id": "finance",
+        "nombre": _("Finance"),
+        "permiso": "finance.view_creditlimitlog",
+        "url": "finance:account_receivable_list",
+        "icono_svg": "<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1'/></svg>",
+        "orden": 20,
+        "color": "teal",
+        "submenus": [
+            {
+                "seccion": _("Accounts Receivable"),
+                "items": [
+                    {"label": _("Accounts Receivable"), "url": "finance:account_receivable_list", "icon": "account_balance_wallet", "permission": "finance.view_creditlimitlog"},
+                    {"label": _("Create Account Receivable"), "url": "finance:account_receivable_create", "icon": "add", "permission": "finance.add_creditlimitlog"}
+                ]
+            },
+            {
+                "seccion": _("Credit Limit Logs"),
+                "items": [
+                    {"label": _("Credit Limit Logs"), "url": "finance:creditlimitlog_list", "icon": "history", "permission": "finance.view_creditlimitlog"},
+                    {"label": _("Create Credit Limit Log"), "url": "finance:creditlimitlog_create", "icon": "add", "permission": "finance.add_creditlimitlog"}
+                ]
+            },
+            {
+                "seccion": _("Financial Reports"),
+                "items": [
+                    {"label": _("Financial Reports"), "url": "finance:financialreport_list", "icon": "bar_chart", "permission": "finance.view_financialreport"},
+                    {"label": _("Create Financial Report"), "url": "finance:financialreport_create", "icon": "add", "permission": "finance.add_financialreport"}
+                ]
+            }
+        ]
+    },
+    {
+        "id": "logistics",
+        "nombre": _("Logistics"),
+        "permiso": "logistics.view_deliveryroute",
+        "url": "logistics:dashboard",
+        "icono_svg": "<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z'/></svg>",
+        "orden": 21,
+        "color": "blue",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {"label": _("Dashboard"), "url": "logistics:dashboard", "icon": "dashboard", "permission": "logistics.view_deliveryroute"}
+                ]
+            },
+            {
+                "seccion": _("Vehicles & Drivers"),
+                "items": [
+                    {"label": _("Vehicles"), "url": "logistics:vehicle_list", "icon": "local_shipping", "permission": "logistics.view_vehicle"},
+                    {"label": _("Drivers"), "url": "logistics:driver_list", "icon": "person", "permission": "logistics.view_driver"}
+                ]
+            },
+            {
+                "seccion": _("Routes & Deliveries"),
+                "items": [
+                    {"label": _("Delivery Routes"), "url": "logistics:deliveryroute_list", "icon": "alt_route", "permission": "logistics.view_deliveryroute"},
+                    {"label": _("Delivery Stops"), "url": "logistics:deliverystop_list", "icon": "place", "permission": "logistics.view_deliverystop"},
+                    {"label": _("Delivery Events"), "url": "logistics:deliveryevent_list", "icon": "event", "permission": "logistics.view_deliveryevent"}
+                ]
+            },
+            {
+                "seccion": _("Tracking & Geofences"),
+                "items": [
+                    {"label": _("Real-Time Tracking"), "url": "logistics:tracking_realtime", "icon": "gps_fixed", "permission": "logistics.view_deliveryroute"},
+                    {"label": _("Geofences"), "url": "logistics:geofence_add", "icon": "my_location", "permission": "logistics.view_deliveryroute"}
+                ]
+            }
+        ]
+    },
 ]
 
 # Apps comentadas para futuras implementaciones
@@ -1217,6 +1289,7 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=No
                         'sales:reports_dashboard': '/sales/reports/',
                         'sales:price_list_list': '/sales/price-lists/',
                         'sales:payment_term_list': '/sales/payment-terms/',
+                        'sales:terminal_list': '/sales/terminals/',
                         'accounting:tax_list': '/accounting/taxes/',
                     }
                     

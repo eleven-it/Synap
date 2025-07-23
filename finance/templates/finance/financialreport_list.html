@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% trans 'Financial Reports' %}</h1>
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+      <thead class="bg-gray-50 dark:bg-gray-800">
+        <tr>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Company' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Report Type' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Period Start' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Period End' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Created At' %}</th>
+          <th class="px-2 py-2 font-medium text-gray-500 dark:text-gray-300 uppercase">{% trans 'Actions' %}</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+        {% for report in financialreports %}
+        <tr>
+          <td class="px-2 py-2 whitespace-nowrap">{{ report.company }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ report.report_type }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ report.period_start }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ report.period_end }}</td>
+          <td class="px-2 py-2 whitespace-nowrap">{{ report.created_at }}</td>
+          <td class="px-2 py-2 whitespace-nowrap flex gap-2">
+            <a href="{% url 'finance:financialreport_edit' report.id %}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition">{% trans 'Edit' %}</a>
+            <a href="{% url 'finance:financialreport_delete' report.id %}" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800 transition">{% trans 'Delete' %}</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="px-2 py-2 text-center text-gray-500 dark:text-gray-400">{% trans 'No financial reports found.' %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mt-4 flex justify-end">
+    <a href="{% url 'finance:financialreport_create' %}" class="inline-flex items-center px-4 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">{% trans 'Add Financial Report' %}</a>
+  </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,26 @@
+{% extends 'sales/sales_base.html' %}
+{% load static i18n %}
+
+{% block content %}
+<div class="pos-root bg-gray-50 dark:bg-gray-900 min-h-screen h-screen">
+    {% include 'sales/pos/header.html' %}
+    <div class="flex flex-row h-full w-full">
+        {% include 'sales/pos/categories_panel.html' %}
+        <main class="flex-1 flex flex-col overflow-y-auto">
+            {% include 'sales/pos/product_grid.html' %}
+        </main>
+        {% include 'sales/pos/cart_panel.html' %}
+    </div>
+    {% include 'sales/pos/payment_modal.html' %}
+    {% include 'sales/pos/session_modal.html' %}
+    {% include 'sales/pos/hardware_status.html' %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script id="initial-products" type="application/json">{{ products|safe }}</script>
+<script>
+window.initialProducts = JSON.parse(document.getElementById('initial-products').textContent);
+</script>
+<script src="{% static 'sales/js/pos.js' %}"></script>
+{% endblock %} 

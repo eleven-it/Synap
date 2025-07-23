@@ -53,6 +53,8 @@ INSTALLED_APPS = [
     'mercadopago',
     'clover',
     'administraNET_integration',
+    'logistics',
+    'finance',
 ]
 
 MIDDLEWARE = [

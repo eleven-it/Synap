@@ -9,7 +9,10 @@ from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 from .models import Client, PaymentMethod, PaymentProcessor, PaymentTerm
 from core.models import Country, State, FiscalResponsibility, Empresa, Branch
-from .models import PaymentTermLine
+from .models import PaymentTermLine, ClientTag, PriceList, UsuarioExtendido, ClientAttachment
+from django.forms import inlineformset_factory
+from core.models import Contact
+from django.forms.models import BaseInlineFormSet
 
 
 class ClientWizardStep1Form(forms.ModelForm):
@@ -988,3 +991,185 @@ class ContactManagementForm(forms.Form):
         )
         
         return contact, relationship 
+
+
+class ClientTagForm(forms.ModelForm):
+    class Meta:
+        model = ClientTag
+        fields = ['name', 'color', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Nombre de la etiqueta')}),
+            'color': forms.TextInput(attrs={'type': 'color', 'class': 'form-input', 'style': 'width: 3rem; padding: 0;'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+        labels = {
+            'name': _('Nombre'),
+            'color': _('Color'),
+            'is_active': _('Activo'),
+        } 
+
+
+class ClientForm(forms.ModelForm):
+    tags = forms.ModelMultipleChoiceField(
+        queryset=ClientTag.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={
+            'class': 'form-input tag-select',
+            'data-autocomplete-url': '/sales/api/client-tags-autocomplete/',
+            'placeholder': _('Add tags...'),
+        }),
+        label=_('Tags')
+    )
+
+    class Meta:
+        model = Client
+        fields = [
+            # Básicos
+            'name', 'type', 'document_number', 'email', 'phone', 'country', 'state', 'city', 'address', 'is_active',
+            # Fiscales
+            'fiscal_responsibility', 'tax_id', 'fiscal_conditions',
+            # Comercial
+            'credit_limit', 'payment_terms', 'default_price_list', 'sales_person', 'default_discount', 'customer_category', 'tags',
+            # Otros
+            'notes',
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Name')}),
+            'type': forms.Select(attrs={'class': 'form-select'}),
+            'document_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Document Number')}),
+            'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': _('Email')}),
+            'phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Phone')}),
+            'country': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/countries-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Country')}),
+            'state': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/states-autocomplete/', 'autocomplete': 'off', 'placeholder': _('State/Province')}),
+            'city': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('City')}),
+            'address': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Address')}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'fiscal_responsibility': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/fiscal-responsibilities-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Fiscal Responsibility')}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Tax ID')}),
+            'fiscal_conditions': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Fiscal Conditions')}),
+            'credit_limit': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'placeholder': _('Credit Limit')}),
+            'payment_terms': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/payment-terms-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Payment Terms')}),
+            'default_price_list': forms.Select(attrs={'class': 'form-select'}),
+            'sales_person': forms.Select(attrs={'class': 'form-select'}),
+            'default_discount': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'max': '100', 'placeholder': _('Default Discount')}),
+            'customer_category': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Category')}),
+            'notes': forms.Textarea(attrs={'class': 'form-input', 'rows': 2, 'placeholder': _('Internal notes')}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        empresa = kwargs.pop('empresa', None)
+        super().__init__(*args, **kwargs)
+        if empresa:
+            self.fields['tags'].queryset = ClientTag.objects.filter(empresa=empresa, is_active=True)
+        else:
+            self.fields['tags'].queryset = ClientTag.objects.none()
+        # Opcional: limitar choices de otros campos por empresa
+        self.fields['default_price_list'].queryset = PriceList.objects.filter(empresa=empresa) if empresa else PriceList.objects.none()
+        self.fields['sales_person'].queryset = UsuarioExtendido.objects.filter(empresa=empresa, is_active=True) if empresa else UsuarioExtendido.objects.none() 
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            qs = Client.objects.filter(email=email, is_active=True)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(_('A client with this email already exists.'))
+        return email
+
+    def clean_document(self):
+        document = self.cleaned_data.get('document_number')
+        empresa = self.cleaned_data.get('empresa') or (self.instance.empresa if self.instance.pk else None)
+        if document and empresa:
+            qs = Client.objects.filter(document_number=document, empresa=empresa)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(_('A client with this document already exists in this company.'))
+        return document
+
+    def clean_tags(self):
+        tags = self.cleaned_data.get('tags')
+        if tags and len(set(tags)) != len(tags):
+            raise forms.ValidationError(_('Duplicate tags are not allowed.'))
+        return tags
+
+    def clean(self):
+        cleaned = super().clean()
+        tipo = cleaned.get('type')
+        if tipo == 'company':
+            # Validar que haya al menos un contacto principal
+            if not self.instance.pk or not self.instance.contacts.filter(is_primary=True).exists():
+                raise forms.ValidationError(_('A company client must have at least one primary contact.'))
+        # Validar campos obligatorios por tipo
+        if tipo == 'person' and not cleaned.get('first_name'):
+            self.add_error('first_name', _('First name is required for person clients.'))
+        if tipo == 'company' and not cleaned.get('company_name'):
+            self.add_error('company_name', _('Company name is required for company clients.'))
+        return cleaned
+
+
+class ContactInlineForm(forms.ModelForm):
+    class Meta:
+        model = Contact
+        fields = ['name', 'email', 'phone', 'position', 'is_primary']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Full name')}),
+            'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': _('Email')}),
+            'phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Phone')}),
+            'position': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Position')}),
+            'is_primary': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+        labels = {
+            'name': _('Name'),
+            'email': _('Email'),
+            'phone': _('Phone'),
+            'position': _('Position'),
+            'is_primary': _('Primary Contact'),
+        }
+
+# Eliminar el formset Client-Contact directo, ya que no existe FK directa.
+# Si se requiere un formset para relaciones, debe usarse ContactRelationship.
+
+# Ejemplo de formset para ContactRelationship (no se activa por defecto):
+# from core.models import ContactRelationship
+# from django.forms import modelformset_factory
+# ContactRelationshipFormSet = modelformset_factory(
+#     ContactRelationship,
+#     fields=['contact', 'relationship_type', 'is_active', 'notes', 'start_date', 'end_date'],
+#     extra=1, can_delete=True
+# ) 
+
+class ClientAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = ClientAttachment
+        fields = ['file', 'description']
+        widgets = {
+            'file': forms.ClearableFileInput(attrs={'class': 'form-input', 'multiple': False}),
+            'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 2, 'placeholder': _('Description (optional)')}),
+        }
+        labels = {
+            'file': _('File'),
+            'description': _('Description'),
+        }
+
+ClientAttachmentFormSet = inlineformset_factory(
+    parent_model=Client,
+    model=ClientAttachment,
+    form=ClientAttachmentForm,
+    fields=['file', 'description'],
+    extra=1,
+    can_delete=True,
+) 
+
+class BaseContactInlineFormSet(BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        primarios = 0
+        for form in self.forms:
+            if not form.cleaned_data.get('DELETE', False) and form.cleaned_data.get('is_primary', False):
+                primarios += 1
+        if primarios == 0:
+            raise forms.ValidationError(_('At least one primary contact is required.'))
+        if primarios > 1:
+            raise forms.ValidationError(_('Only one contact can be marked as primary.')) 

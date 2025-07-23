@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-lg mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow">
+  <h1 class="text-lg font-bold mb-4">{% trans 'Delivery Route Detail' %}</h1>
+  <div class="space-y-2">
+    <div><span class="font-semibold">{% trans 'Vehicle' %}:</span> {{ deliveryroute.vehicle }}</div>
+    <div><span class="font-semibold">{% trans 'Driver' %}:</span> {{ deliveryroute.driver }}</div>
+    <div><span class="font-semibold">{% trans 'Date' %}:</span> {{ deliveryroute.date }}</div>
+    <div><span class="font-semibold">{% trans 'State' %}:</span> {{ deliveryroute.state }}</div>
+    <div><span class="font-semibold">{% trans 'Created At' %}:</span> {{ deliveryroute.created_at }}</div>
+    <div><span class="font-semibold">{% trans 'Updated At' %}:</span> {{ deliveryroute.updated_at }}</div>
+    {% block extra_fields %}{% endblock %}
+  </div>
+  <div class="mt-4 flex gap-2 justify-end">
+    <a href="{% url 'logistics:deliveryroute_edit' deliveryroute.id %}" class="btn btn-primary">{% trans 'Edit' %}</a>
+    <a href="{% url 'logistics:deliveryroute_delete' deliveryroute.id %}" class="btn btn-danger">{% trans 'Delete' %}</a>
+  </div>
+</div>
+{% endblock %} 

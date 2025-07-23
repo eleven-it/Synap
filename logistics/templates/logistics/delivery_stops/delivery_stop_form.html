@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load i18n crispy_forms_tags %}
+
+{% block content %}
+<div class="p-4 md:p-6 lg:p-8 max-w-xl mx-auto">
+    <h1 class="text-lg font-semibold mb-4">{% if form.instance.pk %}{% trans 'Edit Delivery Stop' %}{% else %}{% trans 'Add Delivery Stop' %}{% endif %}</h1>
+    <form method="post" enctype="multipart/form-data" class="bg-white dark:bg-gray-900 rounded shadow p-4 space-y-4">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <div class="flex gap-2 mt-4">
+            <button type="submit" class="btn btn-primary">{% trans 'Save' %}</button>
+            <a href="{% url 'logistics:deliverystop_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %} 

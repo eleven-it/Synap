@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto p-4 bg-white dark:bg-gray-900 rounded shadow font-sans">
+  <h1 class="text-base lg:text-lg font-bold mb-4 text-gray-900 dark:text-white">{% trans 'Real-Time Vehicle Tracking' %}</h1>
+  <div id="tracking-map" class="w-full h-96 rounded-lg shadow mb-4"></div>
+  <div class="flex flex-wrap gap-2" id="vehicle-info-list">
+    {% for v in vehicle_locations %}
+      <div class="bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 text-xs text-gray-800 dark:text-gray-100 shadow flex items-center gap-2 animate-fade-in-up {% if vehicle_alerts.v.id %}border-2 border-red-500{% endif %}">
+        <span class="font-bold">{{ v.name }}</span>
+        <span class="text-gray-500">({{ v.driver }})</span>
+        <span class="ml-2 text-gray-400">{{ v.timestamp|date:'H:i:s' }}</span>
+        {% if vehicle_alerts.v.id %}
+          {% for alert in vehicle_alerts.v.id %}
+            <span class="ml-2 px-2 py-0.5 rounded bg-red-500 text-white font-semibold animate-pulse">{{ alert }}</span>
+          {% endfor %}
+        {% endif %}
+      </div>
+    {% empty %}
+      <span class="text-gray-400">{% trans 'No vehicles with location available.' %}</span>
+    {% endfor %}
+  </div>
+</div>
+{% if use_google_maps and google_maps_api_key %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}"></script>
+<script>
+let map, markers = {}, polylines = {}, geofenceShapes = {};
+function initTrackingMap() {
+  map = new google.maps.Map(document.getElementById('tracking-map'), {
+    center: { lat: {{ vehicle_locations.0.lat|default:0 }}, lng: {{ vehicle_locations.0.lng|default:0 }} },
+    zoom: 12,
+    mapId: document.body.classList.contains('dark') ? 'a3efe1c035bad51b' : undefined
+  });
+  updateMarkers({{ vehicle_locations|safe }}, {{ vehicle_histories|safe }}, {{ vehicle_alerts|safe }});
+  drawGeofences({{ geofences|safe }});
+  setInterval(fetchAndUpdateLocations, 10000);
+}
+function drawGeofences(geofences) {
+  for (const id in geofenceShapes) { geofenceShapes[id].setMap(null); delete geofenceShapes[id]; }
+  if (!geofences) return;
+  geofences.forEach(gf => {
+    if (gf.center_lat && gf.center_lng && gf.radius_m) {
+      geofenceShapes[gf.id] = new google.maps.Circle({
+        strokeColor: '#10b981', fillColor: '#10b981', fillOpacity: 0.08, strokeOpacity: 0.5, strokeWeight: 2,
+        center: { lat: gf.center_lat, lng: gf.center_lng }, radius: gf.radius_m, map: map
+      });
+    } else if (gf.polygon && gf.polygon.coordinates) {
+      geofenceShapes[gf.id] = new google.maps.Polygon({
+        paths: gf.polygon.coordinates[0].map(([lng,lat]) => ({ lat, lng })),
+        strokeColor: '#f59e42', fillColor: '#f59e42', fillOpacity: 0.08, strokeOpacity: 0.5, strokeWeight: 2, map: map
+      });
+    }
+  });
+}
+function updateMarkers(locations, histories, alerts) {
+  // Eliminar marcadores antiguos que ya no existen
+  for (const id in markers) {
+    if (!locations.some(v => v.id == id)) {
+      markers[id].setMap(null);
+      delete markers[id];
+      if (polylines[id]) polylines[id].setMap(null); delete polylines[id];
+      if (geofenceShapes[id]) geofenceShapes[id].setMap(null); delete geofenceShapes[id];
+    }
+  }
+  // Actualizar o crear marcadores, polylines y geofences
+  locations.forEach(v => {
+    if (markers[v.id]) {
+      animateMarkerMove(markers[v.id], v.lat, v.lng);
+    } else {
+      markers[v.id] = new google.maps.Marker({
+        position: { lat: v.lat, lng: v.lng },
+        map: map,
+        title: v.name,
+        label: { text: v.name.slice(0,2), color: '#fff', fontWeight: 'bold' },
+        animation: google.maps.Animation.DROP,
+        icon: (alerts[v.id] && alerts[v.id].length) ? {
+          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+        } : undefined
+      });
+    }
+    // Polyline de historial
+    if (histories[v.id] && histories[v.id].length > 1) {
+      const path = histories[v.id].map(p => ({ lat: p.lat, lng: p.lng }));
+      if (polylines[v.id]) polylines[v.id].setMap(null);
+      polylines[v.id] = new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: (alerts[v.id] && alerts[v.id].length) ? '#ef4444' : '#2563eb',
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
+        map: map
+      });
+    }
+    // Geofence
+    if (geofenceShapes[v.id]) {
+      const shape = geofenceShapes[v.id];
+      if (v.lat && v.lng) {
+        shape.setCenter({ lat: v.lat, lng: v.lng });
+      } else {
+        shape.setMap(null); // Ocultar si no hay posición
+      }
+    }
+  });
+}
+function animateMarkerMove(marker, newLat, newLng) {
+  const start = marker.getPosition();
+  const end = new google.maps.LatLng(newLat, newLng);
+  const duration = 900;
+  const steps = 30;
+  let step = 0;
+  const deltaLat = (end.lat() - start.lat()) / steps;
+  const deltaLng = (end.lng() - start.lng()) / steps;
+  function move() {
+    step++;
+    marker.setPosition(new google.maps.LatLng(start.lat() + deltaLat * step, start.lng() + deltaLng * step));
+    if (step < steps) setTimeout(move, duration / steps);
+  }
+  move();
+}
+async function fetchAndUpdateLocations() {
+  const resp = await fetch(window.location.pathname + '?ajax=1');
+  if (resp.ok) {
+    const data = await resp.json();
+    // Para AJAX, deberías exponer histories, alerts y geofences también en el backend
+    // Aquí solo actualizamos marcadores, pero puedes extender para histories/alerts/geofences
+    updateMarkers(data.vehicle_locations, {}, {});
+    updateVehicleInfoList(data.vehicle_locations, {}, {});
+    drawGeofences(data.geofences); // Actualizar geofences en AJAX
+  }
+}
+function updateVehicleInfoList(locations, histories, alerts) {
+  const container = document.getElementById('vehicle-info-list');
+  container.innerHTML = '';
+  if (!locations.length) {
+    container.innerHTML = '<span class="text-gray-400">{% trans 'No vehicles with location available.' %}</span>';
+    return;
+  }
+  locations.forEach(v => {
+    const div = document.createElement('div');
+    div.className = 'bg-gray-100 dark:bg-gray-800 rounded px-3 py-2 text-xs text-gray-800 dark:text-gray-100 shadow flex items-center gap-2 animate-fade-in-up' + ((alerts[v.id] && alerts[v.id].length) ? ' border-2 border-red-500' : '');
+    div.innerHTML = `<span class="font-bold">${v.name}</span><span class="text-gray-500">(${v.driver})</span><span class="ml-2 text-gray-400">${v.timestamp ? v.timestamp.substring(11,19) : ''}</span>` + ((alerts[v.id] && alerts[v.id].length) ? alerts[v.id].map(a => `<span class='ml-2 px-2 py-0.5 rounded bg-red-500 text-white font-semibold animate-pulse'>${a}</span>`).join('') : '');
+    container.appendChild(div);
+  });
+}
+document.addEventListener('DOMContentLoaded', initTrackingMap);
+</script>
+{% endif %}
+<style>
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(0.4,0,0.2,1) both;
+}
+#tracking-map { min-height: 350px; background: #e5e7eb; }
+</style>
+{% endblock %} 
