@@ -31,7 +31,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:13
+    image: postgres:15
     container_name: Synap_db
     environment:
       - POSTGRES_DB=mydatabase
