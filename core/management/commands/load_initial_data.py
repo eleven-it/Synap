@@ -192,13 +192,13 @@ class Command(BaseCommand):
         
         # Crear monedas
         currencies_data = [
-            {'code': 'ARS', 'name': 'Peso Argentino', 'symbol': '$', 'decimal_places': 2},
-            {'code': 'CLP', 'name': 'Peso Chileno', 'symbol': '$', 'decimal_places': 0},
-            {'code': 'UYU', 'name': 'Peso Uruguayo', 'symbol': '$', 'decimal_places': 2},
-            {'code': 'PYG', 'name': 'Guaraní Paraguayo', 'symbol': '₲', 'decimal_places': 0},
-            {'code': 'BRL', 'name': 'Real Brasileño', 'symbol': 'R$', 'decimal_places': 2},
-            {'code': 'USD', 'name': 'Dólar Estadounidense', 'symbol': '$', 'decimal_places': 2},
-            {'code': 'EUR', 'name': 'Euro', 'symbol': '€', 'decimal_places': 2},
+            {'code': 'ARS', 'name': 'Peso Argentino', 'symbol': '$'},
+            {'code': 'CLP', 'name': 'Peso Chileno', 'symbol': '$'},
+            {'code': 'UYU', 'name': 'Peso Uruguayo', 'symbol': '$'},
+            {'code': 'PYG', 'name': 'Guaraní Paraguayo', 'symbol': '₲'},
+            {'code': 'BRL', 'name': 'Real Brasileño', 'symbol': 'R$'},
+            {'code': 'USD', 'name': 'Dólar Estadounidense', 'symbol': '$'},
+            {'code': 'EUR', 'name': 'Euro', 'symbol': '€'},
         ]
         
         created_currencies = 0

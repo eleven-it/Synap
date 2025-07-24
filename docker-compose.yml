@@ -12,17 +12,10 @@ services:
       - media_volume:/app/media
     env_file:
       - .env
-    environment:
-      - DEBUG=True
-      - POSTGRES_DB=mydatabase
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
     depends_on:
       - db
       - redis
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8002
     logging:
       driver: "json-file"
       options:
@@ -31,12 +24,10 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:15
+    image: postgres:13
     container_name: Synap_db
-    environment:
-      - POSTGRES_DB=mydatabase
-      - POSTGRES_USER=myuser
-      - POSTGRES_PASSWORD=mypassword
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

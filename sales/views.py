@@ -49,6 +49,16 @@ from django.contrib.messages.views import SuccessMessageMixin
 from .services import POSService, POSSaleService, POSIntegrationService
 
 
+# Mixin para manejar permisos de superusuarios y administradores
+class SuperuserOrPermissionRequiredMixin(PermissionRequiredMixin):
+    def has_permission(self):
+        # Superusuarios y administradores tienen acceso total
+        if self.request.user.is_superuser or (hasattr(self.request.user, 'is_admin') and self.request.user.is_admin()):
+            return True
+        # Para otros usuarios, verificar permisos específicos
+        return super().has_permission()
+
+
 
 @login_required
 def sales_dashboard(request):
@@ -857,7 +867,7 @@ def payment_term_line_delete(request, pk):
     return render(request, 'sales/config/payment_term_line_confirm_delete.html', {'line': line, 'payment_term': payment_term})
 
 
-class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ClientListView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, ListView):
     """Vista para listar clientes"""
     model = Client
     template_name = 'sales/clients/client_list.html'
@@ -937,6 +947,17 @@ class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         from .forms import ClientSearchForm
         # Solo pasar los campos válidos
         context['search_form'] = ClientSearchForm(self.request.GET)
+        
+        # Agregar información de permisos para superusuarios y administradores
+        user = self.request.user
+        is_admin_user = user.is_superuser or (hasattr(user, 'is_admin') and user.is_admin())
+        context['is_superuser'] = user.is_superuser
+        context['is_admin_user'] = is_admin_user
+        context['puede_sales_ver_client'] = is_admin_user or user.has_perm('sales.view_client')
+        context['puede_sales_add_client'] = is_admin_user or user.has_perm('sales.add_client')
+        context['puede_sales_change_client'] = is_admin_user or user.has_perm('sales.change_client')
+        context['puede_sales_delete_client'] = is_admin_user or user.has_perm('sales.delete_client')
+        
         return context
     
     def render_to_response(self, context, **response_kwargs):
@@ -981,7 +1002,7 @@ class ClientListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         return super().render_to_response(context, **response_kwargs)
 
 
-class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
+class ClientDetailView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, DetailView):
     """Vista para mostrar detalles de cliente"""
     model = Client
     template_name = 'sales/clients/client_detail.html'
@@ -1004,7 +1025,7 @@ class ClientDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView):
         return context
 
 
-class ClientDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+class ClientDeleteView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, DeleteView):
     """Vista para eliminar cliente"""
     model = Client
     template_name = 'sales/clients/client_confirm_delete.html'
@@ -2795,7 +2816,7 @@ def fiscal_responsibilities_autocomplete(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-class ClientCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ClientCreateView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, CreateView):
     model = Client
     form_class = ClientWizardStep1Form  # Puedes ajustar el formulario según corresponda
     template_name = 'sales/clients/client_form.html'
@@ -2806,7 +2827,7 @@ class ClientCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
         messages.success(self.request, _('Cliente creado correctamente.'))
         return super().form_valid(form)
 
-class ClientUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ClientUpdateView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, UpdateView):
     model = Client
     form_class = ClientWizardStep1Form  # Puedes ajustar el formulario según corresponda
     template_name = 'sales/clients/client_form.html'
@@ -2837,7 +2858,7 @@ def payment_terms_autocomplete(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-class ClientTagListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
+class ClientTagListView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, ListView):
     model = ClientTag
     template_name = 'sales/clients/tags/tag_list.html'
     context_object_name = 'tags'
@@ -2848,7 +2869,7 @@ class ClientTagListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         empresa = self.request.user.empresa_activa
         return ClientTag.objects.filter(empresa=empresa).order_by('name')
 
-class ClientTagCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ClientTagCreateView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, CreateView):
     model = ClientTag
     form_class = ClientTagForm
     template_name = 'sales/clients/tags/tag_form.html'
@@ -2859,14 +2880,14 @@ class ClientTagCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateVie
         form.instance.empresa = self.request.user.empresa_activa
         return super().form_valid(form)
 
-class ClientTagUpdateView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ClientTagUpdateView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, UpdateView):
     model = ClientTag
     form_class = ClientTagForm
     template_name = 'sales/clients/tags/tag_form.html'
     permission_required = 'sales.change_clienttag'
     success_url = reverse_lazy('sales:client_tag_list')
 
-class ClientTagDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteView):
+class ClientTagDeleteView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, DeleteView):
     model = ClientTag
     template_name = 'sales/clients/tags/tag_confirm_delete.html'
     permission_required = 'sales.delete_clienttag'
@@ -2878,7 +2899,7 @@ class ClientTagDeleteView(LoginRequiredMixin, PermissionRequiredMixin, DeleteVie
         self.object.save()
         return super().delete(request, *args, **kwargs)
 
-class ClientFormTabsView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+class ClientFormTabsView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, CreateView):
     model = Client
     form_class = ClientForm
     template_name = 'sales/clients/client_form_tabs.html'
@@ -2903,7 +2924,7 @@ class ClientFormTabsView(LoginRequiredMixin, PermissionRequiredMixin, CreateView
         else:
             return self.render_to_response(self.get_context_data(form=form))
 
-class ClientEditFormTabsView(LoginRequiredMixin, PermissionRequiredMixin, UpdateView):
+class ClientEditFormTabsView(LoginRequiredMixin, SuperuserOrPermissionRequiredMixin, UpdateView):
     model = Client
     form_class = ClientForm
     template_name = 'sales/clients/client_form_tabs.html'
@@ -2959,10 +2980,6 @@ def client_tags_create(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
-class SuperuserOrPermissionRequiredMixin(PermissionRequiredMixin):
-    def has_permission(self):
-        return self.request.user.is_superuser or super().has_permission()
-
 class TerminalListView(SuperuserOrPermissionRequiredMixin, ListView):
     model = POSTerminal
     template_name = 'sales/terminals/terminal_list.html'
@@ -2974,8 +2991,9 @@ class TerminalListView(SuperuserOrPermissionRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         context['show_config_button'] = (
-            user.is_superuser or
-            user.groups.filter(name__in=['Administrador', 'Supervisor de Ventas']).exists()
+            user.is_superuser or 
+            (hasattr(user, 'is_admin') and user.is_admin()) or
+            user.roles.filter(nombre__in=['Administrador', 'Supervisor de Ventas'], activo=True).exists()
         )
         return context
 

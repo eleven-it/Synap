@@ -66,25 +66,25 @@
                 <div class="card-body">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            {{ form.purchase_request|as_crispy_field }}
+                            {{ form.purchase_request|crispy_field }}
                         </div>
                         <div>
-                            {{ form.supplier|as_crispy_field }}
+                            {{ form.supplier|crispy_field }}
                         </div>
                         <div>
-                            {{ form.currency|as_crispy_field }}
+                            {{ form.currency|crispy_field }}
                         </div>
                         <div>
-                            {{ form.valid_until|as_crispy_field }}
+                            {{ form.valid_until|crispy_field }}
                         </div>
                         <div>
-                            {{ form.delivery_time|as_crispy_field }}
+                            {{ form.delivery_time|crispy_field }}
                         </div>
                         <div>
-                            {{ form.payment_terms|as_crispy_field }}
+                            {{ form.payment_terms|crispy_field }}
                         </div>
                         <div class="md:col-span-2">
-                            {{ form.notes|as_crispy_field }}
+                            {{ form.notes|crispy_field }}
                         </div>
                     </div>
                 </div>

@@ -51,24 +51,24 @@
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        {{ form.name|as_crispy_field }}
+                        {{ form.name|crispy_field }}
                     </div>
                     <div>
-                        {{ form.report|as_crispy_field }}
+                        {{ form.report|crispy_field }}
                     </div>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                        {{ form.frequency|as_crispy_field }}
+                        {{ form.frequency|crispy_field }}
                     </div>
                     <div>
-                        {{ form.next_run|as_crispy_field }}
+                        {{ form.next_run|crispy_field }}
                     </div>
                 </div>
                 
                 <div class="mt-6">
-                    {{ form.recipients|as_crispy_field }}
+                    {{ form.recipients|crispy_field }}
                 </div>
                 
                 <div class="mt-6">

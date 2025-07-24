@@ -9,23 +9,23 @@
     {{ form.non_field_errors }}
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Company' %}</label>
-      {{ form.company|as_crispy_field }}
+      {{ form.company|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Report Type' %}</label>
-      {{ form.report_type|as_crispy_field }}
+      {{ form.report_type|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Period Start' %}</label>
-      {{ form.period_start|as_crispy_field }}
+      {{ form.period_start|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Period End' %}</label>
-      {{ form.period_end|as_crispy_field }}
+      {{ form.period_end|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Created At' %}</label>
-      {{ form.created_at|as_crispy_field }}
+      {{ form.created_at|crispy_field }}
     </div>
     {% block extra_fields %}{% endblock %}
     <div class="flex justify-end gap-2 mt-2">

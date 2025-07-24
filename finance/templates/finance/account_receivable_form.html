@@ -9,35 +9,35 @@
     {{ form.non_field_errors }}
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Client' %}</label>
-      {{ form.client|as_crispy_field }}
+      {{ form.client|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Document Type' %}</label>
-      {{ form.document_type|as_crispy_field }}
+      {{ form.document_type|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Document Number' %}</label>
-      {{ form.document_number|as_crispy_field }}
+      {{ form.document_number|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Date' %}</label>
-      {{ form.date|as_crispy_field }}
+      {{ form.date|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Due Date' %}</label>
-      {{ form.due_date|as_crispy_field }}
+      {{ form.due_date|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Amount' %}</label>
-      {{ form.amount|as_crispy_field }}
+      {{ form.amount|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Balance' %}</label>
-      {{ form.balance|as_crispy_field }}
+      {{ form.balance|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'State' %}</label>
-      {{ form.state|as_crispy_field }}
+      {{ form.state|crispy_field }}
     </div>
     {% block extra_fields %}{% endblock %}
     <div class="flex justify-end gap-2 mt-2">

@@ -9,23 +9,23 @@
     {{ form.non_field_errors }}
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Client' %}</label>
-      {{ form.client|as_crispy_field }}
+      {{ form.client|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Old Limit' %}</label>
-      {{ form.old_limit|as_crispy_field }}
+      {{ form.old_limit|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'New Limit' %}</label>
-      {{ form.new_limit|as_crispy_field }}
+      {{ form.new_limit|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Changed By' %}</label>
-      {{ form.changed_by|as_crispy_field }}
+      {{ form.changed_by|crispy_field }}
     </div>
     <div>
       <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">{% trans 'Changed At' %}</label>
-      {{ form.changed_at|as_crispy_field }}
+      {{ form.changed_at|crispy_field }}
     </div>
     {% block extra_fields %}{% endblock %}
     <div class="flex justify-end gap-2 mt-2">

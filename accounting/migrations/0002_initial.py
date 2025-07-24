@@ -17,11 +17,11 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='taxgroup',
-            name='empresa',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tax_groups', to='core.empresa'),
-        ),
+        # migrations.AddField(
+        #     model_name='taxgroup',
+        #     name='empresa',
+        #     field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tax_groups', to='core.empresa'),
+        # ),
         migrations.AddField(
             model_name='taxgroup',
             name='refund_account_id',

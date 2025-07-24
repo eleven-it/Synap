@@ -1,0 +1,418 @@
+{% extends "sales/sales_base.html" %}
+{% load i18n %}
+
+{% block sales_content %}
+{% if puede_sales_ver_client %}
+<div class="max-w-7xl mx-auto">
+  <!-- Header con título y botón de crear -->
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">👥 {% trans "Clients" %}</h1>
+    {% if puede_sales_add_client %}
+    <a href="{% url 'sales:client_create' %}" 
+       class="bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-lg">
+      ➕ {% trans "Add Client" %}
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Subheader con búsqueda y filtros -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+    <div class="flex flex-col lg:flex-row gap-4 items-center justify-between">
+      <!-- Búsqueda predictiva/autocomplete -->
+      <div class="flex-1 w-full lg:w-auto relative">
+        <form method="GET" class="flex gap-2 autocomplete-form" autocomplete="off">
+          <div class="relative w-full">
+            <input type="text" id="client-autocomplete" name="client_autocomplete" value="{{ search }}" 
+                   placeholder="{% trans 'Search client by name, email, tax ID...' %}"
+                   class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-orange-500"
+                   autocomplete="off">
+            <input type="hidden" id="client_id" name="client_id" value="{{ client_id|default:'' }}">
+            <div id="autocomplete-list" class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg hidden"></div>
+          </div>
+          <button type="submit" 
+                  class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-xs transition-colors">
+            🔍 {% trans "Search" %}
+          </button>
+        </form>
+      </div>
+
+      <!-- Contador dinámico -->
+      <div class="text-xs text-gray-600">
+        {% trans "Showing" %} {{ clients|length }} {% trans "of" %} {{ total_clients }} {% trans "clients" %}
+      </div>
+
+      <!-- Toggle de vistas -->
+      <div class="flex gap-2">
+        <button id="view-list" class="px-3 py-2 bg-orange-100 text-orange-700 rounded-md text-xs font-medium">
+          📋 {% trans "List" %}
+        </button>
+        <button id="view-kanban" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-md text-xs font-medium">
+          📊 {% trans "Kanban" %}
+        </button>
+      </div>
+    </div>
+
+    <!-- Filtros avanzados -->
+    <div class="mt-4 pt-4 border-t border-gray-200">
+      <form method="GET" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <input type="hidden" name="search" value="{{ search }}">
+        <select name="type" class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500">
+          <option value="">{% trans "All Types" %}</option>
+          <option value="individual" {% if type_filter == 'individual' %}selected{% endif %}>{% trans "Individual" %}</option>
+          <option value="company" {% if type_filter == 'company' %}selected{% endif %}>{% trans "Company" %}</option>
+        </select>
+        <select name="is_customer" class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500">
+          <option value="">{% trans "All Customers" %}</option>
+          <option value="True" {% if is_customer_filter == 'True' %}selected{% endif %}>{% trans "Customers" %}</option>
+          <option value="False" {% if is_customer_filter == 'False' %}selected{% endif %}>{% trans "Non-Customers" %}</option>
+        </select>
+        <select name="is_active" class="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500">
+          <option value="">{% trans "All Status" %}</option>
+          <option value="True" {% if is_active_filter == 'True' %}selected{% endif %}>{% trans "Active" %}</option>
+          <option value="False" {% if is_active_filter == 'False' %}selected{% endif %}>{% trans "Inactive" %}</option>
+        </select>
+        <button type="submit" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors">
+          🔧 {% trans "Apply Filters" %}
+        </button>
+        <a href="{% url 'sales:client_list' %}" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-xs transition-colors text-center">
+          🔄 {% trans "Clear" %}
+        </a>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lista de clientes (vista lista) -->
+  <div id="client-list-view" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Client" %}
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Type" %}
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Contact" %}
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Status" %}
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Assigned Seller" %}
+            </th>
+            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {% trans "Actions" %}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          {% for client in clients %}
+          <tr class="hover:bg-gray-50 transition-colors">
+            <td class="px-4 py-4 whitespace-nowrap">
+              <div class="flex items-center">
+                <div class="flex-shrink-0 h-10 w-10">
+                  <div class="h-10 w-10 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm">
+                    {{ client.name|first|upper }}
+                  </div>
+                </div>
+                <div class="ml-4">
+                  <div class="text-sm font-medium text-gray-900">{{ client.name }}</div>
+                  {% if client.tax_id %}
+                  <div class="text-xs text-gray-500">{{ client.tax_id }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap">
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                {% if client.type == 'individual' %}bg-blue-100 text-blue-800{% else %}bg-purple-100 text-purple-800{% endif %}">
+                {{ client.get_type_display }}
+              </span>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+              {% if client.email %}
+              <div>{{ client.email }}</div>
+              {% endif %}
+              {% if client.phone %}
+              <div class="text-xs text-gray-500">{{ client.phone }}</div>
+              {% endif %}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap">
+              <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+                {% if client.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                {% if client.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+              </span>
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+              {% if client.assigned_seller %}
+              {{ client.assigned_seller.nombre }}
+              {% else %}
+              <span class="text-gray-400">{% trans "Not assigned" %}</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <div class="flex justify-end gap-2">
+                {% if puede_sales_view_client %}
+                <a href="{% url 'sales:client_detail' client.pk %}" 
+                   class="text-blue-600 hover:text-blue-900 text-xs">👁️ {% trans "View" %}</a>
+                {% endif %}
+                {% if puede_sales_change_client %}
+                <a href="{% url 'sales:client_update' client.pk %}" 
+                   class="text-orange-600 hover:text-orange-900 text-xs">✏️ {% trans "Edit" %}</a>
+                {% endif %}
+                {% if puede_sales_delete_client %}
+                <a href="{% url 'sales:client_delete' client.pk %}" 
+                   class="text-red-600 hover:text-red-900 text-xs">🗑️ {% trans "Delete" %}</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+              {% if search or type_filter or is_customer_filter or is_active_filter %}
+              🔍 {% trans "No clients found matching your filters" %}
+              {% else %}
+              📝 {% trans "No clients found. Create your first client!" %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if is_paginated %}
+    <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+      <div class="flex items-center justify-between">
+        <div class="flex-1 flex justify-between sm:hidden">
+          {% if page_obj.has_previous %}
+          <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}" 
+             class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            {% trans "Previous" %}
+          </a>
+          {% endif %}
+          {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}" 
+             class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            {% trans "Next" %}
+          </a>
+          {% endif %}
+        </div>
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm text-gray-700">
+              {% trans "Showing" %} <span class="font-medium">{{ page_obj.start_index }}</span> 
+              {% trans "to" %} <span class="font-medium">{{ page_obj.end_index }}</span> 
+              {% trans "of" %} <span class="font-medium">{{ page_obj.paginator.count }}</span> 
+              {% trans "results" %}
+            </p>
+          </div>
+          <div>
+            <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+              {% if page_obj.has_previous %}
+              <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}" 
+                 class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                ←
+              </a>
+              {% endif %}
+              {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-orange-50 text-sm font-medium text-orange-600">
+                  {{ num }}
+                </span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <a href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}" 
+                   class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  {{ num }}
+                </a>
+                {% endif %}
+              {% endfor %}
+              {% if page_obj.has_next %}
+              <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}" 
+                 class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                →
+              </a>
+              {% endif %}
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Vista Kanban de clientes (oculta por defecto) -->
+  <div id="client-kanban-view" class="hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      {% for client in clients %}
+      <div class="bg-white rounded-xl shadow p-4 flex flex-col items-center border border-gray-200 hover:shadow-lg transition-all">
+        <div class="h-14 w-14 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-lg mb-2">
+          {{ client.name|first|upper }}
+        </div>
+        <div class="text-sm font-semibold text-gray-900 text-center">{{ client.name }}</div>
+        {% if client.tax_id %}
+        <div class="text-xs text-gray-500 text-center">{{ client.tax_id }}</div>
+        {% endif %}
+        <div class="mt-2 text-xs text-gray-600 text-center">
+          {% if client.email %}{{ client.email }}<br>{% endif %}
+          {% if client.phone %}{{ client.phone }}{% endif %}
+        </div>
+        <div class="mt-2">
+          <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
+            {% if client.is_active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+            {% if client.is_active %}{% trans "Active" %}{% else %}{% trans "Inactive" %}{% endif %}
+          </span>
+        </div>
+        <div class="mt-2 flex gap-2">
+          {% if puede_sales_view_client %}
+          <a href="{% url 'sales:client_detail' client.pk %}" class="text-blue-600 hover:text-blue-900 text-xs">👁️</a>
+          {% endif %}
+          {% if puede_sales_change_client %}
+          <a href="{% url 'sales:client_update' client.pk %}" class="text-orange-600 hover:text-orange-900 text-xs">✏️</a>
+          {% endif %}
+          {% if puede_sales_delete_client %}
+          <a href="{% url 'sales:client_delete' client.pk %}" class="text-red-600 hover:text-red-900 text-xs">🗑️</a>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="col-span-full text-center text-gray-500 py-8">
+        {% if search or type_filter or is_customer_filter or is_active_filter %}
+        🔍 {% trans "No clients found matching your filters" %}
+        {% else %}
+        📝 {% trans "No clients found. Create your first client!" %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="max-w-7xl mx-auto">
+  <div class="bg-red-50 border border-red-200 rounded-md p-4">
+    <div class="flex">
+      <div class="flex-shrink-0">
+        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <div class="ml-3">
+        <h3 class="text-sm font-medium text-red-800">
+          {% trans "Access Denied" %}
+        </h3>
+        <div class="mt-2 text-sm text-red-700">
+          <p>{% trans "You don't have permission to view clients." %}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle entre vistas de lista y kanban
+const listBtn = document.getElementById('view-list');
+const kanbanBtn = document.getElementById('view-kanban');
+const listView = document.getElementById('client-list-view');
+const kanbanView = document.getElementById('client-kanban-view');
+
+listBtn.addEventListener('click', function() {
+  listBtn.classList.add('bg-orange-100', 'text-orange-700');
+  listBtn.classList.remove('bg-gray-100', 'text-gray-600');
+  kanbanBtn.classList.remove('bg-orange-100', 'text-orange-700');
+  kanbanBtn.classList.add('bg-gray-100', 'text-gray-600');
+  listView.classList.remove('hidden');
+  kanbanView.classList.add('hidden');
+});
+
+kanbanBtn.addEventListener('click', function() {
+  kanbanBtn.classList.add('bg-orange-100', 'text-orange-700');
+  kanbanBtn.classList.remove('bg-gray-100', 'text-gray-600');
+  listBtn.classList.remove('bg-orange-100', 'text-orange-700');
+  listBtn.classList.add('bg-gray-100', 'text-gray-600');
+  listView.classList.add('hidden');
+  kanbanView.classList.remove('hidden');
+});
+
+// Autocomplete predictivo para clientes
+const input = document.getElementById('client-autocomplete');
+const list = document.getElementById('autocomplete-list');
+let debounceTimeout;
+input.addEventListener('input', function() {
+  clearTimeout(debounceTimeout);
+  const query = this.value;
+  if (query.length < 2) {
+    list.classList.add('hidden');
+    return;
+  }
+  debounceTimeout = setTimeout(() => {
+    fetch(`/sales/api/clients/autocomplete/?q=${encodeURIComponent(query)}`)
+      .then(res => res.json())
+      .then(data => {
+        list.innerHTML = '';
+        if (data.results && data.results.length > 0) {
+          data.results.forEach(client => {
+            const item = document.createElement('div');
+            item.className = 'px-3 py-2 cursor-pointer hover:bg-orange-100 text-xs';
+            item.textContent = `${client.name} (${client.email || client.tax_id || ''})`;
+            item.addEventListener('mousedown', function(e) {
+              input.value = client.name;
+              document.getElementById('client_id').value = client.id;
+              list.classList.add('hidden');
+            });
+            list.appendChild(item);
+          });
+          list.classList.remove('hidden');
+        } else {
+          const noRes = document.createElement('div');
+          noRes.className = 'px-3 py-2 text-gray-400 text-xs';
+          noRes.textContent = '{% trans "No results found" %}';
+          list.appendChild(noRes);
+          list.classList.remove('hidden');
+        }
+      });
+  }, 300);
+});
+input.addEventListener('blur', function() {
+  setTimeout(() => list.classList.add('hidden'), 200);
+});
+input.addEventListener('focus', function() {
+  if (list.innerHTML.trim() !== '') list.classList.remove('hidden');
+});
+// Navegación por teclado (opcional, mejora UX)
+input.addEventListener('keydown', function(e) {
+  const items = list.querySelectorAll('div');
+  let idx = Array.from(items).findIndex(i => i.classList.contains('bg-orange-100'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (idx < items.length - 1) {
+      if (idx >= 0) items[idx].classList.remove('bg-orange-100');
+      items[idx + 1].classList.add('bg-orange-100');
+      items[idx + 1].scrollIntoView({ block: 'nearest' });
+    } else if (items.length > 0) {
+      items[0].classList.add('bg-orange-100');
+      items[0].scrollIntoView({ block: 'nearest' });
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (idx > 0) {
+      items[idx].classList.remove('bg-orange-100');
+      items[idx - 1].classList.add('bg-orange-100');
+      items[idx - 1].scrollIntoView({ block: 'nearest' });
+    }
+  } else if (e.key === 'Enter') {
+    if (idx >= 0) {
+      items[idx].dispatchEvent(new Event('mousedown'));
+      list.classList.add('hidden');
+      e.preventDefault();
+    }
+  } else if (e.key === 'Escape') {
+    list.classList.add('hidden');
+  }
+});
+</script>
+{% endblock %} 
