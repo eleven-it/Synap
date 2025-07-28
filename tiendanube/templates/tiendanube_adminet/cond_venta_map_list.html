@@ -1,0 +1,809 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Condiciones de Venta - Mapeo Tiendanube ↔ AdministraNET" %}{% endblock %}
+
+{% block tiendanube_content %}
+{% csrf_token %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {% trans "Mapeo Condiciones de Venta" %}
+                </h1>
+                <p class="mt-2 text-gray-600 dark:text-gray-400">
+                    {% trans "Configurar mapeo entre métodos de pago de Tiendanube y condiciones de venta de AdministraNET" %}
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    {% trans "Actualizar" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    {% if connection_error %}
+    <div class="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-exclamation-triangle text-red-400"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">
+                    {% trans "Error de Conexión" %}
+                </h3>
+                <div class="mt-2 text-sm text-red-700">
+                    {{ connection_error }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if connection_success %}
+    <div class="mb-6 bg-green-50 border border-green-200 rounded-md p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-check-circle text-green-400"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-green-800">
+                    {% trans "Conexión Exitosa" %}
+                </h3>
+                <div class="mt-2 text-sm text-green-700">
+                    {% trans "Conectado a AdministraNET. Mostrando condiciones de venta disponibles." %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Statistics -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-list text-blue-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                {% trans "Total Condiciones" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ condiciones_venta|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-link text-green-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                {% trans "Mapeadas" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ condiciones_venta|dictsort:"mapeado"|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-toggle-on text-orange-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                {% trans "Activas" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ condiciones_venta|dictsort:"activo"|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-unlink text-gray-500 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">
+                                {% trans "Sin Mapear" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {% for cond in condiciones_venta %}
+                                    {% if not cond.mapeado %}{{ forloop.counter }}{% endif %}
+                                {% endfor %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Conditions Table -->
+    <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                {% trans "Condiciones de Venta de AdministraNET" %}
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">
+                {% trans "Activa/desactiva la sincronización para cada condición de venta" %}
+            </p>
+        </div>
+        
+        {% if condiciones_venta %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Código" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Descripción AdministraNET" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Método de Pago Tiendanube" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Estado" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Sincronización" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Acciones" %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for condicion in condiciones_venta %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ condicion.codigo }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ condicion.descripcion }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if condicion.mapeado %}
+                                <div class="autocomplete-container">
+                                    <input type="text" 
+                                           class="payment-method-input autocomplete-input" 
+                                           value="{{ condicion.payment_method }}"
+                                           data-codigo="{{ condicion.codigo }}"
+                                           placeholder="{% trans 'Método de pago' %}"
+                                           {% if not condicion.activo %}disabled{% endif %}
+                                           autocomplete="off">
+                                    <div class="autocomplete-dropdown" style="display: none;"></div>
+                                </div>
+                            {% else %}
+                                <div class="autocomplete-container">
+                                    <input type="text" 
+                                           class="payment-method-input autocomplete-input" 
+                                           data-codigo="{{ condicion.codigo }}"
+                                           placeholder="{% trans 'Método de pago' %}">
+                                    <div class="autocomplete-dropdown" style="display: none;"></div>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if condicion.mapeado %}
+                                {% if condicion.activo %}
+                                    <span class="status-badge status-active">
+                                        <i class="fas fa-check mr-1"></i>
+                                        {% trans "Activo" %}
+                                    </span>
+                                {% else %}
+                                    <span class="status-badge status-inactive">
+                                        <i class="fas fa-times mr-1"></i>
+                                        {% trans "Inactivo" %}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="status-badge status-unmapped">
+                                    <i class="fas fa-unlink mr-1"></i>
+                                    {% trans "Sin mapear" %}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <label class="switch">
+                                <input type="checkbox" 
+                                       class="sync-toggle"
+                                       data-codigo="{{ condicion.codigo }}"
+                                       data-mapeo-id="{{ condicion.mapeo_id|default:'' }}"
+                                       {% if condicion.activo %}checked{% endif %}
+                                       {% if not condicion.mapeado %}disabled{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {% if condicion.mapeado %}
+                                <button class="text-red-600 hover:text-red-900 delete-mapping-btn"
+                                        data-mapeo-id="{{ condicion.mapeo_id }}">
+                                    <i class="fas fa-trash"></i>
+                                    {% trans "Eliminar" %}
+                                </button>
+                            {% else %}
+                                <button class="text-blue-600 hover:text-blue-900 create-mapping-btn"
+                                        data-codigo="{{ condicion.codigo }}">
+                                    <i class="fas fa-plus"></i>
+                                    {% trans "Crear" %}
+                                </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-database text-gray-400 text-4xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                {% trans "No hay condiciones de venta disponibles" %}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400">
+                {% trans "Verifica la conexión con AdministraNET o que existan condiciones de venta activas." %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center h-full">
+        <div class="bg-white rounded-lg p-6">
+            <div class="flex items-center">
+                <i class="fas fa-spinner fa-spin text-blue-500 mr-3"></i>
+                <span class="text-gray-700">{% trans "Procesando..." %}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block tiendanube_extra_js %}
+<style>
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .slider {
+        background-color: #10b981;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+
+    .payment-method-input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .status-active {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+
+    .status-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+
+    .status-unmapped {
+        background-color: #f3f4f6;
+        color: #374151;
+    }
+
+    /* Autocomplete styles */
+    .autocomplete-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .autocomplete-input {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
+        background-color: white;
+    }
+
+    .autocomplete-input:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .autocomplete-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #d1d5db;
+        border-top: none;
+        border-radius: 0 0 0.375rem 0.375rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        z-index: 50;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .autocomplete-item {
+        padding: 0.5rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f3f4f6;
+        font-size: 0.875rem;
+    }
+
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+        background-color: #f3f4f6;
+    }
+
+    .autocomplete-item .method-name {
+        font-weight: 500;
+        color: #374151;
+    }
+
+    .autocomplete-item .method-id {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-left: 0.5rem;
+    }
+
+    .autocomplete-no-results {
+        padding: 0.5rem;
+        color: #6b7280;
+        font-style: italic;
+        text-align: center;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    // Función para mostrar/ocultar loading
+    function showLoading() {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+    }
+    
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+    
+    // Función para mostrar notificaciones
+    function showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg ${
+            type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+    
+    // Autocomplete functionality
+    class Autocomplete {
+        constructor(input) {
+            this.input = input;
+            this.dropdown = input.parentElement.querySelector('.autocomplete-dropdown');
+            this.selectedIndex = -1;
+            this.items = [];
+            this.isOpen = false;
+            
+            this.init();
+        }
+        
+        init() {
+            // Debounce para evitar muchas llamadas a la API
+            let timeout;
+            this.input.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    this.search(e.target.value);
+                }, 300);
+            });
+            
+            // Navegación por teclado
+            this.input.addEventListener('keydown', (e) => {
+                if (!this.isOpen) return;
+                
+                switch(e.key) {
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        this.selectNext();
+                        break;
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        this.selectPrevious();
+                        break;
+                    case 'Enter':
+                        e.preventDefault();
+                        this.selectCurrent();
+                        break;
+                    case 'Escape':
+                        this.close();
+                        break;
+                }
+            });
+            
+            // Cerrar al hacer clic fuera
+            document.addEventListener('click', (e) => {
+                if (!this.input.parentElement.contains(e.target)) {
+                    this.close();
+                }
+            });
+        }
+        
+        async search(query) {
+            if (query.length < 2) {
+                this.close();
+                return;
+            }
+            
+            try {
+                const response = await fetch(`{% url "tiendanube:get_payment_methods" %}?q=${encodeURIComponent(query)}`, {
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.items = data.payment_methods;
+                    this.showResults();
+                } else {
+                    console.error('Error obteniendo métodos de pago:', data.error);
+                }
+            } catch (error) {
+                console.error('Error en búsqueda:', error);
+            }
+        }
+        
+        showResults() {
+            if (this.items.length === 0) {
+                this.dropdown.innerHTML = '<div class="autocomplete-no-results">No se encontraron métodos de pago</div>';
+            } else {
+                this.dropdown.innerHTML = this.items.map((item, index) => `
+                    <div class="autocomplete-item" data-index="${index}" data-id="${item.id}" data-name="${item.name}">
+                        <span class="method-name">${item.name}</span>
+                        <span class="method-id">(${item.id})</span>
+                    </div>
+                `).join('');
+                
+                // Event listeners para los items
+                this.dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        this.selectItem(parseInt(item.dataset.index));
+                    });
+                    
+                    item.addEventListener('mouseenter', () => {
+                        this.selectedIndex = parseInt(item.dataset.index);
+                        this.updateSelection();
+                    });
+                });
+            }
+            
+            this.dropdown.style.display = 'block';
+            this.isOpen = true;
+            this.selectedIndex = -1;
+        }
+        
+        selectNext() {
+            if (this.selectedIndex < this.items.length - 1) {
+                this.selectedIndex++;
+                this.updateSelection();
+            }
+        }
+        
+        selectPrevious() {
+            if (this.selectedIndex > 0) {
+                this.selectedIndex--;
+                this.updateSelection();
+            }
+        }
+        
+        updateSelection() {
+            this.dropdown.querySelectorAll('.autocomplete-item').forEach((item, index) => {
+                item.classList.toggle('selected', index === this.selectedIndex);
+            });
+        }
+        
+        selectCurrent() {
+            if (this.selectedIndex >= 0 && this.selectedIndex < this.items.length) {
+                this.selectItem(this.selectedIndex);
+            }
+        }
+        
+        selectItem(index) {
+            const item = this.items[index];
+            this.input.value = item.name;
+            this.input.dataset.methodId = item.id;
+            this.close();
+            
+            // Trigger change event para actualizar el mapeo
+            this.input.dispatchEvent(new Event('change'));
+        }
+        
+        close() {
+            this.dropdown.style.display = 'none';
+            this.isOpen = false;
+            this.selectedIndex = -1;
+        }
+    }
+    
+    // Inicializar autocomplete para todos los inputs
+    document.querySelectorAll('.autocomplete-input').forEach(input => {
+        new Autocomplete(input);
+    });
+    
+    // Toggle de sincronización
+    document.querySelectorAll('.sync-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const codigo = this.dataset.codigo;
+            const mapeoId = this.dataset.mapeoId;
+            const activo = this.checked;
+            
+            // Obtener el método de pago del input
+            const paymentMethodInput = document.querySelector(`input[data-codigo="${codigo}"]`);
+            const paymentMethod = paymentMethodInput ? paymentMethodInput.value : '';
+            const methodId = paymentMethodInput ? paymentMethodInput.dataset.methodId : '';
+            
+            if (!paymentMethod && activo) {
+                showNotification('Debe especificar un método de pago antes de activar', 'error');
+                this.checked = false;
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('{% url "tiendanube:cond_venta_map_toggle" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    codigo: codigo,
+                    payment_method: paymentMethod,
+                    method_id: methodId,
+                    activo: activo
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification('Mapeo actualizado correctamente');
+                    // Recargar la página para actualizar el estado
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showNotification(data.error || 'Error al actualizar mapeo', 'error');
+                    this.checked = !activo; // Revertir el toggle
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Error de conexión', 'error');
+                this.checked = !activo; // Revertir el toggle
+            });
+        });
+    });
+    
+    // Crear mapeo
+    document.querySelectorAll('.create-mapping-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const codigo = this.dataset.codigo;
+            const paymentMethodInput = document.querySelector(`input[data-codigo="${codigo}"]`);
+            const paymentMethod = paymentMethodInput ? paymentMethodInput.value : '';
+            const methodId = paymentMethodInput ? paymentMethodInput.dataset.methodId : '';
+            
+            if (!paymentMethod) {
+                showNotification('Debe especificar un método de pago', 'error');
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('{% url "tiendanube:cond_venta_map_toggle" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    codigo: codigo,
+                    payment_method: paymentMethod,
+                    method_id: methodId,
+                    activo: true
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification('Mapeo creado correctamente');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showNotification(data.error || 'Error al crear mapeo', 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Error de conexión', 'error');
+            });
+        });
+    });
+    
+    // Eliminar mapeo
+    document.querySelectorAll('.delete-mapping-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('¿Está seguro de que desea eliminar este mapeo?')) {
+                return;
+            }
+            
+            const mapeoId = this.dataset.mapeoId;
+            
+            showLoading();
+            
+            fetch('{% url "tiendanube:cond_venta_map_delete_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    mapeo_id: mapeoId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification('Mapeo eliminado correctamente');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showNotification(data.error || 'Error al eliminar mapeo', 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Error de conexión', 'error');
+            });
+        });
+    });
+    
+    // Actualizar página
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        window.location.reload();
+    });
+    
+    // Actualizar método de pago al cambiar input
+    document.querySelectorAll('.payment-method-input').forEach(input => {
+        input.addEventListener('blur', function() {
+            const codigo = this.dataset.codigo;
+            const paymentMethod = this.value;
+            const toggle = document.querySelector(`.sync-toggle[data-codigo="${codigo}"]`);
+            
+            if (toggle && toggle.checked && paymentMethod) {
+                // Actualizar automáticamente si está activo
+                fetch('{% url "tiendanube:cond_venta_map_toggle" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        codigo: codigo,
+                        payment_method: paymentMethod,
+                        activo: true
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Método de pago actualizado');
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %} 

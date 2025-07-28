@@ -1,0 +1,1 @@
+# Aquí se deben mover todas las vistas relacionadas con la integración Synap <-> Tiendanube desde views.py 

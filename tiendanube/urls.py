@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from . import views_adminet
+from .views_adminet_connection import TiendaNubeAdminetConnectionView
 
 app_name = 'tiendanube'
 
@@ -49,4 +51,15 @@ urlpatterns = [
     path('sync/all-stock/', views.TiendaNubeSyncAllStockView.as_view(), name='sync_all_stock'),
     # Reports
     path('reports/', views.TiendaNubeReportsView.as_view(), name='reports'),
+    # Adminet Integration
+    path('adminet/cond_venta_map/', views_adminet.CondVentaMapListView.as_view(), name='cond_venta_map_list'),
+    path('adminet/cond_venta_map/create/', views_adminet.CondVentaMapCreateView.as_view(), name='cond_venta_map_create'),
+    path('adminet/cond_venta_map/<int:pk>/edit/', views_adminet.CondVentaMapUpdateView.as_view(), name='cond_venta_map_update'),
+    path('adminet/cond_venta_map/<int:pk>/delete/', views_adminet.CondVentaMapDeleteView.as_view(), name='cond_venta_map_delete'),
+    path('adminet/cond_venta_map/toggle/', views_adminet.toggle_cond_venta_mapping, name='cond_venta_map_toggle'),
+    path('adminet/cond_venta_map/delete/', views_adminet.delete_cond_venta_mapping, name='cond_venta_map_delete_ajax'),
+    path('adminet/cond_venta_map/payment-methods/', views_adminet.get_tiendanube_payment_methods, name='get_payment_methods'),
+    path('adminet/connection/', TiendaNubeAdminetConnectionView.as_view(), name='adminet_connection'),
+    path('adminet/test-order/', views_adminet.test_order_to_adminet, name='test_order_to_adminet'),
+    path('adminet/webhook-order/', views_adminet.webhook_order_tiendanube, name='webhook_order_tiendanube'),
 ] 

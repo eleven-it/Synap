@@ -30,6 +30,7 @@ urlpatterns = [
     path("login/", include("login.urls")),  
     path("core/", include("core.urls", namespace="core")),
     path("mercadopago/", include("mercadopago.urls")),
+    path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
 ]
 
 # URLs críticas siempre disponibles (workaround para tests y desarrollo)

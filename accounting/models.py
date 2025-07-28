@@ -213,7 +213,7 @@ class JournalEntryLine(models.Model):
 
 class TaxGroup(models.Model):
     """Grupo de impuestos (ej: IVA, Impuestos Internos)"""
-    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='tax_groups')
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='tax_groups', null=True, blank=True)
     name = models.CharField(_('Name'), max_length=100)
     code = models.CharField(_('Code'), max_length=20, unique=True)
     description = models.TextField(_('Description'), blank=True)

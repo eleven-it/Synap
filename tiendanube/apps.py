@@ -5,6 +5,10 @@ class TiendanubeConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'tiendanube'
 
+    def ready(self):
+        """Registrar señales cuando la app se carga."""
+        import tiendanube.signals
+
 # Extensión para menú de navegación de módulos
 
 def get_nav_submenu_items():

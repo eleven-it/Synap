@@ -90,7 +90,7 @@ APPS_MENU = [
     {
         "id": "inventory",
         "nombre": _("Inventory"),
-        "permiso": "inventory.ver",
+        "permiso": "inventory.ver_dashboard",
         "url": "inventory:stock_dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M4 6h16M4 12h16M4 18h16'/></svg>""",
         "orden": 2,
@@ -103,7 +103,7 @@ APPS_MENU = [
                         "label": _("Dashboard"),
                         "url": "inventory:stock_dashboard",
                         "icon": "dashboard",
-                        "permission": "inventory.ver"
+                        "permission": "inventory.ver_dashboard"
                     },
                     {
                         "label": _("Products"),
@@ -160,7 +160,7 @@ APPS_MENU = [
                         "label": _("Dashboard"),
                         "url": "inventory:tiendanube_dashboard",
                         "icon": "cloud",
-                        "permission": "inventory.ver_dashboard_tiendanube"
+                        "permission": "inventory.config_tiendanube"
                     }
                 ]
             }
@@ -169,131 +169,32 @@ APPS_MENU = [
     {
         "id": "tiendanube",
         "nombre": _("TiendaNube"),
-        "permiso": "tiendanube.access",
+        "permiso": "tiendanube.view_integration",
         "url": "tiendanube:dashboard",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M17.5 19a4.5 4.5 0 100-9 5.5 5.5 0 00-10.9 1.5A4.5 4.5 0 006.5 19h11z'/></svg>""",
         "orden": 3,
         "color": "purple",
         "submenus": [
             {
-                "seccion": _("Integration"),
+                "seccion": _("Integración Synap"),
                 "items": [
-                    {
-                        "label": _("Dashboard"),
-                        "url": "tiendanube:dashboard",
-                        "icon": "dashboard",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Configuration"),
-                        "url": "tiendanube:config_list",
-                        "icon": "settings",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Configuration Wizard"),
-                        "url": "tiendanube:config_wizard",
-                        "icon": "wizard",
-                        "permission": "tiendanube.access"
-                    }
+                    {"label": _("Products"), "url": "tiendanube:mapping_list", "icon": "inventory", "permission": "tiendanube.sync_products"},
+                    {"label": _("Orders"), "url": "tiendanube:order_mapping_list", "icon": "assignment", "permission": "tiendanube.sync_orders"},
+                    {"label": _("Sync Logs"), "url": "tiendanube:logs_list", "icon": "history", "permission": "tiendanube.view_sync_log"}
                 ]
             },
             {
-                "seccion": _("Sync Management"),
+                "seccion": _("Integración administraNET"),
                 "items": [
-                    {
-                        "label": _("Sync Logs"),
-                        "url": "tiendanube:logs_list",
-                        "icon": "history",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Manual Sync"),
-                        "url": "tiendanube:manual_sync",
-                        "icon": "sync",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Sync Products"),
-                        "url": "tiendanube:sync_products",
-                        "icon": "inventory",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Sync All Products"),
-                        "url": "tiendanube:sync_products",
-                        "icon": "sync_alt",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Sync All Stock"),
-                        "url": "tiendanube:sync_all_stock",
-                        "icon": "local_shipping",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Sync Customers"),
-                        "url": "tiendanube:sync_customers",
-                        "icon": "people",
-                        "permission": "tiendanube.access"
-                    }
+                    {"label": _("Cond. Venta Tiendanube ↔ Adminet"), "url": "tiendanube:cond_venta_map_list", "icon": "compare_arrows", "permission": "tiendanube.configure_integration"},
+                    {"label": _("Conexión Adminet (MySQL)"), "url": "tiendanube:adminet_connection", "icon": "storage", "permission": "tiendanube.configure_integration"}
                 ]
             },
             {
-                "seccion": _("Mappings"),
+                "seccion": _("General"),
                 "items": [
-                    {
-                        "label": _("Product Mapping"),
-                        "url": "tiendanube:mapping_list",
-                        "icon": "link",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Customer Mapping"),
-                        "url": "tiendanube:customer_mapping_list",
-                        "icon": "person",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Order Mapping"),
-                        "url": "tiendanube:order_mapping_list",
-                        "icon": "receipt",
-                        "permission": "tiendanube.access"
-                    }
-                ]
-            },
-            {
-                "seccion": _("Restock Management"),
-                "items": [
-                    {
-                        "label": _("Product Restock Policies"),
-                        "url": "tiendanube:product_restock_policy_list",
-                        "icon": "policy",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Restock Rules"),
-                        "url": "tiendanube:restock_rule_list",
-                        "icon": "rule",
-                        "permission": "tiendanube.access"
-                    },
-                    {
-                        "label": _("Restock Logs"),
-                        "url": "tiendanube:restock_log_list",
-                        "icon": "history",
-                        "permission": "tiendanube.access"
-                    }
-                ]
-            },
-            {
-                "seccion": _("Reports & Analytics"),
-                "items": [
-                    {
-                        "label": _("Reports"),
-                        "url": "tiendanube:reports",
-                        "icon": "analytics",
-                        "permission": "tiendanube.access"
-                    }
+                    {"label": _("Dashboard"), "url": "tiendanube:dashboard", "icon": "dashboard", "permission": "tiendanube.view_integration"},
+                    {"label": _("Settings"), "url": "tiendanube:config_list", "icon": "settings", "permission": "tiendanube.configure_integration"}
                 ]
             }
         ]
@@ -1291,6 +1192,21 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=No
                         'sales:payment_term_list': '/sales/payment-terms/',
                         'sales:terminal_list': '/sales/terminals/',
                         'accounting:tax_list': '/accounting/taxes/',
+                        'inventory:stock_dashboard': '/inventory/dashboard/',
+                        'inventory:product_list': '/inventory/products/',
+                        'inventory:warehouse_list': '/inventory/warehouses/',
+                        'inventory:location_list': '/inventory/locations/',
+                        'inventory:brand_list': '/inventory/brands/',
+                        'inventory:category_list': '/inventory/categories/',
+                        'inventory:subcategory_list': '/inventory/subcategories/',
+                        'inventory:tiendanube_dashboard': '/inventory/tiendanube/',
+                        'tiendanube:mapping_list': '/tiendanube/mappings/',
+                        'tiendanube:order_mapping_list': '/tiendanube/orders/',
+                        'tiendanube:logs_list': '/tiendanube/logs/',
+                        'tiendanube:cond_venta_map_list': '/tiendanube/adminet/cond_venta_map/',
+                        'tiendanube:adminet_connection': '/tiendanube/adminet/connection/',
+                        'tiendanube:dashboard': '/tiendanube/',
+                        'tiendanube:config_list': '/tiendanube/config/',
                     }
                     
                     # Usar mapeo hardcodeado si existe, sino intentar reverse

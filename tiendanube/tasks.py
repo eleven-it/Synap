@@ -5,8 +5,16 @@ from django.utils import timezone
 import logging
 from tiendanube.models import TiendaNubeProductMapping
 from inventory.models import Product
+from tiendanube.models_adminet import TiendaNubeCondVentaMap, TiendaNubeAdminetConfig
+from tiendanube.services.connection_service import MySQLConnectionService
 
 logger = logging.getLogger(__name__)
+
+def get_tiendanube_service(config=None):
+    if config is None:
+        config = TiendaNubeConfig.objects.first()
+    from .services_main import TiendaNubeService
+    return TiendaNubeService(config)
 
 @shared_task
 def sync_tiendanube_periodic():
@@ -20,7 +28,7 @@ def sync_tiendanube_periodic():
         if elapsed < config.sync_interval:
             logging.info(f'[Celery] Sincronización TiendaNube: Esperando intervalo. Última sync hace {elapsed:.1f} min, intervalo requerido: {config.sync_interval} min.')
             return f'Waiting interval ({elapsed:.1f}/{config.sync_interval} min)'
-    service = TiendaNubeService(config)
+    service = get_tiendanube_service(config)
     # Sincronizar productos pendientes de actualización
     pendientes = TiendaNubeProductMapping.objects.filter(sync_status='pending', sync_enabled=True)
     prod_update_ok = 0
@@ -64,7 +72,7 @@ def sync_products_task():
             logger.info("No hay configuración activa para sincronización automática de productos")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success_count, failed_count = service.sync_products_from_tiendanube()
         
         logger.info(f"Sincronización automática de productos completada. Exitosos: {success_count}, Fallidos: {failed_count}")
@@ -88,7 +96,7 @@ def sync_customers_task():
             logger.info("No hay configuración activa para sincronización automática de clientes")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success_count, failed_count = service.sync_customers_from_tiendanube()
         
         logger.info(f"Sincronización automática de clientes completada. Exitosos: {success_count}, Fallidos: {failed_count}")
@@ -112,7 +120,7 @@ def sync_orders_task():
             logger.info("No hay configuración activa para sincronización automática de pedidos")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success_count, failed_count = service.sync_orders_from_tiendanube()
         
         logger.info(f"Sincronización automática de pedidos completada. Exitosos: {success_count}, Fallidos: {failed_count}")
@@ -136,7 +144,7 @@ def sync_stock_task():
             logger.info("No hay configuración activa para sincronización automática de stock")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success_count, failed_count = service.sync_stock_to_tiendanube()
         
         logger.info(f"Sincronización automática de stock completada. Exitosos: {success_count}, Fallidos: {failed_count}")
@@ -160,7 +168,7 @@ def check_restock_task():
             logger.info("No hay configuración activa para reabastecimiento automático")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success_count, failed_count = service.check_and_restock_products()
         
         logger.info(f"Verificación de reabastecimiento completada. Exitosos: {success_count}, Fallidos: {failed_count}")
@@ -184,7 +192,7 @@ def full_sync_task():
             logger.info("No hay configuración activa para sincronización automática")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         results = {}
         
         # Sincronizar productos
@@ -251,7 +259,7 @@ def test_connection_task():
             logger.warning("No hay configuración de Tiendanube para probar conexión")
             return
         
-        service = TiendaNubeService(config)
+        service = get_tiendanube_service(config)
         success, message = service.test_connection()
         
         if success:
@@ -268,3 +276,13 @@ def test_connection_task():
     except Exception as e:
         logger.error(f"Error en prueba de conexión: {str(e)}")
         raise 
+
+# La sincronización del mapeo de condiciones de venta a MySQL ha sido eliminada.
+# El mapeo solo se mantiene en la base de datos de la app tiendanube (PostgreSQL).
+
+# Puedes consultar el mapeo así:
+# from tiendanube.models_adminet import TiendaNubeCondVentaMap
+# mapeo = TiendaNubeCondVentaMap.objects.filter(payment_method=metodo_pago, activo=True).first()
+# if mapeo:
+#     adminet_codigo = mapeo.adminet_codigo
+#     # Usar adminet_codigo en la integración con MySQL 

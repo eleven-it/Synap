@@ -33,30 +33,31 @@ class TiendaNubeValidationError(Exception):
 
 class TiendaNubeService:
     """
-    Service for full integration with TiendaNube API.
-    Handles authentication, product/variant CRUD, stock sync, orders, customers, webhooks, and logging.
+    Servicio para integración con la API de Tiendanube.
+    Puede ser usado por Synap, administraNET u otros sistemas, siempre que se le pase una configuración con los campos necesarios.
     """
     BASE_URL = "https://api.tiendanube.com/v1"
 
-    def __init__(self, config=None):
+    def __init__(self, config: object):
+        """
+        Inicializa el servicio con cualquier objeto/config que tenga:
+        - store_id
+        - access_token
+        - (opcional) api_url, webhook_secret, etc.
+        """
         self.config = config
-        self.store_id = None
-        if config and hasattr(config, 'store_id') and config.store_id:
-            self.store_id = str(config.store_id)
-        if config:
-            # Usar la URL base que funciona (v1 con store_id)
-            self.BASE_URL = f"https://api.tiendanube.com/v1/{self.store_id}" if self.store_id else "https://api.tiendanube.com/v1"
-            self.headers = {
-                "Content-Type": "application/json",
-                "Authentication": f"bearer {config.access_token}",
-                "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
-            }
+        self.store_id = getattr(config, 'store_id', None)
+        self.access_token = getattr(config, 'access_token', None)
+        self.api_url = getattr(config, 'api_url', self.BASE_URL)
+        if self.store_id:
+            self.BASE_URL = f"https://api.tiendanube.com/v1/{self.store_id}"
         else:
-            self.BASE_URL = "https://api.tiendanube.com/v1"
-            self.headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
-            }
+            self.BASE_URL = self.api_url
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authentication": f"bearer {self.access_token}" if self.access_token else '',
+            "User-Agent": "administranet_tiendanube - tiendanube@administranet.com.ar"
+        }
 
     def validate_product_data(self, product, operation_type="create"):
         """
@@ -2098,3 +2099,45 @@ class TiendaNubeService:
         else:
             logger.error(f"API Error: {response.status_code} - {response.text}")
             return None 
+
+    def get_payment_methods(self):
+        """
+        Obtiene los métodos de pago disponibles en Tiendanube.
+        
+        Returns:
+            dict: Respuesta con los métodos de pago disponibles
+        """
+        try:
+            # Endpoint para obtener métodos de pago
+            response = requests.get(f"{self.BASE_URL}/payment_methods", headers=self.headers)
+            
+            if response.status_code == 200:
+                payment_methods = response.json()
+                logger.info(f"✅ Métodos de pago obtenidos: {len(payment_methods)} métodos encontrados")
+                return {
+                    'success': True,
+                    'payment_methods': payment_methods,
+                    'count': len(payment_methods)
+                }
+            elif response.status_code == 404:
+                logger.warning("⚠️ Endpoint de métodos de pago no disponible")
+                return {
+                    'success': False,
+                    'error': 'Endpoint de métodos de pago no disponible',
+                    'payment_methods': []
+                }
+            else:
+                logger.error(f"❌ Error obteniendo métodos de pago: {response.status_code}")
+                return {
+                    'success': False,
+                    'error': f'Error HTTP {response.status_code}',
+                    'payment_methods': []
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Excepción obteniendo métodos de pago: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error de conexión: {str(e)}',
+                'payment_methods': []
+            }

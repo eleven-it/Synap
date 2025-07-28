@@ -10,7 +10,7 @@ from django.conf import settings
 from core.decorators import tiene_permiso
 from core.utils import permisos_contextuales
 from tiendanube.models import Product, TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping
-from tiendanube.services import TiendaNubeService
+from tiendanube.services_main import TiendaNubeService
 from .serializers import (
     ProductSerializer, TiendaNubeConfigSerializer, 
     TiendaNubeSyncLogSerializer, SyncStatusSerializer

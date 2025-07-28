@@ -1,0 +1,14 @@
+{% extends 'tiendanube/tiendanube_app_base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="max-w-xl mx-auto py-8">
+    <h1 class="text-lg font-bold mb-4">{% trans 'Eliminar mapeo' %}</h1>
+    <p class="mb-4">{% trans '¿Estás seguro de que deseas eliminar este mapeo?' %}</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">{% trans 'Eliminar' %}</button>
+        <a href="{% url 'tiendanube:cond_venta_map_list' %}" class="btn btn-outline">{% trans 'Cancelar' %}</a>
+    </form>
+</div>
+{% endblock %} 

@@ -9,14 +9,14 @@ from django.contrib import messages
 from django.db.models import Q, Count, Sum
 from django.utils import timezone
 from django.core.paginator import Paginator
-from .models import (
+from .models_synap import (
     TiendaNubeConfig, TiendaNubeSyncLog, TiendaNubeProductMapping,
     TiendaNubeCustomerMapping, TiendaNubeOrderMapping, TiendaNubeRestockRule,
     TiendaNubeRestockLog, TiendaNubeProductRestockPolicy
 )
 from core.decorators import tiene_permiso
 import logging
-from .services import TiendaNubeService
+from .services_main import TiendaNubeService
 from django.http import HttpResponseRedirect
 import requests
 import json
@@ -29,11 +29,21 @@ class TiendaNubePermissionMixin(UserPassesTestMixin):
     def test_func(self):
         return self.request.user.tiene_permiso("tiendanube.access")
 
+# Vistas generales o utilidades compartidas para Tiendanube
+# Las vistas de integración Synap <-> Tiendanube están en views_synap.py
+# Las vistas de integración administraNET <-> Tiendanube están en views_adminet.py
+
 # Create your views here.
 
 class TiendaNubeDashboardView(TiendaNubePermissionMixin, TemplateView):
     """Main dashboard for TiendaNube integration."""
     template_name = 'tiendanube/tiendanube_dashboard.html'
+
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -47,7 +57,7 @@ class TiendaNubeDashboardView(TiendaNubePermissionMixin, TemplateView):
             context['tiendanube_config'] = config
             
             # Obtener estadísticas del servicio
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             context['sync_status'] = service.get_sync_status()
             context['recent_logs'] = service.get_recent_logs(limit=10)
             
@@ -71,12 +81,18 @@ class TiendaNubeConfigListView(TiendaNubePermissionMixin, ListView):
     template_name = 'tiendanube/tiendanube_config_list.html'
     context_object_name = 'configs'
 
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         configs = context['configs']
         config_statuses = {}
         for config in configs:
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             ok, msg = service.test_connection()
             config_statuses[config.pk] = {
                 'active': ok,
@@ -545,17 +561,19 @@ class TiendaNubeReportsView(TiendaNubePermissionMixin, TemplateView):
 # Vistas para sincronización manual
 class TiendaNubeManualSyncView(TiendaNubePermissionMixin, View):
     """Manual sync operations."""
-    
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+
     def post(self, request, *args, **kwargs):
         sync_type = request.POST.get('sync_type')
         config = TiendaNubeConfig.objects.first()
-        
         if not config:
             messages.error(request, 'No hay configuración de Tiendanube activa.')
             return JsonResponse({'success': False, 'message': 'No configuration found'})
-        
-        service = TiendaNubeService(config)
-        
+        service = self.get_tiendanube_service(config)
         try:
             if sync_type == 'products':
                 success_count, failed_count = service.sync_products_from_tiendanube()
@@ -792,6 +810,12 @@ class TiendaNubeConfigWizardCallbackView(View):
 class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):
     """Sincroniza todos los productos con tag tiendanube hacia Tiendanube."""
     
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+    
     def post(self, request):
         try:
             config = TiendaNubeConfig.objects.first()
@@ -799,7 +823,7 @@ class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):
                 messages.error(request, _('TiendaNube configuration not found.'))
                 return redirect('tiendanube:dashboard')
             
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             limit = int(request.POST.get('limit', 100))
             offset = int(request.POST.get('offset', 0))
             
@@ -821,6 +845,12 @@ class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):
 class TiendaNubeSyncAllStockView(TiendaNubePermissionMixin, View):
     """Sincroniza stock de todos los productos con tag tiendanube hacia Tiendanube."""
     
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+    
     def post(self, request):
         try:
             config = TiendaNubeConfig.objects.first()
@@ -828,7 +858,7 @@ class TiendaNubeSyncAllStockView(TiendaNubePermissionMixin, View):
                 messages.error(request, _('TiendaNube configuration not found.'))
                 return redirect('tiendanube:dashboard')
             
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             limit = int(request.POST.get('limit', 100))
             offset = int(request.POST.get('offset', 0))
             
@@ -849,7 +879,12 @@ class TiendaNubeSyncAllStockView(TiendaNubePermissionMixin, View):
 
 class TiendaNubeSyncProductsView(TiendaNubePermissionMixin, View):
     """Sincroniza productos pendientes hacia Tiendanube."""
-    
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+
     def get(self, request):
         """Muestra la página de sincronización de productos."""
         config = TiendaNubeConfig.objects.first()
@@ -876,7 +911,7 @@ class TiendaNubeSyncProductsView(TiendaNubePermissionMixin, View):
                 messages.error(request, _('TiendaNube configuration not found.'))
                 return redirect('tiendanube:dashboard')
             
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             success_count, failed_count = service.sync_pending_products_to_tiendanube()
             
             if failed_count == 0:
@@ -894,6 +929,12 @@ class TiendaNubeSyncProductsView(TiendaNubePermissionMixin, View):
 
 class TiendaNubeSyncCustomersView(TiendaNubePermissionMixin, View):
     """Sincroniza clientes desde Tiendanube hacia Synap."""
+    
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
     
     def get(self, request):
         """Muestra la página de sincronización de clientes."""
@@ -935,7 +976,7 @@ class TiendaNubeSyncCustomersView(TiendaNubePermissionMixin, View):
                 messages.error(request, _('TiendaNube configuration not found.'))
                 return redirect('tiendanube:dashboard')
             
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             limit = int(request.POST.get('limit', 50))
             offset = int(request.POST.get('offset', 0))
             
@@ -958,6 +999,12 @@ class TiendaNubeSyncCustomersView(TiendaNubePermissionMixin, View):
 class TiendaNubeSyncCustomersToTiendanubeView(TiendaNubePermissionMixin, View):
     """Sincroniza clientes desde Synap hacia Tiendanube."""
     
+    def get_tiendanube_service(self, config=None):
+        if config is None:
+            config = TiendaNubeConfig.objects.first()
+        from .services_main import TiendaNubeService
+        return TiendaNubeService(config)
+    
     def post(self, request):
         try:
             config = TiendaNubeConfig.objects.first()
@@ -965,7 +1012,7 @@ class TiendaNubeSyncCustomersToTiendanubeView(TiendaNubePermissionMixin, View):
                 messages.error(request, _('TiendaNube configuration not found.'))
                 return redirect('tiendanube:dashboard')
             
-            service = TiendaNubeService(config)
+            service = self.get_tiendanube_service(config)
             limit = int(request.POST.get('limit', 100))
             offset = int(request.POST.get('offset', 0))
             
