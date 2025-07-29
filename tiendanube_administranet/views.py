@@ -2943,14 +2943,11 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                 try:
                     # Crear la configuración de Tiendanube
                     config = TiendanubeConfig.objects.create(
+                        name=f"Store {request.session.get('wizard_user_id', 'Unknown')}",
                         store_id=request.session.get('wizard_user_id'),
                         access_token=request.session.get('wizard_access_token'),
                         api_url='https://api.tiendanube.com/v1',
                         is_active=request.session.get('wizard_auto_sync', True),
-                        sync_interval=request.session.get('wizard_sync_interval', 30),
-                        sync_products=request.session.get('wizard_sync_products', True),
-                        sync_stock=request.session.get('wizard_sync_stock', True),
-                        sync_variants=request.session.get('wizard_sync_variants', True),
                     )
                     
                     # Limpiar datos de sesión
