@@ -1010,103 +1010,328 @@ class ClientTagForm(forms.ModelForm):
 
 
 class ClientForm(forms.ModelForm):
+    """
+    Formulario principal para clientes con todos los campos necesarios
+    Incluye validación dinámica y campos condicionales
+    """
+    
+    # Campos de búsqueda autocomplete
+    country_search = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input autocomplete-field',
+            'placeholder': _('Search country...'),
+            'data-autocomplete-url': '/sales/api/countries-autocomplete/',
+            'autocomplete': 'off'
+        }),
+        label=_('Country Search')
+    )
+    
+    state_search = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input autocomplete-field',
+            'placeholder': _('Search state/province...'),
+            'data-autocomplete-url': '/sales/api/states-autocomplete/',
+            'autocomplete': 'off'
+        }),
+        label=_('State/Province Search')
+    )
+    
+    fiscal_responsibility_search = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input autocomplete-field',
+            'placeholder': _('Search fiscal responsibility...'),
+            'data-autocomplete-url': '/sales/api/fiscal-responsibilities-autocomplete/',
+            'autocomplete': 'off'
+        }),
+        label=_('Fiscal Responsibility Search')
+    )
+    
+    payment_terms_search = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input autocomplete-field',
+            'placeholder': _('Search payment terms...'),
+            'data-autocomplete-url': '/sales/api/payment-terms-autocomplete/',
+            'autocomplete': 'off'
+        }),
+        label=_('Payment Terms Search')
+    )
+    
     tags = forms.ModelMultipleChoiceField(
-        queryset=ClientTag.objects.none(),
+        queryset=ClientTag.objects.filter(is_active=True),
         required=False,
         widget=forms.SelectMultiple(attrs={
-            'class': 'form-input tag-select',
-            'data-autocomplete-url': '/sales/api/client-tags-autocomplete/',
-            'placeholder': _('Add tags...'),
+            'class': 'form-select tags-select',
+            'data-placeholder': _('Select tags...')
         }),
         label=_('Tags')
+    )
+    
+    # Campos para nuevos tags
+    new_tags = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-input',
+            'placeholder': _('Add new tags (comma separated)')
+        }),
+        help_text=_('Enter new tags separated by commas')
     )
 
     class Meta:
         model = Client
         fields = [
             # Básicos
-            'name', 'type', 'document_number', 'email', 'phone', 'country', 'state', 'city', 'address', 'is_active',
+            'name', 'type', 'document_number', 'email', 'phone', 'mobile', 'website',
+            'country', 'state', 'city', 'address', 'postal_code', 'is_active',
             # Fiscales
             'fiscal_responsibility', 'tax_id', 'fiscal_conditions',
             # Comercial
-            'credit_limit', 'payment_terms', 'default_price_list', 'sales_person', 'default_discount', 'customer_category', 'tags',
+            'credit_limit', 'payment_terms', 'default_price_list', 'sales_person', 
+            'default_discount', 'customer_category', 'default_delivery_location',
+            'invoice_delivery_method', 'payment_method', 'is_customer', 'is_prospect', 'is_vip',
             # Otros
             'notes',
         ]
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Name')}),
-            'type': forms.Select(attrs={'class': 'form-select'}),
-            'document_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Document Number')}),
-            'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': _('Email')}),
-            'phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Phone')}),
-            'country': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/countries-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Country')}),
-            'state': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/states-autocomplete/', 'autocomplete': 'off', 'placeholder': _('State/Province')}),
-            'city': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('City')}),
-            'address': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Address')}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
-            'fiscal_responsibility': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/fiscal-responsibilities-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Fiscal Responsibility')}),
-            'tax_id': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Tax ID')}),
-            'fiscal_conditions': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Fiscal Conditions')}),
-            'credit_limit': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'placeholder': _('Credit Limit')}),
-            'payment_terms': forms.TextInput(attrs={'class': 'form-input autocomplete-field', 'data-autocomplete-url': '/sales/api/payment-terms-autocomplete/', 'autocomplete': 'off', 'placeholder': _('Payment Terms')}),
-            'default_price_list': forms.Select(attrs={'class': 'form-select'}),
-            'sales_person': forms.Select(attrs={'class': 'form-select'}),
-            'default_discount': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'min': '0', 'max': '100', 'placeholder': _('Default Discount')}),
-            'customer_category': forms.TextInput(attrs={'class': 'form-input', 'placeholder': _('Category')}),
-            'notes': forms.Textarea(attrs={'class': 'form-input', 'rows': 2, 'placeholder': _('Internal notes')}),
+            'name': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Client name')
+            }),
+            'type': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'document_number': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Document number (DNI, CUIT, etc.)')
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Email address')
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Phone number')
+            }),
+            'mobile': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Mobile number')
+            }),
+            'website': forms.URLInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Website URL')
+            }),
+            'country': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'state': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'city': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('City')
+            }),
+            'address': forms.Textarea(attrs={
+                'class': 'form-input',
+                'rows': 3,
+                'placeholder': _('Full address')
+            }),
+            'postal_code': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Postal code')
+            }),
+            'fiscal_responsibility': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'tax_id': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Tax ID (VAT number)')
+            }),
+            'fiscal_conditions': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Fiscal conditions')
+            }),
+            'credit_limit': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'step': '0.01',
+                'min': '0',
+                'placeholder': _('Credit limit')
+            }),
+            'payment_terms': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'default_price_list': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'sales_person': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'default_discount': forms.NumberInput(attrs={
+                'class': 'form-input',
+                'step': '0.01',
+                'min': '0',
+                'max': '100',
+                'placeholder': _('Default discount %')
+            }),
+            'customer_category': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': _('Customer category')
+            }),
+            'default_delivery_location': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'invoice_delivery_method': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'payment_method': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox'
+            }),
+            'is_customer': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox'
+            }),
+            'is_prospect': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox'
+            }),
+            'is_vip': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox'
+            }),
+            'notes': forms.Textarea(attrs={
+                'class': 'form-input',
+                'rows': 4,
+                'placeholder': _('Additional notes')
+            }),
+        }
+        labels = {
+            'name': _('Client Name'),
+            'type': _('Client Type'),
+            'document_number': _('Document Number'),
+            'email': _('Email'),
+            'phone': _('Phone'),
+            'mobile': _('Mobile'),
+            'website': _('Website'),
+            'country': _('Country'),
+            'state': _('State/Province'),
+            'city': _('City'),
+            'address': _('Address'),
+            'postal_code': _('Postal Code'),
+            'fiscal_responsibility': _('Fiscal Responsibility'),
+            'tax_id': _('Tax ID'),
+            'fiscal_conditions': _('Fiscal Conditions'),
+            'credit_limit': _('Credit Limit'),
+            'payment_terms': _('Payment Terms'),
+            'default_price_list': _('Default Price List'),
+            'sales_person': _('Sales Person'),
+            'default_discount': _('Default Discount (%)'),
+            'customer_category': _('Customer Category'),
+            'default_delivery_location': _('Default Delivery Location'),
+            'invoice_delivery_method': _('Invoice Delivery Method'),
+            'payment_method': _('Payment Method'),
+            'is_active': _('Active'),
+            'is_customer': _('Is Customer'),
+            'is_prospect': _('Is Prospect'),
+            'is_vip': _('VIP Customer'),
+            'notes': _('Notes'),
         }
 
     def __init__(self, *args, **kwargs):
-        empresa = kwargs.pop('empresa', None)
         super().__init__(*args, **kwargs)
-        if empresa:
-            self.fields['tags'].queryset = ClientTag.objects.filter(empresa=empresa, is_active=True)
-        else:
-            self.fields['tags'].queryset = ClientTag.objects.none()
-        # Opcional: limitar choices de otros campos por empresa
-        self.fields['default_price_list'].queryset = PriceList.objects.filter(empresa=empresa) if empresa else PriceList.objects.none()
-        self.fields['sales_person'].queryset = UsuarioExtendido.objects.filter(empresa=empresa, is_active=True) if empresa else UsuarioExtendido.objects.none() 
+        
+        # Configurar querysets dinámicos
+        if 'instance' in kwargs and kwargs['instance']:
+            client = kwargs['instance']
+            if client.country:
+                self.fields['state'].queryset = State.objects.filter(
+                    country=client.country, is_active=True
+                ).order_by('name')
+        
+        # Configurar campos de búsqueda
+        if self.instance.pk:
+            if self.instance.country:
+                self.fields['country_search'].initial = self.instance.country.name
+            if self.instance.state:
+                self.fields['state_search'].initial = self.instance.state.name
+            if self.instance.fiscal_responsibility:
+                self.fields['fiscal_responsibility_search'].initial = self.instance.fiscal_responsibility.name
+            if self.instance.payment_terms:
+                self.fields['payment_terms_search'].initial = self.instance.payment_terms.name
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if email:
-            qs = Client.objects.filter(email=email, is_active=True)
-            if self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise forms.ValidationError(_('A client with this email already exists.'))
+            # Verificar que el email no esté duplicado
+            existing_client = Client.objects.filter(email=email).exclude(pk=self.instance.pk if self.instance else None)
+            if existing_client.exists():
+                raise ValidationError(_('A client with this email already exists.'))
         return email
 
-    def clean_document(self):
+    def clean_document_number(self):
         document = self.cleaned_data.get('document_number')
-        empresa = self.cleaned_data.get('empresa') or (self.instance.empresa if self.instance.pk else None)
-        if document and empresa:
-            qs = Client.objects.filter(document_number=document, empresa=empresa)
-            if self.instance.pk:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise forms.ValidationError(_('A client with this document already exists in this company.'))
+        if document:
+            # Verificar que el documento no esté duplicado
+            existing_client = Client.objects.filter(document_number=document).exclude(pk=self.instance.pk if self.instance else None)
+            if existing_client.exists():
+                raise ValidationError(_('A client with this document number already exists.'))
         return document
 
     def clean_tags(self):
         tags = self.cleaned_data.get('tags')
-        if tags and len(set(tags)) != len(tags):
-            raise forms.ValidationError(_('Duplicate tags are not allowed.'))
         return tags
 
     def clean(self):
-        cleaned = super().clean()
-        tipo = cleaned.get('type')
-        if tipo == 'company':
-            # Validar que haya al menos un contacto principal
-            if not self.instance.pk or not self.instance.contacts.filter(is_primary=True).exists():
-                raise forms.ValidationError(_('A company client must have at least one primary contact.'))
-        # Validar campos obligatorios por tipo
-        if tipo == 'person' and not cleaned.get('first_name'):
-            self.add_error('first_name', _('First name is required for person clients.'))
-        if tipo == 'company' and not cleaned.get('company_name'):
-            self.add_error('company_name', _('Company name is required for company clients.'))
-        return cleaned
+        cleaned_data = super().clean()
+        
+        # Validar campos según tipo de cliente
+        client_type = cleaned_data.get('type')
+        if client_type == 'individual':
+            if not cleaned_data.get('document_number'):
+                self.add_error('document_number', _('Document number is required for individual clients.'))
+        elif client_type == 'company':
+            if not cleaned_data.get('tax_id'):
+                self.add_error('tax_id', _('Tax ID is required for company clients.'))
+        
+        # Validar límite de crédito
+        credit_limit = cleaned_data.get('credit_limit')
+        if credit_limit and credit_limit < 0:
+            self.add_error('credit_limit', _('Credit limit cannot be negative.'))
+        
+        # Validar descuento por defecto
+        default_discount = cleaned_data.get('default_discount')
+        if default_discount and (default_discount < 0 or default_discount > 100):
+            self.add_error('default_discount', _('Default discount must be between 0 and 100.'))
+        
+        return cleaned_data
+
+    def save(self, commit=True):
+        client = super().save(commit=False)
+        
+        # Procesar nuevos tags
+        new_tags = self.cleaned_data.get('new_tags')
+        if new_tags:
+            tag_names = [tag.strip() for tag in new_tags.split(',') if tag.strip()]
+            for tag_name in tag_names:
+                tag, created = ClientTag.objects.get_or_create(
+                    name=tag_name,
+                    empresa=client.empresa,
+                    defaults={'is_active': True}
+                )
+                if commit:
+                    client.tags.add(tag)
+        
+        if commit:
+            client.save()
+            self.save_m2m()
+        
+        return client 
 
 
 class ContactInlineForm(forms.ModelForm):

@@ -1,0 +1,312 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Order Mapping Detail" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="breadcrumb">
+    <div class="breadcrumb-item">
+        <span class="material-icons text-sm">receipt</span>
+        <a href="{% url 'tiendanube_administranet:order_mapping_list' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">{% trans "Order Mappings" %}</a>
+    </div>
+    <div class="breadcrumb-item active">
+        <span>{{ object.tiendanube_number|default:object.adminet_numero|default:"Order" }}</span>
+    </div>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans "Order Mapping Detail" %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "View order mapping details and synchronization status" %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'tiendanube_administranet:order_mapping_list' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">arrow_back</span>
+                {% trans "Back to List" %}
+            </a>
+            <a href="{% url 'tiendanube_administranet:order_mapping_edit' object.pk %}" 
+               class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">edit</span>
+                {% trans "Edit" %}
+            </a>
+            <a href="{% url 'tiendanube_administranet:order_mapping_delete' object.pk %}" 
+               class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
+               onclick="return confirm('{% trans 'Are you sure you want to delete this order mapping?' %}')">
+                <span class="material-icons text-sm mr-2">delete</span>
+                {% trans "Delete" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="max-w-6xl mx-auto space-y-8">
+    <!-- Order Overview -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Order Overview" %}</h3>
+                <span class="inline-flex px-3 py-1 text-sm font-semibold rounded-full
+                    {% if object.sync_status == 'synced' %}
+                        bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
+                    {% elif object.sync_status == 'pending' %}
+                        bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400
+                    {% elif object.sync_status == 'error' %}
+                        bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                    {% else %}
+                        bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400
+                    {% endif %}">
+                    {{ object.get_sync_status_display }}
+                </span>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="flex items-center">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-xl mr-4">
+                        {{ object.tiendanube_number|default:object.adminet_numero|first|upper|default:"O" }}
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {{ object.tiendanube_number|default:object.adminet_numero|default:"No order number" }}
+                        </h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{{ object.tiendanube_customer_email|default:"No customer" }}</p>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Total Amount" %}</span>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                            ${{ object.tiendanube_total|default:object.adminet_total|floatformat:2|default:"0.00" }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Currency" %}</span>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                            {{ object.tiendanube_currency|default:object.adminet_moneda|default:"USD" }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Payment Status" %}</span>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">
+                            {{ object.tiendanube_payment_status|default:object.adminet_estado_pago|default:"Unknown" }}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        {% if object.sync_enabled %}
+                            <span class="material-icons text-green-500 mr-2">check_circle</span>
+                            <span class="text-sm text-green-600 dark:text-green-400">{% trans "Sync Enabled" %}</span>
+                        {% else %}
+                            <span class="material-icons text-gray-400 mr-2">cancel</span>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Sync Disabled" %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center">
+                        <span class="material-icons text-blue-500 mr-2">sync</span>
+                        <span class="text-sm text-blue-600 dark:text-blue-400">
+                            {{ object.get_sync_direction_display|default:"Bidirectional" }}
+                        </span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="material-icons text-purple-500 mr-2">schedule</span>
+                        <span class="text-sm text-purple-600 dark:text-purple-400">
+                            {% if object.last_sync_at %}
+                                {{ object.last_sync_at|timesince }} {% trans "ago" %}
+                            {% else %}
+                                {% trans "Never synced" %}
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Tiendanube Order -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-blue-600 mr-2">cloud</span>
+                    {% trans "Tiendanube Order" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Order ID" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_id|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Order Number" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_number|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Email" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_customer_email|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Name" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_customer_name|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Total" %}</p>
+                        <p class="text-gray-900 dark:text-white">${{ object.tiendanube_total|floatformat:2|default:"0.00" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Status" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_status|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Currency" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_currency|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Payment Status" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_payment_status|default:"N/A" }}</p>
+                    </div>
+                </div>
+                
+                {% if object.tiendanube_notes %}
+                <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{% trans "Notes" %}</h4>
+                    <p class="text-gray-900 dark:text-white">{{ object.tiendanube_notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- AdministraNET Order -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-green-600 mr-2">database</span>
+                    {% trans "AdministraNET Order" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Order Code" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_codigo|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Order Number" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_numero|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Email" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_cliente_email|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Name" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_cliente_nombre|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Total" %}</p>
+                        <p class="text-gray-900 dark:text-white">${{ object.adminet_total|floatformat:2|default:"0.00" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Status" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_estado|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Currency" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_moneda|default:"N/A" }}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Payment Status" %}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_estado_pago|default:"N/A" }}</p>
+                    </div>
+                </div>
+                
+                {% if object.adminet_observaciones %}
+                <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{% trans "Observations" %}</h4>
+                    <p class="text-gray-900 dark:text-white">{{ object.adminet_observaciones }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Synchronization Configuration -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-purple-600 mr-2">sync</span>
+                {% trans "Synchronization Configuration" %}
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Sync Status" %}</p>
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                        {% if object.sync_status == 'synced' %}
+                            bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
+                        {% elif object.sync_status == 'pending' %}
+                            bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400
+                        {% elif object.sync_status == 'error' %}
+                            bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                        {% else %}
+                            bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400
+                        {% endif %}">
+                        {{ object.get_sync_status_display }}
+                    </span>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Sync Enabled" %}</p>
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                        {% if object.sync_enabled %}
+                            bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
+                        {% else %}
+                            bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                        {% endif %}">
+                        {{ object.sync_enabled|yesno:"Yes,No" }}
+                    </span>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Sync Direction" %}</p>
+                    <p class="text-gray-900 dark:text-white">{{ object.get_sync_direction_display|default:"N/A" }}</p>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Sync Frequency" %}</p>
+                    <p class="text-gray-900 dark:text-white">{{ object.get_sync_frequency_display|default:"N/A" }}</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mt-6">
+                <div class="flex items-center">
+                    {{ object.sync_customer|yesno:"✓,✗" }}
+                    <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{% trans "Sync Customer" %}</span>
+                </div>
+                <div class="flex items-center">
+                    {{ object.sync_items|yesno:"✓,✗" }}
+                    <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{% trans "Sync Items" %}</span>
+                </div>
+                <div class="flex items-center">
+                    {{ object.sync_payments|yesno:"✓,✗" }}
+                    <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{% trans "Sync Payments" %}</span>
+                </div>
+                <div class="flex items-center">
+                    {{ object.sync_shipping|yesno:"✓,✗" }}
+                    <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{% trans "Sync Shipping" %}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

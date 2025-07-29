@@ -10,7 +10,7 @@ from .models_synap import (
     TiendaNubeConfig, TiendaNubeProductMapping, TiendaNubeCustomerMapping, 
     TiendaNubeOrderMapping, TiendaNubeSyncLog
 )
-from .models_adminet import TiendaNubeCondVentaMap, TiendaNubeAdminetConfig
+from .models_adminet import TiendaNubeCondVentaMap, TiendaNubeAdminetConfig, TiendaNubeClienteMap
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,32 @@ def cond_venta_map_saved(sender, instance, created, **kwargs):
             logger.info(f"Condition of sale mapping updated: {instance.payment_method} -> {instance.adminet_codigo}")
     except Exception as e:
         logger.error(f"Error in cond_venta_map_saved signal: {str(e)}")
+
+
+@receiver(post_save, sender=TiendaNubeClienteMap)
+def cliente_map_saved(sender, instance, created, **kwargs):
+    """
+    Señal que se dispara cuando se guarda un mapeo de cliente.
+    Específico para integración administraNET.
+    """
+    try:
+        if created:
+            logger.info(f"Customer mapping created: {instance.tiendanube_email} -> {instance.adminet_codigo}")
+        else:
+            logger.info(f"Customer mapping updated: {instance.tiendanube_email} -> {instance.adminet_codigo}")
+    except Exception as e:
+        logger.error(f"Error in cliente_map_saved signal: {str(e)}")
+
+
+@receiver(post_delete, sender=TiendaNubeClienteMap)
+def cliente_map_deleted(sender, instance, **kwargs):
+    """
+    Señal que se dispara cuando se elimina un mapeo de cliente.
+    """
+    try:
+        logger.info(f"Customer mapping deleted: {instance.tiendanube_email} -> {instance.adminet_codigo}")
+    except Exception as e:
+        logger.error(f"Error in cliente_map_deleted signal: {str(e)}")
 
 @receiver(post_save, sender=TiendaNubeAdminetConfig)
 def adminet_config_saved(sender, instance, created, **kwargs):

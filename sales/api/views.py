@@ -8,13 +8,20 @@ from django.utils import timezone
 from django.db import transaction
 from datetime import datetime, timedelta
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+import json
+import os
 from sales.models import (
     Client, SalesOrder, SalesOrderLine, PriceList, PriceListItem,
     PaymentTerm, PaymentTermLine, Invoice, InvoiceLine, Payment,
     DeliveryOrder, DeliveryOrderLine, ReturnDelivery, CreditNote, ApprovalLog,
-    POSSale, POSSaleLine
+    POSSale, POSSaleLine, ClientTag, ClientAttachment, ClientActivity
 )
-from core.models import Contact
+from core.models import Contact, Country, State, FiscalResponsibility
 from inventory.models import ProductVariant, Warehouse
 from .serializers import (
     ClientSerializer, ClientListSerializer, ClientStatsSerializer,
@@ -23,7 +30,8 @@ from .serializers import (
     PriceListSerializer, PriceListItemSerializer, PaymentTermSerializer, PaymentTermLineSerializer,
     InvoiceSerializer, InvoiceLineSerializer, PaymentSerializer, DeliveryOrderSerializer,
     DeliveryOrderLineSerializer, ReturnDeliverySerializer, CreditNoteSerializer,
-    ApprovalLogSerializer, SalesOrderCreateSerializer, InvoiceCreateSerializer
+    ApprovalLogSerializer, SalesOrderCreateSerializer, InvoiceCreateSerializer,
+    ClientTagSerializer, ClientAttachmentSerializer, ClientActivitySerializer
 )
 
 User = get_user_model()
@@ -100,19 +108,100 @@ class ClientViewSet(viewsets.ModelViewSet):
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query) |
             Q(company_name__icontains=query) |
-            Q(email__icontains=query)
+            Q(email__icontains=query) |
+            Q(tax_id__icontains=query)
         )[:10]
         
         results = []
         for client in queryset:
+            name = client.company_name if client.client_type == 'company' else f"{client.first_name} {client.last_name}".strip()
             results.append({
                 'id': client.id,
-                'name': client.get_display_name(),
-                'additional_info': f"{client.email or ''} - {client.get_client_type_display()}"
+                'name': name,
+                'email': client.email,
+                'tax_id': client.tax_id,
+                'type': client.client_type
             })
         
-        serializer = AutocompleteSerializer(results, many=True)
-        return Response(serializer.data)
+        return Response({'success': True, 'results': results})
+    
+    @action(detail=True, methods=['get'])
+    def activity_history(self, request, pk=None):
+        """Obtener historial de actividad del cliente"""
+        client = self.get_object()
+        activity_type = request.query_params.get('activity_type', '')
+        date_range = request.query_params.get('date_range', '30')
+        user = request.query_params.get('user', '')
+        
+        queryset = ClientActivity.objects.filter(client=client)
+        
+        # Filtrar por tipo de actividad
+        if activity_type:
+            queryset = queryset.filter(activity_type=activity_type)
+        
+        # Filtrar por rango de fechas
+        if date_range != 'all':
+            days = int(date_range)
+            start_date = timezone.now() - timedelta(days=days)
+            queryset = queryset.filter(timestamp__gte=start_date)
+        
+        # Filtrar por usuario
+        if user:
+            queryset = queryset.filter(user__username__icontains=user)
+        
+        activities = queryset.order_by('-timestamp')[:50]
+        serializer = ClientActivitySerializer(activities, many=True)
+        
+        return Response({
+            'success': True,
+            'activities': serializer.data
+        })
+    
+    @action(detail=True, methods=['get'])
+    def top_products(self, request, pk=None):
+        """Obtener productos más comprados por el cliente"""
+        client = self.get_object()
+        
+        # Obtener productos más comprados
+        top_products = SalesOrderLine.objects.filter(
+            sales_order__client=client,
+            sales_order__state='confirmed'
+        ).values('product__name').annotate(
+            quantity=Sum('quantity')
+        ).order_by('-quantity')[:10]
+        
+        return Response({
+            'success': True,
+            'products': list(top_products)
+        })
+    
+    @action(detail=True, methods=['get'])
+    def sales_chart(self, request, pk=None):
+        """Obtener datos de ventas por mes para el cliente"""
+        client = self.get_object()
+        
+        # Obtener ventas de los últimos 12 meses
+        sales_data = []
+        for i in range(12):
+            date = timezone.now() - timedelta(days=30*i)
+            month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+            
+            total = SalesOrder.objects.filter(
+                client=client,
+                order_date__range=[month_start, month_end],
+                state='confirmed'
+            ).aggregate(total=Sum('total'))['total'] or 0
+            
+            sales_data.append({
+                'month': month_start.strftime('%B %Y'),
+                'amount': float(total)
+            })
+        
+        return Response({
+            'success': True,
+            'sales_data': sales_data
+        })
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -125,7 +214,7 @@ class ContactViewSet(viewsets.ModelViewSet):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Contact.objects.select_related('client')
+        return Contact.objects.select_related('client').prefetch_related('relationships')
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -140,7 +229,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         # Estadísticas básicas
         total_contacts = queryset.count()
         active_contacts = queryset.filter(status='active').count()
-        primary_contacts = queryset.filter(role='primary').count()
+        primary_contacts = queryset.filter(is_primary=True).count()
         
         # Contactos por rol
         contacts_by_role = queryset.values('role').annotate(
@@ -180,19 +269,356 @@ class ContactViewSet(viewsets.ModelViewSet):
             Q(first_name__icontains=query) |
             Q(last_name__icontains=query) |
             Q(email__icontains=query) |
-            Q(phone__icontains=query)
+            Q(phone__icontains=query) |
+            Q(company__icontains=query)
         )[:10]
         
         results = []
         for contact in queryset:
             results.append({
                 'id': contact.id,
-                'name': contact.get_full_name(),
-                'additional_info': f"{contact.email or ''} - {contact.position or ''}"
+                'name': f"{contact.first_name} {contact.last_name}".strip(),
+                'email': contact.email,
+                'phone': contact.phone,
+                'company': contact.company
             })
         
-        serializer = AutocompleteSerializer(results, many=True)
-        return Response(serializer.data)
+        return Response({'success': True, 'results': results})
+    
+    @action(detail=False, methods=['get'])
+    def search(self, request):
+        """Búsqueda de contactos"""
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response({'success': True, 'contacts': []})
+        
+        queryset = self.get_queryset().filter(
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(company__icontains=query)
+        )[:20]
+        
+        results = []
+        for contact in queryset:
+            results.append({
+                'id': contact.id,
+                'name': f"{contact.first_name} {contact.last_name}".strip(),
+                'email': contact.email,
+                'phone': contact.phone,
+                'company': contact.company
+            })
+        
+        return Response({'success': True, 'contacts': results})
+    
+    @action(detail=False, methods=['post'])
+    def create_contact(self, request):
+        """Crear nuevo contacto"""
+        try:
+            data = request.data
+            contact = Contact.objects.create(
+                first_name=data.get('name', '').split()[0] if data.get('name') else '',
+                last_name=' '.join(data.get('name', '').split()[1:]) if data.get('name') and len(data.get('name').split()) > 1 else '',
+                email=data.get('email', ''),
+                phone=data.get('phone', ''),
+                position=data.get('position', ''),
+                company=data.get('company', ''),
+                is_primary=data.get('is_primary', False)
+            )
+            
+            # Crear relación con cliente si se especifica
+            if data.get('client_id'):
+                from sales.models import ClientContactRelationship
+                ClientContactRelationship.objects.create(
+                    client_id=data['client_id'],
+                    contact=contact,
+                    relationship_type=data.get('relationship_type', 'other'),
+                    notes=data.get('notes', ''),
+                    is_active=True
+                )
+            
+            return Response({
+                'success': True,
+                'message': 'Contact created successfully',
+                'contact': {
+                    'id': contact.id,
+                    'name': f"{contact.first_name} {contact.last_name}".strip(),
+                    'email': contact.email,
+                    'phone': contact.phone
+                }
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+    
+    @action(detail=True, methods=['post'])
+    def update_contact(self, request, pk=None):
+        """Actualizar contacto existente"""
+        try:
+            contact = self.get_object()
+            data = request.data
+            
+            contact.first_name = data.get('name', '').split()[0] if data.get('name') else contact.first_name
+            contact.last_name = ' '.join(data.get('name', '').split()[1:]) if data.get('name') and len(data.get('name').split()) > 1 else contact.last_name
+            contact.email = data.get('email', contact.email)
+            contact.phone = data.get('phone', contact.phone)
+            contact.position = data.get('position', contact.position)
+            contact.is_primary = data.get('is_primary', contact.is_primary)
+            contact.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Contact updated successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+    
+    @action(detail=True, methods=['post'])
+    def add_to_client(self, request, pk=None):
+        """Agregar contacto existente a un cliente"""
+        try:
+            contact = self.get_object()
+            data = request.data
+            
+            from sales.models import ClientContactRelationship
+            relationship, created = ClientContactRelationship.objects.get_or_create(
+                client_id=data['client_id'],
+                contact=contact,
+                defaults={
+                    'relationship_type': data.get('relationship_type', 'other'),
+                    'notes': data.get('notes', ''),
+                    'is_active': True
+                }
+            )
+            
+            if not created:
+                relationship.relationship_type = data.get('relationship_type', relationship.relationship_type)
+                relationship.notes = data.get('notes', relationship.notes)
+                relationship.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Contact added to client successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+
+
+class ClientTagViewSet(viewsets.ModelViewSet):
+    """ViewSet para tags de clientes"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ClientTagSerializer
+    
+    def get_queryset(self):
+        return ClientTag.objects.filter(is_active=True).order_by('name')
+    
+    @action(detail=False, methods=['get'])
+    def autocomplete(self, request):
+        """Autocompletado de tags"""
+        query = request.query_params.get('q', '')
+        if not query:
+            return Response({'success': True, 'results': []})
+        
+        queryset = self.get_queryset().filter(name__icontains=query)[:10]
+        results = [{'id': tag.id, 'name': tag.name} for tag in queryset]
+        
+        return Response({'success': True, 'results': results})
+
+
+class ClientAttachmentViewSet(viewsets.ModelViewSet):
+    """ViewSet para adjuntos de clientes"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = ClientAttachmentSerializer
+    
+    def get_queryset(self):
+        return ClientAttachment.objects.filter(client__isnull=False).order_by('-uploaded_at')
+    
+    @action(detail=False, methods=['post'])
+    def upload(self, request):
+        """Subir archivo adjunto"""
+        try:
+            file = request.FILES.get('file')
+            client_id = request.data.get('client_id')
+            description = request.data.get('description', '')
+            
+            if not file or not client_id:
+                return Response({
+                    'success': False,
+                    'message': 'File and client_id are required'
+                }, status=400)
+            
+            # Validar tipo de archivo
+            allowed_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.zip']
+            file_extension = os.path.splitext(file.name)[1].lower()
+            
+            if file_extension not in allowed_extensions:
+                return Response({
+                    'success': False,
+                    'message': 'File type not allowed'
+                }, status=400)
+            
+            # Validar tamaño (10MB máximo)
+            if file.size > 10 * 1024 * 1024:
+                return Response({
+                    'success': False,
+                    'message': 'File size too large (max 10MB)'
+                }, status=400)
+            
+            # Guardar archivo
+            file_path = default_storage.save(f'client_attachments/{client_id}/{file.name}', ContentFile(file.read()))
+            
+            # Crear registro en base de datos
+            attachment = ClientAttachment.objects.create(
+                client_id=client_id,
+                file=file_path,
+                file_name=file.name,
+                file_size=file.size,
+                description=description,
+                uploaded_by=request.user
+            )
+            
+            return Response({
+                'success': True,
+                'message': 'File uploaded successfully',
+                'attachment': {
+                    'id': attachment.id,
+                    'file_name': attachment.file_name,
+                    'file_size': attachment.file_size,
+                    'description': attachment.description
+                }
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+    
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """Descargar archivo adjunto"""
+        attachment = self.get_object()
+        
+        if default_storage.exists(attachment.file.name):
+            response = HttpResponse(default_storage.open(attachment.file.name).read())
+            response['Content-Type'] = 'application/octet-stream'
+            response['Content-Disposition'] = f'attachment; filename="{attachment.file_name}"'
+            return response
+        else:
+            return Response({
+                'success': False,
+                'message': 'File not found'
+            }, status=404)
+    
+    @action(detail=True, methods=['post'])
+    def update_attachment(self, request, pk=None):
+        """Actualizar descripción del archivo"""
+        try:
+            attachment = self.get_object()
+            description = request.data.get('description', '')
+            
+            attachment.description = description
+            attachment.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Description updated successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+    
+    @action(detail=True, methods=['post'])
+    def delete_attachment(self, request, pk=None):
+        """Eliminar archivo adjunto"""
+        try:
+            attachment = self.get_object()
+            
+            # Eliminar archivo físico
+            if default_storage.exists(attachment.file.name):
+                default_storage.delete(attachment.file.name)
+            
+            # Eliminar registro
+            attachment.delete()
+            
+            return Response({
+                'success': True,
+                'message': 'File deleted successfully'
+            })
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': str(e)
+            }, status=400)
+
+
+# Autocomplete endpoints for various entities
+class AutocompleteViewSet(viewsets.ViewSet):
+    """ViewSet para autocompletado de entidades"""
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def countries(self, request):
+        """Autocompletado de países"""
+        query = request.query_params.get('q', '')
+        queryset = Country.objects.filter(is_active=True)
+        
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        
+        results = [{'id': country.id, 'name': country.name} for country in queryset[:10]]
+        return Response({'success': True, 'results': results})
+    
+    @action(detail=False, methods=['get'])
+    def states(self, request):
+        """Autocompletado de estados/provincias"""
+        query = request.query_params.get('q', '')
+        country_id = request.query_params.get('country_id', '')
+        
+        queryset = State.objects.filter(is_active=True)
+        
+        if country_id:
+            queryset = queryset.filter(country_id=country_id)
+        
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        
+        results = [{'id': state.id, 'name': state.name} for state in queryset[:10]]
+        return Response({'success': True, 'results': results})
+    
+    @action(detail=False, methods=['get'])
+    def fiscal_responsibilities(self, request):
+        """Autocompletado de responsabilidades fiscales"""
+        query = request.query_params.get('q', '')
+        queryset = FiscalResponsibility.objects.filter(is_active=True)
+        
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        
+        results = [{'id': resp.id, 'name': resp.name} for resp in queryset[:10]]
+        return Response({'success': True, 'results': results})
+    
+    @action(detail=False, methods=['get'])
+    def payment_terms(self, request):
+        """Autocompletado de condiciones de pago"""
+        query = request.query_params.get('q', '')
+        queryset = PaymentTerm.objects.filter(is_active=True)
+        
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        
+        results = [{'id': term.id, 'name': term.name} for term in queryset[:10]]
+        return Response({'success': True, 'results': results})
 
 
 # class CountryViewSet(viewsets.ReadOnlyModelViewSet):

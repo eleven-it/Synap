@@ -1,3 +1,441 @@
-<div>
-    {% include 'sales/clients/contacts/contact_formset.html' %}
-</div> 
+<div class="space-y-6">
+    <!-- Contactos existentes -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                {% trans 'Existing Contacts' %}
+            </h3>
+            <button type="button" id="add-contact-btn" class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                {% trans 'Add Contact' %}
+            </button>
+        </div>
+        
+        <div id="contacts-list" class="space-y-3">
+            {% if client.pk %}
+                {% for relationship in client.relationships.all %}
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ relationship.contact.name }}
+                                </h4>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                    {{ relationship.get_relationship_type_display }}
+                                </span>
+                                {% if relationship.is_active %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                        {% trans 'Active' %}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                {% if relationship.contact.email %}
+                                    <div>{{ relationship.contact.email }}</div>
+                                {% endif %}
+                                {% if relationship.contact.phone %}
+                                    <div>{{ relationship.contact.phone }}</div>
+                                {% endif %}
+                                {% if relationship.contact.position %}
+                                    <div>{{ relationship.contact.position }}</div>
+                                {% endif %}
+                            </div>
+                            {% if relationship.notes %}
+                                <div class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                                    {{ relationship.notes }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="flex space-x-2">
+                            <button type="button" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300" onclick="editContact({{ relationship.id }})">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button type="button" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300" onclick="removeContact({{ relationship.id }})">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans 'No contacts' %}</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans 'Get started by adding a contact.' %}</p>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans 'Save client first' %}</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans 'You can add contacts after saving the client.' %}</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Formulario para agregar/editar contacto -->
+    <div id="contact-form-container" class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hidden">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            <span id="contact-form-title">{% trans 'Add New Contact' %}</span>
+        </h3>
+        
+        <form id="contact-form" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans 'Full Name' %} *
+                    </label>
+                    <input type="text" id="contact-name" class="form-input w-full" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans 'Email' %}
+                    </label>
+                    <input type="email" id="contact-email" class="form-input w-full">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans 'Phone' %}
+                    </label>
+                    <input type="tel" id="contact-phone" class="form-input w-full">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans 'Position' %}
+                    </label>
+                    <input type="text" id="contact-position" class="form-input w-full">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        {% trans 'Relationship Type' %} *
+                    </label>
+                    <select id="contact-relationship-type" class="form-select w-full" required>
+                        <option value="">{% trans 'Select relationship type' %}</option>
+                        <option value="primary">{% trans 'Primary Contact' %}</option>
+                        <option value="secondary">{% trans 'Secondary Contact' %}</option>
+                        <option value="billing">{% trans 'Billing Contact' %}</option>
+                        <option value="technical">{% trans 'Technical Contact' %}</option>
+                        <option value="decision_maker">{% trans 'Decision Maker' %}</option>
+                        <option value="representative">{% trans 'Representative' %}</option>
+                        <option value="other">{% trans 'Other' %}</option>
+                    </select>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="contact-is-primary" class="form-checkbox">
+                    <label for="contact-is-primary" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                        {% trans 'Is Primary Contact' %}
+                    </label>
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Notes' %}
+                </label>
+                <textarea id="contact-notes" class="form-input w-full" rows="3"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" id="cancel-contact-btn" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors">
+                    {% trans 'Cancel' %}
+                </button>
+                <button type="submit" id="save-contact-btn" class="px-4 py-2 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors">
+                    {% trans 'Save Contact' %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Búsqueda de contactos existentes -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+            {% trans 'Search Existing Contacts' %}
+        </h3>
+        
+        <div class="space-y-3">
+            <div class="flex space-x-2">
+                <input type="text" id="contact-search" class="form-input flex-1" placeholder="{% trans 'Search contacts by name, email, or phone...' %}">
+                <button type="button" id="search-contacts-btn" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors">
+                    {% trans 'Search' %}
+                </button>
+            </div>
+            
+            <div id="search-results" class="space-y-2 hidden">
+                <!-- Los resultados de búsqueda se mostrarán aquí -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addContactBtn = document.getElementById('add-contact-btn');
+    const contactFormContainer = document.getElementById('contact-form-container');
+    const contactForm = document.getElementById('contact-form');
+    const cancelContactBtn = document.getElementById('cancel-contact-btn');
+    const contactSearch = document.getElementById('contact-search');
+    const searchContactsBtn = document.getElementById('search-contacts-btn');
+    const searchResults = document.getElementById('search-results');
+    
+    let editingContactId = null;
+    
+    // Mostrar formulario para agregar contacto
+    if (addContactBtn) {
+        addContactBtn.addEventListener('click', function() {
+            showContactForm();
+        });
+    }
+    
+    // Cancelar formulario
+    if (cancelContactBtn) {
+        cancelContactBtn.addEventListener('click', function() {
+            hideContactForm();
+        });
+    }
+    
+    // Enviar formulario de contacto
+    if (contactForm) {
+        contactForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveContact();
+        });
+    }
+    
+    // Búsqueda de contactos
+    if (searchContactsBtn) {
+        searchContactsBtn.addEventListener('click', function() {
+            searchContacts();
+        });
+    }
+    
+    // Búsqueda con Enter
+    if (contactSearch) {
+        contactSearch.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchContacts();
+            }
+        });
+    }
+    
+    function showContactForm(contactData = null) {
+        contactFormContainer.classList.remove('hidden');
+        editingContactId = contactData ? contactData.id : null;
+        
+        if (contactData) {
+            document.getElementById('contact-form-title').textContent = '{% trans "Edit Contact" %}';
+            document.getElementById('contact-name').value = contactData.name || '';
+            document.getElementById('contact-email').value = contactData.email || '';
+            document.getElementById('contact-phone').value = contactData.phone || '';
+            document.getElementById('contact-position').value = contactData.position || '';
+            document.getElementById('contact-relationship-type').value = contactData.relationship_type || '';
+            document.getElementById('contact-notes').value = contactData.notes || '';
+            document.getElementById('contact-is-primary').checked = contactData.is_primary || false;
+        } else {
+            document.getElementById('contact-form-title').textContent = '{% trans "Add New Contact" %}';
+            contactForm.reset();
+        }
+        
+        // Scroll al formulario
+        contactFormContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    function hideContactForm() {
+        contactFormContainer.classList.add('hidden');
+        editingContactId = null;
+        contactForm.reset();
+    }
+    
+    function saveContact() {
+        const formData = {
+            name: document.getElementById('contact-name').value,
+            email: document.getElementById('contact-email').value,
+            phone: document.getElementById('contact-phone').value,
+            position: document.getElementById('contact-position').value,
+            relationship_type: document.getElementById('contact-relationship-type').value,
+            notes: document.getElementById('contact-notes').value,
+            is_primary: document.getElementById('contact-is-primary').checked
+        };
+        
+        if (!formData.name || !formData.relationship_type) {
+            showToast('{% trans "Name and relationship type are required" %}', 'error');
+            return;
+        }
+        
+        const url = editingContactId 
+            ? `/sales/api/contacts/${editingContactId}/update/`
+            : '/sales/api/contacts/create/';
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                ...formData,
+                client_id: {{ client.pk|default:"null" }}
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || '{% trans "Contact saved successfully" %}', 'success');
+                hideContactForm();
+                // Recargar la lista de contactos
+                location.reload();
+            } else {
+                showToast(data.message || '{% trans "Error saving contact" %}', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('{% trans "Error saving contact" %}', 'error');
+        });
+    }
+    
+    function searchContacts() {
+        const searchTerm = contactSearch.value.trim();
+        if (!searchTerm) {
+            showToast('{% trans "Please enter a search term" %}', 'warning');
+            return;
+        }
+        
+        fetch(`/sales/api/contacts/search/?q=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
+            .then(data => {
+                displaySearchResults(data.contacts || []);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('{% trans "Error searching contacts" %}', 'error');
+            });
+    }
+    
+    function displaySearchResults(contacts) {
+        searchResults.innerHTML = '';
+        
+        if (contacts.length === 0) {
+            searchResults.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">{% trans "No contacts found" %}</p>';
+            searchResults.classList.remove('hidden');
+            return;
+        }
+        
+        contacts.forEach(contact => {
+            const contactElement = document.createElement('div');
+            contactElement.className = 'bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600';
+            contactElement.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">${contact.name}</h4>
+                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                            ${contact.email ? contact.email + '<br>' : ''}
+                            ${contact.phone ? contact.phone : ''}
+                        </div>
+                    </div>
+                    <button type="button" onclick="addExistingContact(${contact.id})" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            searchResults.appendChild(contactElement);
+        });
+        
+        searchResults.classList.remove('hidden');
+    }
+    
+    // Funciones globales
+    window.editContact = function(relationshipId) {
+        fetch(`/sales/api/contacts/relationship/${relationshipId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showContactForm(data.contact);
+                } else {
+                    showToast('{% trans "Error loading contact" %}', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('{% trans "Error loading contact" %}', 'error');
+            });
+    };
+    
+    window.removeContact = function(relationshipId) {
+        if (confirm('{% trans "Are you sure you want to remove this contact?" %}')) {
+            fetch(`/sales/api/contacts/relationship/${relationshipId}/remove/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('{% trans "Contact removed successfully" %}', 'success');
+                    location.reload();
+                } else {
+                    showToast(data.message || '{% trans "Error removing contact" %}', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('{% trans "Error removing contact" %}', 'error');
+            });
+        }
+    };
+    
+    window.addExistingContact = function(contactId) {
+        const relationshipType = prompt('{% trans "Enter relationship type (primary, secondary, billing, etc.):" %}');
+        if (relationshipType) {
+            fetch('/sales/api/contacts/add-to-client/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({
+                    contact_id: contactId,
+                    client_id: {{ client.pk|default:"null" }},
+                    relationship_type: relationshipType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('{% trans "Contact added successfully" %}', 'success');
+                    location.reload();
+                } else {
+                    showToast(data.message || '{% trans "Error adding contact" %}', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('{% trans "Error adding contact" %}', 'error');
+            });
+        }
+    };
+});
+</script> 

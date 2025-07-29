@@ -57,12 +57,20 @@ MENU_CONFIG = [
                         'order': 1
                     },
                     {
+                        'name': 'cliente_map',
+                        'label': 'Clientes Tiendanube ↔ Adminet',
+                        'url': 'tiendanube:cliente_map_list',
+                        'permission': 'tiendanube.configure_integration',
+                        'icon': 'fas fa-users',
+                        'order': 2
+                    },
+                    {
                         'name': 'adminet_connection',
                         'label': 'Conexión Adminet (MySQL)',
                         'url': 'tiendanube:adminet_connection',
                         'permission': 'tiendanube.configure_integration',
                         'icon': 'fas fa-database',
-                        'order': 2
+                        'order': 3
                     },
                 ]
             },

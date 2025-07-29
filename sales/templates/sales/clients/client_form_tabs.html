@@ -26,7 +26,7 @@
         </svg>
         {% trans 'Back' %}
     </a>
-    <button type="submit" form="client-form" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+    <button type="submit" form="client-form" class="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 transform hover:scale-105">
         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
         </svg>
@@ -36,46 +36,130 @@
 
 {% block sales_content %}
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-    <div class="max-w-5xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
-        <form method="post" id="client-form" class="space-y-4" autocomplete="off">
+    <div class="max-w-6xl mx-auto px-2 sm:px-4 lg:px-6 py-4">
+        <!-- Barra de progreso -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{% trans 'Form Progress' %}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400" id="progress-text">1/6</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div class="bg-gradient-to-r from-orange-400 to-orange-600 h-2 rounded-full transition-all duration-300" id="progress-bar" style="width: 16.67%"></div>
+            </div>
+        </div>
+
+        <form method="post" id="client-form" class="space-y-4" autocomplete="off" enctype="multipart/form-data">
             {% csrf_token %}
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
-                <div class="border-b border-gray-200 dark:border-gray-700">
-                    <nav class="flex space-x-4 px-3" aria-label="Tabs">
-                        <button type="button" class="tab-link border-b-2 border-synap-500 py-2 px-1 text-xs font-medium text-synap-600 dark:text-synap-400" data-tab="basic">{% trans 'Basic Data' %}</button>
-                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="fiscal">{% trans 'Fiscal Data' %}</button>
-                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="commercial">{% trans 'Commercial' %}</button>
-                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="contacts">{% trans 'Contacts' %}</button>
-                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="notes">{% trans 'Notes & Documents' %}</button>
-                        <button type="button" class="tab-link border-b-2 border-transparent py-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300" data-tab="history">{% trans 'History' %}</button>
+            <div class="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+                <!-- Navegación de pestañas -->
+                <div class="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+                    <nav class="flex space-x-1 px-4" aria-label="Tabs">
+                        <button type="button" class="tab-link active-tab flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="basic">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                            </svg>
+                            {% trans 'Basic Data' %}
+                        </button>
+                        <button type="button" class="tab-link flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="fiscal">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            {% trans 'Fiscal Data' %}
+                        </button>
+                        <button type="button" class="tab-link flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="commercial">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                            </svg>
+                            {% trans 'Commercial' %}
+                        </button>
+                        <button type="button" class="tab-link flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="contacts">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            {% trans 'Contacts' %}
+                        </button>
+                        <button type="button" class="tab-link flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="attachments">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                            </svg>
+                            {% trans 'Attachments' %}
+                        </button>
+                        <button type="button" class="tab-link flex items-center px-3 py-3 text-xs font-medium rounded-t-lg transition-all duration-200" data-tab="history">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            {% trans 'History' %}
+                        </button>
                     </nav>
                 </div>
-                <div class="p-3">
+
+                <!-- Contenido de las pestañas -->
+                <div class="p-6">
+                    <!-- Pestaña: Datos Básicos -->
                     <div id="tab-basic" class="tab-content">
                         {% include 'sales/clients/tabs/_tab_basic.html' %}
                     </div>
+
+                    <!-- Pestaña: Datos Fiscales -->
                     <div id="tab-fiscal" class="tab-content hidden">
                         {% include 'sales/clients/tabs/_tab_fiscal.html' %}
                     </div>
+
+                    <!-- Pestaña: Datos Comerciales -->
                     <div id="tab-commercial" class="tab-content hidden">
                         {% include 'sales/clients/tabs/_tab_commercial.html' %}
                     </div>
+
+                    <!-- Pestaña: Contactos -->
                     <div id="tab-contacts" class="tab-content hidden">
                         {% include 'sales/clients/tabs/_tab_contacts.html' %}
                     </div>
-                    <div id="tab-notes" class="tab-content hidden">
-                        {% include 'sales/clients/tabs/_tab_notes.html' %}
+
+                    <!-- Pestaña: Adjuntos -->
+                    <div id="tab-attachments" class="tab-content hidden">
+                        {% include 'sales/clients/tabs/_tab_attachments.html' %}
                     </div>
+
+                    <!-- Pestaña: Historial -->
                     <div id="tab-history" class="tab-content hidden">
                         {% include 'sales/clients/tabs/_tab_history.html' %}
+                    </div>
+                </div>
+
+                <!-- Navegación inferior -->
+                <div class="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 px-6 py-4">
+                    <div class="flex justify-between items-center">
+                        <button type="button" id="prev-tab" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                            </svg>
+                            {% trans 'Previous' %}
+                        </button>
+                        
+                        <div class="flex space-x-2">
+                            <button type="button" id="save-draft" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-synap-500 transition-colors">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                                </svg>
+                                {% trans 'Save Draft' %}
+                            </button>
+                            
+                            <button type="button" id="next-tab" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors">
+                                {% trans 'Next' %}
+                                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </form>
     </div>
+
     <!-- Toast de notificación -->
     <div id="toast" class="fixed bottom-4 right-4 z-50 hidden">
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 max-w-sm transform transition-all duration-300">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
@@ -86,7 +170,7 @@
                     <p class="text-sm font-medium text-gray-900 dark:text-white" id="toast-message">{% trans 'Client saved successfully' %}</p>
                 </div>
                 <div class="ml-auto pl-3">
-                    <button type="button" onclick="hideToast()" class="text-gray-400 hover:text-gray-600" title="{% trans 'Close' %}">
+                    <button type="button" onclick="hideToast()" class="text-gray-400 hover:text-gray-600 transition-colors">
                         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
@@ -95,49 +179,265 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal de confirmación -->
+    <div id="confirm-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black bg-opacity-50 transition-opacity"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full transform transition-all duration-300">
+                <div class="p-6">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4" id="confirm-title">{% trans 'Confirm Action' %}</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6" id="confirm-message">{% trans 'Are you sure you want to perform this action?' %}</p>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="confirm-cancel" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                            {% trans 'Cancel' %}
+                        </button>
+                        <button type="button" id="confirm-ok" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors">
+                            {% trans 'Confirm' %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .active-tab {
+        @apply bg-white dark:bg-gray-800 text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400;
+    }
+    
+    .tab-link:not(.active-tab) {
+        @apply text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300;
+    }
+    
+    .form-input:focus, .form-select:focus {
+        @apply ring-2 ring-orange-500 border-orange-500;
+    }
+    
+    .autocomplete-dropdown {
+        @apply absolute z-50 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto;
+    }
+    
+    .autocomplete-item {
+        @apply px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+    }
+    
+    .autocomplete-item.selected {
+        @apply bg-orange-100 dark:bg-orange-900 text-orange-900 dark:text-orange-100;
+    }
+    
+    .tag-chip {
+        @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 mr-2 mb-2;
+    }
+    
+    .tag-remove {
+        @apply ml-1 text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-200 cursor-pointer;
+    }
+</style>
+{% endblock %}
+
 {% block extra_js %}
+<script src="/static/sales/js/autocomplete.js"></script>
 <script src="/static/sales/js/tags_chips.js"></script>
 <script>
-// Funcionalidad de pestañas (idéntica a sales_order_form.html)
 document.addEventListener('DOMContentLoaded', function() {
     const tabLinks = document.querySelectorAll('.tab-link');
     const tabContents = document.querySelectorAll('.tab-content');
-
-    tabLinks.forEach(tab => {
-        tab.addEventListener('click', function() {
-            const targetTab = this.getAttribute('data-tab');
-            // Remover clases activas
-            tabLinks.forEach(t => {
-                t.classList.remove('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
-                t.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
-            });
-            // Ocultar todos los contenidos
-            tabContents.forEach(content => {
-                content.classList.add('hidden');
-            });
-            // Activar pestaña seleccionada
-            this.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
-            this.classList.add('border-synap-500', 'text-synap-600', 'dark:text-synap-400');
-            // Mostrar contenido correspondiente
-            document.getElementById(`tab-${targetTab}`).classList.remove('hidden');
-        });
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const prevBtn = document.getElementById('prev-tab');
+    const nextBtn = document.getElementById('next-tab');
+    const saveDraftBtn = document.getElementById('save-draft');
+    
+    let currentTab = 0;
+    const totalTabs = tabLinks.length;
+    
+    // Inicializar autocomplete
+    initializeAutocomplete();
+    
+    // Inicializar tags
+    initializeTags();
+    
+    // Función para cambiar pestaña
+    function switchTab(tabIndex) {
+        // Ocultar todas las pestañas
+        tabLinks.forEach(tab => tab.classList.remove('active-tab'));
+        tabContents.forEach(content => content.classList.add('hidden'));
+        
+        // Mostrar pestaña seleccionada
+        tabLinks[tabIndex].classList.add('active-tab');
+        tabContents[tabIndex].classList.remove('hidden');
+        
+        // Actualizar progreso
+        currentTab = tabIndex;
+        const progress = ((tabIndex + 1) / totalTabs) * 100;
+        progressBar.style.width = progress + '%';
+        progressText.textContent = (tabIndex + 1) + '/' + totalTabs;
+        
+        // Actualizar botones
+        prevBtn.disabled = tabIndex === 0;
+        nextBtn.textContent = tabIndex === totalTabs - 1 ? '{% trans "Save Client" %}' : '{% trans "Next" %}';
+        
+        // Animación de entrada
+        tabContents[tabIndex].style.opacity = '0';
+        tabContents[tabIndex].style.transform = 'translateY(10px)';
+        setTimeout(() => {
+            tabContents[tabIndex].style.transition = 'all 0.3s ease';
+            tabContents[tabIndex].style.opacity = '1';
+            tabContents[tabIndex].style.transform = 'translateY(0)';
+        }, 50);
+    }
+    
+    // Event listeners para pestañas
+    tabLinks.forEach((tab, index) => {
+        tab.addEventListener('click', () => switchTab(index));
     });
-
-    // Toast
+    
+    // Navegación con botones
+    prevBtn.addEventListener('click', () => {
+        if (currentTab > 0) {
+            switchTab(currentTab - 1);
+        }
+    });
+    
+    nextBtn.addEventListener('click', () => {
+        if (currentTab < totalTabs - 1) {
+            switchTab(currentTab + 1);
+        } else {
+            // Guardar cliente
+            document.getElementById('client-form').submit();
+        }
+    });
+    
+    // Guardar borrador
+    saveDraftBtn.addEventListener('click', () => {
+        // Agregar campo hidden para indicar que es borrador
+        const draftField = document.createElement('input');
+        draftField.type = 'hidden';
+        draftField.name = 'save_draft';
+        draftField.value = '1';
+        document.getElementById('client-form').appendChild(draftField);
+        
+        // Enviar formulario
+        document.getElementById('client-form').submit();
+    });
+    
+    // Validación en tiempo real
+    const form = document.getElementById('client-form');
+    const inputs = form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+        input.addEventListener('blur', validateField);
+        input.addEventListener('input', clearFieldError);
+    });
+    
+    function validateField(e) {
+        const field = e.target;
+        const value = field.value.trim();
+        
+        // Validaciones específicas por campo
+        if (field.name === 'email' && value) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(value)) {
+                showFieldError(field, '{% trans "Please enter a valid email address" %}');
+            }
+        }
+        
+        if (field.name === 'credit_limit' && value) {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue) || numValue < 0) {
+                showFieldError(field, '{% trans "Credit limit must be a positive number" %}');
+            }
+        }
+        
+        if (field.name === 'default_discount' && value) {
+            const numValue = parseFloat(value);
+            if (isNaN(numValue) || numValue < 0 || numValue > 100) {
+                showFieldError(field, '{% trans "Discount must be between 0 and 100" %}');
+            }
+        }
+    }
+    
+    function showFieldError(field, message) {
+        clearFieldError(field);
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-red-500 text-xs mt-1';
+        errorDiv.textContent = message;
+        errorDiv.id = field.name + '-error';
+        
+        field.parentNode.appendChild(errorDiv);
+        field.classList.add('border-red-500');
+    }
+    
+    function clearFieldError(field) {
+        const errorDiv = field.parentNode.querySelector('#' + field.name + '-error');
+        if (errorDiv) {
+            errorDiv.remove();
+        }
+        field.classList.remove('border-red-500');
+    }
+    
+    // Toast functions
     window.showToast = function(message, type = 'success') {
         const toast = document.getElementById('toast');
         const toastMessage = document.getElementById('toast-message');
+        const icon = toast.querySelector('svg');
+        
         toastMessage.textContent = message;
+        
+        // Cambiar color según tipo
+        if (type === 'error') {
+            icon.classList.remove('text-green-400');
+            icon.classList.add('text-red-400');
+        } else {
+            icon.classList.remove('text-red-400');
+            icon.classList.add('text-green-400');
+        }
+        
         toast.classList.remove('hidden');
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+        
         setTimeout(() => { hideToast(); }, 3000);
     };
+    
     window.hideToast = function() {
         const toast = document.getElementById('toast');
-        toast.classList.add('hidden');
+        toast.style.transform = 'translateY(20px)';
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            toast.classList.add('hidden');
+        }, 300);
     };
+    
+    // Modal functions
+    window.showConfirmModal = function(title, message, onConfirm) {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-title');
+        const messageEl = document.getElementById('confirm-message');
+        const okBtn = document.getElementById('confirm-ok');
+        
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        
+        modal.classList.remove('hidden');
+        
+        okBtn.onclick = () => {
+            modal.classList.add('hidden');
+            if (onConfirm) onConfirm();
+        };
+        
+        document.getElementById('confirm-cancel').onclick = () => {
+            modal.classList.add('hidden');
+        };
+    };
+    
+    // Inicializar primera pestaña
+    switchTab(0);
 });
 </script>
 {% endblock %} 

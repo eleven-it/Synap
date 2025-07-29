@@ -1,0 +1,329 @@
+{% extends "tiendanube_administranet/base.html" %}
+{% load i18n crispy_forms_tags %}
+
+{% block title %}{% trans "Webhook Configurations" %}{% endblock %}
+
+{% block integration_content %}
+<div class="integration-header">
+    <div class="integration-title-section">
+        <h1 class="integration-title">{% trans "Webhook Configurations" %}</h1>
+        <p class="integration-subtitle">{% trans "Manage webhook configurations for real-time synchronization with Tiendanube" %}</p>
+    </div>
+    <div class="integration-actions">
+        <a href="{% url 'tiendanube_administranet:webhook_config_create' %}" class="btn btn-primary">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+            {% trans "Create Webhook" %}
+        </a>
+        <button onclick="syncWebhooks()" class="btn btn-secondary">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            {% trans "Sync with Tiendanube" %}
+        </button>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="integration-card">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">{% trans "Total Webhooks" %}</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ statistics.total_webhooks }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="integration-card">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-green-100 text-green-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">{% trans "Active Webhooks" %}</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ statistics.active_webhooks }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="integration-card">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">{% trans "Total Events" %}</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ statistics.total_events }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="integration-card">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-red-100 text-red-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">{% trans "Failed Events" %}</p>
+                <p class="text-2xl font-semibold text-gray-900">{{ statistics.failed_events }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="integration-card mb-6">
+    <div class="integration-card-header">
+        <h3 class="integration-card-title">{% trans "Filters" %}</h3>
+    </div>
+    <div class="integration-card-body">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Status" %}</label>
+                <select name="status" class="form-select">
+                    <option value="">{% trans "All Statuses" %}</option>
+                    <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>{% trans "Active" %}</option>
+                    <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>{% trans "Inactive" %}</option>
+                    <option value="error" {% if request.GET.status == 'error' %}selected{% endif %}>{% trans "Error" %}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">{% trans "Active" %}</label>
+                <select name="is_active" class="form-select">
+                    <option value="">{% trans "All" %}</option>
+                    <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>{% trans "Active Only" %}</option>
+                    <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>{% trans "Inactive Only" %}</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="submit" class="btn btn-primary mr-2">{% trans "Filter" %}</button>
+                <a href="{% url 'tiendanube_administranet:webhook_config_list' %}" class="btn btn-secondary">{% trans "Clear" %}</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Webhook Configurations Table -->
+<div class="integration-card">
+    <div class="integration-card-header">
+        <h3 class="integration-card-title">{% trans "Webhook Configurations" %}</h3>
+        <div class="integration-card-actions">
+            <a href="{% url 'tiendanube_administranet:webhook_event_list' %}" class="btn btn-sm btn-secondary">
+                {% trans "View Events" %}
+            </a>
+        </div>
+    </div>
+    <div class="integration-card-body">
+        {% if webhook_configs %}
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{% trans "URL" %}</th>
+                        <th>{% trans "Events" %}</th>
+                        <th>{% trans "Status" %}</th>
+                        <th>{% trans "Last Triggered" %}</th>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for webhook in webhook_configs %}
+                    <tr>
+                        <td>
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-gray-900">{{ webhook.webhook_url|truncatechars:50 }}</p>
+                                    <p class="text-sm text-gray-500">{{ webhook.tiendanube_config.name }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="flex flex-wrap gap-1">
+                                {% for event in webhook.events|slice:":3" %}
+                                <span class="badge badge-blue">{{ event|truncatechars:20 }}</span>
+                                {% endfor %}
+                                {% if webhook.events|length > 3 %}
+                                <span class="badge badge-gray">+{{ webhook.events|length|add:"-3" }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if webhook.status == 'active' %}
+                            <span class="status-indicator status-success">{% trans "Active" %}</span>
+                            {% elif webhook.status == 'inactive' %}
+                            <span class="status-indicator status-warning">{% trans "Inactive" %}</span>
+                            {% else %}
+                            <span class="status-indicator status-error">{% trans "Error" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if webhook.last_triggered %}
+                            <span class="text-sm text-gray-900">{{ webhook.last_triggered|date:"M d, Y H:i" }}</span>
+                            {% else %}
+                            <span class="text-sm text-gray-500">{% trans "Never" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="flex items-center space-x-2">
+                                <a href="{% url 'tiendanube_administranet:webhook_config_detail' webhook.pk %}" class="btn btn-sm btn-secondary">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </a>
+                                <a href="{% url 'tiendanube_administranet:webhook_config_update' webhook.pk %}" class="btn btn-sm btn-primary">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </a>
+                                {% if webhook.webhook_id %}
+                                <button onclick="testWebhook({{ webhook.pk }})" class="btn btn-sm btn-secondary">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                                <a href="{% url 'tiendanube_administranet:webhook_config_delete' webhook.pk %}" class="btn btn-sm btn-danger">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="mt-6 flex items-center justify-between">
+            <div class="text-sm text-gray-700">
+                {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+            </div>
+            <div class="flex space-x-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">
+                    {% trans "Previous" %}
+                </a>
+                {% endif %}
+                
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="btn btn-sm btn-secondary">
+                    {% trans "Next" %}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-12">
+            <div class="mx-auto h-12 w-12 text-gray-400">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </div>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">{% trans "No webhook configurations" %}</h3>
+            <p class="mt-1 text-sm text-gray-500">{% trans "Get started by creating a new webhook configuration." %}</p>
+            <div class="mt-6">
+                <a href="{% url 'tiendanube_administranet:webhook_config_create' %}" class="btn btn-primary">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    {% trans "Create Webhook" %}
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testWebhook(webhookId) {
+    if (!confirm('{% trans "Are you sure you want to test this webhook?" %}')) {
+        return;
+    }
+    
+    setLoading(true);
+    
+    fetch(`/tiendanube-adminet/ajax/webhooks/${webhookId}/test/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        setLoading(false);
+        if (data.success) {
+            showToast('success', data.message);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        setLoading(false);
+        showToast('error', '{% trans "Error testing webhook" %}');
+        console.error('Error:', error);
+    });
+}
+
+function syncWebhooks() {
+    if (!confirm('{% trans "Are you sure you want to sync webhooks with Tiendanube?" %}')) {
+        return;
+    }
+    
+    setLoading(true);
+    
+    fetch('/tiendanube-adminet/ajax/webhooks/sync/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        setLoading(false);
+        if (data.success) {
+            showToast('success', data.message);
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        setLoading(false);
+        showToast('error', '{% trans "Error syncing webhooks" %}');
+        console.error('Error:', error);
+    });
+}
+</script>
+{% endblock %} 

@@ -1,6 +1,6 @@
 import logging
 from .connection_service import MySQLConnectionService
-from tiendanube.models_adminet import TiendaNubeAdminetConfig, TiendaNubeCondVentaMap
+from tiendanube.models_adminet import TiendaNubeAdminetConfig, TiendaNubeCondVentaMap, TiendaNubeClienteMap
 
 logger = logging.getLogger(__name__)
 
@@ -60,30 +60,41 @@ class OrderToAdminetService:
         provincia = cliente_data.get('address', {}).get('province', '').strip() if cliente_data.get('address') else ''
         codigo_postal = cliente_data.get('address', {}).get('zip', '').strip() if cliente_data.get('address') else ''
         
-        # 1. Buscar cliente por email o documento
+        # 1. Primero verificar si existe un mapeo de cliente
+        if email:
+            mapeo_cliente = TiendaNubeClienteMap.objects.filter(
+                tiendanube_email=email, 
+                activo=True
+            ).first()
+            
+            if mapeo_cliente:
+                logger.info(f"Cliente encontrado por mapeo: {mapeo_cliente.adminet_codigo} ({email})")
+                return mapeo_cliente.adminet_codigo
+        
+        # 2. Buscar cliente por email o documento
         query = """
-            SELECT idcliente FROM cliente
-            WHERE LOWER(email) = %s OR (documento <> '' AND documento = %s)
+            SELECT codigo FROM cliente
+            WHERE LOWER(email) = %s OR (cuit <> '' AND cuit = %s)
             LIMIT 1
         """
         params = (email, documento)
         result = self.mysql_service.execute_query(query, params, fetch_one=True)
-        if result and result.get('idcliente'):
-            logger.info(f"Cliente encontrado en administraNET: {result['idcliente']} ({email or documento})")
-            return result['idcliente']
+        if result and result.get('codigo'):
+            logger.info(f"Cliente encontrado en administraNET: {result['codigo']} ({email or documento})")
+            return result['codigo']
         
-        # 2. Si no existe, crear cliente
+        # 3. Si no existe, crear cliente
         insert_query = """
-            INSERT INTO cliente (nombre, email, documento, telefono, direccion, ciudad, provincia, codigopostal, fecha_alta)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            INSERT INTO cliente (nombre_cliente, email, cuit, fecha_alta)
+            VALUES (%s, %s, %s, NOW())
         """
-        insert_params = (nombre, email, documento, telefono, direccion, ciudad, provincia, codigo_postal)
+        insert_params = (nombre, email, documento)
         self.mysql_service.execute_query(insert_query, insert_params, commit=True)
         # Obtener el ID del nuevo cliente
-        id_query = "SELECT LAST_INSERT_ID() AS idcliente"
+        id_query = "SELECT LAST_INSERT_ID() AS codigo"
         new_id = self.mysql_service.execute_query(id_query, fetch_one=True)
-        logger.info(f"Cliente creado en administraNET: {new_id['idcliente']} ({email or documento})")
-        return new_id['idcliente']
+        logger.info(f"Cliente creado en administraNET: {new_id['codigo']} ({email or documento})")
+        return new_id['codigo']
 
     def _map_cond_venta(self, order_data):
         """

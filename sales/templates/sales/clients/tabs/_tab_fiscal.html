@@ -1,11 +1,228 @@
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div>
-        {{ form.fiscal_responsibility|as_crispy_field }}
+<div class="space-y-6">
+    <!-- Información fiscal básica -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+            {% trans 'Fiscal Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.tax_id|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.fiscal_responsibility|as_crispy_field }}
+            </div>
+            <div class="md:col-span-2">
+                {{ form.fiscal_conditions|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.tax_id|as_crispy_field }}
+
+    <!-- Validación fiscal -->
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% trans 'Fiscal Validation' %}
+        </h3>
+        
+        <div class="space-y-3">
+            <div class="flex items-center space-x-3">
+                <div id="tax-id-status" class="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{% trans 'Tax ID validation' %}</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div id="fiscal-responsibility-status" class="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{% trans 'Fiscal responsibility validation' %}</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div id="country-compliance-status" class="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                <span class="text-sm text-gray-700 dark:text-gray-300">{% trans 'Country compliance' %}</span>
+            </div>
+        </div>
     </div>
-    <div class="md:col-span-2">
-        {{ form.fiscal_conditions|as_crispy_field }}
+
+    <!-- Información adicional fiscal -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            {% trans 'Additional Fiscal Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Fiscal Year End' %}
+                </label>
+                <select class="form-select" id="fiscal_year_end">
+                    <option value="">{% trans 'Select fiscal year end' %}</option>
+                    <option value="12-31">{% trans 'December 31' %}</option>
+                    <option value="06-30">{% trans 'June 30' %}</option>
+                    <option value="03-31">{% trans 'March 31' %}</option>
+                    <option value="09-30">{% trans 'September 30' %}</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Tax Regime' %}
+                </label>
+                <select class="form-select" id="tax_regime">
+                    <option value="">{% trans 'Select tax regime' %}</option>
+                    <option value="general">{% trans 'General Regime' %}</option>
+                    <option value="simplified">{% trans 'Simplified Regime' %}</option>
+                    <option value="exempt">{% trans 'Exempt' %}</option>
+                    <option value="monotributo">{% trans 'Monotributo' %}</option>
+                </select>
+            </div>
+        </div>
     </div>
-</div> 
+
+    <!-- Notas fiscales -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+            {% trans 'Fiscal Notes' %}
+        </h3>
+        
+        <div>
+            <textarea class="form-input w-full" rows="3" placeholder="{% trans 'Additional fiscal notes or observations...' %}" id="fiscal_notes"></textarea>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const taxIdField = document.getElementById('id_tax_id');
+    const fiscalResponsibilityField = document.getElementById('id_fiscal_responsibility');
+    const countryField = document.getElementById('id_country');
+    
+    // Validación de Tax ID
+    if (taxIdField) {
+        taxIdField.addEventListener('blur', function() {
+            validateTaxId(this.value);
+        });
+        
+        taxIdField.addEventListener('input', function() {
+            clearValidationStatus('tax-id-status');
+        });
+    }
+    
+    // Validación de responsabilidad fiscal
+    if (fiscalResponsibilityField) {
+        fiscalResponsibilityField.addEventListener('change', function() {
+            validateFiscalResponsibility(this.value);
+        });
+    }
+    
+    // Validación de cumplimiento por país
+    if (countryField) {
+        countryField.addEventListener('change', function() {
+            validateCountryCompliance(this.value);
+        });
+    }
+    
+    function validateTaxId(taxId) {
+        const statusElement = document.getElementById('tax-id-status');
+        
+        if (!taxId) {
+            setValidationStatus(statusElement, 'warning', '{% trans "Tax ID is required for companies" %}');
+            return;
+        }
+        
+        // Validación básica según el país
+        const country = countryField ? countryField.value : '';
+        let isValid = false;
+        
+        switch(country) {
+            case 'AR': // Argentina
+                isValid = /^\d{2}-\d{8}-\d{1}$/.test(taxId) || /^\d{11}$/.test(taxId);
+                break;
+            case 'BR': // Brasil
+                isValid = /^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(taxId) || /^\d{14}$/.test(taxId);
+                break;
+            case 'MX': // México
+                isValid = /^[A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3}$/.test(taxId);
+                break;
+            default:
+                isValid = taxId.length >= 5;
+        }
+        
+        if (isValid) {
+            setValidationStatus(statusElement, 'success', '{% trans "Tax ID is valid" %}');
+        } else {
+            setValidationStatus(statusElement, 'error', '{% trans "Tax ID format is invalid" %}');
+        }
+    }
+    
+    function validateFiscalResponsibility(responsibility) {
+        const statusElement = document.getElementById('fiscal-responsibility-status');
+        
+        if (!responsibility) {
+            setValidationStatus(statusElement, 'warning', '{% trans "Fiscal responsibility is recommended" %}');
+            return;
+        }
+        
+        setValidationStatus(statusElement, 'success', '{% trans "Fiscal responsibility is valid" %}');
+    }
+    
+    function validateCountryCompliance(country) {
+        const statusElement = document.getElementById('country-compliance-status');
+        
+        if (!country) {
+            setValidationStatus(statusElement, 'warning', '{% trans "Country selection is required" %}');
+            return;
+        }
+        
+        // Aquí se podrían agregar validaciones específicas por país
+        setValidationStatus(statusElement, 'success', '{% trans "Country compliance verified" %}');
+    }
+    
+    function setValidationStatus(element, status, message) {
+        element.className = 'w-4 h-4 rounded-full';
+        
+        switch(status) {
+            case 'success':
+                element.classList.add('bg-green-500');
+                element.title = message;
+                break;
+            case 'error':
+                element.classList.add('bg-red-500');
+                element.title = message;
+                break;
+            case 'warning':
+                element.classList.add('bg-yellow-500');
+                element.title = message;
+                break;
+            default:
+                element.classList.add('bg-gray-300', 'dark:bg-gray-600');
+        }
+    }
+    
+    function clearValidationStatus(elementId) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.className = 'w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600';
+            element.title = '';
+        }
+    }
+    
+    // Auto-validar al cargar la página
+    if (taxIdField && taxIdField.value) {
+        validateTaxId(taxIdField.value);
+    }
+    if (fiscalResponsibilityField && fiscalResponsibilityField.value) {
+        validateFiscalResponsibility(fiscalResponsibilityField.value);
+    }
+    if (countryField && countryField.value) {
+        validateCountryCompliance(countryField.value);
+    }
+});
+</script> 

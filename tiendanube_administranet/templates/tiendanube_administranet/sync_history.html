@@ -1,0 +1,241 @@
+{% extends "tiendanube_administranet/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Sync History" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+            {% trans "Synchronization History" %}
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-2">
+            {% trans "View detailed history of all synchronization operations" %}
+        </p>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label for="sync_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans "Sync Type" %}
+                </label>
+                <select id="sync_type" name="sync_type" class="form-select w-full">
+                    <option value="">{% trans "All Types" %}</option>
+                    <option value="customers" {% if request.GET.sync_type == 'customers' %}selected{% endif %}>
+                        {% trans "Customers" %}
+                    </option>
+                    <option value="products" {% if request.GET.sync_type == 'products' %}selected{% endif %}>
+                        {% trans "Products" %}
+                    </option>
+                    <option value="orders" {% if request.GET.sync_type == 'orders' %}selected{% endif %}>
+                        {% trans "Orders" %}
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label for="status" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans "Status" %}
+                </label>
+                <select id="status" name="status" class="form-select w-full">
+                    <option value="">{% trans "All Statuses" %}</option>
+                    <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>
+                        {% trans "Completed" %}
+                    </option>
+                    <option value="failed" {% if request.GET.status == 'failed' %}selected{% endif %}>
+                        {% trans "Failed" %}
+                    </option>
+                    <option value="in_progress" {% if request.GET.status == 'in_progress' %}selected{% endif %}>
+                        {% trans "In Progress" %}
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label for="direction" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans "Direction" %}
+                </label>
+                <select id="direction" name="direction" class="form-select w-full">
+                    <option value="">{% trans "All Directions" %}</option>
+                    <option value="to_adminet" {% if request.GET.direction == 'to_adminet' %}selected{% endif %}>
+                        {% trans "To AdministraNET" %}
+                    </option>
+                    <option value="to_tiendanube" {% if request.GET.direction == 'to_tiendanube' %}selected{% endif %}>
+                        {% trans "To Tiendanube" %}
+                    </option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button type="button" id="apply-filters" class="btn btn-secondary w-full">
+                    <i class="fas fa-filter mr-2"></i>
+                    {% trans "Apply Filters" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync History Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {% trans "Synchronization History" %}
+            </h3>
+        </div>
+        
+        {% if object_list %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Sync Info" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Direction" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Status" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Items" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Started" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Duration" %}
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Actions" %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for sync_log in object_list %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-10 w-10">
+                                    <div class="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                                        <i class="fas fa-sync text-gray-600 dark:text-gray-400"></i>
+                                    </div>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ sync_log.get_sync_type_display }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ sync_log.tiendanube_config.name|default:"No config" }}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if sync_log.direction == 'to_adminet' %}bg-blue-100 text-blue-800
+                                {% else %}bg-green-100 text-green-800{% endif %}">
+                                {{ sync_log.get_direction_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if sync_log.status == 'completed' %}bg-green-100 text-green-800
+                                {% elif sync_log.status == 'failed' %}bg-red-100 text-red-800
+                                {% elif sync_log.status == 'in_progress' %}bg-yellow-100 text-yellow-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ sync_log.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            <div class="text-sm">
+                                <span class="font-medium">{{ sync_log.total_items }}</span> {% trans "total" %}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ sync_log.successful_items }} {% trans "successful" %}, {{ sync_log.failed_items }} {% trans "failed" %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ sync_log.started_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {% if sync_log.completed_at %}
+                                {{ sync_log.started_at|timesince:sync_log.completed_at }}
+                            {% else %}
+                                {% trans "In progress" %}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'tiendanube_administranet:sync_log_detail' sync_log.pk %}" 
+                               class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-history text-gray-400 text-4xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                {% trans "No sync history found" %}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400 mb-6">
+                {% trans "Synchronization history will appear here once you start syncing data." %}
+            </p>
+            <a href="{% url 'tiendanube_administranet:manual_sync' %}" class="btn btn-primary">
+                <i class="fas fa-sync mr-2"></i>
+                {% trans "Start Manual Sync" %}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="mt-6 flex items-center justify-between">
+        <div class="text-sm text-gray-700 dark:text-gray-300">
+            {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} 
+            {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+        </div>
+        <div class="flex space-x-2">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-secondary">
+                <i class="fas fa-chevron-left mr-2"></i>
+                {% trans "Previous" %}
+            </a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="btn btn-secondary">
+                {% trans "Next" %}
+                <i class="fas fa-chevron-right ml-2"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality
+    document.getElementById('apply-filters').addEventListener('click', function() {
+        const syncType = document.getElementById('sync_type').value;
+        const status = document.getElementById('status').value;
+        const direction = document.getElementById('direction').value;
+        
+        const params = new URLSearchParams();
+        if (syncType) params.append('sync_type', syncType);
+        if (status) params.append('status', status);
+        if (direction) params.append('direction', direction);
+        
+        window.location.href = window.location.pathname + '?' + params.toString();
+    });
+});
+</script>
+{% endblock %} 

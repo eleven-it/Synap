@@ -15,6 +15,26 @@ class TiendaNubeCondVentaMap(models.Model):
     def __str__(self):
         return f"{self.payment_method} → {self.adminet_codigo} ({self.adminet_descripcion})"
 
+
+class TiendaNubeClienteMap(models.Model):
+    """Mapeo entre clientes de Tiendanube y administraNET"""
+    tiendanube_email = models.EmailField(unique=True, verbose_name="Email cliente Tiendanube")
+    adminet_codigo = models.IntegerField(verbose_name="Código cliente administraNET")
+    adminet_nombre = models.CharField(max_length=255, blank=True, verbose_name="Nombre cliente administraNET")
+    adminet_documento = models.CharField(max_length=50, blank=True, verbose_name="Documento cliente administraNET")
+    activo = models.BooleanField(default=True, verbose_name="Sincronización activa")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Mapeo cliente Tiendanube"
+        verbose_name_plural = "Mapeos clientes Tiendanube"
+        ordering = ['tiendanube_email']
+
+    def __str__(self):
+        return f"{self.tiendanube_email} → {self.adminet_codigo} ({self.adminet_nombre})"
+
+
 class TiendaNubeAdminetConfig(models.Model):
     host = models.CharField(max_length=255)
     port = models.IntegerField(default=3306)

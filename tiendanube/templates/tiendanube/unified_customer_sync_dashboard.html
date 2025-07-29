@@ -1,0 +1,513 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Unified Customer Sync Dashboard" %}{% endblock %}
+
+{% block tiendanube_content %}
+{% csrf_token %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Unified Customer Sync Dashboard" %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Centralized customer synchronization across all platforms" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="migrateBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                        <i class="fas fa-migration mr-2"></i>
+                        {% trans "Migrate Old Data" %}
+                    </button>
+                    <a href="{% url 'tiendanube:unified_mapping_list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        <i class="fas fa-list mr-2"></i>
+                        {% trans "View Mappings" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% if not config %}
+        <!-- No Configuration Warning -->
+        <div class="bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-700 rounded-md p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                        {% trans "Configuration Required" %}
+                    </h3>
+                    <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                        <p>{% trans "Please configure the unified customer synchronization system before proceeding." %}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        
+        <!-- Connection Status -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-shopping-cart text-blue-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Tiendanube Connection" %}
+                                </dt>
+                                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {% if tiendanube_configured %}
+                                        <span class="text-green-600 dark:text-green-400">{% trans "Connected" %}</span>
+                                    {% else %}
+                                        <span class="text-red-600 dark:text-red-400">{% trans "Not Configured" %}</span>
+                                    {% endif %}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-server text-orange-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "AdministraNET Connection" %}
+                                </dt>
+                                <dd class="text-sm font-medium text-gray-900 dark:text-white">
+                                    {% if adminet_configured %}
+                                        <span class="text-green-600 dark:text-green-400">{% trans "Connected" %}</span>
+                                    {% else %}
+                                        <span class="text-red-600 dark:text-red-400">{% trans "Not Configured" %}</span>
+                                    {% endif %}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-users text-blue-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Total Mappings" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.total_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Synced" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.synced_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-clock text-yellow-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Pending" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.pending_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Errors" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.error_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Platform Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-shopping-cart text-blue-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Tiendanube Mappings" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.tiendanube_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-database text-green-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Synap Mappings" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.synap_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-server text-orange-600 text-2xl"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "AdministraNET Mappings" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ stats.adminet_mappings|default:0 }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                    {% trans "Quick Actions" %}
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button id="syncFromTiendanube" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        <i class="fas fa-download mr-2"></i>
+                        {% trans "Sync from Tiendanube" %}
+                    </button>
+                    <button id="syncToTiendanube" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        <i class="fas fa-upload mr-2"></i>
+                        {% trans "Sync to Tiendanube" %}
+                    </button>
+                    <button id="syncWithAdminet" class="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        <i class="fas fa-sync mr-2"></i>
+                        {% trans "Sync with AdministraNET" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs -->
+        {% if recent_logs %}
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                    {% trans "Recent Sync Logs" %}
+                </h3>
+                <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "Latest synchronization activities" %}
+                </p>
+            </div>
+            <div class="overflow-hidden">
+                <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for log in recent_logs %}
+                    <li class="px-4 py-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                        {% if log.status == 'success' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                        {% elif log.status == 'error' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200
+                                        {% else %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200{% endif %}">
+                                        {{ log.get_status_display }}
+                                    </span>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ log.get_sync_type_display }}
+                                    </div>
+                                    <div class="text-sm text-gray-500 dark:text-gray-400">
+                                        {{ log.message }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                {{ log.started_at|timesince }}
+                            </div>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+                <a href="{% url 'tiendanube:unified_sync_log_list' %}" class="text-sm text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
+                    {% trans "View all logs" %} →
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div id="loadingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900">
+                <i class="fas fa-spinner fa-spin text-blue-600 dark:text-blue-400"></i>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mt-4" id="loadingMessage">
+                {% trans "Processing..." %}
+            </h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500 dark:text-gray-400" id="loadingDetails">
+                    {% trans "Please wait while we process your request." %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+// Quick action buttons
+document.getElementById('syncFromTiendanube').addEventListener('click', function() {
+    showLoading('{% trans "Syncing from Tiendanube..." %}', '{% trans "Downloading customer data from Tiendanube" %}');
+    syncFromTiendanube();
+});
+
+document.getElementById('syncToTiendanube').addEventListener('click', function() {
+    showLoading('{% trans "Syncing to Tiendanube..." %}', '{% trans "Uploading customer data to Tiendanube" %}');
+    syncToTiendanube();
+});
+
+document.getElementById('syncWithAdminet').addEventListener('click', function() {
+    showLoading('{% trans "Syncing with AdministraNET..." %}', '{% trans "Synchronizing customer data with AdministraNET" %}');
+    syncWithAdminet();
+});
+
+document.getElementById('migrateBtn').addEventListener('click', function() {
+    if (confirm('{% trans "This will migrate data from the old separate systems to the unified system. Continue?" %}')) {
+        showLoading('{% trans "Migrating data..." %}', '{% trans "Migrating from old systems to unified system" %}');
+        migrateFromOldSystems();
+    }
+});
+
+function showLoading(message, details) {
+    document.getElementById('loadingMessage').textContent = message;
+    document.getElementById('loadingDetails').textContent = details;
+    document.getElementById('loadingModal').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').classList.add('hidden');
+}
+
+function showToast(message, type = 'info') {
+    // Simple toast implementation
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-md text-white ${
+        type === 'success' ? 'bg-green-600' : 
+        type === 'error' ? 'bg-red-600' : 
+        type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+function syncFromTiendanube() {
+    fetch('{% url "tiendanube:unified_sync_from_tiendanube" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            limit: 100,
+            offset: 0
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showToast(`{% trans "Sync completed" %}: ${data.success_count} {% trans "successful" %}, ${data.failed_count} {% trans "failed" %}`, 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || '{% trans "Sync failed" %}', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function syncToTiendanube() {
+    fetch('{% url "tiendanube:unified_sync_to_tiendanube" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            limit: 100,
+            offset: 0
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showToast(`{% trans "Sync completed" %}: ${data.success_count} {% trans "successful" %}, ${data.failed_count} {% trans "failed" %}`, 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || '{% trans "Sync failed" %}', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function syncWithAdminet() {
+    fetch('{% url "tiendanube:unified_sync_with_adminet" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            limit: 100,
+            offset: 0
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showToast(`{% trans "Sync completed" %}: ${data.success_count} {% trans "successful" %}, ${data.failed_count} {% trans "failed" %}`, 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || '{% trans "Sync failed" %}', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function migrateFromOldSystems() {
+    fetch('{% url "tiendanube:unified_migrate_from_old_systems" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showToast(`{% trans "Migration completed" %}: ${data.migrated_count} {% trans "migrated" %}, ${data.error_count} {% trans "errors" %}`, 'success');
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast(data.error || '{% trans "Migration failed" %}', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showToast('{% trans "Network error" %}', 'error');
+        console.error('Error:', error);
+    });
+}
+</script>
+{% endblock %} 

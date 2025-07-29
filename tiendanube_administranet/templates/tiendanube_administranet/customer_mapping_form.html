@@ -1,0 +1,270 @@
+{% extends "base_app.html" %}
+{% load i18n crispy_forms_tags %}
+
+{% block title %}
+    {% if object %}{% trans "Edit Customer Mapping" %}{% else %}{% trans "Create Customer Mapping" %}{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="breadcrumb">
+    <div class="breadcrumb-item">
+        <span class="material-icons text-sm">people</span>
+        <a href="{% url 'tiendanube_administranet:customer_mapping_list' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">{% trans "Customer Mappings" %}</a>
+    </div>
+    <div class="breadcrumb-item active">
+        <span>{% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %}</span>
+    </div>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% if object %}{% trans "Edit Customer Mapping" %}{% else %}{% trans "Create Customer Mapping" %}{% endif %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% if object %}
+                    {% trans "Update customer mapping between Tiendanube and AdministraNET" %}
+                {% else %}
+                    {% trans "Create a new customer mapping between Tiendanube and AdministraNET" %}
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'tiendanube_administranet:customer_mapping_list' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">arrow_back</span>
+                {% trans "Back to List" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="max-w-6xl mx-auto">
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Tiendanube Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-blue-600 mr-2">cloud</span>
+                    {% trans "Tiendanube Information" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.tiendanube_id|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_email|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_name|as_crispy_field }}
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            {{ form.tiendanube_first_name|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.tiendanube_last_name|as_crispy_field }}
+                        </div>
+                    </div>
+                    <div>
+                        {{ form.tiendanube_document|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_phone|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.tiendanube_address|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_city|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_state|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_country|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_postal_code|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.tiendanube_notes|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_tags|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.tiendanube_tax_exemptions|as_crispy_field }}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                    <div class="flex items-center">
+                        {{ form.tiendanube_verified_email }}
+                        <label for="{{ form.tiendanube_verified_email.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Verified Email" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.tiendanube_accepts_marketing }}
+                        <label for="{{ form.tiendanube_accepts_marketing.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Accepts Marketing" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.tiendanube_tax_exempt }}
+                        <label for="{{ form.tiendanube_tax_exempt.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Tax Exempt" %}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AdministraNET Information -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-green-600 mr-2">database</span>
+                    {% trans "AdministraNET Information" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.adminet_code|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_name|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_document|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_email|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_phone|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_mobile|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.adminet_address|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_city|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_state|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_country|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.adminet_postal_code|as_crispy_field }}
+                    </div>
+                    <div class="md:col-span-2">
+                        {{ form.adminet_notes|as_crispy_field }}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                    <div class="flex items-center">
+                        {{ form.adminet_active }}
+                        <label for="{{ form.adminet_active.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Active" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.adminet_credit_customer }}
+                        <label for="{{ form.adminet_credit_customer.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Credit Customer" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.adminet_wholesale_customer }}
+                        <label for="{{ form.adminet_wholesale_customer.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Wholesale Customer" %}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Synchronization Configuration -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-purple-600 mr-2">sync</span>
+                    {% trans "Synchronization Configuration" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.sync_status|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.sync_enabled|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.sync_direction|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.sync_frequency|as_crispy_field }}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6">
+                    <div class="flex items-center">
+                        {{ form.sync_email }}
+                        <label for="{{ form.sync_email.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Sync Email" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.sync_name }}
+                        <label for="{{ form.sync_name.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Sync Name" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.sync_address }}
+                        <label for="{{ form.sync_address.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Sync Address" %}
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        {{ form.sync_phone }}
+                        <label for="{{ form.sync_phone.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {% trans "Sync Phone" %}
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-6">
+            <a href="{% url 'tiendanube_administranet:customer_mapping_list' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">cancel</span>
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" 
+                    class="inline-flex items-center px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
+                <span class="material-icons text-sm mr-2">{% if object %}save{% else %}add{% endif %}</span>
+                {% if object %}{% trans "Update Mapping" %}{% else %}{% trans "Create Mapping" %}{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %} 

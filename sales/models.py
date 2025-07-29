@@ -1618,3 +1618,127 @@ class ClientTag(models.Model):
 
     def __str__(self):
         return self.name
+
+class ClientActivity(models.Model):
+    """
+    Actividad y historial de clientes
+    Registra todas las acciones y eventos relacionados con un cliente
+    """
+    ACTIVITY_TYPES = [
+        ('order_created', _('Order Created')),
+        ('order_updated', _('Order Updated')),
+        ('order_cancelled', _('Order Cancelled')),
+        ('invoice_created', _('Invoice Created')),
+        ('payment_received', _('Payment Received')),
+        ('contact_added', _('Contact Added')),
+        ('contact_updated', _('Contact Updated')),
+        ('attachment_uploaded', _('Attachment Uploaded')),
+        ('note_added', _('Note Added')),
+        ('status_changed', _('Status Changed')),
+        ('credit_limit_updated', _('Credit Limit Updated')),
+        ('discount_updated', _('Discount Updated')),
+        ('tag_added', _('Tag Added')),
+        ('tag_removed', _('Tag Removed')),
+        ('visit_scheduled', _('Visit Scheduled')),
+        ('call_logged', _('Call Logged')),
+        ('email_sent', _('Email Sent')),
+        ('quote_sent', _('Quote Sent')),
+        ('complaint_logged', _('Complaint Logged')),
+        ('other', _('Other')),
+    ]
+    
+    empresa = models.ForeignKey('core.Empresa', on_delete=models.CASCADE, related_name='client_activities', verbose_name=_('Company'))
+    client = models.ForeignKey('Client', on_delete=models.CASCADE, related_name='activities', verbose_name=_('Client'))
+    activity_type = models.CharField(_('Activity Type'), max_length=32, choices=ACTIVITY_TYPES)
+    title = models.CharField(_('Title'), max_length=255)
+    description = models.TextField(_('Description'), blank=True)
+    
+    # Datos relacionados (JSON para flexibilidad)
+    related_data = models.JSONField(_('Related Data'), default=dict, blank=True)
+    
+    # Usuario que realizó la actividad
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name=_('User'))
+    
+    # Fecha y hora
+    activity_date = models.DateTimeField(_('Activity Date'), auto_now_add=True)
+    
+    # Prioridad y estado
+    priority = models.CharField(_('Priority'), max_length=16, choices=[
+        ('low', _('Low')),
+        ('medium', _('Medium')),
+        ('high', _('High')),
+        ('urgent', _('Urgent')),
+    ], default='medium')
+    
+    is_private = models.BooleanField(_('Private'), default=False, help_text=_('Only visible to assigned user'))
+    is_completed = models.BooleanField(_('Completed'), default=True)
+    
+    # Auditoría
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = _('Client Activity')
+        verbose_name_plural = _('Client Activities')
+        ordering = ['-activity_date']
+        indexes = [
+            models.Index(fields=['empresa', 'client']),
+            models.Index(fields=['activity_type']),
+            models.Index(fields=['activity_date']),
+            models.Index(fields=['user']),
+        ]
+    
+    def __str__(self):
+        return f"{self.client.name} - {self.get_activity_type_display()} - {self.title}"
+    
+    def get_activity_icon(self):
+        """Retorna el ícono correspondiente al tipo de actividad"""
+        icon_map = {
+            'order_created': 'shopping_cart',
+            'order_updated': 'edit',
+            'order_cancelled': 'cancel',
+            'invoice_created': 'receipt',
+            'payment_received': 'payment',
+            'contact_added': 'person_add',
+            'contact_updated': 'person',
+            'attachment_uploaded': 'attach_file',
+            'note_added': 'note',
+            'status_changed': 'update',
+            'credit_limit_updated': 'credit_card',
+            'discount_updated': 'local_offer',
+            'tag_added': 'label',
+            'tag_removed': 'label_off',
+            'visit_scheduled': 'event',
+            'call_logged': 'phone',
+            'email_sent': 'email',
+            'quote_sent': 'description',
+            'complaint_logged': 'report_problem',
+            'other': 'info',
+        }
+        return icon_map.get(self.activity_type, 'info')
+    
+    def get_activity_color(self):
+        """Retorna el color correspondiente al tipo de actividad"""
+        color_map = {
+            'order_created': 'text-green-600',
+            'order_updated': 'text-blue-600',
+            'order_cancelled': 'text-red-600',
+            'invoice_created': 'text-purple-600',
+            'payment_received': 'text-green-600',
+            'contact_added': 'text-blue-600',
+            'contact_updated': 'text-blue-600',
+            'attachment_uploaded': 'text-orange-600',
+            'note_added': 'text-gray-600',
+            'status_changed': 'text-yellow-600',
+            'credit_limit_updated': 'text-indigo-600',
+            'discount_updated': 'text-pink-600',
+            'tag_added': 'text-green-600',
+            'tag_removed': 'text-red-600',
+            'visit_scheduled': 'text-blue-600',
+            'call_logged': 'text-green-600',
+            'email_sent': 'text-blue-600',
+            'quote_sent': 'text-purple-600',
+            'complaint_logged': 'text-red-600',
+            'other': 'text-gray-600',
+        }
+        return color_map.get(self.activity_type, 'text-gray-600')

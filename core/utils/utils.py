@@ -187,6 +187,7 @@ APPS_MENU = [
                 "seccion": _("Integración administraNET"),
                 "items": [
                     {"label": _("Cond. Venta Tiendanube ↔ Adminet"), "url": "tiendanube:cond_venta_map_list", "icon": "compare_arrows", "permission": "tiendanube.configure_integration"},
+                    {"label": _("Clientes Tiendanube ↔ Adminet"), "url": "tiendanube:cliente_map_list", "icon": "people", "permission": "tiendanube.configure_integration"},
                     {"label": _("Conexión Adminet (MySQL)"), "url": "tiendanube:adminet_connection", "icon": "storage", "permission": "tiendanube.configure_integration"}
                 ]
             },
@@ -1065,6 +1066,56 @@ APPS_MENU = [
             }
         ]
     },
+    {
+        "id": "tiendanube_administranet",
+        "nombre": _("Tiendanube-AdministraNET"),
+        "permiso": "tiendanube_administranet.view_tiendanubeconfig",
+        "url": "tiendanube_administranet:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'/>
+        </svg>""",
+        "orden": 16,
+        "color": "purple",
+        "submenus": [
+            {
+                "seccion": _("Dashboard"),
+                "items": [
+                    {"label": _("Dashboard"), "url": "tiendanube_administranet:dashboard", "icon": "dashboard", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
+                    {"label": _("Status"), "url": "tiendanube_administranet:status", "icon": "monitor_heart", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
+                ]
+            },
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {"label": _("Tiendanube Settings"), "url": "tiendanube_administranet:tiendanube_config_list", "icon": "cloud", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
+                    {"label": _("AdministraNET Settings"), "url": "tiendanube_administranet:adminet_config", "icon": "database", "permission": "tiendanube_administranet.view_administranetconfig"},
+                ]
+            },
+            {
+                "seccion": _("Mappings"),
+                "items": [
+                    {"label": _("Customer Mappings"), "url": "tiendanube_administranet:customer_mapping_list", "icon": "people", "permission": "tiendanube_administranet.view_customermapping"},
+                    {"label": _("Product Mappings"), "url": "tiendanube_administranet:product_list", "icon": "inventory", "permission": "tiendanube_administranet.view_productmapping"},
+                    {"label": _("Order Mappings"), "url": "tiendanube_administranet:order_mapping_list", "icon": "receipt", "permission": "tiendanube_administranet.view_ordermapping"},
+                ]
+            },
+            {
+                "seccion": _("Webhooks"),
+                "items": [
+                    {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "zap", "permission": "tiendanube_administranet.view_webhookconfig"},
+                    {"label": _("Webhook Events"), "url": "tiendanube_administranet:webhook_event_list", "icon": "activity", "permission": "tiendanube_administranet.view_webhookevent"},
+                ]
+            },
+            {
+                "seccion": _("Synchronization"),
+                "items": [
+                    {"label": _("Manual Sync"), "url": "tiendanube_administranet:manual_sync", "icon": "sync", "permission": "tiendanube_administranet.run_sync"},
+                    {"label": _("Sync History"), "url": "tiendanube_administranet:sync_history", "icon": "history", "permission": "tiendanube_administranet.view_synclog"},
+                    {"label": _("Sync Logs"), "url": "tiendanube_administranet:sync_log_list", "icon": "article", "permission": "tiendanube_administranet.view_synclog"},
+                ]
+            }
+        ]
+    },
 ]
 
 # Apps comentadas para futuras implementaciones
@@ -1204,6 +1255,7 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=No
                         'tiendanube:order_mapping_list': '/tiendanube/orders/',
                         'tiendanube:logs_list': '/tiendanube/logs/',
                         'tiendanube:cond_venta_map_list': '/tiendanube/adminet/cond_venta_map/',
+                        'tiendanube:cliente_map_list': '/tiendanube/adminet/cliente_map/',
                         'tiendanube:adminet_connection': '/tiendanube/adminet/connection/',
                         'tiendanube:dashboard': '/tiendanube/',
                         'tiendanube:config_list': '/tiendanube/config/',

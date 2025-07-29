@@ -236,6 +236,14 @@ class ModuleConfig(models.Model):
                 {'label': 'Credit Limit Logs', 'url': '/finance/credit-limit-logs/'},
                 {'label': 'Financial Reports', 'url': '/finance/financial-reports/'},
             ]
+        elif self.name == 'tiendanube_administranet':
+            return [
+                {'label': 'Dashboard', 'url': '/tiendanube_administranet/'},
+                {'label': 'Customer Mappings', 'url': '/tiendanube_administranet/customer-mappings/'},
+                {'label': 'Product Mappings', 'url': '/tiendanube_administranet/product-mappings/'},
+                {'label': 'Order Mappings', 'url': '/tiendanube_administranet/order-mappings/'},
+                {'label': 'Sync History', 'url': '/tiendanube_administranet/sync-history/'},
+            ]
         # Por defecto, un solo item principal
         return [{
             'label': self.display_name,

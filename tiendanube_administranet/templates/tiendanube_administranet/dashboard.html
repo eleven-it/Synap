@@ -1,0 +1,340 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Tiendanube-AdministraNET Dashboard" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="breadcrumb">
+    <div class="breadcrumb-item">
+        <span class="material-icons text-sm">dashboard</span>
+        <span>{% trans "Dashboard" %}</span>
+    </div>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans "Integration Dashboard" %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "Monitor and manage synchronization between Tiendanube and AdministraNET" %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button onclick="refreshDashboard()" class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200" id="refresh-btn">
+                <span class="material-icons text-sm mr-2">refresh</span>
+                {% trans "Refresh" %}
+            </button>
+            <a href="{% url 'tiendanube_administranet:customer_mapping_create' %}" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
+                <span class="material-icons text-sm mr-2">add</span>
+                {% trans "New Mapping" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Welcome Section -->
+<div class="mb-8">
+    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold mb-2">{% trans "Welcome to Integration Dashboard" %}</h2>
+                <p class="text-blue-100 text-lg">{% trans "Monitor your synchronization status and manage customer mappings efficiently" %}</p>
+            </div>
+            <div class="hidden lg:block">
+                <div class="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center">
+                    <span class="material-icons text-4xl">sync</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Mappings -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{% trans "Total Mappings" %}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="total-mappings">{{ statistics.total_mappings|default:0 }}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{% trans "Active customer mappings" %}</p>
+            </div>
+            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                <span class="material-icons text-blue-600">people</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Synced Mappings -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{% trans "Synced" %}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="synced-mappings">{{ statistics.synced_mappings|default:0 }}</p>
+                <p class="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
+                    <span class="material-icons text-sm mr-1">check_circle</span>
+                    {% trans "Successfully synchronized" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                <span class="material-icons text-green-600">check_circle</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Mappings -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{% trans "Pending" %}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="pending-mappings">{{ statistics.pending_mappings|default:0 }}</p>
+                <p class="text-sm text-yellow-600 dark:text-yellow-400 mt-1 flex items-center">
+                    <span class="material-icons text-sm mr-1">schedule</span>
+                    {% trans "Awaiting sync" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl flex items-center justify-center">
+                <span class="material-icons text-yellow-600">schedule</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Mappings -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{% trans "Errors" %}</p>
+                <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="error-mappings">{{ statistics.error_mappings|default:0 }}</p>
+                <p class="text-sm text-red-600 dark:text-red-400 mt-1 flex items-center">
+                    <span class="material-icons text-sm mr-1">error</span>
+                    {% trans "Sync errors" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                <span class="material-icons text-red-600">error</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Test Connections -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-4">
+            <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">
+                <span class="material-icons text-blue-600">wifi_tethering</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Test Connections" %}</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">{% trans "Verify connectivity with Tiendanube and AdministraNET" %}</p>
+        <button onclick="testConnections()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors duration-200" id="test-connections-btn">
+            <span class="material-icons text-sm mr-2">play_arrow</span>
+            {% trans "Test Now" %}
+        </button>
+    </div>
+
+    <!-- Sync from Tiendanube -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-4">
+            <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mr-3">
+                <span class="material-icons text-green-600">cloud_download</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Sync from Tiendanube" %}</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">{% trans "Import latest customer data from Tiendanube" %}</p>
+        <button onclick="syncFromTiendanube()" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg transition-colors duration-200" id="sync-tiendanube-btn">
+            <span class="material-icons text-sm mr-2">sync</span>
+            {% trans "Sync Now" %}
+        </button>
+    </div>
+
+    <!-- Sync from AdministraNET -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center mb-4">
+            <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mr-3">
+                <span class="material-icons text-purple-600">database</span>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Sync from AdministraNET" %}</h3>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 mb-4">{% trans "Import latest customer data from AdministraNET" %}</p>
+        <button onclick="syncFromAdminet()" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg transition-colors duration-200" id="sync-adminet-btn">
+            <span class="material-icons text-sm mr-2">sync</span>
+            {% trans "Sync Now" %}
+        </button>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+    <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Recent Activity" %}</h3>
+    </div>
+    <div class="p-6">
+        <div id="recent-activity" class="space-y-4">
+            <!-- Activity items will be loaded here -->
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for dashboard functionality -->
+<script>
+// IntegrationApp utility
+const IntegrationApp = {
+    loadData: function(url, callback) {
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => callback(data))
+        .catch(error => {
+            console.error('Error:', error);
+            this.showNotification('Error loading data', 'error');
+        });
+    },
+
+    sendData: function(url, data, callback) {
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => callback(data))
+        .catch(error => {
+            console.error('Error:', error);
+            this.showNotification('Error sending data', 'error');
+        });
+    },
+
+    showNotification: function(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+            type === 'success' ? 'bg-green-500 text-white' :
+            type === 'error' ? 'bg-red-500 text-white' :
+            'bg-blue-500 text-white'
+        }`;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+};
+
+// Dashboard functions
+function refreshDashboard() {
+    const button = document.getElementById('refresh-btn');
+    button.disabled = true;
+    button.innerHTML = '<span class="material-icons text-sm animate-spin">refresh</span> Loading...';
+    
+    IntegrationApp.loadData('{% url "tiendanube_administranet:get_statistics_ajax" %}', function(data) {
+        if (data.success) {
+            document.getElementById('total-mappings').textContent = data.statistics.total_mappings || 0;
+            document.getElementById('synced-mappings').textContent = data.statistics.synced_mappings || 0;
+            document.getElementById('pending-mappings').textContent = data.statistics.pending_mappings || 0;
+            document.getElementById('error-mappings').textContent = data.statistics.error_mappings || 0;
+            IntegrationApp.showNotification('Dashboard refreshed successfully', 'success');
+        } else {
+            IntegrationApp.showNotification('Error refreshing dashboard', 'error');
+        }
+        
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm mr-2">refresh</span> Refresh';
+    });
+}
+
+function testConnections() {
+    const button = document.getElementById('test-connections-btn');
+    button.disabled = true;
+    button.innerHTML = '<span class="material-icons text-sm animate-spin">sync</span> Testing...';
+    
+    IntegrationApp.sendData('{% url "tiendanube_administranet:test_connections_ajax" %}', {}, function(data) {
+        if (data.success) {
+            IntegrationApp.showNotification('Connections tested successfully', 'success');
+        } else {
+            IntegrationApp.showNotification('Connection test failed', 'error');
+        }
+        
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm mr-2">play_arrow</span> Test Now';
+    });
+}
+
+function syncFromTiendanube() {
+    const button = document.getElementById('sync-tiendanube-btn');
+    button.disabled = true;
+    button.innerHTML = '<span class="material-icons text-sm animate-spin">sync</span> Syncing...';
+    
+    IntegrationApp.sendData('{% url "tiendanube_administranet:sync_customers_from_tiendanube_ajax" %}', {}, function(data) {
+        if (data.success) {
+            IntegrationApp.showNotification('Sync from Tiendanube completed', 'success');
+            refreshDashboard();
+        } else {
+            IntegrationApp.showNotification('Sync from Tiendanube failed', 'error');
+        }
+        
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm mr-2">sync</span> Sync Now';
+    });
+}
+
+function syncFromAdminet() {
+    const button = document.getElementById('sync-adminet-btn');
+    button.disabled = true;
+    button.innerHTML = '<span class="material-icons text-sm animate-spin">sync</span> Syncing...';
+    
+    IntegrationApp.sendData('{% url "tiendanube_administranet:sync_customers_from_adminet_ajax" %}', {}, function(data) {
+        if (data.success) {
+            IntegrationApp.showNotification('Sync from AdministraNET completed', 'success');
+            refreshDashboard();
+        } else {
+            IntegrationApp.showNotification('Sync from AdministraNET failed', 'error');
+        }
+        
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm mr-2">sync</span> Sync Now';
+    });
+}
+
+function syncPendingMappings() {
+    const button = document.getElementById('sync-pending-btn');
+    button.disabled = true;
+    button.innerHTML = '<span class="material-icons text-sm animate-spin">sync</span> Syncing...';
+    
+    IntegrationApp.sendData('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {}, function(data) {
+        if (data.success) {
+            IntegrationApp.showNotification('Pending mappings synced successfully', 'success');
+            refreshDashboard();
+        } else {
+            IntegrationApp.showNotification('Sync failed', 'error');
+        }
+        
+        button.disabled = false;
+        button.innerHTML = '<span class="material-icons text-sm mr-2">sync</span> Sync Pending';
+    });
+}
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', function() {
+    refreshDashboard();
+});
+</script>
+{% endblock %} 

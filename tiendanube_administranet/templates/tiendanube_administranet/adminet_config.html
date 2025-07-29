@@ -1,0 +1,260 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "AdministraNET Configuration" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "AdministraNET Configuration" %}</span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-3xl mr-3 text-blue-600 dark:text-blue-400">database</span>
+                {% trans "AdministraNET Configuration" %}
+            </h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {% trans "Configure AdministraNET database connection settings" %}
+            </p>
+        </div>
+        <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+            <span class="material-icons text-sm mr-2">arrow_back</span>
+            {% trans "Back to Dashboard" %}
+        </a>
+    </div>
+</div>
+
+<!-- Configuration Form -->
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">settings</span>
+                {% trans "Database Configuration" %}
+            </h3>
+        </div>
+        <div class="p-6">
+            <form method="post" id="adminet-config-form">
+                {% csrf_token %}
+                
+                <div class="space-y-6">
+                    <!-- Configuration Name -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">label</span>
+                            {% trans "Configuration Name" %}
+                        </h4>
+                        <div class="grid grid-cols-1 gap-4">
+                            <div>
+                                {{ form.name|as_crispy_field }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Database Connection -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">storage</span>
+                            {% trans "Database Connection" %}
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                {{ form.host|as_crispy_field }}
+                            </div>
+                            <div>
+                                {{ form.port|as_crispy_field }}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                {{ form.database|as_crispy_field }}
+                            </div>
+                            <div>
+                                {{ form.user|as_crispy_field }}
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            {{ form.password|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration Settings -->
+                    <div>
+                        <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">tune</span>
+                            {% trans "Configuration Settings" %}
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                {{ form.is_active|as_crispy_field }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex items-center justify-center space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700 mt-8">
+                    <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                        <span class="material-icons text-sm mr-2">close</span>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-600 dark:hover:bg-blue-900/40" id="test-config-btn">
+                        <span class="material-icons text-sm mr-2">wifi_tethering</span>
+                        {% trans "Test Connection" %}
+                    </button>
+                    <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500" id="save-config-btn">
+                        <span class="material-icons text-sm mr-2">save</span>
+                        {% trans "Save Configuration" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Form submission
+    document.getElementById('adminet-config-form').addEventListener('submit', function(e) {
+        const submitBtn = document.getElementById('save-config-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Saving..." %}';
+    });
+
+    // Toast utility functions
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        
+        // Determine colors based on type
+        let bgColor, borderColor, textColor, iconColor, icon;
+        switch(type) {
+            case 'success':
+                bgColor = 'bg-green-50 dark:bg-green-900/20';
+                borderColor = 'border-green-200 dark:border-green-700';
+                textColor = 'text-green-800 dark:text-green-200';
+                iconColor = 'text-green-600 dark:text-green-400';
+                icon = 'check_circle';
+                break;
+            case 'error':
+                bgColor = 'bg-red-50 dark:bg-red-900/20';
+                borderColor = 'border-red-200 dark:border-red-700';
+                textColor = 'text-red-800 dark:text-red-200';
+                iconColor = 'text-red-600 dark:text-red-400';
+                icon = 'error';
+                break;
+            case 'warning':
+                bgColor = 'bg-yellow-50 dark:bg-yellow-900/20';
+                borderColor = 'border-yellow-200 dark:border-yellow-700';
+                textColor = 'text-yellow-800 dark:text-yellow-200';
+                iconColor = 'text-yellow-600 dark:text-yellow-400';
+                icon = 'warning';
+                break;
+            default:
+                bgColor = 'bg-blue-50 dark:bg-blue-900/20';
+                borderColor = 'border-blue-200 dark:border-blue-700';
+                textColor = 'text-blue-800 dark:text-blue-200';
+                iconColor = 'text-blue-600 dark:text-blue-400';
+                icon = 'info';
+        }
+        
+        toast.className = `${bgColor} border ${borderColor} rounded-lg p-4 shadow-lg max-w-sm transform transition-all duration-300 ease-in-out translate-x-full`;
+        toast.innerHTML = `
+            <div class="flex items-start">
+                <span class="material-icons ${iconColor} mr-3 mt-0.5">${icon}</span>
+                <div class="flex-1">
+                    <p class="text-sm ${textColor}">${message}</p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <span class="material-icons text-sm">close</span>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Animate in
+        setTimeout(() => {
+            toast.classList.remove('translate-x-full');
+        }, 100);
+        
+        // Auto remove after duration
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.remove();
+                }
+            }, 300);
+        }, duration);
+    }
+
+    // Test connection functionality
+    document.getElementById('test-config-btn').addEventListener('click', function() {
+        const testBtn = this;
+        
+        // Disable button and show loading
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Testing..." %}';
+        
+        // Show loading toast
+        showToast('{% trans "Testing MySQL connection..." %}', 'info', 3000);
+        
+        // Get form data
+        const form = document.getElementById('adminet-config-form');
+        const formData = new FormData(form);
+        
+        // Send test request
+        fetch('{% url "tiendanube_administranet:test_adminet_connection_ajax" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let message = data.message;
+                if (data.version) {
+                    message += ` (MySQL ${data.version})`;
+                }
+                showToast(message, 'success', 6000);
+            } else {
+                showToast(data.message, 'error', 8000);
+            }
+        })
+        .catch(error => {
+            showToast('{% trans "An error occurred while testing the connection." %}', 'error', 8000);
+        })
+        .finally(() => {
+            // Re-enable button
+            testBtn.disabled = false;
+            testBtn.innerHTML = '<span class="material-icons text-sm mr-2">wifi_tethering</span>{% trans "Test Connection" %}';
+        });
+    });
+</script>
+{% endblock %} 

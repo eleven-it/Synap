@@ -1,0 +1,228 @@
+{% extends "tiendanube_administranet/base.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if object %}{% trans "Edit Product Mapping" %}{% else %}{% trans "Create Product Mapping" %}{% endif %} - {{ block.super }}
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                {% if object %}
+                    {% trans "Edit Product Mapping" %}
+                {% else %}
+                    {% trans "Create Product Mapping" %}
+                {% endif %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">
+                {% trans "Configure the mapping between Tiendanube and AdministraNET products" %}
+            </p>
+        </div>
+
+        <!-- Form -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md">
+            <form method="post" class="p-6">
+                {% csrf_token %}
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Tiendanube Section -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            <i class="fas fa-cloud text-blue-500 mr-2"></i>
+                            {% trans "Tiendanube Product" %}
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="{{ form.tiendanube_id.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {% trans "Tiendanube ID" %}
+                                </label>
+                                {{ form.tiendanube_id }}
+                                {% if form.tiendanube_id.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.tiendanube_id.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label for="{{ form.tiendanube_name.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {% trans "Product Name" %}
+                                </label>
+                                {{ form.tiendanube_name }}
+                                {% if form.tiendanube_name.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.tiendanube_name.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label for="{{ form.tiendanube_sku.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {% trans "SKU" %}
+                                </label>
+                                {{ form.tiendanube_sku }}
+                                {% if form.tiendanube_sku.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.tiendanube_sku.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="{{ form.tiendanube_price.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {% trans "Price" %}
+                                    </label>
+                                    {{ form.tiendanube_price }}
+                                    {% if form.tiendanube_price.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.tiendanube_price.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div>
+                                    <label for="{{ form.tiendanube_stock.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {% trans "Stock" %}
+                                    </label>
+                                    {{ form.tiendanube_stock }}
+                                    {% if form.tiendanube_stock.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.tiendanube_stock.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AdministraNET Section -->
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            <i class="fas fa-database text-green-500 mr-2"></i>
+                            {% trans "AdministraNET Product" %}
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label for="{{ form.adminet_codigo.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {% trans "Product Code" %}
+                                </label>
+                                {{ form.adminet_codigo }}
+                                {% if form.adminet_codigo.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.adminet_codigo.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label for="{{ form.adminet_nombre.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    {% trans "Product Name" %}
+                                </label>
+                                {{ form.adminet_nombre }}
+                                {% if form.adminet_nombre.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.adminet_nombre.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label for="{{ form.adminet_precio.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {% trans "Price" %}
+                                    </label>
+                                    {{ form.adminet_precio }}
+                                    {% if form.adminet_precio.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.adminet_precio.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                                
+                                <div>
+                                    <label for="{{ form.adminet_stock.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        {% trans "Stock" %}
+                                    </label>
+                                    {{ form.adminet_stock }}
+                                    {% if form.adminet_stock.errors %}
+                                    <p class="mt-1 text-sm text-red-600">{{ form.adminet_stock.errors.0 }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sync Configuration -->
+                <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                        <i class="fas fa-sync text-purple-500 mr-2"></i>
+                        {% trans "Synchronization Configuration" %}
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="{{ form.sync_status.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                {% trans "Sync Status" %}
+                            </label>
+                            {{ form.sync_status }}
+                            {% if form.sync_status.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.sync_status.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div>
+                            <label for="{{ form.sync_enabled.id_for_label }}" class="flex items-center">
+                                {{ form.sync_enabled }}
+                                <span class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    {% trans "Enable Synchronization" %}
+                                </span>
+                            </label>
+                            {% if form.sync_enabled.errors %}
+                            <p class="mt-1 text-sm text-red-600">{{ form.sync_enabled.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label for="{{ form.error_message.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Error Message" %}
+                        </label>
+                        {{ form.error_message }}
+                        {% if form.error_message.errors %}
+                        <p class="mt-1 text-sm text-red-600">{{ form.error_message.errors.0 }}</p>
+                        {% endif %}
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            {% trans "Optional error message if synchronization failed" %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-8 flex justify-end space-x-4">
+                    <a href="{% url 'tiendanube_administranet:product_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times mr-2"></i>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-2"></i>
+                        {% if object %}
+                            {% trans "Update Mapping" %}
+                        {% else %}
+                            {% trans "Create Mapping" %}
+                        {% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-input, .form-select, .form-textarea {
+        @apply block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
+    }
+    
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        @apply ring-2 ring-blue-500 border-blue-500;
+    }
+    
+    .form-checkbox {
+        @apply h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700;
+    }
+</style>
+{% endblock %} 

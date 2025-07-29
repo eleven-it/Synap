@@ -23,6 +23,25 @@ import json
 from django.utils.translation import gettext_lazy as _
 from inventory.models import Product, Warehouse
 
+# Import unified views
+from .views_unified import (
+    UnifiedCustomerSyncDashboardView,
+    UnifiedCustomerMappingListView,
+    UnifiedCustomerMappingCreateView,
+    UnifiedCustomerMappingDetailView,
+    UnifiedCustomerMappingUpdateView,
+    UnifiedCustomerMappingDeleteView,
+    UnifiedSyncLogListView,
+    unified_sync_customers_from_tiendanube,
+    unified_sync_customers_to_tiendanube,
+    unified_sync_customers_with_adminet,
+    unified_migrate_from_old_systems,
+    unified_create_mapping_ajax,
+    unified_delete_mapping_ajax,
+    unified_get_adminet_customers,
+    unified_get_tiendanube_customers,
+)
+
 class TiendaNubePermissionMixin(UserPassesTestMixin):
     """Mixin to check TiendaNube access permissions."""
     

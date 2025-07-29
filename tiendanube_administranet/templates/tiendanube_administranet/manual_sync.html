@@ -1,0 +1,392 @@
+{% extends "tiendanube_administranet/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Manual Synchronization" %} - {{ block.super }}{% endblock %}
+
+{% block integration_content %}
+<!-- Header -->
+<div class="integration-header">
+    <h1 class="integration-title">
+        {% trans "Manual Synchronization" %}
+    </h1>
+    <p class="integration-subtitle">
+        {% trans "Manually trigger synchronization between Tiendanube and AdministraNET" %}
+    </p>
+</div>
+
+<!-- Sync Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
+    <!-- Tiendanube to AdministraNET -->
+    <div class="integration-card">
+        <div class="integration-card-header">
+            <div class="flex items-center space-x-4">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">{% trans "Tiendanube → AdministraNET" %}</h3>
+                    <p class="text-gray-600 dark:text-gray-400">{% trans "Sync data from e-commerce to ERP" %}</p>
+                </div>
+            </div>
+        </div>
+        <div class="integration-card-body">
+            <div class="space-y-4">
+                <button id="sync-customers-tn" class="btn btn-primary w-full" onclick="triggerSync('customers', 'tiendanube')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    {% trans "Sync Customers" %}
+                </button>
+                
+                <button id="sync-products-tn" class="btn btn-primary w-full" onclick="triggerSync('products', 'tiendanube')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    {% trans "Sync Products" %}
+                </button>
+                
+                <button id="sync-orders-tn" class="btn btn-primary w-full" onclick="triggerSync('orders', 'tiendanube')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    {% trans "Sync Orders" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AdministraNET to Tiendanube -->
+    <div class="integration-card">
+        <div class="integration-card-header">
+            <div class="flex items-center space-x-4">
+                <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">{% trans "AdministraNET → Tiendanube" %}</h3>
+                    <p class="text-gray-600 dark:text-gray-400">{% trans "Sync data from ERP to e-commerce" %}</p>
+                </div>
+            </div>
+        </div>
+        <div class="integration-card-body">
+            <div class="space-y-4">
+                <button id="sync-customers-an" class="btn btn-success w-full" onclick="triggerSync('customers', 'adminet')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                    {% trans "Sync Customers" %}
+                </button>
+                
+                <button id="sync-products-an" class="btn btn-success w-full" onclick="triggerSync('products', 'adminet')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                    </svg>
+                    {% trans "Sync Products" %}
+                </button>
+                
+                <button id="sync-orders-an" class="btn btn-success w-full" onclick="triggerSync('orders', 'adminet')">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    {% trans "Sync Orders" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync History -->
+<div class="section">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{% trans "Recent Sync History" %}</h2>
+        <button id="refresh-history" class="btn btn-secondary" onclick="loadSyncHistory()">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            {% trans "Refresh" %}
+        </button>
+    </div>
+    
+    <div class="integration-card">
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>{% trans "Type" %}</th>
+                        <th>{% trans "Direction" %}</th>
+                        <th>{% trans "Status" %}</th>
+                        <th>{% trans "Items" %}</th>
+                        <th>{% trans "Duration" %}</th>
+                        <th>{% trans "Timestamp" %}</th>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+                <tbody id="sync-history-table">
+                    <tr>
+                        <td colspan="7" class="text-center py-8">
+                            <div class="flex items-center justify-center">
+                                <svg class="w-8 h-8 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                <span class="text-gray-500">{% trans "Loading sync history..." %}</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Progress Modal -->
+<div id="sync-progress-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="integration-card max-w-md w-full mx-4">
+        <div class="integration-card-header">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">{% trans "Synchronization in Progress" %}</h3>
+        </div>
+        <div class="integration-card-body">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                    <svg class="w-8 h-8 text-white animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                </div>
+                <h4 id="sync-progress-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    {% trans "Syncing..." %}
+                </h4>
+                <p id="sync-progress-description" class="text-gray-600 dark:text-gray-400 mb-4">
+                    {% trans "Please wait while the synchronization is in progress" %}
+                </p>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
+                    <div id="sync-progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="sync-progress-text" class="text-sm text-gray-500 dark:text-gray-400">
+                    0%
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load sync history on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSyncHistory();
+    });
+
+    // Trigger sync function
+    async function triggerSync(type, direction) {
+        const buttonId = `sync-${type}-${direction === 'tiendanube' ? 'tn' : 'an'}`;
+        const button = document.getElementById(buttonId);
+        
+        if (!button) return;
+        
+        // Show progress modal
+        showSyncProgress(type, direction);
+        
+        // Disable button and show loading
+        setLoading(button, true);
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    sync_type: type,
+                    direction: direction
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast(data.message || 'Sync completed successfully', 'success');
+                
+                // Simulate progress updates
+                simulateProgress();
+                
+                // Reload sync history after a delay
+                setTimeout(() => {
+                    loadSyncHistory();
+                }, 2000);
+            } else {
+                showToast(data.message || 'Sync failed', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('An error occurred during sync', 'error');
+        } finally {
+            // Hide progress modal
+            hideSyncProgress();
+            
+            // Re-enable button
+            setLoading(button, false);
+        }
+    }
+
+    // Show sync progress modal
+    function showSyncProgress(type, direction) {
+        const modal = document.getElementById('sync-progress-modal');
+        const title = document.getElementById('sync-progress-title');
+        const description = document.getElementById('sync-progress-description');
+        
+        title.textContent = `Syncing ${type} ${direction === 'tiendanube' ? 'from Tiendanube' : 'from AdministraNET'}`;
+        description.textContent = 'Please wait while the synchronization is in progress...';
+        
+        modal.classList.remove('hidden');
+    }
+
+    // Hide sync progress modal
+    function hideSyncProgress() {
+        const modal = document.getElementById('sync-progress-modal');
+        modal.classList.add('hidden');
+    }
+
+    // Simulate progress updates
+    function simulateProgress() {
+        const progressBar = document.getElementById('sync-progress-bar');
+        const progressText = document.getElementById('sync-progress-text');
+        let progress = 0;
+        
+        const interval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+            }
+            
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${Math.round(progress)}%`;
+        }, 200);
+    }
+
+    // Load sync history
+    async function loadSyncHistory() {
+        const tableBody = document.getElementById('sync-history-table');
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:get_sync_history_ajax" %}');
+            const data = await response.json();
+            
+            if (data.success) {
+                updateSyncHistoryTable(data.history);
+            } else {
+                showToast('Error loading sync history', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error loading sync history', 'error');
+        }
+    }
+
+    // Update sync history table
+    function updateSyncHistoryTable(history) {
+        const tableBody = document.getElementById('sync-history-table');
+        
+        if (!history || history.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-8">
+                        <div class="flex items-center justify-center">
+                            <svg class="w-8 h-8 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span class="text-gray-500">{% trans "No sync history available" %}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tableBody.innerHTML = history.map(item => `
+            <tr>
+                <td>
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 ${getTypeColor(item.sync_type)} rounded-lg flex items-center justify-center">
+                            ${getTypeIcon(item.sync_type)}
+                        </div>
+                        <span class="font-medium">${item.sync_type}</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="badge ${item.direction === 'TO_ADMINET' ? 'badge-info' : 'badge-warning'}">
+                        ${item.direction === 'TO_ADMINET' ? '{% trans "To Adminet" %}' : '{% trans "To Tiendanube" %}'}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge ${getStatusBadge(item.status)}">
+                        ${getStatusText(item.status)}
+                    </span>
+                </td>
+                <td>${item.items_processed || 0}</td>
+                <td>${item.duration || 'N/A'}</td>
+                <td>${formatTimestamp(item.created_at)}</td>
+                <td>
+                    <a href="/tiendanube-adminet/logs/${item.id}/" class="btn btn-sm btn-secondary">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Helper functions
+    function getTypeColor(type) {
+        const colors = {
+            'customers': 'bg-purple-100 dark:bg-purple-900/30',
+            'products': 'bg-blue-100 dark:bg-blue-900/30',
+            'orders': 'bg-green-100 dark:bg-green-900/30'
+        };
+        return colors[type] || 'bg-gray-100 dark:bg-gray-900/30';
+    }
+
+    function getTypeIcon(type) {
+        const icons = {
+            'customers': '<svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>',
+            'products': '<svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>',
+            'orders': '<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>'
+        };
+        return icons[type] || '<svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+    }
+
+    function getStatusBadge(status) {
+        const badges = {
+            'completed': 'badge-success',
+            'failed': 'badge-error',
+            'in_progress': 'badge-warning',
+            'pending': 'badge-pending'
+        };
+        return badges[status] || 'badge-pending';
+    }
+
+    function getStatusText(status) {
+        const texts = {
+            'completed': '{% trans "Success" %}',
+            'failed': '{% trans "Error" %}',
+            'in_progress': '{% trans "In Progress" %}',
+            'pending': '{% trans "Pending" %}'
+        };
+        return texts[status] || '{% trans "Unknown" %}';
+    }
+
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return 'N/A';
+        const date = new Date(timestamp);
+        return date.toLocaleString();
+    }
+</script>
+{% endblock %} 

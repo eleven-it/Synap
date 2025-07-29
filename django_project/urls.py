@@ -31,6 +31,7 @@ urlpatterns = [
     path("core/", include("core.urls", namespace="core")),
     path("mercadopago/", include("mercadopago.urls")),
     path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
+    path("tiendanube-adminet/", include("tiendanube_administranet.urls", namespace="tiendanube_administranet")),
 ]
 
 # URLs críticas siempre disponibles (workaround para tests y desarrollo)
@@ -41,6 +42,7 @@ urlpatterns.extend([
     path('api/sales/', include('sales.api.urls')),
     path('core/api/', include('core.api.urls', namespace='core_api')),
     path('administraNET_integration/', include('administraNET_integration.urls', namespace='administraNET_integration')),
+    path('api/tiendanube-adminet/', include('tiendanube_administranet.api.urls', namespace='tiendanube_administranet_api')),
 ])
 
 # URLs de módulos dinámicos

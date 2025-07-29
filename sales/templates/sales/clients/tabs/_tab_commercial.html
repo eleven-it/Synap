@@ -1,23 +1,278 @@
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div>
-        {{ form.credit_limit|as_crispy_field }}
+<div class="space-y-6">
+    <!-- Configuración comercial básica -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+            </svg>
+            {% trans 'Commercial Configuration' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.credit_limit|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.default_discount|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.payment_terms|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.default_price_list|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.sales_person|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.customer_category|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.payment_terms|as_crispy_field }}
+
+    <!-- Configuración de entrega -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+            {% trans 'Delivery Configuration' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.default_delivery_location|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.invoice_delivery_method|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.default_price_list|as_crispy_field }}
+
+    <!-- Configuración de pagos -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+            </svg>
+            {% trans 'Payment Configuration' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.payment_method|as_crispy_field }}
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Payment Priority' %}
+                </label>
+                <select class="form-select" id="payment_priority">
+                    <option value="normal">{% trans 'Normal' %}</option>
+                    <option value="high">{% trans 'High Priority' %}</option>
+                    <option value="low">{% trans 'Low Priority' %}</option>
+                </select>
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.sales_person|as_crispy_field }}
+
+    <!-- Estado del cliente -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {% trans 'Client Status' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="flex items-center">
+                {{ form.is_customer|as_crispy_field }}
+            </div>
+            <div class="flex items-center">
+                {{ form.is_prospect|as_crispy_field }}
+            </div>
+            <div class="flex items-center">
+                {{ form.is_vip|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.default_discount|as_crispy_field }}
+
+    <!-- Información de crédito -->
+    <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            {% trans 'Credit Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Credit Limit' %}</div>
+                <div class="text-lg font-semibold text-gray-900 dark:text-white" id="credit-limit-display">
+                    ${{ client.credit_limit|default:"0.00"|floatformat:2 }}
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Available Credit' %}</div>
+                <div class="text-lg font-semibold text-green-600 dark:text-green-400" id="available-credit-display">
+                    ${{ client.credit_available|default:"0.00"|floatformat:2 }}
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">{% trans 'Outstanding Balance' %}</div>
+                <div class="text-lg font-semibold text-red-600 dark:text-red-400" id="outstanding-balance-display">
+                    ${{ client.outstanding_balance|default:"0.00"|floatformat:2 }}
+                </div>
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.customer_category|as_crispy_field }}
+
+    <!-- Configuración de descuentos -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+            </svg>
+            {% trans 'Discount Configuration' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Volume Discount' %}
+                </label>
+                <div class="flex items-center space-x-2">
+                    <input type="number" class="form-input flex-1" min="0" max="100" step="0.01" placeholder="0.00" id="volume_discount">
+                    <span class="text-sm text-gray-500">%</span>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% trans 'Early Payment Discount' %}
+                </label>
+                <div class="flex items-center space-x-2">
+                    <input type="number" class="form-input flex-1" min="0" max="100" step="0.01" placeholder="0.00" id="early_payment_discount">
+                    <span class="text-sm text-gray-500">%</span>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="md:col-span-2">
-        {{ form.tags|as_crispy_field }}
-    </div>
-</div> 
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const creditLimitField = document.getElementById('id_credit_limit');
+    const defaultDiscountField = document.getElementById('id_default_discount');
+    const volumeDiscountField = document.getElementById('volume_discount');
+    const earlyPaymentDiscountField = document.getElementById('early_payment_discount');
+    
+    // Actualizar displays de crédito
+    function updateCreditDisplays() {
+        const creditLimit = parseFloat(creditLimitField.value) || 0;
+        const outstandingBalance = 0; // Esto se calcularía desde el backend
+        const availableCredit = creditLimit - outstandingBalance;
+        
+        document.getElementById('credit-limit-display').textContent = '$' + creditLimit.toFixed(2);
+        document.getElementById('available-credit-display').textContent = '$' + availableCredit.toFixed(2);
+        document.getElementById('outstanding-balance-display').textContent = '$' + outstandingBalance.toFixed(2);
+        
+        // Cambiar color según disponibilidad
+        const availableDisplay = document.getElementById('available-credit-display');
+        if (availableCredit < 0) {
+            availableDisplay.className = 'text-lg font-semibold text-red-600 dark:text-red-400';
+        } else if (availableCredit < creditLimit * 0.1) {
+            availableDisplay.className = 'text-lg font-semibold text-yellow-600 dark:text-yellow-400';
+        } else {
+            availableDisplay.className = 'text-lg font-semibold text-green-600 dark:text-green-400';
+        }
+    }
+    
+    // Event listeners para actualizar displays
+    if (creditLimitField) {
+        creditLimitField.addEventListener('input', updateCreditDisplays);
+        creditLimitField.addEventListener('blur', updateCreditDisplays);
+    }
+    
+    // Validación de descuentos
+    function validateDiscount(field, maxValue = 100) {
+        const value = parseFloat(field.value);
+        if (isNaN(value) || value < 0 || value > maxValue) {
+            showFieldError(field, `{% trans "Discount must be between 0 and" %} ${maxValue}%`);
+            return false;
+        }
+        clearFieldError(field);
+        return true;
+    }
+    
+    if (defaultDiscountField) {
+        defaultDiscountField.addEventListener('blur', function() {
+            validateDiscount(this, 100);
+        });
+    }
+    
+    if (volumeDiscountField) {
+        volumeDiscountField.addEventListener('blur', function() {
+            validateDiscount(this, 50);
+        });
+    }
+    
+    if (earlyPaymentDiscountField) {
+        earlyPaymentDiscountField.addEventListener('blur', function() {
+            validateDiscount(this, 20);
+        });
+    }
+    
+    // Configurar valores por defecto para VIP
+    const isVipField = document.getElementById('id_is_vip');
+    if (isVipField) {
+        isVipField.addEventListener('change', function() {
+            if (this.checked) {
+                // Aplicar descuentos por defecto para VIP
+                if (defaultDiscountField && !defaultDiscountField.value) {
+                    defaultDiscountField.value = '10.00';
+                }
+                if (volumeDiscountField && !volumeDiscountField.value) {
+                    volumeDiscountField.value = '5.00';
+                }
+            }
+        });
+    }
+    
+    // Inicializar displays
+    updateCreditDisplays();
+    
+    // Configurar tooltips para información adicional
+    const tooltipElements = document.querySelectorAll('[data-tooltip]');
+    tooltipElements.forEach(element => {
+        element.addEventListener('mouseenter', function() {
+            const tooltip = this.getAttribute('data-tooltip');
+            showTooltip(this, tooltip);
+        });
+        
+        element.addEventListener('mouseleave', function() {
+            hideTooltip();
+        });
+    });
+    
+    function showTooltip(element, text) {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'absolute z-50 px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg';
+        tooltip.textContent = text;
+        tooltip.id = 'tooltip';
+        
+        document.body.appendChild(tooltip);
+        
+        const rect = element.getBoundingClientRect();
+        tooltip.style.left = rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2) + 'px';
+        tooltip.style.top = rect.top - tooltip.offsetHeight - 5 + 'px';
+    }
+    
+    function hideTooltip() {
+        const tooltip = document.getElementById('tooltip');
+        if (tooltip) {
+            tooltip.remove();
+        }
+    }
+});
+</script> 

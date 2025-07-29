@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, include
+from django.views.generic import RedirectView
 from . import views
 from . import views_adminet
 from .views_adminet_connection import TiendaNubeAdminetConnectionView
@@ -20,9 +21,9 @@ urlpatterns = [
     # Product Mapping
     path('mappings/', views.TiendaNubeProductMappingListView.as_view(), name='mapping_list'),
     path('mappings/<int:pk>/', views.TiendaNubeProductMappingDetailView.as_view(), name='mapping_detail'),
-    # Customer Mapping
-    path('customers/', views.TiendaNubeCustomerMappingListView.as_view(), name='customer_mapping_list'),
-    path('customers/<int:pk>/', views.TiendaNubeCustomerMappingDetailView.as_view(), name='customer_mapping_detail'),
+    # Customer Mapping - Redirect to unified system
+    path('customers/', RedirectView.as_view(url='/tiendanube/unified/mappings/', permanent=False), name='customer_mapping_list'),
+    path('customers/<int:pk>/', RedirectView.as_view(url='/tiendanube/unified/mappings/', permanent=False), name='customer_mapping_detail'),
     # Order Mapping
     path('orders/', views.TiendaNubeOrderMappingListView.as_view(), name='order_mapping_list'),
     path('orders/<int:pk>/', views.TiendaNubeOrderMappingDetailView.as_view(), name='order_mapping_detail'),
@@ -43,15 +44,15 @@ urlpatterns = [
     path('restock/policies/<int:pk>/delete/', views.TiendaNubeProductRestockPolicyDeleteView.as_view(), name='product_restock_policy_delete'),
     path('restock/policies/<int:pk>/', views.TiendaNubeProductRestockPolicyDetailView.as_view(), name='product_restock_policy_detail'),
     path('restock/policies/<int:pk>/execute/', views.TiendaNubeProductRestockPolicyExecuteView.as_view(), name='product_restock_policy_execute'),
-    # Sync Management
+    # Sync Management - Redirect customer sync to unified system
     path('sync/manual/', views.TiendaNubeManualSyncView.as_view(), name='manual_sync'),
     path('sync/products/', views.TiendaNubeSyncProductsView.as_view(), name='sync_products'),
-    path('sync/customers/', views.TiendaNubeSyncCustomersView.as_view(), name='sync_customers'),
-    path('sync/customers/to-tiendanube/', views.TiendaNubeSyncCustomersToTiendanubeView.as_view(), name='sync_customers_to_tiendanube'),
+    path('sync/customers/', RedirectView.as_view(url='/tiendanube/unified/dashboard/', permanent=False), name='sync_customers'),
+    path('sync/customers/to-tiendanube/', RedirectView.as_view(url='/tiendanube/unified/sync/to-tiendanube/', permanent=False), name='sync_customers_to_tiendanube'),
     path('sync/all-stock/', views.TiendaNubeSyncAllStockView.as_view(), name='sync_all_stock'),
     # Reports
     path('reports/', views.TiendaNubeReportsView.as_view(), name='reports'),
-    # Adminet Integration
+    # Adminet Integration - Redirect cliente mapping to unified system
     path('adminet/cond_venta_map/', views_adminet.CondVentaMapListView.as_view(), name='cond_venta_map_list'),
     path('adminet/cond_venta_map/create/', views_adminet.CondVentaMapCreateView.as_view(), name='cond_venta_map_create'),
     path('adminet/cond_venta_map/<int:pk>/edit/', views_adminet.CondVentaMapUpdateView.as_view(), name='cond_venta_map_update'),
@@ -59,7 +60,29 @@ urlpatterns = [
     path('adminet/cond_venta_map/toggle/', views_adminet.toggle_cond_venta_mapping, name='cond_venta_map_toggle'),
     path('adminet/cond_venta_map/delete/', views_adminet.delete_cond_venta_mapping, name='cond_venta_map_delete_ajax'),
     path('adminet/cond_venta_map/payment-methods/', views_adminet.get_tiendanube_payment_methods, name='get_payment_methods'),
+    # Cliente mapping URLs - Redirect to unified system
+    path('adminet/cliente_map/', RedirectView.as_view(url='/tiendanube/unified/mappings/', permanent=False), name='cliente_map_list'),
+    path('adminet/cliente_map/toggle/', RedirectView.as_view(url='/tiendanube/unified/mappings/create-ajax/', permanent=False), name='cliente_map_toggle'),
+    path('adminet/cliente_map/delete/', RedirectView.as_view(url='/tiendanube/unified/mappings/delete-ajax/', permanent=False), name='cliente_map_delete_ajax'),
+    path('adminet/cliente_map/customers/', RedirectView.as_view(url='/tiendanube/unified/tiendanube/customers/', permanent=False), name='get_tiendanube_customers'),
     path('adminet/connection/', TiendaNubeAdminetConnectionView.as_view(), name='adminet_connection'),
     path('adminet/test-order/', views_adminet.test_order_to_adminet, name='test_order_to_adminet'),
     path('adminet/webhook-order/', views_adminet.webhook_order_tiendanube, name='webhook_order_tiendanube'),
+    
+    # Unified Customer Sync URLs - Include directly with proper namespace
+    path('unified/dashboard/', views.UnifiedCustomerSyncDashboardView.as_view(), name='unified_dashboard'),
+    path('unified/mappings/', views.UnifiedCustomerMappingListView.as_view(), name='unified_mapping_list'),
+    path('unified/mappings/create/', views.UnifiedCustomerMappingCreateView.as_view(), name='unified_mapping_create'),
+    path('unified/mappings/<int:pk>/', views.UnifiedCustomerMappingDetailView.as_view(), name='unified_mapping_detail'),
+    path('unified/mappings/<int:pk>/edit/', views.UnifiedCustomerMappingUpdateView.as_view(), name='unified_mapping_update'),
+    path('unified/mappings/<int:pk>/delete/', views.UnifiedCustomerMappingDeleteView.as_view(), name='unified_mapping_delete'),
+    path('unified/logs/', views.UnifiedSyncLogListView.as_view(), name='unified_sync_log_list'),
+    path('unified/sync/from-tiendanube/', views.unified_sync_customers_from_tiendanube, name='unified_sync_from_tiendanube'),
+    path('unified/sync/to-tiendanube/', views.unified_sync_customers_to_tiendanube, name='unified_sync_to_tiendanube'),
+    path('unified/sync/with-adminet/', views.unified_sync_customers_with_adminet, name='unified_sync_with_adminet'),
+    path('unified/sync/migrate/', views.unified_migrate_from_old_systems, name='unified_migrate_from_old_systems'),
+    path('unified/mappings/create-ajax/', views.unified_create_mapping_ajax, name='unified_create_mapping_ajax'),
+    path('unified/mappings/delete-ajax/', views.unified_delete_mapping_ajax, name='unified_delete_mapping_ajax'),
+    path('unified/adminet/customers/', views.unified_get_adminet_customers, name='unified_get_adminet_customers'),
+    path('unified/tiendanube/customers/', views.unified_get_tiendanube_customers, name='unified_get_tiendanube_customers'),
 ] 

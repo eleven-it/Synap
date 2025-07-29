@@ -1,32 +1,152 @@
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div>
-        {{ form.name|as_crispy_field }}
+<div class="space-y-6">
+    <!-- Información básica del cliente -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+            {% trans 'Basic Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.name|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.type|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.document_number|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.is_active|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.type|as_crispy_field }}
+
+    <!-- Información de contacto -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            {% trans 'Contact Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.email|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.phone|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.mobile|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.website|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.document_number|as_crispy_field }}
+
+    <!-- Información de ubicación -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            {% trans 'Location Information' %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                {{ form.country|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.state|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.city|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.postal_code|as_crispy_field }}
+            </div>
+            <div class="md:col-span-2">
+                {{ form.address|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.email|as_crispy_field }}
+
+    <!-- Tags -->
+    <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+            </svg>
+            {% trans 'Tags & Categories' %}
+        </h3>
+        
+        <div class="space-y-4">
+            <div>
+                {{ form.tags|as_crispy_field }}
+            </div>
+            <div>
+                {{ form.new_tags|as_crispy_field }}
+            </div>
+        </div>
     </div>
-    <div>
-        {{ form.phone|as_crispy_field }}
-    </div>
-    <div>
-        {{ form.country|as_crispy_field }}
-    </div>
-    <div>
-        {{ form.state|as_crispy_field }}
-    </div>
-    <div>
-        {{ form.city|as_crispy_field }}
-    </div>
-    <div class="md:col-span-2">
-        {{ form.address|as_crispy_field }}
-    </div>
-    <div>
-        {{ form.is_active|as_crispy_field }}
-    </div>
-</div> 
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Actualizar estados cuando cambie el país
+    const countrySelect = document.getElementById('id_country');
+    const stateSelect = document.getElementById('id_state');
+    
+    if (countrySelect && stateSelect) {
+        countrySelect.addEventListener('change', function() {
+            const countryId = this.value;
+            if (countryId) {
+                // Limpiar estados actuales
+                stateSelect.innerHTML = '<option value="">{% trans "Select state/province..." %}</option>';
+                
+                // Cargar estados del país seleccionado
+                fetch(`/sales/api/states-by-country/?country_id=${countryId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        data.states.forEach(state => {
+                            const option = document.createElement('option');
+                            option.value = state.id;
+                            option.textContent = state.name;
+                            stateSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error loading states:', error);
+                    });
+            }
+        });
+    }
+    
+    // Validación en tiempo real para documento según tipo
+    const typeSelect = document.getElementById('id_type');
+    const documentField = document.getElementById('id_document_number');
+    
+    if (typeSelect && documentField) {
+        typeSelect.addEventListener('change', function() {
+            const clientType = this.value;
+            const documentValue = documentField.value;
+            
+            if (clientType === 'individual') {
+                documentField.placeholder = '{% trans "DNI, Passport, etc." %}';
+                if (documentValue && documentValue.length < 5) {
+                    showFieldError(documentField, '{% trans "Document number is required for individuals" %}');
+                }
+            } else if (clientType === 'company') {
+                documentField.placeholder = '{% trans "CUIT, RFC, NIF, etc." %}';
+            }
+        });
+    }
+});
+</script> 

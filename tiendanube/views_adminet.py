@@ -17,6 +17,7 @@ from django.contrib import messages
 import logging
 from tiendanube.models_synap import TiendaNubeConfig
 from tiendanube.services_main import TiendaNubeService
+from .models_adminet import TiendaNubeAdminetConfig, TiendaNubeCondVentaMap, TiendaNubeClienteMap
 
 logger = logging.getLogger(__name__)
 
@@ -321,3 +322,202 @@ def get_tiendanube_payment_methods(request):
             'error': f'Error: {str(e)}',
             'payment_methods': []
         }) 
+
+class ClienteMapListView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    template_name = 'tiendanube_adminet/cliente_map_list.html'
+    permission_required = 'tiendanube.view_tiendanubeclientemap'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Obtener configuración de administraNET
+        adminet_config = TiendaNubeAdminetConfig.objects.filter(is_active=True).first()
+        if not adminet_config:
+            messages.warning(self.request, "No hay configuración activa de administraNET")
+            context['clientes'] = []
+            context['connection_error'] = "No hay configuración activa de administraNET"
+            return context
+
+        try:
+            # Conectar a administraNET y obtener clientes
+            mysql_config = {
+                'host': adminet_config.host,
+                'port': adminet_config.port,
+                'database': adminet_config.database,
+                'user': adminet_config.user,
+                'password': adminet_config.password,
+            }
+            
+            mysql_service = MySQLConnectionService(mysql_config)
+            
+            # Obtener todos los clientes de administraNET
+            query = """
+                SELECT codigo, nombre_cliente, email, cuit
+                FROM cliente 
+                ORDER BY nombre_cliente
+            """
+            
+            result = mysql_service.execute_query(query)
+            
+            if not result.get('success'):
+                context['connection_error'] = result.get('error', 'Error desconocido')
+                context['clientes'] = []
+                return context
+            
+            clientes = result.get('results', [])
+            
+            # Obtener mapeos existentes
+            mapeos_existentes = {
+                mapping.adminet_codigo: mapping 
+                for mapping in TiendaNubeClienteMap.objects.all()
+            }
+            
+            # Crear lista con información completa
+            clientes_completos = []
+            for cliente in clientes:
+                codigo = cliente['codigo']
+                mapeo = mapeos_existentes.get(codigo)
+                
+                clientes_completos.append({
+                    'codigo': codigo,
+                    'nombre': cliente['nombre_cliente'],
+                    'email': cliente.get('email', ''),
+                    'documento': cliente.get('cuit', ''),
+                    'telefono': '',  # Campo no disponible
+                    'direccion': '',  # Campo no disponible
+                    'ciudad': '',  # Campo no disponible
+                    'provincia': '',  # Campo no disponible
+                    'mapeado': mapeo is not None,
+                    'tiendanube_email': mapeo.tiendanube_email if mapeo else '',
+                    'activo': mapeo.activo if mapeo else False,
+                    'mapeo_id': mapeo.id if mapeo else None,
+                })
+            
+            context['clientes'] = clientes_completos
+            context['connection_success'] = True
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo clientes: {str(e)}")
+            context['connection_error'] = f"Error de conexión: {str(e)}"
+            context['clientes'] = []
+        
+        return context
+
+
+@csrf_exempt
+@user_passes_test(lambda u: u.is_superuser)
+def toggle_cliente_mapping(request):
+    """Toggle o crear mapeo de cliente"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'})
+    
+    try:
+        data = json.loads(request.body)
+        codigo = data.get('codigo')
+        tiendanube_email = data.get('tiendanube_email')
+        activo = data.get('activo', False)
+        
+        if not codigo or not tiendanube_email:
+            return JsonResponse({'success': False, 'error': 'Código cliente y email son requeridos'})
+        
+        # Buscar mapeo existente o crear uno nuevo
+        mapeo, created = TiendaNubeClienteMap.objects.get_or_create(
+            adminet_codigo=codigo,
+            defaults={
+                'tiendanube_email': tiendanube_email,
+                'activo': activo
+            }
+        )
+        
+        if not created:
+            # Actualizar mapeo existente
+            mapeo.tiendanube_email = tiendanube_email
+            mapeo.activo = activo
+            mapeo.save()
+        
+        # Obtener información del cliente de administraNET
+        adminet_config = TiendaNubeAdminetConfig.objects.filter(is_active=True).first()
+        if adminet_config:
+            try:
+                mysql_config = {
+                    'host': adminet_config.host,
+                    'port': adminet_config.port,
+                    'database': adminet_config.database,
+                    'user': adminet_config.user,
+                    'password': adminet_config.password,
+                }
+                
+                mysql_service = MySQLConnectionService(mysql_config)
+                query = "SELECT nombre_cliente, cuit FROM cliente WHERE codigo = %s"
+                result = mysql_service.execute_query(query, (codigo,))
+                
+                if result.get('success') and result.get('results'):
+                    cliente_data = result['results'][0]
+                    mapeo.adminet_nombre = cliente_data['nombre_cliente']
+                    mapeo.adminet_documento = cliente_data.get('cuit', '')
+                    mapeo.save()
+            except Exception as e:
+                logger.error(f"Error obteniendo información del cliente de administraNET: {str(e)}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Mapeo actualizado correctamente',
+            'mapeo_id': mapeo.id,
+            'created': created
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en toggle_cliente_mapping: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@user_passes_test(lambda u: u.is_superuser)
+def delete_cliente_mapping(request):
+    """Eliminar mapeo de cliente"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'})
+    
+    try:
+        data = json.loads(request.body)
+        mapeo_id = data.get('mapeo_id')
+        
+        if not mapeo_id:
+            return JsonResponse({'success': False, 'error': 'ID de mapeo requerido'})
+        
+        mapeo = TiendaNubeClienteMap.objects.filter(id=mapeo_id).first()
+        if not mapeo:
+            return JsonResponse({'success': False, 'error': 'Mapeo no encontrado'})
+        
+        mapeo.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Mapeo eliminado correctamente'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en delete_cliente_mapping: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+def get_tiendanube_customers(request):
+    """Obtener lista de clientes de Tiendanube para autocompletado"""
+    try:
+        # Aquí deberías obtener los clientes reales de Tiendanube
+        # Por ahora, devolvemos una lista de ejemplo
+        customers = [
+            {'email': 'cliente1@ejemplo.com', 'name': 'Cliente Ejemplo 1'},
+            {'email': 'cliente2@ejemplo.com', 'name': 'Cliente Ejemplo 2'},
+            {'email': 'cliente3@ejemplo.com', 'name': 'Cliente Ejemplo 3'},
+        ]
+        
+        return JsonResponse({
+            'success': True,
+            'customers': customers
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo clientes de Tiendanube: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500) 

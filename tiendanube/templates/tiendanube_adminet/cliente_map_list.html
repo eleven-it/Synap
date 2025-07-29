@@ -1,0 +1,525 @@
+{% extends "tiendanube/tiendanube_app_base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Clientes - Mapeo Tiendanube ↔ AdministraNET" %}{% endblock %}
+
+{% block tiendanube_content %}
+{% csrf_token %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {% trans "Mapeo de Clientes" %}
+                </h1>
+                <p class="mt-2 text-gray-600 dark:text-gray-400">
+                    {% trans "Configurar mapeo entre clientes de Tiendanube y AdministraNET" %}
+                </p>
+            </div>
+            <div class="flex space-x-3">
+                <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    {% trans "Actualizar" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    {% if connection_error %}
+    <div class="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-exclamation-triangle text-red-400"></i>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">
+                    {% trans "Error de Conexión" %}
+                </h3>
+                <div class="mt-2 text-sm text-red-700">
+                    {{ connection_error }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if connection_success %}
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-users text-blue-600 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                {% trans "Total Clientes" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ clientes|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-link text-green-600 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                {% trans "Mapeados" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ clientes|dictsort:"mapeado"|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-toggle-on text-orange-600 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                {% trans "Activos" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ clientes|dictsort:"activo"|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-unlink text-gray-600 text-2xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                {% trans "Sin Mapear" %}
+                            </dt>
+                            <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                {{ clientes|dictsort:"mapeado"|length }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Clientes Table -->
+    <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+        <div class="px-4 py-5 sm:px-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                {% trans "Clientes de AdministraNET" %}
+            </h3>
+            <p class="mt-1 max-w-2xl text-sm text-gray-500">
+                {% trans "Activa/desactiva la sincronización para cada cliente" %}
+            </p>
+        </div>
+        
+        {% if clientes %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "ID" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Nombre" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Email" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Documento" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Email Tiendanube" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Estado" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Sincronización" %}
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {% trans "Acciones" %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for cliente in clientes %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {{ cliente.codigo }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ cliente.nombre }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ cliente.email|default:"-" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {{ cliente.documento|default:"-" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if cliente.mapeado %}
+                                <input type="email" 
+                                       class="cliente-email-input text-xs p-2 rounded border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans"
+                                       value="{{ cliente.tiendanube_email }}"
+                                       data-codigo="{{ cliente.codigo }}"
+                                       data-mapeo-id="{{ cliente.mapeo_id }}"
+                                       placeholder="Email Tiendanube">
+                            {% else %}
+                                <input type="email" 
+                                       class="cliente-email-input text-xs p-2 rounded border-gray-300 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-sans"
+                                       data-codigo="{{ cliente.codigo }}"
+                                       placeholder="Email Tiendanube">
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if cliente.mapeado %}
+                                {% if cliente.activo %}
+                                    <span class="status-badge status-active">
+                                        <i class="fas fa-check mr-1"></i>
+                                        {% trans "Activo" %}
+                                    </span>
+                                {% else %}
+                                    <span class="status-badge status-inactive">
+                                        <i class="fas fa-times mr-1"></i>
+                                        {% trans "Inactivo" %}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="status-badge status-unmapped">
+                                    <i class="fas fa-unlink mr-1"></i>
+                                    {% trans "Sin mapear" %}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <label class="switch">
+                                <input type="checkbox" 
+                                       class="sync-toggle"
+                                       data-codigo="{{ cliente.codigo }}"
+                                       data-mapeo-id="{{ cliente.mapeo_id|default:'' }}"
+                                       {% if cliente.activo %}checked{% endif %}
+                                       {% if not cliente.mapeado %}disabled{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {% if cliente.mapeado %}
+                                <button class="text-red-600 hover:text-red-900 delete-mapping-btn"
+                                        data-mapeo-id="{{ cliente.mapeo_id }}">
+                                    <i class="fas fa-trash"></i>
+                                    {% trans "Eliminar" %}
+                                </button>
+                            {% else %}
+                                <button class="text-blue-600 hover:text-blue-900 create-mapping-btn"
+                                        data-codigo="{{ cliente.codigo }}">
+                                    <i class="fas fa-plus"></i>
+                                    {% trans "Crear" %}
+                                </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-users text-gray-400 text-4xl mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                {% trans "No hay clientes disponibles" %}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400">
+                {% trans "Verifica la conexión con AdministraNET o que existan clientes activos." %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+            <span class="text-gray-700 dark:text-gray-300">{% trans "Procesando..." %}</span>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50"></div>
+
+<style>
+/* Status badges */
+.status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-active {
+    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
+}
+
+.status-inactive {
+    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200;
+}
+
+.status-unmapped {
+    @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200;
+}
+
+/* Switch toggle */
+.switch {
+    @apply relative inline-flex items-center h-6 rounded-full w-11;
+}
+
+.switch input {
+    @apply opacity-0 w-0 h-0;
+}
+
+.slider {
+    @apply absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-300 dark:bg-gray-600 rounded-full transition-all duration-300;
+}
+
+.slider:before {
+    @apply absolute h-4 w-4 left-1 bottom-1 bg-white rounded-full transition-all duration-300;
+    content: "";
+}
+
+input:checked + .slider {
+    @apply bg-orange-500;
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+input:disabled + .slider {
+    @apply opacity-50 cursor-not-allowed;
+}
+
+/* Toast styles */
+.toast {
+    @apply max-w-sm w-full bg-white dark:bg-gray-800 shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden;
+}
+
+.toast-success {
+    @apply border-l-4 border-green-400;
+}
+
+.toast-error {
+    @apply border-l-4 border-red-400;
+}
+
+.toast-content {
+    @apply p-4;
+}
+
+.toast-title {
+    @apply text-sm font-medium text-gray-900 dark:text-white;
+}
+
+.toast-message {
+    @apply mt-1 text-sm text-gray-500 dark:text-gray-400;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    // Refresh button
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        window.location.reload();
+    });
+    
+    // Email input handling
+    document.querySelectorAll('.cliente-email-input').forEach(input => {
+        input.addEventListener('blur', function() {
+            const codigo = this.dataset.codigo;
+            const email = this.value.trim();
+            const mapeoId = this.dataset.mapeoId;
+            
+            if (email && codigo) {
+                toggleClienteMapping(codigo, email, mapeoId ? true : false);
+            }
+        });
+    });
+    
+    // Create mapping button
+    document.querySelectorAll('.create-mapping-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const codigo = this.dataset.codigo;
+            const row = this.closest('tr');
+            const emailInput = row.querySelector('.cliente-email-input');
+            const email = emailInput.value.trim();
+            
+            if (!email) {
+                showToast('Por favor ingresa un email de Tiendanube', 'error');
+                emailInput.focus();
+                return;
+            }
+            
+            toggleClienteMapping(codigo, email, false);
+        });
+    });
+    
+    // Delete mapping button
+    document.querySelectorAll('.delete-mapping-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mapeoId = this.dataset.mapeoId;
+            
+            if (confirm('¿Estás seguro de que quieres eliminar este mapeo?')) {
+                deleteClienteMapping(mapeoId);
+            }
+        });
+    });
+    
+    // Sync toggle
+    document.querySelectorAll('.sync-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function() {
+            const codigo = this.dataset.codigo;
+            const mapeoId = this.dataset.mapeoId;
+            const activo = this.checked;
+            
+            if (mapeoId) {
+                // Update existing mapping
+                const row = this.closest('tr');
+                const emailInput = row.querySelector('.cliente-email-input');
+                const email = emailInput.value.trim();
+                
+                if (email) {
+                    toggleClienteMapping(codigo, email, true, activo);
+                }
+            }
+        });
+    });
+    
+    function toggleClienteMapping(codigo, email, isUpdate = false, activo = true) {
+        showLoading();
+        
+        fetch('{% url "tiendanube:cliente_map_toggle" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                codigo: codigo,
+                tiendanube_email: email,
+                activo: activo
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(data.error || 'Error al actualizar mapeo', 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showToast('Error de conexión', 'error');
+            console.error('Error:', error);
+        });
+    }
+    
+    function deleteClienteMapping(mapeoId) {
+        showLoading();
+        
+        fetch('{% url "tiendanube:cliente_map_delete_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                mapeo_id: mapeoId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(data.error || 'Error al eliminar mapeo', 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showToast('Error de conexión', 'error');
+            console.error('Error:', error);
+        });
+    }
+    
+    function showLoading() {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+    }
+    
+    function hideLoading() {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+    
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type} mb-4`;
+        
+        toast.innerHTML = `
+            <div class="toast-content">
+                <div class="toast-title">${type === 'success' ? 'Éxito' : 'Error'}</div>
+                <div class="toast-message">${message}</div>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 5000);
+    }
+});
+</script>
+{% endblock %} 

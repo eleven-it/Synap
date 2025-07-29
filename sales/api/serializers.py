@@ -7,6 +7,7 @@ from inventory.models import ProductVariant, Warehouse
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from core.models import Contact, ContactRelationship
+from sales.models import ClientTag, ClientAttachment, ClientActivity
 
 User = get_user_model()
 
@@ -547,3 +548,76 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
             number = 1
         
         return f"INV-{timezone.now().strftime('%Y%m')}-{number:04d}" 
+
+
+class ClientTagSerializer(serializers.ModelSerializer):
+    """Serializer para tags de clientes"""
+    class Meta:
+        model = ClientTag
+        fields = [
+            'id', 'name', 'color', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def validate_name(self, value):
+        """Validar que el nombre del tag sea único por empresa"""
+        empresa = self.context.get('request').user.empresa if self.context.get('request') else None
+        if empresa:
+            tag_id = self.instance.id if self.instance else None
+            if ClientTag.objects.filter(empresa=empresa, name=value).exclude(id=tag_id).exists():
+                raise serializers.ValidationError("Ya existe un tag con este nombre.")
+        return value
+
+
+class ClientAttachmentSerializer(serializers.ModelSerializer):
+    """Serializer para adjuntos de clientes"""
+    file_size_mb = serializers.ReadOnlyField()
+    uploaded_by_name = serializers.CharField(source='uploaded_by.get_full_name', read_only=True)
+    
+    class Meta:
+        model = ClientAttachment
+        fields = [
+            'id', 'client', 'file', 'file_name', 'file_size', 'file_size_mb',
+            'description', 'uploaded_by', 'uploaded_by_name', 'uploaded_at', 'is_active'
+        ]
+        read_only_fields = ['file_size', 'uploaded_by', 'uploaded_at']
+    
+    def validate_file(self, value):
+        """Validar el archivo subido"""
+        # Validar tamaño máximo (10MB)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if value.size > max_size:
+            raise serializers.ValidationError("El archivo no puede ser mayor a 10MB.")
+        
+        # Validar tipos de archivo permitidos
+        allowed_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.txt']
+        file_extension = value.name.lower()
+        if not any(file_extension.endswith(ext) for ext in allowed_extensions):
+            raise serializers.ValidationError("Tipo de archivo no permitido.")
+        
+        return value
+
+
+class ClientActivitySerializer(serializers.ModelSerializer):
+    """Serializer para actividades de clientes"""
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    activity_type_display = serializers.CharField(source='get_activity_type_display', read_only=True)
+    activity_icon = serializers.CharField(source='get_activity_icon', read_only=True)
+    activity_color = serializers.CharField(source='get_activity_color', read_only=True)
+    
+    class Meta:
+        model = ClientActivity
+        fields = [
+            'id', 'client', 'activity_type', 'activity_type_display', 'title', 'description',
+            'related_data', 'user', 'user_name', 'activity_date', 'priority', 'is_private',
+            'is_completed', 'activity_icon', 'activity_color', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'activity_date', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        """Validaciones adicionales"""
+        # Si es una actividad privada, solo el usuario asignado puede verla
+        if data.get('is_private') and not data.get('user'):
+            raise serializers.ValidationError("Las actividades privadas deben tener un usuario asignado.")
+        
+        return data 
