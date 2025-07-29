@@ -6,7 +6,7 @@ import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
-from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView, RedirectView
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView, RedirectView, View
 from django.views.generic.edit import FormView
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponseRedirect
@@ -2827,6 +2827,28 @@ class TiendanubeConfigDeleteView(LoginRequiredMixin, PermissionRequiredMixin, De
         return super().delete(request, *args, **kwargs)
 
 
+class TiendanubeConfigWizardCallbackView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """
+    Vista de callback para el wizard de configuración de Tiendanube.
+    """
+    permission_required = 'tiendanube_administranet.add_tiendanubeconfig'
+    
+    def get(self, request, *args, **kwargs):
+        session = request.session
+        code = request.GET.get('code')
+        state = request.GET.get('state')
+        
+        if code and state:
+            session['wizard_code'] = code
+            session['wizard_state'] = state
+            session['wizard_step'] = 4
+            messages.success(request, _('Authorization code received successfully!'))
+        else:
+            messages.error(request, _('Authorization failed. Please try again.'))
+        
+        return redirect('tiendanube_administranet:tiendanube_config_wizard')
+
+
 class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
     """
     Vista para el wizard de configuración de Tiendanube.
@@ -2856,7 +2878,7 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             # Paso 1: Credenciales
             context['app_id'] = self.request.session.get('wizard_app_id', '')
             context['client_secret'] = self.request.session.get('wizard_client_secret', '')
-            context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard'))
+            context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
             
         elif step == 3:
             # Paso 3: Autorización
@@ -2866,7 +2888,7 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                 # Generar URL de autorización
                 state = self.request.session.get('wizard_state', '')
                 context['auth_url'] = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&state={state}"
-                context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard'))
+                context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
                 context['state'] = state
                 
         elif step == 4:

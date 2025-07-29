@@ -19,6 +19,7 @@ urlpatterns = [
     path('config/tiendanube/<int:pk>/edit/', views.TiendanubeConfigUpdateView.as_view(), name='tiendanube_config_update'),
     path('config/tiendanube/<int:pk>/delete/', views.TiendanubeConfigDeleteView.as_view(), name='tiendanube_config_delete'),
     path('config/tiendanube/wizard/', views.TiendanubeConfigWizardView.as_view(), name='tiendanube_config_wizard'),
+    path('config/tiendanube/wizard/callback/', views.TiendanubeConfigWizardCallbackView.as_view(), name='tiendanube_config_wizard_callback'),
     path('config/adminet/', views.AdministraNETConfigView.as_view(), name='adminet_config'),
     
     # Clientes
