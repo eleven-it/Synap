@@ -824,6 +824,7 @@ class TiendaNubeConfigWizardCallbackView(View):
         
         # Construir la URL de redirección con los parámetros
         redirect_url = f'/tiendanube-adminet/config/tiendanube/wizard/callback/?code={code}&state={state}'
+        print(f"Tiendanube callback redirecting to: {redirect_url}")
         return redirect(redirect_url)
 
 class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):

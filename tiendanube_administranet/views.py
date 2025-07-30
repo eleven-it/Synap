@@ -2838,7 +2838,9 @@ class TiendanubeConfigWizardCallbackView(LoginRequiredMixin, PermissionRequiredM
         code = request.GET.get('code')
         state = request.GET.get('state')
         
-        logger.info(f"Tiendanube callback received - Code: {code[:10] if code else 'None'}..., State: {state}")
+        logger.info(f"Tiendanube ADMINET callback received - Code: {code[:10] if code else 'None'}..., State: {state}")
+        logger.info(f"Request path: {request.path}")
+        logger.info(f"Request GET params: {dict(request.GET)}")
         
         if code and state:
             session['wizard_code'] = code
@@ -2853,7 +2855,9 @@ class TiendanubeConfigWizardCallbackView(LoginRequiredMixin, PermissionRequiredM
             session['wizard_message'] = 'Authorization failed. Please try again.'
             session['wizard_message_type'] = 'error'
         
-        return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=4")
+        redirect_url = f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=4"
+        logger.info(f"Redirecting to: {redirect_url}")
+        return redirect(redirect_url)
 
 
 class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
@@ -2907,6 +2911,10 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                 context['auth_url'] = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&state={state}"
                 context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
                 context['state'] = state
+                
+                logger.info(f"Step 3 - App ID: {app_id}, State: {state}")
+                logger.info(f"Step 3 - Auth URL: {context['auth_url']}")
+                logger.info(f"Step 3 - Redirect URI: {context['redirect_uri']}")
                 
         elif step == 4:
             # Paso 4: Token
