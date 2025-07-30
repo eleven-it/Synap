@@ -2923,8 +2923,18 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                 
         elif step == 4:
             # Paso 4: Token
-            context['access_token'] = self.request.session.get('wizard_access_token')
-            context['user_id'] = self.request.session.get('wizard_user_id')
+            access_token = self.request.session.get('wizard_access_token')
+            user_id = self.request.session.get('wizard_user_id')
+            
+            # Solo mostrar datos si realmente tenemos un token válido
+            if access_token and user_id and not access_token.startswith('sample_'):
+                context['access_token'] = access_token
+                context['user_id'] = user_id
+                context['token_obtained'] = True
+            else:
+                context['access_token'] = None
+                context['user_id'] = None
+                context['token_obtained'] = False
             
         elif step == 5:
             # Paso 5: Preferencias

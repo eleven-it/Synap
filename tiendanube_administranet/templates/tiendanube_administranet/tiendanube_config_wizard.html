@@ -175,18 +175,22 @@
         </div>
         {% endif %}
         
-        {% if not access_token %}
+        {% if not token_obtained %}
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 animate-fadeIn">
+            <div class="text-blue-700 dark:text-blue-300 font-semibold mb-2">{% trans "Ready to Exchange Authorization Code" %}</div>
+            <div class="text-sm text-blue-600 dark:text-blue-400 mb-4">{% trans "Click the button below to exchange your authorization code for an access token." %}</div>
+        </div>
         <form method="post" class="animate-fadeIn">
             {% csrf_token %}
             <button type="submit" name="get_token" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
                 <span class="material-icons text-sm mr-2">key</span>
-                {% trans "Get Access Token" %}
+                {% trans "Exchange Authorization Code for Token" %}
             </button>
         </form>
         {% else %}
         <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4 animate-fadeIn">
-            <div class="text-green-700 dark:text-green-300 font-semibold mb-2">{% trans "Access Token Obtained!" %}</div>
-            <div class="text-xs text-gray-700 dark:text-gray-300 break-all"><b>{% trans "Access Token:" %}</b> {{ access_token }}</div>
+            <div class="text-green-700 dark:text-green-300 font-semibold mb-2">{% trans "Access Token Obtained Successfully!" %}</div>
+            <div class="text-xs text-gray-700 dark:text-gray-300 break-all mb-2"><b>{% trans "Access Token:" %}</b> {{ access_token|slice:":20 }}...{{ access_token|slice:"-10:" }}</div>
             <div class="text-xs text-gray-700 dark:text-gray-300"><b>{% trans "Store ID:" %}</b> {{ user_id }}</div>
         </div>
         <form method="post" class="animate-fadeIn">
