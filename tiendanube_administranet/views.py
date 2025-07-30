@@ -3,6 +3,8 @@ Vistas principales para la integración Tiendanube-AdministraNET.
 """
 
 import logging
+import requests
+import uuid
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
@@ -2932,20 +2934,37 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             context['sync_stock'] = self.request.session.get('wizard_sync_stock', True)
             context['sync_variants'] = self.request.session.get('wizard_sync_variants', True)
             
+            # Verificar que tenemos los datos necesarios para continuar
+            access_token = self.request.session.get('wizard_access_token')
+            user_id = self.request.session.get('wizard_user_id')
+            if not access_token or not user_id:
+                context['wizard_error'] = 'No se pudo obtener la autorización de Tiendanube. Por favor, completa el proceso de autorización antes de continuar.'
+            
         elif step == 6:
             # Paso 6: Resumen
-            context['summary'] = {
-                'app_id': self.request.session.get('wizard_app_id'),
-                'user_id': self.request.session.get('wizard_user_id'),
-                'access_token': self.request.session.get('wizard_access_token'),
-                'scopes': self.request.session.get('wizard_scopes', []),
-                'auto_sync': self.request.session.get('wizard_auto_sync', True),
-                'sync_interval': self.request.session.get('wizard_sync_interval', 30),
-                'sync_products': self.request.session.get('wizard_sync_products', True),
-                'sync_stock': self.request.session.get('wizard_sync_stock', True),
-                'sync_variants': self.request.session.get('wizard_sync_variants', True),
-            }
-            # Obtener datos de la tienda si están disponibles
+            access_token = self.request.session.get('wizard_access_token')
+            user_id = self.request.session.get('wizard_user_id')
+            
+            # Verificar que tenemos los datos necesarios
+            if not access_token or not user_id:
+                context['wizard_error'] = 'No se pudo obtener la autorización de Tiendanube. Por favor, completa el proceso de autorización antes de continuar.'
+            else:
+                # Verificar si ya existe la tienda en Synap
+                if TiendanubeConfig.objects.filter(store_id=user_id).exists():
+                    context['wizard_error'] = 'This store is already registered in Synap.'
+                else:
+                    context['summary'] = {
+                        'app_id': self.request.session.get('wizard_app_id'),
+                        'user_id': user_id,
+                        'access_token': access_token[:20] + '...' + access_token[-10:] if access_token else 'N/A',
+                        'scopes': self.request.session.get('wizard_scopes', []),
+                        'auto_sync': self.request.session.get('wizard_auto_sync', True),
+                        'sync_interval': self.request.session.get('wizard_sync_interval', 30),
+                        'sync_products': self.request.session.get('wizard_sync_products', True),
+                        'sync_stock': self.request.session.get('wizard_sync_stock', True),
+                        'sync_variants': self.request.session.get('wizard_sync_variants', True),
+                    }
+                    # Obtener datos de la tienda si están disponibles
             context['tienda_data'] = self.request.session.get('wizard_tienda_data')
             
         return context
@@ -2970,10 +2989,104 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
         elif step == 4:
             # Obtener token de acceso
             if 'get_token' in request.POST:
-                # Aquí implementarías la lógica para obtener el token de acceso
-                # Por ahora, simulamos el proceso
-                request.session['wizard_access_token'] = 'sample_access_token_123'
-                request.session['wizard_user_id'] = 'sample_store_id'
+                # Intercambiar código de autorización por access token
+                app_id = request.session.get('wizard_app_id')
+                client_secret = request.session.get('wizard_client_secret')
+                code = request.session.get('wizard_code')
+                redirect_uri = request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
+                redirect_uri = redirect_uri.replace('http://', 'https://')
+                
+                data = {
+                    'client_id': app_id,
+                    'client_secret': client_secret,
+                    'grant_type': 'authorization_code',
+                    'code': code,
+                    'redirect_uri': redirect_uri
+                }
+                
+                logger.info(f"Tiendanube token exchange - App ID: {app_id}")
+                logger.info(f"Tiendanube token exchange - Code: {code[:10] if code else 'None'}...")
+                logger.info(f"Tiendanube token exchange - Redirect URI: {redirect_uri}")
+                
+                try:
+                    response = requests.post(
+                        'https://www.tiendanube.com/apps/authorize/token',
+                        json=data,
+                        headers={'Content-Type': 'application/json'},
+                        timeout=30
+                    )
+                    
+                    logger.info(f"Tiendanube token exchange - Response status: {response.status_code}")
+                    logger.info(f"Tiendanube token exchange - Response text: {response.text}")
+                    
+                    if response.status_code == 200:
+                        token_data = response.json()
+                        access_token = token_data.get('access_token')
+                        user_id = token_data.get('user_id')
+                        
+                        if access_token and user_id:
+                            request.session['wizard_access_token'] = access_token
+                            request.session['wizard_user_id'] = user_id
+                            request.session['wizard_message'] = 'Access token obtained successfully!'
+                            request.session['wizard_message_type'] = 'success'
+                            logger.info(f"Tiendanube token exchange - Success! User ID: {user_id}")
+                        else:
+                            # Verificar si hay error en la respuesta
+                            error = token_data.get('error')
+                            error_description = token_data.get('error_description', 'Unknown error')
+                            
+                            if error == 'invalid_client':
+                                request.session['wizard_message'] = 'Invalid App ID or Client Secret. Please check your credentials.'
+                            elif error == 'invalid_grant':
+                                request.session['wizard_message'] = 'Authorization code is invalid or expired. Please try the authorization process again.'
+                            elif error == 'invalid_redirect_uri':
+                                request.session['wizard_message'] = 'Redirect URI mismatch. Please check your app configuration.'
+                            else:
+                                request.session['wizard_message'] = f'Error from Tiendanube: {error_description}'
+                            
+                            request.session['wizard_message_type'] = 'error'
+                            logger.error(f"Tiendanube token exchange - Error: {error} - {error_description}")
+                    else:
+                        # Manejar errores HTTP
+                        if response.status_code == 400:
+                            try:
+                                error_data = response.json()
+                                error = error_data.get('error')
+                                error_description = error_data.get('error_description', 'Bad request')
+                                
+                                if error == 'invalid_client':
+                                    request.session['wizard_message'] = 'Invalid App ID or Client Secret. Please check your credentials.'
+                                elif error == 'invalid_grant':
+                                    request.session['wizard_message'] = 'Authorization code is invalid or expired. Please try the authorization process again.'
+                                elif error == 'invalid_redirect_uri':
+                                    request.session['wizard_message'] = 'Redirect URI mismatch. Please check your app configuration.'
+                                else:
+                                    request.session['wizard_message'] = f'Error from Tiendanube: {error_description}'
+                            except:
+                                request.session['wizard_message'] = 'Invalid request to Tiendanube. Please check your configuration.'
+                        elif response.status_code == 401:
+                            request.session['wizard_message'] = 'Unauthorized. Please check your App ID and Client Secret.'
+                        elif response.status_code == 403:
+                            request.session['wizard_message'] = 'Access forbidden. Please check your app permissions.'
+                        elif response.status_code >= 500:
+                            request.session['wizard_message'] = 'Tiendanube service is temporarily unavailable. Please try again later.'
+                        else:
+                            request.session['wizard_message'] = f'Unexpected error from Tiendanube (HTTP {response.status_code})'
+                        
+                        request.session['wizard_message_type'] = 'error'
+                        logger.error(f"Tiendanube token exchange - HTTP Error {response.status_code}: {response.text}")
+                        
+                except requests.exceptions.RequestException as e:
+                    error_message = f'Network error: {str(e)}'
+                    request.session['wizard_message'] = error_message
+                    request.session['wizard_message_type'] = 'error'
+                    logger.error(f"Tiendanube token exchange - Network error: {e}")
+                except Exception as e:
+                    error_message = f'Unexpected error: {str(e)}'
+                    request.session['wizard_message'] = error_message
+                    request.session['wizard_message_type'] = 'error'
+                    logger.error(f"Tiendanube token exchange - Unexpected error: {e}")
+                
                 return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=4")
             elif 'continue_prefs' in request.POST:
                 return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=5")
@@ -2991,27 +3104,73 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             # Guardar configuración
             if 'save_store' in request.POST:
                 try:
+                    # Verificar que tenemos los datos necesarios
+                    store_id = request.session.get('wizard_user_id')
+                    access_token = request.session.get('wizard_access_token')
+                    
+                    if not store_id or not access_token:
+                        request.session['wizard_message'] = 'No se pudo obtener la autorización de Tiendanube. Por favor, completa el proceso de autorización antes de continuar.'
+                        request.session['wizard_message_type'] = 'error'
+                        return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=6")
+                    
+                    # Verificar si ya existe la tienda en Synap
+                    if TiendanubeConfig.objects.filter(store_id=store_id).exists():
+                        request.session['wizard_message'] = 'This store is already registered in Synap.'
+                        request.session['wizard_message_type'] = 'error'
+                        return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=6")
+                    
+                    # Obtener datos de la tienda desde Tiendanube para el nombre
+                    tienda_name = f"Store {store_id}"
+                    try:
+                        headers = {
+                            'Content-Type': 'application/json',
+                            'Authentication': f'bearer {access_token}',
+                            'User-Agent': 'Synap-Tiendanube-Integration/1.0'
+                        }
+                        response = requests.get(
+                            f'https://api.tiendanube.com/v1/{store_id}/store',
+                            headers=headers,
+                            timeout=10
+                        )
+                        if response.status_code == 200:
+                            tienda_data = response.json()
+                            tienda_name = tienda_data.get('name', f"Store {store_id}")
+                            logger.info(f"Tiendanube store data retrieved: {tienda_name}")
+                    except Exception as e:
+                        logger.warning(f"Could not retrieve store data from Tiendanube: {e}")
+                    
                     # Crear la configuración de Tiendanube
                     config = TiendanubeConfig.objects.create(
-                        name=f"Store {request.session.get('wizard_user_id', 'Unknown')}",
-                        store_id=request.session.get('wizard_user_id'),
-                        access_token=request.session.get('wizard_access_token'),
+                        name=tienda_name,
+                        store_id=store_id,
+                        access_token=access_token,
                         api_url='https://api.tiendanube.com/v1',
                         is_active=request.session.get('wizard_auto_sync', True),
                     )
                     
+                    logger.info(f"Tiendanube configuration created successfully: {config.name} (ID: {config.id})")
+                    
                     # Limpiar datos de sesión
-                    for key in ['wizard_app_id', 'wizard_client_secret', 'wizard_state', 
-                               'wizard_access_token', 'wizard_user_id', 'wizard_auto_sync',
-                               'wizard_sync_interval', 'wizard_sync_products', 'wizard_sync_stock',
-                               'wizard_sync_variants', 'wizard_scopes', 'wizard_tienda_data']:
+                    session_keys_to_clean = [
+                        'wizard_app_id', 'wizard_client_secret', 'wizard_state', 
+                        'wizard_access_token', 'wizard_user_id', 'wizard_auto_sync',
+                        'wizard_sync_interval', 'wizard_sync_products', 'wizard_sync_stock',
+                        'wizard_sync_variants', 'wizard_scopes', 'wizard_tienda_data',
+                        'wizard_message', 'wizard_message_type'
+                    ]
+                    
+                    for key in session_keys_to_clean:
                         request.session.pop(key, None)
                     
                     messages.success(request, _('Tiendanube store configuration completed successfully!'))
+                    logger.info(f"Wizard completed successfully for store: {store_id}")
                     return redirect('tiendanube_administranet:tiendanube_config_list')
                     
                 except Exception as e:
-                    messages.error(request, f'Error saving configuration: {str(e)}')
+                    error_msg = f'Error saving configuration: {str(e)}'
+                    logger.error(f"Wizard error: {error_msg}")
+                    request.session['wizard_message'] = error_msg
+                    request.session['wizard_message_type'] = 'error'
                     return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=6")
         
         return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step={step}")
