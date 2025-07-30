@@ -2908,8 +2908,11 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             if app_id and client_secret:
                 # Generar URL de autorización
                 state = self.request.session.get('wizard_state', '')
-                context['auth_url'] = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&state={state}"
-                context['redirect_uri'] = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
+                redirect_uri = self.request.build_absolute_uri(reverse('tiendanube_administranet:tiendanube_config_wizard_callback'))
+                # Asegurar que la URL sea HTTPS
+                redirect_uri = redirect_uri.replace('http://', 'https://')
+                context['auth_url'] = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&redirect_uri={redirect_uri}&state={state}"
+                context['redirect_uri'] = redirect_uri
                 context['state'] = state
                 
                 logger.info(f"Step 3 - App ID: {app_id}, State: {state}")
