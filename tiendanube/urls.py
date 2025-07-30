@@ -14,7 +14,7 @@ urlpatterns = [
     path('config/<int:pk>/edit/', views.TiendaNubeConfigUpdateView.as_view(), name='config_update'),
     path('config/<int:pk>/delete/', views.TiendaNubeConfigDeleteView.as_view(), name='config_delete'),
     path('config/wizard/', views.TiendaNubeConfigWizardView.as_view(), name='config_wizard'),
-    path('config/wizard/callback/', views.TiendaNubeConfigWizardCallbackView.as_view(), name='config_wizard_callback'),
+    path('config/wizard/callback/', RedirectView.as_view(url='/tiendanube-adminet/config/tiendanube/wizard/callback/', permanent=False), name='config_wizard_callback'),
     # Logs
     path('logs/', views.TiendaNubeSyncLogListView.as_view(), name='logs_list'),
     path('logs/<int:pk>/', views.TiendaNubeSyncLogDetailView.as_view(), name='log_detail'),
