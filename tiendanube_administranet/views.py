@@ -2853,7 +2853,7 @@ class TiendanubeConfigWizardCallbackView(LoginRequiredMixin, PermissionRequiredM
             session['wizard_message'] = 'Authorization failed. Please try again.'
             session['wizard_message_type'] = 'error'
         
-        return redirect('tiendanube_administranet:tiendanube_config_wizard')
+        return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=4")
 
 
 class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
@@ -2869,6 +2869,8 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
         # Obtener el paso actual del wizard
         step = int(self.request.GET.get('step', 1))
         context['step'] = step
+        
+        logger.info(f"Wizard step: {step}, Session data: {dict(self.request.session)}")
         
         # Manejar mensajes desde la sesión
         wizard_message = self.request.session.pop('wizard_message', None)
