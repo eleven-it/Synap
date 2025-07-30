@@ -818,13 +818,13 @@ class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
 
 class TiendaNubeConfigWizardCallbackView(View):
     def get(self, request, *args, **kwargs):
-        session = request.session
+        # Redirigir directamente a la app tiendanube_administranet
         code = request.GET.get('code')
         state = request.GET.get('state')
-        session['wizard_code'] = code
-        session['wizard_state'] = state
-        session['wizard_step'] = 4
-        return redirect('tiendanube:config_wizard')
+        
+        # Construir la URL de redirección con los parámetros
+        redirect_url = f'/tiendanube-adminet/config/tiendanube/wizard/callback/?code={code}&state={state}'
+        return redirect(redirect_url)
 
 class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):
     """Sincroniza todos los productos con tag tiendanube hacia Tiendanube."""

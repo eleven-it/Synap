@@ -229,6 +229,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
+
+# Configuración de mensajes
+MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 AUTH_USER_MODEL = 'core.UsuarioExtendido'
 
 LOGGING = {

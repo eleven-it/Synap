@@ -58,6 +58,18 @@
         {% endfor %}
     </div>
     
+    <!-- Mensajes del wizard -->
+    {% if wizard_message %}
+    <div class="mb-6 p-4 rounded-lg border {% if wizard_message_type == 'success' %}bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200{% elif wizard_message_type == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200{% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200{% endif %} animate-fadeIn">
+        <div class="flex items-center">
+            <span class="material-icons text-sm mr-2">
+                {% if wizard_message_type == 'success' %}check_circle{% elif wizard_message_type == 'error' %}error{% else %}info{% endif %}
+            </span>
+            <span class="text-sm font-medium">{{ wizard_message }}</span>
+        </div>
+    </div>
+    {% endif %}
+    
     <div id="wizardStepContent" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center animate-fadeIn">
         {% if step == 1 %}
         <form method="post" class="space-y-6">

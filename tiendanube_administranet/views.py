@@ -2838,13 +2838,20 @@ class TiendanubeConfigWizardCallbackView(LoginRequiredMixin, PermissionRequiredM
         code = request.GET.get('code')
         state = request.GET.get('state')
         
+        logger.info(f"Tiendanube callback received - Code: {code[:10] if code else 'None'}..., State: {state}")
+        
         if code and state:
             session['wizard_code'] = code
             session['wizard_state'] = state
             session['wizard_step'] = 4
-            messages.success(request, _('Authorization code received successfully!'))
+            logger.info("Authorization code saved to session successfully")
+            # Usar session para mensajes en lugar del framework de mensajes
+            session['wizard_message'] = 'Authorization code received successfully!'
+            session['wizard_message_type'] = 'success'
         else:
-            messages.error(request, _('Authorization failed. Please try again.'))
+            logger.error(f"Authorization failed - Code: {code}, State: {state}")
+            session['wizard_message'] = 'Authorization failed. Please try again.'
+            session['wizard_message_type'] = 'error'
         
         return redirect('tiendanube_administranet:tiendanube_config_wizard')
 
@@ -2862,6 +2869,14 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
         # Obtener el paso actual del wizard
         step = int(self.request.GET.get('step', 1))
         context['step'] = step
+        
+        # Manejar mensajes desde la sesión
+        wizard_message = self.request.session.pop('wizard_message', None)
+        wizard_message_type = self.request.session.pop('wizard_message_type', None)
+        
+        if wizard_message:
+            context['wizard_message'] = wizard_message
+            context['wizard_message_type'] = wizard_message_type
         
         # Definir los pasos del wizard
         context['wizard_steps'] = [
