@@ -46,155 +46,366 @@
     <form method="post" class="space-y-8">
         {% csrf_token %}
         
-        <!-- Tiendanube Information -->
+        <!-- Field Mapping Section -->
         <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <span class="material-icons text-blue-600 mr-2">cloud</span>
-                    {% trans "Tiendanube Information" %}
+                    <span class="material-icons text-blue-600 mr-2">compare_arrows</span>
+                    {% trans "Field Mapping Configuration" %}
                 </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {% trans "Map fields between AdministraNET and Tiendanube systems" %}
+                </p>
             </div>
+            
             <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        {{ form.tiendanube_id|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_email|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_name|as_crispy_field }}
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            {{ form.tiendanube_first_name|as_crispy_field }}
-                        </div>
-                        <div>
-                            {{ form.tiendanube_last_name|as_crispy_field }}
-                        </div>
-                    </div>
-                    <div>
-                        {{ form.tiendanube_document|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_phone|as_crispy_field }}
-                    </div>
-                    <div class="md:col-span-2">
-                        {{ form.tiendanube_address|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_city|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_state|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_country|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_postal_code|as_crispy_field }}
-                    </div>
-                    <div class="md:col-span-2">
-                        {{ form.tiendanube_notes|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_tags|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.tiendanube_tax_exemptions|as_crispy_field }}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                    <div class="flex items-center">
-                        {{ form.tiendanube_verified_email }}
-                        <label for="{{ form.tiendanube_verified_email.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Verified Email" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.tiendanube_accepts_marketing }}
-                        <label for="{{ form.tiendanube_accepts_marketing.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Accepts Marketing" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.tiendanube_tax_exempt }}
-                        <label for="{{ form.tiendanube_tax_exempt.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Tax Exempt" %}
-                        </label>
-                    </div>
-                </div>
-            </div>
-        </div>
+                <!-- Mapping Table -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">
+                                    <div class="flex items-center">
+                                        <span class="material-icons text-green-600 mr-2 text-sm">database</span>
+                                        {% trans "AdministraNET Fields" %}
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">
+                                    <div class="flex items-center">
+                                        <span class="material-icons text-blue-600 mr-2 text-sm">cloud</span>
+                                        {% trans "Tiendanube Fields" %}
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- ID Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Codigo</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer ID (Primary Key)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">id</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer ID (Primary Key)</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Name Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">nombre_cliente</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Name</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">name</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Name</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Email Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Email</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Email</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">email</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Email</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Document Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">CUIT</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Tax ID/Document</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">document</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Tax ID/Document</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Phone Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">telefono</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Phone Number</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">phone</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Phone Number</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Address Street Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Calle</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Street Name</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.street</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Calle y número (incluidos)</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Address Number Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">NroCalle</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Street Number</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.street</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Incluido en calle y número</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Address Department Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Dpto</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Department/Apartment</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.street</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Incluido en calle y número</div>
+                                </td>
+                            </tr>
+                            
 
-        <!-- AdministraNET Information -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                    <span class="material-icons text-green-600 mr-2">database</span>
-                    {% trans "AdministraNET Information" %}
-                </h3>
-            </div>
-            <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        {{ form.adminet_code|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_name|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_document|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_email|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_phone|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_mobile|as_crispy_field }}
-                    </div>
-                    <div class="md:col-span-2">
-                        {{ form.adminet_address|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_city|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_state|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_country|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.adminet_postal_code|as_crispy_field }}
-                    </div>
-                    <div class="md:col-span-2">
-                        {{ form.adminet_notes|as_crispy_field }}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                    <div class="flex items-center">
-                        {{ form.adminet_active }}
-                        <label for="{{ form.adminet_active.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Active" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.adminet_credit_customer }}
-                        <label for="{{ form.adminet_credit_customer.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Credit Customer" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.adminet_wholesale_customer }}
-                        <label for="{{ form.adminet_wholesale_customer.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Wholesale Customer" %}
-                        </label>
-                    </div>
+                            
+                            <!-- City Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">IDDepartamento</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">City/Department (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.city</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">City</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Province Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">CodProvincia</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Province Code (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.province</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Province/State</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Status Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Estado</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Status</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">active</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Active Status</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Creation Date Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">FechaAlta</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Registration Date</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">created_at</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Creation Date</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Tipo Cliente Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">TipoCliente</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Customer Type (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Viajante Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">CodViajante</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Sales Rep (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- País Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">id_pais</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Country (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.country</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Country</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Distrito Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">IDDistrito</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">District (FK)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- CUIT Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">CUIT</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Tax ID</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">document</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Document</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Lista Precio Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">ListaPrecio</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Price List</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Fecha Última Compra Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">fecha_ultima_compra</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Last Purchase Date</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Country Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.country</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Country</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Postal Code Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.zip</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Postal Code</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Country Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.country</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">País del cliente</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Postal Code Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">address.zip</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Código postal</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Datos Completos Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">datos_completos</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Datos Completos</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Workflow Estado Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">workflow_estado</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Estado del Workflow</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Fecha Registro Incompleto Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">fecha_registro_incompleto</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Fecha Registro Incompleto</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Intentos Completar Datos Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">intentos_completar_datos</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Intentos Completar Datos</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -208,7 +419,7 @@
                 </h3>
             </div>
             <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         {{ form.sync_status|as_crispy_field }}
                     </div>
@@ -217,36 +428,6 @@
                     </div>
                     <div>
                         {{ form.sync_direction|as_crispy_field }}
-                    </div>
-                    <div>
-                        {{ form.sync_frequency|as_crispy_field }}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6">
-                    <div class="flex items-center">
-                        {{ form.sync_email }}
-                        <label for="{{ form.sync_email.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Email" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.sync_name }}
-                        <label for="{{ form.sync_name.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Name" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.sync_address }}
-                        <label for="{{ form.sync_address.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Address" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        {{ form.sync_phone }}
-                        <label for="{{ form.sync_phone.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Phone" %}
-                        </label>
                     </div>
                 </div>
             </div>
@@ -267,4 +448,20 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-input, .form-select, .form-textarea {
+        @apply text-xs;
+    }
+    
+    .table th {
+        @apply text-xs font-medium;
+    }
+    
+    .table td {
+        @apply text-sm;
+    }
+</style>
 {% endblock %} 

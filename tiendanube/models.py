@@ -10,8 +10,15 @@ from .models_synap import (
     TiendaNubeCustomerMapping, TiendaNubeOrderMapping, TiendaNubeRestockRule,
     TiendaNubeRestockLog, TiendaNubeProductRestockPolicy
 )
-from .models_adminet import (
-    TiendaNubeCondVentaMap, TiendaNubeAdminetConfig
-)
 
-# Dejar solo la configuración y utilidades generales aquí
+# Importar todos los modelos de Synap para mantener la funcionalidad completa
+__all__ = [
+    'TiendaNubeConfig',
+    'TiendaNubeSyncLog', 
+    'TiendaNubeProductMapping',
+    'TiendaNubeCustomerMapping',
+    'TiendaNubeOrderMapping',
+    'TiendaNubeRestockRule',
+    'TiendaNubeRestockLog',
+    'TiendaNubeProductRestockPolicy',
+]

@@ -1,0 +1,368 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if object %}{% trans "Edit Product Variant Mapping" %}{% else %}{% trans "Create Product Variant Mapping" %}{% endif %}
+{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" 
+               class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <a href="{% url 'tiendanube_administranet:product_variant_mapping_list' %}" 
+                   class="text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                    {% trans "Product Variants" %}
+                </a>
+            </div>
+        </li>
+        <li aria-current="page">
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %}
+                </span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<!-- Header -->
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+        {% if object %}{% trans "Edit Product Variant Mapping" %}{% else %}{% trans "Create Product Variant Mapping" %}{% endif %}
+    </h1>
+    <p class="text-sm text-gray-600 dark:text-gray-400">
+        {% trans "Configure field mapping between AdministraNET and Tiendanube product variants" %}
+    </p>
+</div>
+
+<div class="max-w-6xl mx-auto">
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Field Mapping Section -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-blue-600 mr-2">compare_arrows</span>
+                    {% trans "Field Mapping Configuration" %}
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {% trans "Map fields between AdministraNET and Tiendanube product variants" %}
+                </p>
+            </div>
+            
+            <div class="p-6">
+                <!-- Mapping Table -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">
+                                    <div class="flex items-center">
+                                        <span class="material-icons text-green-600 mr-2 text-sm">database</span>
+                                        {% trans "AdministraNET Fields" %}
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-1/2">
+                                    <div class="flex items-center">
+                                        <span class="material-icons text-blue-600 mr-2 text-sm">cloud</span>
+                                        {% trans "Tiendanube Fields" %}
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                            <!-- ID Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">IDArt</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant ID (Primary Key)</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">id</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant ID (Primary Key)</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Product ID Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">product_id</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Parent Product ID</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Name Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">NombreArticulo</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Name</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">name</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Name</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- SKU Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">NroCodBarra</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Barcode/SKU</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">sku</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant SKU</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Price Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">Precio1V</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Sale Price</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">price</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Price</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Compare Price Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">compare_at_price</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Compare Price</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Cost Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">PrecioCosto</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Cost Price</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">cost</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Cost</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Stock Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">saldo_articulo</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Available Stock</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">stock</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Stock</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Weight Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">weight</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Weight</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Dimensions Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">width, height, depth</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Dimensions</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Options Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">options</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Options</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Values Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">values</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Values</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Product ID Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">product_id</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Parent Product ID</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Free Shipping Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">free_shipping</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Free Shipping</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Published Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">disponible_vta</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Available for Sale</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">published</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Published</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Images Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">-</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">No mapeable</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">images</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Variant Images</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Created At Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">fecha_alta</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Creation Date</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">created_at</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Creation Date</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Updated At Mapping -->
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">fecha_mod</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Last Update</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">updated_at</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">Last Update</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Synchronization Configuration -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-purple-50 dark:bg-purple-900/20">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-purple-600 mr-2">sync</span>
+                    {% trans "Synchronization Configuration" %}
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        {{ form.sync_status|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.sync_enabled|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.sync_price|as_crispy_field }}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        {{ form.sync_stock|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex items-center justify-between pt-6">
+            <a href="{% url 'tiendanube_administranet:product_variant_mapping_list' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">cancel</span>
+                {% trans "Cancel" %}
+            </a>
+            <button type="submit" 
+                    class="inline-flex items-center px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
+                <span class="material-icons text-sm mr-2">{% if object %}save{% else %}add{% endif %}</span>
+                {% if object %}{% trans "Update Mapping" %}{% else %}{% trans "Create Mapping" %}{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-input, .form-select, .form-textarea {
+        @apply text-xs;
+    }
+    
+    .table th {
+        @apply text-xs font-medium;
+    }
+    
+    .table td {
+        @apply text-sm;
+    }
+</style>
+{% endblock %} 

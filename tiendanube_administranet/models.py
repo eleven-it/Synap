@@ -95,9 +95,61 @@ class CustomerMapping(models.Model):
     # Campos de AdministraNET
     adminet_codigo = models.IntegerField(null=True, blank=True, verbose_name=_("AdministraNET Code"))
     adminet_nombre = models.CharField(max_length=255, blank=True, verbose_name=_("AdministraNET Name"))
+    adminet_email = models.EmailField(blank=True, verbose_name=_("Email AdministraNET"))
     adminet_documento = models.CharField(max_length=50, blank=True, verbose_name=_("AdministraNET Document"))
     adminet_telefono = models.CharField(max_length=50, blank=True, verbose_name=_("AdministraNET Phone"))
+    
+    # Campos de dirección de AdministraNET (datos de la cuenta del cliente)
+    adminet_calle = models.CharField(max_length=255, blank=True, verbose_name=_("Calle AdministraNET"))
+    adminet_nro_calle = models.CharField(max_length=20, blank=True, verbose_name=_("Número Calle AdministraNET"))
+    adminet_dpto = models.CharField(max_length=50, blank=True, verbose_name=_("Departamento AdministraNET"))
+    
+    # Campo de dirección combinada (para compatibilidad)
     adminet_direccion = models.TextField(blank=True, verbose_name=_("AdministraNET Address"))
+    
+    # Campos de ubicación (relaciones con tablas de referencia - datos de la cuenta)
+    adminet_id_distrito = models.IntegerField(blank=True, null=True, verbose_name=_("ID Distrito AdministraNET"))
+    adminet_cod_provincia = models.IntegerField(blank=True, null=True, verbose_name=_("Código Provincia AdministraNET"))
+    adminet_id_departamento = models.IntegerField(blank=True, null=True, verbose_name=_("ID Departamento AdministraNET"))
+    
+    # Campos de configuración y estado
+    adminet_tipo_cliente = models.IntegerField(blank=True, null=True, verbose_name=_("Tipo Cliente AdministraNET"))
+    adminet_cod_viajante = models.IntegerField(blank=True, null=True, verbose_name=_("Código Viajante AdministraNET"))
+    adminet_id_pais = models.IntegerField(blank=True, null=True, verbose_name=_("ID País AdministraNET"))
+    adminet_estado = models.CharField(max_length=30, blank=True, verbose_name=_("Estado AdministraNET"))
+    adminet_tipo_doc = models.CharField(max_length=10, blank=True, verbose_name=_("Tipo Documento AdministraNET"))
+    adminet_lista_precio = models.CharField(max_length=60, blank=True, verbose_name=_("Lista Precio AdministraNET"))
+    adminet_fecha_alta = models.DateTimeField(blank=True, null=True, verbose_name=_("Fecha Alta AdministraNET"))
+    adminet_fecha_ultima_compra = models.DateField(blank=True, null=True, verbose_name=_("Fecha Última Compra AdministraNET"))
+    
+    # Campos adicionales importantes
+    adminet_cuit = models.CharField(max_length=20, blank=True, verbose_name=_("CUIT AdministraNET"))
+    adminet_credito = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name=_("Crédito AdministraNET"))
+    adminet_descuento = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name=_("Descuento AdministraNET"))
+    adminet_observaciones = models.TextField(blank=True, verbose_name=_("Observaciones AdministraNET"))
+    adminet_saldo = models.DecimalField(max_digits=25, decimal_places=2, blank=True, null=True, verbose_name=_("Saldo AdministraNET"))
+    adminet_id_manual_cli = models.CharField(max_length=200, blank=True, verbose_name=_("ID Manual Cliente AdministraNET"))
+    adminet_nombre_fantasia = models.CharField(max_length=300, blank=True, verbose_name=_("Nombre Fantasía AdministraNET"))
+    adminet_cliente_ecommerce = models.CharField(max_length=5, blank=True, verbose_name=_("Cliente Ecommerce AdministraNET"))
+    
+    # Campos para manejo de datos incompletos
+    datos_completos = models.BooleanField(default=False, verbose_name=_("Datos Completos"))
+    fecha_registro_incompleto = models.DateTimeField(null=True, blank=True, verbose_name=_("Fecha Registro Incompleto"))
+    intentos_completar_datos = models.IntegerField(default=0, verbose_name=_("Intentos Completar Datos"))
+    ultimo_intento_completar = models.DateTimeField(null=True, blank=True, verbose_name=_("Último Intento Completar"))
+    
+    # Estado del workflow de completado
+    workflow_estado = models.CharField(
+        max_length=20,
+        choices=[
+            ('incompleto', 'Datos Incompletos'),
+            ('pendiente', 'Pendiente de Completar'),
+            ('completo', 'Datos Completos'),
+            ('abandonado', 'Abandonado'),
+        ],
+        default='incompleto',
+        verbose_name=_("Estado del Workflow")
+    )
 
     # Configuración de sincronización
     sync_direction = models.CharField(
@@ -132,6 +184,210 @@ class CustomerMapping(models.Model):
     def needs_sync(self):
         """Verificar si necesita sincronización."""
         return self.sync_enabled and self.sync_status != self.SyncStatus.SYNCED
+
+    def combine_adminet_address(self):
+        """
+        Combina los campos de dirección de AdministraNET en un solo string.
+        Formato: "Calle NroCalle Dpto"
+        """
+        parts = []
+        if self.adminet_calle:
+            parts.append(self.adminet_calle.strip())
+        if self.adminet_nro_calle:
+            parts.append(self.adminet_nro_calle.strip())
+        if self.adminet_dpto:
+            parts.append(self.adminet_dpto.strip())
+        
+        combined = ' '.join(parts)
+        self.adminet_direccion = combined
+        return combined
+
+    def parse_tiendanube_address(self, address_string):
+        """
+        Parsea la dirección de Tiendanube y la separa en campos de AdministraNET.
+        Tiendanube: "Calle 1234 Depto 5B"
+        AdministraNET: Calle="Calle", NroCalle="1234", Dpto="Depto 5B"
+        """
+        if not address_string:
+            return
+        
+        # Algoritmo de parsing inteligente
+        address_parts = address_string.strip().split()
+        
+        if len(address_parts) >= 2:
+            # Buscar el número (primer grupo de dígitos)
+            number_index = -1
+            for i, part in enumerate(address_parts):
+                if part.replace('.', '').isdigit():
+                    number_index = i
+                    break
+            
+            if number_index > 0:
+                # Calle: todo antes del número
+                self.adminet_calle = ' '.join(address_parts[:number_index])
+                # Número: el número encontrado
+                self.adminet_nro_calle = address_parts[number_index]
+                # Departamento: todo después del número
+                if number_index + 1 < len(address_parts):
+                    self.adminet_dpto = ' '.join(address_parts[number_index + 1:])
+                else:
+                    self.adminet_dpto = ''
+            else:
+                # No se encontró número, todo va en calle
+                self.adminet_calle = address_string
+                self.adminet_nro_calle = ''
+                self.adminet_dpto = ''
+        else:
+            # Solo una palabra, va en calle
+            self.adminet_calle = address_string
+            self.adminet_nro_calle = ''
+            self.adminet_dpto = ''
+        
+        # Actualizar el campo combinado
+        self.combine_adminet_address()
+
+    def get_tiendanube_address(self):
+        """
+        Obtiene la dirección formateada para Tiendanube desde los campos de AdministraNET.
+        """
+        return self.combine_adminet_address()
+
+    def sync_address_to_tiendanube(self):
+        """
+        Sincroniza la dirección desde AdministraNET hacia Tiendanube.
+        """
+        if self.adminet_calle or self.adminet_nro_calle or self.adminet_dpto:
+            self.tiendanube_address = self.get_tiendanube_address()
+
+    def sync_address_from_tiendanube(self):
+        """
+        Sincroniza la dirección desde Tiendanube hacia AdministraNET.
+        """
+        if self.tiendanube_address:
+            self.parse_tiendanube_address(self.tiendanube_address)
+
+
+class AdministraNETTipoCliente(models.Model):
+    """
+    Modelo para la tabla tipo_cliente de AdministraNET.
+    """
+    id_tipo_cliente = models.IntegerField(primary_key=True, verbose_name=_("ID Tipo Cliente"))
+    nombre_tipo_cliente = models.CharField(max_length=50, blank=True, verbose_name=_("Nombre Tipo Cliente"))
+    anulado = models.CharField(max_length=5, blank=True, verbose_name=_("Anulado"))
+
+    class Meta:
+        verbose_name = _("AdministraNET Tipo Cliente")
+        verbose_name_plural = _("AdministraNET Tipos Cliente")
+        db_table = 'tipo_cliente'
+
+    def __str__(self):
+        return f"{self.nombre_tipo_cliente}"
+
+
+class AdministraNETDepartamento(models.Model):
+    """
+    Modelo para la tabla departamento de AdministraNET.
+    """
+    id_departamento = models.IntegerField(primary_key=True, verbose_name=_("ID Departamento"))
+    nombre_departamento = models.CharField(max_length=50, blank=True, verbose_name=_("Nombre Departamento"))
+    cod_provincia = models.IntegerField(verbose_name=_("Código Provincia"))
+    anulado = models.CharField(max_length=5, blank=True, verbose_name=_("Anulado"))
+    cod_postal = models.CharField(max_length=50, blank=True, verbose_name=_("Código Postal"))
+
+    class Meta:
+        verbose_name = _("AdministraNET Departamento")
+        verbose_name_plural = _("AdministraNET Departamentos")
+        db_table = 'departamento'
+
+    def __str__(self):
+        return f"{self.nombre_departamento}"
+
+
+class AdministraNETProvincia(models.Model):
+    """
+    Modelo para la tabla provincia de AdministraNET.
+    """
+    cod_provincia = models.IntegerField(primary_key=True, verbose_name=_("Código Provincia"))
+    provincia = models.CharField(max_length=100, blank=True, verbose_name=_("Provincia"))
+    anulado = models.CharField(max_length=5, blank=True, verbose_name=_("Anulado"))
+    id_pais = models.IntegerField(blank=True, null=True, verbose_name=_("ID País"))
+    cod_afip = models.IntegerField(blank=True, null=True, verbose_name=_("Código AFIP"))
+    id_juridic_convenio = models.IntegerField(blank=True, null=True, verbose_name=_("ID Jurídico Convenio"))
+    id_pc = models.IntegerField(blank=True, null=True, verbose_name=_("ID PC"))
+
+    class Meta:
+        verbose_name = _("AdministraNET Provincia")
+        verbose_name_plural = _("AdministraNET Provincias")
+        db_table = 'provincia'
+
+    def __str__(self):
+        return f"{self.provincia}"
+
+
+class AdministraNETDistrito(models.Model):
+    """
+    Modelo para la tabla distrito de AdministraNET.
+    """
+    id_distrito = models.IntegerField(primary_key=True, verbose_name=_("ID Distrito"))
+    id_departamento = models.IntegerField(blank=True, null=True, verbose_name=_("ID Departamento"))
+    nombre_distrito = models.CharField(max_length=50, blank=True, verbose_name=_("Nombre Distrito"))
+    anulado = models.CharField(max_length=5, blank=True, verbose_name=_("Anulado"))
+    cod_postal = models.CharField(max_length=50, blank=True, verbose_name=_("Código Postal"))
+
+    class Meta:
+        verbose_name = _("AdministraNET Distrito")
+        verbose_name_plural = _("AdministraNET Distritos")
+        db_table = 'distrito'
+
+    def __str__(self):
+        return f"{self.nombre_distrito}"
+
+
+class AdministraNETViajante(models.Model):
+    """
+    Modelo para la tabla viajantes de AdministraNET.
+    """
+    cod_viajante = models.IntegerField(primary_key=True, verbose_name=_("Código Viajante"))
+    nombre = models.CharField(max_length=50, blank=True, verbose_name=_("Nombre"))
+    comision_vta = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name=_("Comisión Venta"))
+    comision_cob = models.DecimalField(max_digits=15, decimal_places=2, verbose_name=_("Comisión Cobro"))
+    zona = models.CharField(max_length=50, blank=True, verbose_name=_("Zona"))
+    observaciones = models.CharField(max_length=255, blank=True, verbose_name=_("Observaciones"))
+    anulado = models.CharField(max_length=5, blank=True, verbose_name=_("Anulado"))
+    web_desc_renglon = models.CharField(max_length=2, blank=True, verbose_name=_("Web Desc Renglón"))
+    web_desc_pie = models.CharField(max_length=2, blank=True, verbose_name=_("Web Desc Pie"))
+    web_cliente_todos = models.CharField(max_length=2, blank=True, verbose_name=_("Web Cliente Todos"))
+    cobrador = models.CharField(max_length=2, blank=True, verbose_name=_("Cobrador"))
+    clave_caja = models.CharField(max_length=50, blank=True, verbose_name=_("Clave Caja"))
+    logueado = models.CharField(max_length=2, blank=True, verbose_name=_("Logueado"))
+    detalle_logueo = models.CharField(max_length=500, blank=True, verbose_name=_("Detalle Logueo"))
+    ip_logueo = models.CharField(max_length=30, blank=True, verbose_name=_("IP Logueo"))
+    comisiones_avanzadas = models.CharField(max_length=2, blank=True, verbose_name=_("Comisiones Avanzadas"))
+
+    class Meta:
+        verbose_name = _("AdministraNET Viajante")
+        verbose_name_plural = _("AdministraNET Viajantes")
+        db_table = 'viajantes'
+
+    def __str__(self):
+        return f"{self.nombre}"
+
+
+class AdministraNETPais(models.Model):
+    """
+    Modelo para la tabla pais de AdministraNET.
+    """
+    id_pais = models.IntegerField(primary_key=True, verbose_name=_("ID País"))
+    nombre = models.CharField(max_length=100, blank=True, verbose_name=_("Nombre"))
+    anulado = models.CharField(max_length=2, blank=True, verbose_name=_("Anulado"))
+
+    class Meta:
+        verbose_name = _("AdministraNET País")
+        verbose_name_plural = _("AdministraNET Países")
+        db_table = 'pais'
+
+    def __str__(self):
+        return f"{self.nombre}"
 
 
 class ProductMapping(models.Model):
@@ -173,6 +429,11 @@ class ProductMapping(models.Model):
     tiendanube_videos = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Videos"))
     tiendanube_seo_title = models.CharField(max_length=255, blank=True, verbose_name=_("Tiendanube SEO Title"))
     tiendanube_seo_description = models.TextField(blank=True, verbose_name=_("Tiendanube SEO Description"))
+    tiendanube_brand = models.CharField(max_length=255, blank=True, verbose_name=_("Tiendanube Brand"))
+    tiendanube_categories = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Categories"))
+    tiendanube_tags = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Tags"))
+    tiendanube_images = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Images"))
+    tiendanube_videos = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Videos"))
     tiendanube_created_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Created At"))
     tiendanube_updated_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Updated At"))
 
@@ -208,6 +469,7 @@ class ProductMapping(models.Model):
     adminet_detalle_web = models.TextField(blank=True, null=True, verbose_name=_("Detalle Web AdministraNET"))
     adminet_disponible_venta = models.CharField(max_length=2, blank=True, null=True, verbose_name=_("Disponible Venta AdministraNET"))
     adminet_disponible_compra = models.CharField(max_length=2, blank=True, null=True, verbose_name=_("Disponible Compra AdministraNET"))
+    adminet_promo_destacado = models.CharField(max_length=2, blank=True, null=True, verbose_name=_("Promo Destacado AdministraNET"))
     adminet_fecha_alta = models.DateTimeField(blank=True, null=True, verbose_name=_("Fecha Alta AdministraNET"))
     adminet_fecha_mod = models.DateTimeField(blank=True, null=True, verbose_name=_("Fecha Modificación AdministraNET"))
 
@@ -278,6 +540,8 @@ class ProductVariantMapping(models.Model):
     tiendanube_published = models.BooleanField(default=True, verbose_name=_("Tiendanube Variant Published"))
     tiendanube_values = models.JSONField(default=dict, blank=True, verbose_name=_("Tiendanube Variant Values"))
     tiendanube_images = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Variant Images"))
+    tiendanube_product_id = models.BigIntegerField(null=True, blank=True, verbose_name=_("Tiendanube Product ID"))
+    tiendanube_options = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Variant Options"))
     tiendanube_created_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Variant Created At"))
     tiendanube_updated_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Variant Updated At"))
 
@@ -413,15 +677,44 @@ class OrderMapping(models.Model):
     # Campos de Tiendanube
     tiendanube_id = models.BigIntegerField(unique=True, null=True, blank=True, verbose_name=_("Tiendanube ID"))
     tiendanube_number = models.CharField(max_length=50, blank=True, verbose_name=_("Tiendanube Number"))
-    tiendanube_status = models.CharField(max_length=50, blank=True, verbose_name=_("Tiendanube Status"))
     tiendanube_total = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name=_("Tiendanube Total"))
+    tiendanube_currency = models.CharField(max_length=10, blank=True, verbose_name=_("Tiendanube Currency"))
+    tiendanube_status = models.CharField(max_length=50, blank=True, verbose_name=_("Tiendanube Status"))
+    tiendanube_payment_status = models.CharField(max_length=50, blank=True, verbose_name=_("Tiendanube Payment Status"))
+    tiendanube_notes = models.TextField(blank=True, verbose_name=_("Tiendanube Notes"))
+    tiendanube_customer_id = models.BigIntegerField(null=True, blank=True, verbose_name=_("Tiendanube Customer ID"))
     tiendanube_customer_email = models.EmailField(blank=True, verbose_name=_("Tiendanube Customer Email"))
+    tiendanube_customer_name = models.CharField(max_length=255, blank=True, verbose_name=_("Tiendanube Customer Name"))
+    tiendanube_shipping_address = models.JSONField(default=dict, blank=True, verbose_name=_("Tiendanube Shipping Address"))
+    tiendanube_billing_address = models.JSONField(default=dict, blank=True, verbose_name=_("Tiendanube Billing Address"))
+    tiendanube_payment_method = models.CharField(max_length=100, blank=True, verbose_name=_("Tiendanube Payment Method"))
+    tiendanube_shipping_method = models.CharField(max_length=100, blank=True, verbose_name=_("Tiendanube Shipping Method"))
+    tiendanube_created_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Created At"))
+    tiendanube_updated_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Updated At"))
 
     # Campos de AdministraNET
     adminet_codigo = models.CharField(max_length=50, null=True, blank=True, verbose_name=_("AdministraNET Code"))
     adminet_numero = models.CharField(max_length=50, blank=True, verbose_name=_("AdministraNET Number"))
     adminet_estado = models.CharField(max_length=50, blank=True, verbose_name=_("AdministraNET Status"))
     adminet_total = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name=_("AdministraNET Total"))
+    
+    # Campos de dirección de entrega (AdministraNET)
+    adminet_direccion_entrega = models.TextField(blank=True, verbose_name=_("Dirección de Entrega AdministraNET"))
+    adminet_calle_entrega = models.CharField(max_length=255, blank=True, verbose_name=_("Calle Entrega AdministraNET"))
+    adminet_nro_calle_entrega = models.CharField(max_length=20, blank=True, verbose_name=_("Número Calle Entrega AdministraNET"))
+    adminet_dpto_entrega = models.CharField(max_length=50, blank=True, verbose_name=_("Departamento Entrega AdministraNET"))
+    adminet_ciudad_entrega = models.CharField(max_length=100, blank=True, verbose_name=_("Ciudad Entrega AdministraNET"))
+    adminet_provincia_entrega = models.CharField(max_length=100, blank=True, verbose_name=_("Provincia Entrega AdministraNET"))
+    adminet_codigo_postal_entrega = models.CharField(max_length=20, blank=True, verbose_name=_("Código Postal Entrega AdministraNET"))
+    
+    # Campos de dirección de facturación (AdministraNET)
+    adminet_direccion_facturacion = models.TextField(blank=True, verbose_name=_("Dirección de Facturación AdministraNET"))
+    adminet_calle_facturacion = models.CharField(max_length=255, blank=True, verbose_name=_("Calle Facturación AdministraNET"))
+    adminet_nro_calle_facturacion = models.CharField(max_length=20, blank=True, verbose_name=_("Número Calle Facturación AdministraNET"))
+    adminet_dpto_facturacion = models.CharField(max_length=50, blank=True, verbose_name=_("Departamento Facturación AdministraNET"))
+    adminet_ciudad_facturacion = models.CharField(max_length=100, blank=True, verbose_name=_("Ciudad Facturación AdministraNET"))
+    adminet_provincia_facturacion = models.CharField(max_length=100, blank=True, verbose_name=_("Provincia Facturación AdministraNET"))
+    adminet_codigo_postal_facturacion = models.CharField(max_length=20, blank=True, verbose_name=_("Código Postal Facturación AdministraNET"))
 
     # Configuración de sincronización
     sync_status = models.CharField(

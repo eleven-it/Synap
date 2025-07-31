@@ -1,0 +1,49 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Webhook Event Detail" %}{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">{% trans "Webhook Event Detail" %}</h1>
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow p-4 mb-4">
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
+            <dt class="font-semibold">{% trans "ID" %}</dt>
+            <dd>{{ webhook_event.id }}</dd>
+            <dt class="font-semibold">{% trans "Type" %}</dt>
+            <dd>{{ webhook_event.event_type }}</dd>
+            <dt class="font-semibold">{% trans "Status" %}</dt>
+            <dd>{{ webhook_event.status }}</dd>
+            <dt class="font-semibold">{% trans "Resource ID" %}</dt>
+            <dd>{{ webhook_event.resource_id }}</dd>
+            <dt class="font-semibold">{% trans "Received At" %}</dt>
+            <dd>{{ webhook_event.received_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+            <dt class="font-semibold">{% trans "Webhook Config" %}</dt>
+            <dd>{{ webhook_event.webhook_config }}</dd>
+        </dl>
+    </div>
+    <h2 class="text-lg font-semibold mt-6 mb-2">{% trans "Delivery Logs" %}</h2>
+    <div class="overflow-x-auto rounded-lg shadow">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+            <thead class="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                    <th class="px-2 py-2">{% trans "Sent At" %}</th>
+                    <th class="px-2 py-2">{% trans "Status" %}</th>
+                    <th class="px-2 py-2">{% trans "Response" %}</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                {% for log in delivery_logs %}
+                <tr>
+                    <td class="px-2 py-2">{{ log.sent_at|date:'SHORT_DATETIME_FORMAT' }}</td>
+                    <td class="px-2 py-2">{{ log.status }}</td>
+                    <td class="px-2 py-2">{{ log.response|truncatechars:100 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center py-4 text-gray-400">{% trans "No delivery logs found." %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

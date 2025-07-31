@@ -1,0 +1,24 @@
+Campo_Adminet,Valor_Adminet,Campo_Tiendanube,Valor_Tiendanube,Regla_Transformación
+disponible_vta,Si,published,true,Si disponible_vta = 'Si' entonces published = true
+disponible_vta,No,published,false,Si disponible_vta = 'No' entonces published = false
+promo_destacado,Si,featured,true,Si promo_destacado = 'Si' entonces featured = true
+promo_destacado,No,featured,false,Si promo_destacado = 'No' entonces featured = false
+Estado,Activo,active,true,Si Estado = 'Activo' entonces active = true
+Estado,Inactivo,active,false,Si Estado = 'Inactivo' entonces active = false
+anulado,No,active,true,Si anulado = 'No' entonces active = true
+anulado,Sí,active,false,Si anulado = 'Sí' entonces active = false
+ecommerce,Si,sync_enabled,true,Si ecommerce = 'Si' entonces sync_enabled = true
+ecommerce,No,sync_enabled,false,Si ecommerce = 'No' entonces sync_enabled = false
+cliente_ecommerce,Si,sync_enabled,true,Si cliente_ecommerce = 'Si' entonces sync_enabled = true
+cliente_ecommerce,No,sync_enabled,false,Si cliente_ecommerce = 'No' entonces sync_enabled = false
+CodigoMarca,-,brand,string,JOIN con tabla marca para obtener NombreMarca
+CodigoRubro,-,categories,array,JOIN con tabla rubro para obtener NombreRubro
+IDDepartamento,-,address.city,string,JOIN con tabla departamento para obtener nombre
+CodProvincia,-,address.province,string,JOIN con tabla provincia para obtener nombre
+NroCodBarra,-,handle,string,Generar handle único basado en NroCodBarra o NombreArticulo
+Precio1V,-,compare_at_price,decimal,Usar Precio1V como precio comparativo si existe
+PrecioCosto,-,cost,decimal,Usar PrecioCosto como precio de costo
+saldo_articulo,-,stock,integer,Usar saldo_articulo como stock disponible
+fecha_alta,-,created_at,datetime,Convertir timestamp a datetime
+fecha_mod,-,updated_at,datetime,Convertir timestamp a datetime
+FechaAlta,-,created_at,datetime,Convertir timestamp a datetime 

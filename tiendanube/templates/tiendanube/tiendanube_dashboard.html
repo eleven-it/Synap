@@ -2,82 +2,111 @@
 {% load static %}
 {% load i18n %}
 
-{% block title %}{% trans "TiendaNube Dashboard" %}{% endblock %}
+{% block title %}{% trans "TiendaNube Dashboard - Synap" %}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .sync-status-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .dashboard-header {
+        background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
         color: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 25px rgba(249, 115, 22, 0.3);
     }
     
     .stat-card {
         background: white;
-        border-radius: 8px;
-        padding: 1.25rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #667eea;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid #f3f4f6;
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
     }
     
     .stat-number {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #667eea;
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #f97316, #ea580c);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
     .sync-progress {
-        background: #e5e7eb;
+        background: #f3f4f6;
         border-radius: 8px;
         height: 8px;
         overflow: hidden;
-        margin: 0.5rem 0;
+        margin: 0.75rem 0;
     }
     
     .sync-progress-bar {
         background: linear-gradient(90deg, #10b981, #059669);
         height: 100%;
-        transition: width 0.3s ease;
+        transition: width 0.5s ease;
+        border-radius: 8px;
     }
     
     .action-btn {
-        background: #667eea;
+        background: linear-gradient(135deg, #f97316, #ea580c);
         color: white;
         border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 6px;
-        font-weight: 500;
+        padding: 0.875rem 1.75rem;
+        border-radius: 8px;
+        font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.3s ease;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
     .action-btn:hover {
-        background: #5a67d8;
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(249, 115, 22, 0.4);
     }
     
     .action-btn:disabled {
         background: #9ca3af;
         cursor: not-allowed;
         transform: none;
+        box-shadow: none;
     }
     
     .action-btn.success {
-        background: #10b981;
+        background: linear-gradient(135deg, #10b981, #059669);
     }
     
     .action-btn.warning {
-        background: #f59e0b;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
     }
     
     .log-item {
         background: white;
-        border-radius: 6px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-bottom: 0.75rem;
         border-left: 4px solid #e5e7eb;
+        transition: all 0.3s ease;
+    }
+    
+    .log-item:hover {
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     
     .log-item.success {
@@ -93,565 +122,303 @@
     }
     
     .status-badge {
-        padding: 0.25rem 0.75rem;
+        padding: 0.375rem 0.875rem;
         border-radius: 9999px;
         font-size: 0.75rem;
-        font-weight: 500;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     
-    .status-synced { background: #d1fae5; color: #065f46; }
-    .status-pending { background: #fef3c7; color: #92400e; }
-    .status-error { background: #fee2e2; color: #991b1b; }
+    .status-badge.success {
+        background: #dcfce7;
+        color: #166534;
+    }
     
-    .loading-spinner {
-        border: 2px solid #f3f3f3;
-        border-top: 2px solid #667eea;
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        animation: spin 1s linear infinite;
-        display: inline-block;
+    .status-badge.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    .status-badge.partial {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    
+    .quick-actions {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid #f3f4f6;
+    }
+    
+    .quick-action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        text-decoration: none;
+    }
+    
+    .quick-action-btn:hover {
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+        transform: translateY(-1px);
+        color: #1e293b;
+    }
+    
+    .quick-action-btn svg {
+        width: 1.5rem;
+        height: 1.5rem;
         margin-right: 0.5rem;
     }
     
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+    .recent-activity {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid #f3f4f6;
     }
     
-    .env-info {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
+    .activity-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f5f9;
     }
     
-    .env-info.success {
-        background: #f0fdf4;
-        border-color: #bbf7d0;
+    .activity-item:last-child {
+        border-bottom: none;
     }
     
-    .env-info.warning {
-        background: #fffbeb;
-        border-color: #fed7aa;
+    .activity-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.75rem;
+        flex-shrink: 0;
+    }
+    
+    .activity-icon.success {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .activity-icon.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    .activity-icon.partial {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    
+    .activity-content {
+        flex: 1;
+    }
+    
+    .activity-title {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.25rem;
+    }
+    
+    .activity-time {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #6b7280;
+    }
+    
+    .empty-state svg {
+        width: 4rem;
+        height: 4rem;
+        margin: 0 auto 1rem;
+        color: #d1d5db;
     }
 </style>
 {% endblock %}
 
 {% block tiendanube_content %}
-{% if 'tiendanube.access' in permisos_usuario or '*' in permisos_usuario %}
-<div class="min-h-screen bg-gray-50">
-    <!-- Header -->
-    <div class="bg-white shadow">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">{% trans "TiendaNube Integration" %}</h1>
-                    <p class="mt-1 text-sm text-gray-500">{% trans "Manage your TiendaNube integration and synchronization" %}</p>
-                </div>
-                <div class="flex space-x-3">
-                    <button id="manual-sync-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                        {% trans "Manual Sync" %}
-                    </button>
-                    <a href="{% url 'tiendanube:config_list' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                        {% trans "Configuration" %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Dashboard Header -->
+    <div class="dashboard-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold mb-2">{% trans "TiendaNube Integration" %}</h1>
+                <p class="text-orange-100 text-lg">
+                    {% if env_configured %}
+                        {% trans "Connected to store" %}: <strong>{{ store_id }}</strong>
+                    {% else %}
+                        {% trans "No store configured" %}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="text-right">
+                {% if env_configured %}
+                    <div class="text-orange-100 text-sm">
+                        <div>{% trans "API URL" %}: {{ api_url }}</div>
+                        <div>{% trans "Auto Sync" %}: {{ auto_sync|yesno:"Enabled,Disabled" }}</div>
+                        <div>{% trans "Sync Interval" %}: {{ sync_interval }} {% trans "minutes" %}</div>
+                    </div>
+                {% else %}
+                    <a href="{% url 'tiendanube:tiendanube_config_wizard' %}" 
+                       class="inline-flex items-center px-4 py-2 bg-white bg-opacity-20 rounded-lg text-white font-semibold hover:bg-opacity-30 transition-all duration-200">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        {% trans "Configure Store" %}
                     </a>
-                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Status Overview -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Configuration Status -->
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Configuration" %}</dt>
-                                <dd class="text-lg font-medium text-gray-900">
-                                    {% if env_configured %}
-                                        <span class="text-green-600">{% trans "Active" %}</span>
-                                    {% else %}
-                                        <span class="text-red-600">{% trans "Not Configured" %}</span>
-                                    {% endif %}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Products Status -->
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Products" %}</dt>
-                                <dd class="text-lg font-medium text-gray-900">
-                                    {% if sync_status %}
-                                        {{ sync_status.synced_products }}/{{ sync_status.total_products }}
-                                    {% else %}
-                                        0/0
-                                    {% endif %}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Customers Status -->
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Customers" %}</dt>
-                                <dd class="text-lg font-medium text-gray-900">
-                                    {% if sync_status %}
-                                        {{ sync_status.synced_customers }}/{{ sync_status.total_customers }}
-                                    {% else %}
-                                        0/0
-                                    {% endif %}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Orders Status -->
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Orders" %}</dt>
-                                <dd class="text-lg font-medium text-gray-900">
-                                    {% if sync_status %}
-                                        {{ sync_status.synced_orders }}/{{ sync_status.total_orders }}
-                                    {% else %}
-                                        0/0
-                                    {% endif %}
-                                </dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    {% if env_configured %}
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="stat-card">
+            <div class="stat-number">{{ product_mappings|default:0 }}</div>
+            <div class="stat-label">{% trans "Product Mappings" %}</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ customer_mappings|default:0 }}</div>
+            <div class="stat-label">{% trans "Customer Mappings" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ order_mappings|default:0 }}</div>
+            <div class="stat-label">{% trans "Order Mappings" %}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ pending_syncs|default:0 }}</div>
+            <div class="stat-label">{% trans "Pending Syncs" %}</div>
+        </div>
+    </div>
 
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <!-- Quick Actions -->
-        <div class="bg-white shadow rounded-lg mb-8">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Quick Actions" %}</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <button class="sync-action-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm font-medium" data-sync-type="products">
-                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        <div class="lg:col-span-1">
+            <div class="quick-actions">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">{% trans "Quick Actions" %}</h3>
+                <div class="space-y-3">
+                    <a href="{% url 'tiendanube:manual_sync' %}" class="quick-action-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
-                        {% trans "Sync Products" %}
-                    </button>
-                    <button class="sync-action-btn bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-md text-sm font-medium" data-sync-type="customers">
-                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        {% trans "Manual Sync" %}
+                    </a>
+                    <a href="{% url 'tiendanube:mapping_list' %}" class="quick-action-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
-                        {% trans "Sync Customers" %}
-                    </button>
-                    <button class="sync-action-btn bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-md text-sm font-medium" data-sync-type="orders">
-                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        {% trans "Product Mappings" %}
+                    </a>
+                    <a href="{% url 'tiendanube:customer_mapping_list' %}" class="quick-action-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
                         </svg>
-                        {% trans "Sync Orders" %}
-                    </button>
-                    <button class="sync-action-btn bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-md text-sm font-medium" data-sync-type="restock">
-                        <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                        {% trans "Customer Mappings" %}
+                    </a>
+                    <a href="{% url 'tiendanube:logs_list' %}" class="quick-action-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
-                        {% trans "Check Restock" %}
-                    </button>
+                        {% trans "Sync Logs" %}
+                    </a>
+                    <a href="{% url 'tiendanube:reports' %}" class="quick-action-btn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        {% trans "Reports" %}
+                    </a>
                 </div>
             </div>
         </div>
 
         <!-- Recent Activity -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Recent Sync Logs -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Recent Sync Activity" %}</h3>
-                    <div class="flow-root">
-                        <ul class="-mb-8">
-                            {% for log in recent_logs %}
-                            <li>
-                                <div class="relative pb-8">
-                                    {% if not forloop.last %}
-                                    <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
-                                    {% endif %}
-                                    <div class="relative flex space-x-3">
-                                        <div>
-                                            <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white
-                                                {% if log.status == 'success' %}bg-green-500{% elif log.status == 'error' %}bg-red-500{% else %}bg-yellow-500{% endif %}">
-                                                <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                                </svg>
-                                            </span>
-                                        </div>
-                                        <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
-                                            <div>
-                                                <p class="text-sm text-gray-500">
-                                                    {{ log.get_sync_type_display }} - {{ log.get_status_display }}
-                                                </p>
-                                                <p class="text-sm text-gray-900">{{ log.message }}</p>
-                                            </div>
-                                            <div class="text-right text-sm whitespace-nowrap text-gray-500">
-                                                <time datetime="{{ log.started_at|date:'c' }}">{{ log.started_at|timesince }}</time>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </li>
-                            {% empty %}
-                            <li class="text-center py-4 text-gray-500">
-                                {% trans "No recent sync activity" %}
-                            </li>
-                            {% endfor %}
-                        </ul>
+        <div class="lg:col-span-2">
+            <div class="recent-activity">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">{% trans "Recent Activity" %}</h3>
+                
+                {% if recent_syncs %}
+                    <div class="space-y-2">
+                        {% for sync in recent_syncs %}
+                        <div class="activity-item">
+                            <div class="activity-icon {{ sync.status }}">
+                                {% if sync.status == 'success' %}
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                {% elif sync.status == 'error' %}
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                {% else %}
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                {% endif %}
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-title">{{ sync.get_sync_type_display }}</div>
+                                <div class="activity-time">{{ sync.started_at|timesince }} {% trans "ago" %}</div>
+                            </div>
+                            <span class="status-badge {{ sync.status }}">{{ sync.get_status_display }}</span>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="mt-4">
-                        <a href="{% url 'tiendanube:logs_list' %}" class="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                    <div class="mt-4 text-center">
+                        <a href="{% url 'tiendanube:logs_list' %}" class="text-orange-600 hover:text-orange-700 font-medium">
                             {% trans "View all logs" %} →
                         </a>
                     </div>
-                </div>
-            </div>
-
-            <!-- Quick Stats -->
-            <div class="bg-white shadow rounded-lg">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">{% trans "Quick Statistics" %}</h3>
-                    <dl class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                        <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
-                            <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Sync Percentage" %}</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                                {% if sync_status %}
-                                    {{ sync_status.sync_percentage|floatformat:1 }}%
-                                {% else %}
-                                    0%
-                                {% endif %}
-                            </dd>
-                        </div>
-                        <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
-                            <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Last Sync" %}</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                                {% if sync_status.last_sync %}
-                                    {{ sync_status.last_sync|timesince }}
-                                {% else %}
-                                    {% trans "Never" %}
-                                {% endif %}
-                            </dd>
-                        </div>
-                        <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
-                            <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Auto Sync" %}</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                                {% if sync_status.auto_sync %}
-                                    <span class="text-green-600">{% trans "Active" %}</span>
-                                {% else %}
-                                    <span class="text-red-600">{% trans "Inactive" %}</span>
-                                {% endif %}
-                            </dd>
-                        </div>
-                        <div class="px-4 py-5 bg-gray-50 shadow rounded-lg overflow-hidden sm:p-6">
-                            <dt class="text-sm font-medium text-gray-500 truncate">{% trans "Next Sync" %}</dt>
-                            <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                                {% if sync_status.next_sync %}
-                                    {{ sync_status.next_sync|timeuntil }}
-                                {% else %}
-                                    {% trans "Not scheduled" %}
-                                {% endif %}
-                            </dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-        </div>
-
-        <!-- Navigation Cards -->
-        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <a href="{% url 'tiendanube:mapping_list' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Product Mappings" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "Manage product synchronization" %}</p>
-                        </div>
+                {% else %}
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <p class="text-lg font-medium">{% trans "No recent activity" %}</p>
+                        <p class="text-sm">{% trans "Start syncing to see activity here" %}</p>
                     </div>
-                </div>
-            </a>
-
-            <a href="{% url 'tiendanube:customer_mapping_list' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Customer Mappings" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "Manage customer synchronization" %}</p>
-                        </div>
-                    </div>
-                </div>
-            </a>
-
-            <a href="{% url 'tiendanube:order_mapping_list' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Order Mappings" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "Manage order synchronization" %}</p>
-                        </div>
-                    </div>
-                </div>
-            </a>
-
-            <a href="{% url 'tiendanube:restock_rule_list' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Restock Rules" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "Manage automatic restocking" %}</p>
-                        </div>
-                    </div>
-                </div>
-            </a>
-
-            <a href="{% url 'tiendanube:reports' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-indigo-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Reports & KPIs" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "View integration statistics" %}</p>
-                        </div>
-                    </div>
-                </div>
-            </a>
-
-            <a href="{% url 'tiendanube:logs_list' %}" class="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow">
-                <div class="p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <div class="w-8 h-8 bg-gray-500 rounded-md flex items-center justify-center">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-lg font-medium text-gray-900">{% trans "Sync Logs" %}</h3>
-                            <p class="text-sm text-gray-500">{% trans "View synchronization history" %}</p>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-</div>
-
-<!-- Manual Sync Modal -->
-<div id="manual-sync-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">{% trans "Manual Synchronization" %}</h3>
-            <div class="space-y-3">
-                <button class="sync-modal-btn w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="products">
-                    {% trans "Sync Pending Products" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="all_products">
-                    {% trans "Sync All Tiendanube Products" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="customers">
-                    {% trans "Sync Customers" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="orders">
-                    {% trans "Sync Orders" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="stock">
-                    {% trans "Sync Pending Stock" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="all_stock">
-                    {% trans "Sync All Tiendanube Stock" %}
-                </button>
-                <button class="sync-modal-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium" data-sync-type="restock">
-                    {% trans "Check Restock" %}
-                </button>
-            </div>
-            <div class="mt-4 flex justify-end">
-                <button id="close-modal" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md text-sm font-medium">
-                    {% trans "Close" %}
-                </button>
+                {% endif %}
             </div>
         </div>
     </div>
-</div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Manual sync modal
-    const modal = document.getElementById('manual-sync-modal');
-    const openModalBtn = document.getElementById('manual-sync-btn');
-    const closeModalBtn = document.getElementById('close-modal');
-    
-    openModalBtn.addEventListener('click', function() {
-        modal.classList.remove('hidden');
-    });
-    
-    closeModalBtn.addEventListener('click', function() {
-        modal.classList.add('hidden');
-    });
-    
-    // Close modal when clicking outside
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            modal.classList.add('hidden');
-        }
-    });
-    
-    // Sync action buttons
-    const syncButtons = document.querySelectorAll('.sync-action-btn, .sync-modal-btn');
-    
-    syncButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const syncType = this.dataset.syncType;
-            const originalText = this.textContent;
-            
-            // Show loading state
-            this.disabled = true;
-            this.textContent = '{% trans "Syncing..." %}';
-            
-            // Make AJAX request
-            fetch('{% url "tiendanube:manual_sync" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                },
-                body: `sync_type=${syncType}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success message
-                    showNotification('success', data.message);
-                    // Reload page after a short delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    // Show error message
-                    showNotification('error', data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showNotification('error', '{% trans "An error occurred during synchronization" %}');
-            })
-            .finally(() => {
-                // Restore button state
-                this.disabled = false;
-                this.textContent = originalText;
-                modal.classList.add('hidden');
-            });
-        });
-    });
-    
-    function showNotification(type, message) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${
-            type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-        }`;
-        notification.textContent = message;
-        
-        document.body.appendChild(notification);
-        
-        // Remove notification after 5 seconds
-        setTimeout(() => {
-            notification.remove();
-        }, 5000);
-    }
-});
-</script>
-
-{% csrf_token %}
-{% else %}
-<div class="p-6 text-center text-red-600 font-semibold">
-  ⚠️ You do not have permission to access TiendaNube.
+    {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-12">
+        <div class="max-w-md mx-auto">
+            <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">{% trans "No TiendaNube store configured" %}</h3>
+            <p class="text-gray-500 mb-6">{% trans "Configure your TiendaNube store to start syncing products, customers, and orders." %}</p>
+            <a href="{% url 'tiendanube:tiendanube_config_wizard' %}" 
+               class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-400 to-orange-600 text-white font-semibold rounded-lg hover:from-orange-500 hover:to-orange-700 transition-all duration-200">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                {% trans "Configure Store" %}
+            </a>
+        </div>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 {% endblock %} 

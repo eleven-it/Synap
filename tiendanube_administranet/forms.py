@@ -168,8 +168,13 @@ class CustomerMappingForm(forms.ModelForm):
             'tiendanube_tax_exemptions', 'tiendanube_created_at', 'tiendanube_updated_at',
             
             # Campos de AdministraNET
-            'adminet_codigo', 'adminet_nombre', 'adminet_documento',
-            'adminet_telefono', 'adminet_direccion',
+            'adminet_codigo', 'adminet_nombre', 'adminet_email', 'adminet_documento',
+            'adminet_telefono', 'adminet_calle', 'adminet_nro_calle', 'adminet_dpto', 'adminet_direccion',
+            'adminet_id_distrito', 'adminet_cod_provincia', 'adminet_id_departamento',
+            'adminet_tipo_cliente', 'adminet_cod_viajante', 'adminet_id_pais', 'adminet_estado',
+            'adminet_tipo_doc', 'adminet_lista_precio', 'adminet_fecha_alta', 'adminet_fecha_ultima_compra',
+            'adminet_cuit', 'adminet_credito', 'adminet_descuento', 'adminet_observaciones',
+            'adminet_saldo', 'adminet_id_manual_cli', 'adminet_nombre_fantasia', 'adminet_cliente_ecommerce',
             
             # Configuración de sincronización
             'sync_direction', 'sync_status', 'sync_enabled'
@@ -203,6 +208,90 @@ class CustomerMappingForm(forms.ModelForm):
                 'class': 'form-control',
                 'rows': 3,
                 'placeholder': 'Dirección completa'
+            }),
+            'adminet_calle': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Nombre de la calle'
+            }),
+            'adminet_nro_calle': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Número de calle'
+            }),
+            'adminet_dpto': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Departamento/Piso'
+            }),
+            'adminet_id_distrito': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ID Distrito'
+            }),
+            'adminet_cod_provincia': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Código Provincia'
+            }),
+            'adminet_id_departamento': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ID Departamento'
+            }),
+            'adminet_tipo_cliente': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Tipo Cliente'
+            }),
+            'adminet_cod_viajante': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Código Viajante'
+            }),
+            'adminet_id_pais': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ID País'
+            }),
+            'adminet_tipo_doc': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Tipo Documento'
+            }),
+            'adminet_lista_precio': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Lista Precio'
+            }),
+            'adminet_fecha_ultima_compra': forms.DateInput(attrs={
+                'class': 'form-control',
+                'type': 'date'
+            }),
+            'adminet_cuit': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'CUIT'
+            }),
+            'adminet_credito': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': 'Crédito'
+            }),
+            'adminet_descuento': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': 'Descuento'
+            }),
+            'adminet_observaciones': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Observaciones'
+            }),
+            'adminet_saldo': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': 'Saldo'
+            }),
+            'adminet_id_manual_cli': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ID Manual Cliente'
+            }),
+            'adminet_nombre_fantasia': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Nombre Fantasía'
+            }),
+            'adminet_cliente_ecommerce': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Cliente Ecommerce'
             }),
             'tiendanube_city': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -280,6 +369,26 @@ class CustomerMappingForm(forms.ModelForm):
                 'class': 'form-control',
                 'rows': 3,
                 'placeholder': 'Dirección en AdministraNET'
+            }),
+            'adminet_email': forms.EmailInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Email en AdministraNET'
+            }),
+            'adminet_estado': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Estado en AdministraNET'
+            }),
+            'adminet_id_departamento': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'ID Departamento'
+            }),
+            'adminet_cod_provincia': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Código Provincia'
+            }),
+            'adminet_fecha_alta': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
             }),
         }
     
@@ -554,13 +663,15 @@ class ProductMappingForm(forms.ModelForm):
             'tiendanube_weight', 'tiendanube_width', 'tiendanube_height', 'tiendanube_depth',
             'tiendanube_free_shipping', 'tiendanube_published', 'tiendanube_featured',
             'tiendanube_product_type', 'tiendanube_seo_title', 'tiendanube_seo_description',
+            'tiendanube_brand', 'tiendanube_categories', 'tiendanube_tags', 'tiendanube_images',
+            'tiendanube_videos', 'tiendanube_created_at', 'tiendanube_updated_at',
             'adminet_id', 'adminet_id_manual', 'adminet_codigo_articulo', 'adminet_nombre', 'adminet_detalle',
             'adminet_precio_costo', 'adminet_precio_1v', 'adminet_precio_2v', 'adminet_precio_3v', 'adminet_precio_4v', 'adminet_precio_5v',
             'adminet_stock', 'adminet_stock_max', 'adminet_stock_min', 'adminet_codigo_barra', 'adminet_codigo_barra_f',
             'adminet_codigo_proveedor', 'adminet_codigo_marca', 'adminet_codigo_modelo', 'adminet_codigo_rubro', 'adminet_codigo_subrubro',
             'adminet_alicuota', 'adminet_alicuota_ib', 'adminet_moneda', 'adminet_tipo_iva', 'adminet_tipo_ib',
             'adminet_discontinuo', 'adminet_ecommerce', 'adminet_detalle_web', 'adminet_disponible_venta', 'adminet_disponible_compra',
-            'adminet_fecha_alta', 'adminet_fecha_mod',
+            'adminet_promo_destacado', 'adminet_fecha_alta', 'adminet_fecha_mod',
             'sync_enabled', 'sync_price', 'sync_stock', 'sync_description', 'sync_images'
         ]
         widgets = {
@@ -582,6 +693,13 @@ class ProductMappingForm(forms.ModelForm):
             'tiendanube_product_type': forms.Select(attrs={'class': 'form-select'}),
             'tiendanube_seo_title': forms.TextInput(attrs={'class': 'form-control'}),
             'tiendanube_seo_description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            'tiendanube_brand': forms.TextInput(attrs={'class': 'form-control'}),
+            'tiendanube_categories': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'category1, category2'}),
+            'tiendanube_tags': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'tag1, tag2, tag3'}),
+            'tiendanube_images': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'url1, url2'}),
+            'tiendanube_videos': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'url1, url2'}),
+            'tiendanube_created_at': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
+            'tiendanube_updated_at': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
             'adminet_id': forms.NumberInput(attrs={'class': 'form-control'}),
             'adminet_id_manual': forms.TextInput(attrs={'class': 'form-control'}),
             'adminet_codigo_articulo': forms.TextInput(attrs={'class': 'form-control'}),
@@ -613,6 +731,7 @@ class ProductMappingForm(forms.ModelForm):
             'adminet_detalle_web': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
             'adminet_disponible_venta': forms.TextInput(attrs={'class': 'form-control'}),
             'adminet_disponible_compra': forms.TextInput(attrs={'class': 'form-control'}),
+            'adminet_promo_destacado': forms.TextInput(attrs={'class': 'form-control'}),
             'adminet_fecha_alta': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
             'adminet_fecha_mod': forms.DateTimeInput(attrs={'class': 'form-control', 'type': 'datetime-local'}),
             'sync_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -646,6 +765,8 @@ class ProductVariantMappingForm(forms.ModelForm):
             'tiendanube_name', 'tiendanube_sku', 'tiendanube_price', 'tiendanube_compare_at_price',
             'tiendanube_cost', 'tiendanube_stock', 'tiendanube_weight', 'tiendanube_width',
             'tiendanube_height', 'tiendanube_depth', 'tiendanube_free_shipping', 'tiendanube_published',
+            'tiendanube_values', 'tiendanube_images', 'tiendanube_product_id', 'tiendanube_options',
+            'tiendanube_created_at', 'tiendanube_updated_at',
             'adminet_id', 'adminet_id_manual', 'adminet_codigo_articulo', 'adminet_nombre', 'adminet_detalle',
             'adminet_precio_costo', 'adminet_precio_1v', 'adminet_stock', 'adminet_codigo_barra',
             'adminet_codigo_proveedor', 'adminet_codigo_marca', 'adminet_codigo_modelo',
@@ -730,8 +851,12 @@ class OrderMappingForm(forms.ModelForm):
     class Meta:
         model = OrderMapping
         fields = [
-            'tiendanube_number', 'tiendanube_customer_email',
-            'adminet_codigo', 'adminet_numero',
+            'tiendanube_number', 'tiendanube_total', 'tiendanube_currency', 'tiendanube_status',
+            'tiendanube_payment_status', 'tiendanube_notes', 'tiendanube_customer_id',
+            'tiendanube_customer_email', 'tiendanube_customer_name', 'tiendanube_shipping_address',
+            'tiendanube_billing_address', 'tiendanube_payment_method', 'tiendanube_shipping_method',
+            'tiendanube_created_at', 'tiendanube_updated_at',
+            'adminet_codigo', 'adminet_numero', 'adminet_estado', 'adminet_total',
             'sync_enabled'
         ]
         widgets = {
@@ -739,9 +864,65 @@ class OrderMappingForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': _('Número de orden en Tiendanube')
             }),
+            'tiendanube_total': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': _('Total de la orden')
+            }),
+            'tiendanube_currency': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Moneda (USD, ARS, etc.)')
+            }),
+            'tiendanube_status': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Estado de la orden')
+            }),
+            'tiendanube_payment_status': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Estado del pago')
+            }),
+            'tiendanube_notes': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': _('Notas de la orden')
+            }),
+            'tiendanube_customer_id': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('ID del cliente')
+            }),
             'tiendanube_customer_email': forms.EmailInput(attrs={
                 'class': 'form-control',
                 'placeholder': _('Email del cliente de la orden')
+            }),
+            'tiendanube_customer_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Nombre del cliente')
+            }),
+            'tiendanube_shipping_address': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': _('Dirección de envío (JSON)')
+            }),
+            'tiendanube_billing_address': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': _('Dirección de facturación (JSON)')
+            }),
+            'tiendanube_payment_method': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Método de pago')
+            }),
+            'tiendanube_shipping_method': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Método de envío')
+            }),
+            'tiendanube_created_at': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
+            }),
+            'tiendanube_updated_at': forms.DateTimeInput(attrs={
+                'class': 'form-control',
+                'type': 'datetime-local'
             }),
             'adminet_codigo': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -750,6 +931,15 @@ class OrderMappingForm(forms.ModelForm):
             'adminet_numero': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': _('Número de orden en AdministraNET')
+            }),
+            'adminet_estado': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Estado en AdministraNET')
+            }),
+            'adminet_total': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': _('Total en AdministraNET')
             }),
             'sync_enabled': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'

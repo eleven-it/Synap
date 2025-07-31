@@ -1,0 +1,36 @@
+Tabla_Adminet,Campo_Adminet,Tipo_Adminet,Tabla_Tiendanube,Campo_Tiendanube,Tipo_Tiendanube,Mapeo_Directo,Notas_Mapeo
+articulo,IDArt,int(20),Productos,id,Integer,Sí,ID único del producto
+articulo,NombreArticulo,varchar(255),Productos,name,String,Sí,Nombre del producto
+articulo,Detalle,longtext,Productos,description,Text,Sí,Descripción del producto
+articulo,NroCodBarra,varchar(255),Productos,sku,String,Sí,Código de barras como SKU
+articulo,Precio1V,decimal(15,4),Productos,price,Decimal,Sí,Precio de venta principal
+articulo,PrecioCosto,decimal(15,4),Productos,cost,Decimal,Sí,Precio de costo
+articulo,saldo_articulo,int(11),Productos,stock,Integer,Sí,Stock disponible
+articulo,disponible_vta,varchar(2),Productos,published,Boolean,No,Convertir: Si=published, No=unpublished
+articulo,promo_destacado,varchar(2),Productos,featured,Boolean,No,Convertir: Si=featured, No=not_featured
+articulo,detalle_web,longtext,Productos,seo_description,Text,Sí,Descripción para SEO
+articulo,CodigoMarca,int(11),Productos,brand,String,No,Relación con tabla marca
+articulo,CodigoRubro,int(11),Productos,categories,Array,No,Relación con tabla rubro
+articulo,fecha_alta,timestamp,Productos,created_at,DateTime,Sí,Fecha de creación
+articulo,fecha_mod,timestamp,Productos,updated_at,DateTime,Sí,Fecha de modificación
+articulo,ecommerce,varchar(2),Productos,-,-,No,Campo de control interno
+cliente,Codigo,int(11),Clientes,id,Integer,Sí,ID único del cliente
+cliente,nombre_cliente,varchar(200),Clientes,name,String,Sí,Nombre del cliente
+cliente,Email,varchar(100),Clientes,email,String,Sí,Email del cliente
+cliente,CUIT,varchar(20),Clientes,document,String,Sí,Documento de identidad
+cliente,telefono,varchar(100),Clientes,phone,String,Sí,Teléfono del cliente
+cliente,Calle,varchar(100),Clientes,address.street,String,Sí,Calle de la dirección
+cliente,IDDepartamento,int(11),Clientes,address.city,String,No,Relación con tabla departamento
+cliente,CodProvincia,int(11),Clientes,address.province,String,No,Relación con tabla provincia
+cliente,Estado,varchar(30),Clientes,-,-,No,Estado del cliente (Activo/Inactivo)
+cliente,FechaAlta,timestamp,Clientes,created_at,DateTime,Sí,Fecha de alta
+cliente,cliente_ecommerce,varchar(5),Clientes,-,-,No,Campo de control interno
+marca,CodMarca,int(11),Marcas,id,Integer,Sí,ID único de la marca
+marca,NombreMarca,varchar(100),Marcas,name,String,Sí,Nombre de la marca
+marca,anulado,varchar(5),Marcas,-,-,No,Estado de la marca (Sí/No)
+marca,ecommerce,varchar(2),Marcas,-,-,No,Campo de control interno
+rubro,CodigoRubro,int(11),Categorías,id,Integer,Sí,ID único de la categoría
+rubro,NombreRubro,varchar(255),Categorías,name,String,Sí,Nombre de la categoría
+rubro,anulado,varchar(5),Categorías,-,-,No,Estado de la categoría (Sí/No)
+rubro,ecommerce,varchar(2),Categorías,-,-,No,Campo de control interno
+rubro,url_foto,varchar(500),Categorías,image,String,No,URL de la imagen de la categoría 

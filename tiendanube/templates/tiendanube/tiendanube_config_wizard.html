@@ -1,326 +1,366 @@
 {% extends "tiendanube/tiendanube_app_base.html" %}
 
-{% block title %}Add New Store - TiendaNube Wizard{% endblock %}
+{% block title %}TiendaNube Configuration Wizard - Synap{% endblock %}
 
 {% block tiendanube_content %}
-<div class="max-w-2xl mx-auto mt-12">
+<div class="max-w-4xl mx-auto mt-8">
     <!-- Progress Bar -->
     <div class="w-full bg-gray-200 rounded-full h-2 mb-6">
-        <div id="wizardProgress" class="bg-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        <div id="wizardProgress" class="bg-gradient-to-r from-orange-400 to-orange-600 h-2 rounded-full transition-all duration-500" style="width: {{ current_step|add:0|multiply:25 }}%"></div>
     </div>
+    
     <!-- Step Indicators -->
     <div class="flex justify-between items-center mb-8">
-        {% for step_name in wizard_steps %}
-            {% with i=forloop.counter %}
-            <div class="flex flex-col items-center flex-1">
-                <div class="relative">
-                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300
-                        {% if step > i %}bg-green-500 border-green-500 text-white{% elif step == i %}bg-purple-600 border-purple-600 text-white animate-bounce{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
-                        {% if step > i %}
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                        {% else %}{{ i }}{% endif %}
-                    </div>
-                    {% if not forloop.last %}
-                        <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 -translate-y-1/2"></div>
-                    {% endif %}
+        <div class="flex flex-col items-center flex-1">
+            <div class="relative">
+                <div class="w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                    {% if current_step > 1 %}bg-green-500 border-green-500 text-white{% elif current_step == 1 %}bg-orange-500 border-orange-500 text-white animate-pulse{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
+                    {% if current_step > 1 %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    {% else %}1{% endif %}
                 </div>
-                <span class="mt-2 text-xs font-medium {% if step == i %}text-purple-700{% elif step > i %}text-green-600{% else %}text-gray-400{% endif %}">{{ step_name }}</span>
+                {% if not forloop.last %}
+                    <div class="absolute top-1/2 left-full w-full h-1 bg-gray-300 -translate-y-1/2"></div>
+                {% endif %}
             </div>
-            {% endwith %}
-        {% endfor %}
+            <span class="mt-2 text-xs font-medium {% if current_step == 1 %}text-orange-600{% elif current_step > 1 %}text-green-600{% else %}text-gray-400{% endif %}">App Registration</span>
+        </div>
+        
+        <div class="flex flex-col items-center flex-1">
+            <div class="relative">
+                <div class="w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                    {% if current_step > 2 %}bg-green-500 border-green-500 text-white{% elif current_step == 2 %}bg-orange-500 border-orange-500 text-white animate-pulse{% elif current_step > 1 %}bg-blue-500 border-blue-500 text-white{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
+                    {% if current_step > 2 %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    {% else %}2{% endif %}
+                </div>
+                {% if not forloop.last %}
+                    <div class="absolute top-1/2 left-full w-full h-1 bg-gray-300 -translate-y-1/2"></div>
+                {% endif %}
+            </div>
+            <span class="mt-2 text-xs font-medium {% if current_step == 2 %}text-orange-600{% elif current_step > 2 %}text-green-600{% elif current_step > 1 %}text-blue-600{% else %}text-gray-400{% endif %}">Authorization</span>
+        </div>
+        
+        <div class="flex flex-col items-center flex-1">
+            <div class="relative">
+                <div class="w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                    {% if current_step > 3 %}bg-green-500 border-green-500 text-white{% elif current_step == 3 %}bg-orange-500 border-orange-500 text-white animate-pulse{% elif current_step > 2 %}bg-blue-500 border-blue-500 text-white{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
+                    {% if current_step > 3 %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    {% else %}3{% endif %}
+                </div>
+                {% if not forloop.last %}
+                    <div class="absolute top-1/2 left-full w-full h-1 bg-gray-300 -translate-y-1/2"></div>
+                {% endif %}
+            </div>
+            <span class="mt-2 text-xs font-medium {% if current_step == 3 %}text-orange-600{% elif current_step > 3 %}text-green-600{% elif current_step > 2 %}text-blue-600{% else %}text-gray-400{% endif %}">Callback</span>
+        </div>
+        
+        <div class="flex flex-col items-center flex-1">
+            <div class="relative">
+                <div class="w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                    {% if current_step == 4 %}bg-orange-500 border-orange-500 text-white animate-pulse{% elif current_step > 3 %}bg-green-500 border-green-500 text-white{% else %}bg-white border-gray-300 text-gray-400{% endif %}">
+                    {% if current_step > 4 %}
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    {% else %}4{% endif %}
+                </div>
+            </div>
+            <span class="mt-2 text-xs font-medium {% if current_step == 4 %}text-orange-600{% elif current_step > 4 %}text-green-600{% else %}text-gray-400{% endif %}">Token Exchange</span>
+        </div>
     </div>
-    <div id="wizardStepContent" class="bg-white rounded-lg shadow-sm border p-8 text-center animate-fadeIn">
-        {% if step == 1 %}
+
+    <div id="wizardStepContent" class="bg-white rounded-lg shadow-lg border p-8 animate-fadeIn">
+        {% if current_step == 1 %}
+        <!-- Step 1: App Registration -->
         <form method="post" class="space-y-6">
             {% csrf_token %}
-            <div class="animate-slideUp">
-                <label for="app_id" class="block text-sm font-medium text-gray-700 mb-1">App ID *</label>
-                <input type="text" id="app_id" name="app_id" class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition text-center" required value="{{ app_id|default:'' }}">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">App Registration</h2>
+                <p class="text-gray-600">Enter your TiendaNube app credentials to begin the configuration process.</p>
             </div>
+            
+            <div class="animate-slideUp">
+                <label for="app_id" class="block text-sm font-medium text-gray-700 mb-2">App ID *</label>
+                <input type="text" id="app_id" name="app_id" 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200" 
+                       required value="{{ app_id|default:'' }}" 
+                       placeholder="Enter your TiendaNube App ID">
+            </div>
+            
             <div class="animate-slideUp" style="animation-delay:0.1s;">
-                <label for="client_secret" class="block text-sm font-medium text-gray-700 mb-1">Client Secret *</label>
+                <label for="client_secret" class="block text-sm font-medium text-gray-700 mb-2">Client Secret *</label>
                 <div class="relative">
-                    <input type="password" id="client_secret" name="client_secret" class="w-full px-4 py-2 border rounded-lg text-base focus:ring-2 focus:ring-purple-500 transition pr-10 text-center" required value="{{ client_secret|default:'' }}">
-                    <button type="button" tabindex="-1" onclick="toggleSecretVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none">
-                        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <input type="password" id="client_secret" name="client_secret" 
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 pr-12" 
+                           required value="{{ client_secret|default:'' }}" 
+                           placeholder="Enter your TiendaNube Client Secret">
+                    <button type="button" onclick="toggleSecretVisibility()" 
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 focus:outline-none transition-colors">
+                        <svg id="eyeIcon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </button>
                 </div>
             </div>
+            
             <div class="mt-8 flex justify-center animate-fadeIn" style="animation-delay:0.2s;">
-                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                    Next
+                <button type="submit" 
+                        class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-200 text-lg font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                    Continue to Authorization
                 </button>
             </div>
         </form>
-        <p class="text-gray-500 mt-6 text-sm animate-fadeIn" style="animation-delay:0.3s;">
-            This wizard will guide you step by step to connect and configure a new TiendaNube store in Synap.<br>
-            You will need your <b>App ID</b> and <b>Client Secret</b> from TiendaNube.<br>
-            You will be able to customize permissions and sync preferences.
-        </p>
         
         <!-- Help Section -->
-        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4 text-left animate-fadeIn" style="animation-delay:0.4s;">
-            <h3 class="text-blue-800 font-semibold mb-2 flex items-center">
-                <i class="fas fa-info-circle mr-2"></i>How to get your App ID and Client Secret
+        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6 text-left animate-fadeIn" style="animation-delay:0.3s;">
+            <h3 class="text-blue-800 font-semibold mb-3 flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                </svg>
+                How to get your App ID and Client Secret
             </h3>
             <ol class="text-blue-700 text-sm space-y-2">
                 <li class="flex items-start">
-                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">1</span>
-                    <span>Go to <a href="https://www.tiendanube.com/apps/" target="_blank" class="underline font-semibold">TiendaNube Apps</a></span>
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">1</span>
+                    <span>Go to <a href="https://www.tiendanube.com/apps/" target="_blank" class="underline font-semibold hover:text-blue-800">TiendaNube Apps</a></span>
                 </li>
                 <li class="flex items-start">
-                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">2</span>
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">2</span>
                     <span>Click "Create App" or "New App"</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">3</span>
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">3</span>
                     <span>Fill in the app details (name, description, etc.)</span>
                 </li>
                 <li class="flex items-start">
-                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">4</span>
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">4</span>
                     <span>Set the Redirect URI to: 
-                        <code class="bg-blue-100 px-1 rounded text-xs" id="redirectUriHelpText">{{ redirect_uri }}</code>
-                        <button type="button" onclick="copyRedirectUriHelp()" class="ml-1 px-2 py-1 rounded bg-blue-200 hover:bg-blue-300 text-blue-700 text-xs font-semibold focus:outline-none">Copy</button>
+                        <code class="bg-blue-100 px-2 py-1 rounded text-xs font-mono" id="redirectUriHelpText">{{ redirect_uri }}</code>
+                        <button type="button" onclick="copyRedirectUriHelp()" 
+                                class="ml-2 px-2 py-1 rounded bg-blue-200 hover:bg-blue-300 text-blue-700 text-xs font-semibold focus:outline-none transition-colors">
+                            Copy
+                        </button>
                     </span>
                 </li>
                 <li class="flex items-start">
-                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">5</span>
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-3 mt-0.5">5</span>
                     <span>Save the app and copy the <b>App ID</b> and <b>Client Secret</b></span>
                 </li>
             </ol>
-            <div class="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-xs">
-                <i class="fas fa-exclamation-triangle mr-1"></i>
+            <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-xs">
+                <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
                 <strong>Important:</strong> Keep your Client Secret secure and never share it publicly.
             </div>
-            <div id="redirectUriHelp" class="mt-2 p-2 bg-green-50 border border-green-200 rounded text-green-800 text-xs hidden">
-                <i class="fas fa-check-circle mr-1"></i>
+            <div id="redirectUriHelp" class="mt-3 p-3 bg-green-50 border border-green-200 rounded text-green-800 text-xs hidden">
+                <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
                 <strong>Copied!</strong> Redirect URI copied to clipboard. Paste this URL in your TiendaNube app settings.
             </div>
         </div>
-        {% elif step == 3 %}
-        <div class="mb-6 animate-fadeIn">
-            <p class="text-gray-700 text-lg mb-2 font-semibold">Authorize Synap to access your TiendaNube store</p>
-            <p class="text-gray-500 text-sm mb-4">You will be redirected to TiendaNube to grant access. After authorizing, you will return here automatically.</p>
+        
+        {% elif current_step == 2 %}
+        <!-- Step 2: Authorization -->
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Authorization</h2>
+            <p class="text-gray-600">Authorize Synap to access your TiendaNube store.</p>
         </div>
-        <a href="{{ auth_url }}" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500 animate-bounce" id="authorizeBtn">
-            Authorize with TiendaNube
-        </a>
-        <div class="mt-6 text-xs text-gray-400 animate-fadeIn flex flex-col items-center">
-            <div class="flex items-center space-x-2">
-                <b>Redirect URI:</b> <span id="redirectUriText" class="text-gray-700">{{ redirect_uri }}</span>
-                <button type="button" onclick="copyRedirectUri()" class="ml-2 px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-semibold focus:outline-none">Copy</button>
-            </div>
-            <div class="mt-1"><b>State:</b> {{ state }}</div>
-            <div id="redirectUriHelp" class="text-green-600 text-xs mt-2 hidden">Copied! Paste this URL in your TiendaNube app settings if you see a redirect_uri error.</div>
-        </div>
-        {% elif step == 4 %}
-        <div class="mb-6 animate-fadeIn">
-            <p class="text-gray-700 text-lg mb-2 font-semibold">Authorization Code Received</p>
-            <p class="text-gray-500 text-sm mb-4">You have authorized Synap. Now, obtain your access token to complete the connection.</p>
-        </div>
-        {% if not access_token %}
-        <form method="post" class="animate-fadeIn">
-            {% csrf_token %}
-            <button type="submit" name="get_token" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                Get Access Token
-            </button>
-        </form>
-        {% else %}
-        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4 animate-fadeIn">
-            <div class="text-green-700 font-semibold mb-2">Access Token Obtained!</div>
-            <div class="text-xs text-gray-700 break-all"><b>Access Token:</b> {{ access_token }}</div>
-            <div class="text-xs text-gray-700"><b>Store ID:</b> {{ user_id }}</div>
-        </div>
-        <form method="post" class="animate-fadeIn">
-            {% csrf_token %}
-            <button type="submit" name="continue_prefs" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                Continue to Preferences
-            </button>
-        </form>
-        {% endif %}
-        {% elif step == 5 %}
-        <form method="post" class="space-y-6 animate-fadeIn">
-            {% csrf_token %}
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Synchronization Preferences</label>
-                <div class="flex items-center mb-2 animate-slideUp">
-                    <input type="checkbox" id="auto_sync" name="auto_sync" class="mr-2" {% if auto_sync %}checked{% endif %}>
-                    <label for="auto_sync" class="text-gray-700">Enable automatic synchronization</label>
+        
+        <div class="bg-gray-50 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">App Credentials</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">App ID</label>
+                    <input type="text" value="{{ app_id }}" readonly 
+                           class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm">
                 </div>
-                <div class="mb-2 animate-slideUp">
-                    <label for="sync_interval" class="block text-xs font-medium text-gray-500 mb-1">Sync Interval (minutes)</label>
-                    <input type="number" id="sync_interval" name="sync_interval" min="5" max="1440" class="w-32 px-2 py-1 border rounded" value="{{ sync_interval|default:30 }}">
-                </div>
-                <div class="flex flex-wrap gap-4 mt-4">
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_products" class="mr-2" {% if sync_products %}checked{% endif %}><span>Sync Products</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_stock" class="mr-2" {% if sync_stock %}checked{% endif %}><span>Sync Stock</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_variants" class="mr-2" {% if sync_variants %}checked{% endif %}><span>Sync Variants</span></label>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                    <input type="password" value="{{ client_secret }}" readonly 
+                           class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm">
                 </div>
             </div>
-            <div class="mt-8 flex justify-center animate-fadeIn">
-                <button type="submit" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                    Finish
+        </div>
+        
+        <div class="text-center">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="authorize" 
+                        class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-200 text-lg font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                    </svg>
+                    Authorize with TiendaNube
                 </button>
-            </div>
-        </form>
-        {% elif step == 6 %}
-        <div class="mb-6 animate-fadeIn">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Configuration Summary</h2>
-            <p class="text-gray-600 mb-4">Review the details below and click "Register Store in Synap" to finish the setup.</p>
-            {% if tienda_data %}
-            <div class="bg-blue-50 border rounded-lg p-4 text-left text-sm animate-slideUp mb-4">
-                <div><b>Store Name:</b> {{ tienda_data.name }}</div>
-                <div><b>Domain:</b> {{ tienda_data.domains.0.domain }}</div>
-                <div><b>Email:</b> {{ tienda_data.email }}</div>
-                <div><b>Phone:</b> {{ tienda_data.phone }}</div>
-                <div><b>Country:</b> {{ tienda_data.country }}</div>
-                <div><b>Currency:</b> {{ tienda_data.currency }}</div>
-            </div>
-            {% endif %}
-            <div class="bg-gray-50 border rounded-lg p-4 text-left text-sm animate-slideUp">
-                <div><b>App ID:</b> {{ summary.app_id }}</div>
-                <div><b>Store ID:</b> {{ summary.user_id }}</div>
-                <div><b>Access Token:</b> <span class="break-all">{{ summary.access_token }}</span></div>
-                <div><b>Scopes:</b> {{ summary.scopes|join:', ' }}</div>
-                <div><b>Auto Sync:</b> {{ summary.auto_sync|yesno:"Yes,No" }}</div>
-                <div><b>Sync Interval:</b> {{ summary.sync_interval }} min</div>
-                <div><b>Sync Products:</b> {{ summary.sync_products|yesno:"Yes,No" }}</div>
-                <div><b>Sync Stock:</b> {{ summary.sync_stock|yesno:"Yes,No" }}</div>
-                <div><b>Sync Variants:</b> {{ summary.sync_variants|yesno:"Yes,No" }}</div>
+            </form>
+        </div>
+        
+        {% elif current_step == 3 %}
+        <!-- Step 3: Callback Processing -->
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Authorization Successful</h2>
+            <p class="text-gray-600">Your app has been authorized. Proceed to exchange the authorization code for an access token.</p>
+        </div>
+        
+        <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+            <div class="flex items-center">
+                <svg class="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="text-lg font-semibold text-green-800">Authorization Code Received</h3>
+                    <p class="text-green-700 text-sm">Code: <code class="bg-green-100 px-2 py-1 rounded">{{ code|truncatechars:20 }}</code></p>
+                </div>
             </div>
         </div>
-        {% if wizard_error %}
-        <div class="bg-red-100 border border-red-300 text-red-700 rounded-lg p-4 mb-4 animate-fadeIn">
-            <b>{{ wizard_error }}</b>
+        
+        <div class="text-center">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="continue" 
+                        class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-200 text-lg font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                    Continue to Token Exchange
+                </button>
+            </form>
         </div>
-        <a href="{% url 'tiendanube:config_list' %}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition font-semibold">Go to Store List</a>
+        
+        {% elif current_step == 4 %}
+        <!-- Step 4: Token Exchange -->
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Token Exchange</h2>
+            <p class="text-gray-600">Exchange the authorization code for an access token to complete the configuration.</p>
+        </div>
+        
+        {% if token_obtained %}
+        <!-- Token already obtained -->
+        <div class="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+            <div class="flex items-center">
+                <svg class="w-8 h-8 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="text-lg font-semibold text-green-800">Access Token Obtained Successfully!</h3>
+                    <p class="text-green-700 text-sm">Your TiendaNube store is now ready to be configured.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Configuration Details</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Store ID</label>
+                    <input type="text" value="{{ store_id }}" readonly 
+                           class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                    <input type="text" value="{{ user_id }}" readonly 
+                           class="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded text-sm">
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="save_config" 
+                        class="bg-gradient-to-r from-green-400 to-green-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-200 text-lg font-semibold focus:ring-2 focus:ring-green-500 focus:outline-none">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    Save Configuration & Go to Dashboard
+                </button>
+            </form>
+        </div>
+        
         {% else %}
-        <form method="post" class="animate-fadeIn">
-            {% csrf_token %}
-            <button type="submit" name="save_store" class="bg-purple-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition text-lg font-semibold focus:ring-2 focus:ring-purple-500">
-                Register Store in Synap
-            </button>
-        </form>
+        <!-- Token not yet obtained -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+            <div class="flex items-center">
+                <svg class="w-8 h-8 text-blue-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div>
+                    <h3 class="text-lg font-semibold text-blue-800">Ready to Exchange Token</h3>
+                    <p class="text-blue-700 text-sm">Click the button below to exchange your authorization code for an access token.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="get_token" 
+                        class="bg-gradient-to-r from-orange-400 to-orange-600 text-white px-8 py-3 rounded-lg hover:scale-105 hover:shadow-lg transition-all duration-200 text-lg font-semibold focus:ring-2 focus:ring-orange-500 focus:outline-none">
+                    <svg class="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    Get Access Token
+                </button>
+            </form>
+        </div>
         {% endif %}
         {% endif %}
     </div>
-    <!-- Toast Notification -->
-    <div id="toast" class="fixed top-6 right-6 z-50 hidden px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300"></div>
-    <!-- Confetti Script -->
-    <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50" style="display:none;"></canvas>
 </div>
 
-{% endblock %}
-
-{% block tiendanube_extra_js %}
 <script>
-// Animations
-const fadeIn = [
-    { opacity: 0, transform: 'translateY(20px)' },
-    { opacity: 1, transform: 'translateY(0)' }
-];
-const slideUp = [
-    { opacity: 0, transform: 'translateY(40px)' },
-    { opacity: 1, transform: 'translateY(0)' }
-];
-
-// Progress bar logic
-const step = {{ step|default:1 }};
-const progress = [0, 16, 32, 48, 64, 82, 100];
-document.getElementById('wizardProgress').style.width = progress[step] + '%';
-
-// Toast notification
-function showToast(msg, type='success') {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.className = `fixed top-6 right-6 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300 ${type==='success' ? 'bg-green-600' : 'bg-red-600'}`;
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 3500);
-}
-
-// Confetti (simple, inline, no deps)
-function launchConfetti() {
-    const canvas = document.getElementById('confettiCanvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    canvas.style.display = 'block';
-    const ctx = canvas.getContext('2d');
-    const pieces = Array.from({length: 120}, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * -canvas.height,
-        r: 6 + Math.random() * 8,
-        d: Math.random() * 50,
-        color: `hsl(${Math.random()*360},70%,60%)`,
-        tilt: Math.random() * 10 - 10
-    }));
-    let angle = 0;
-    function draw() {
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        angle += 0.01;
-        for (let i=0; i<pieces.length; i++) {
-            let p = pieces[i];
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
-            ctx.fillStyle = p.color;
-            ctx.fill();
-            p.y += Math.cos(angle + p.d) + 2 + p.r/8;
-            p.x += Math.sin(angle) * 2;
-            if (p.y > canvas.height) {
-                p.x = Math.random() * canvas.width;
-                p.y = Math.random() * -20;
-            }
-        }
-        requestAnimationFrame(draw);
-    }
-    draw();
-    setTimeout(() => { canvas.style.display = 'none'; }, 3500);
-}
-
-// Show confetti and toast on finish
-if (step === 6) {
-    setTimeout(() => {
-        launchConfetti();
-        showToast('Store configuration completed!');
-    }, 500);
-}
-
+// Toggle password visibility
 function toggleSecretVisibility() {
     const input = document.getElementById('client_secret');
-    const icon = document.getElementById('eyeIcon');
+    const eyeIcon = document.getElementById('eyeIcon');
+    
     if (input.type === 'password') {
         input.type = 'text';
-        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.956 9.956 0 012.042-3.292m1.528-1.58A9.953 9.953 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.965 9.965 0 01-4.293 5.411M15 12a3 3 0 11-6 0 3 3 0 016 0z' /><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 3l18 18' />`;
+        eyeIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+        `;
     } else {
         input.type = 'password';
-        icon.innerHTML = `<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M15 12a3 3 0 11-6 0 3 3 0 016 0z' />\n<path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z' />`;
+        eyeIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        `;
     }
 }
 
-function copyRedirectUri() {
-    const text = document.getElementById('redirectUriText').textContent;
-    navigator.clipboard.writeText(text).then(function() {
-        const help = document.getElementById('redirectUriHelp');
-        help.classList.remove('hidden');
-        setTimeout(() => help.classList.add('hidden'), 2500);
-    });
-}
-
+// Copy redirect URI to clipboard
 function copyRedirectUriHelp() {
     const text = document.getElementById('redirectUriHelpText').textContent;
     navigator.clipboard.writeText(text).then(function() {
-        const help = document.getElementById('redirectUriHelp');
-        help.classList.remove('hidden');
-        setTimeout(() => help.classList.add('hidden'), 2500);
+        const helpDiv = document.getElementById('redirectUriHelp');
+        helpDiv.classList.remove('hidden');
+        setTimeout(() => {
+            helpDiv.classList.add('hidden');
+        }, 3000);
     });
 }
+
+// Add CSS animations
+document.addEventListener('DOMContentLoaded', function() {
+    // Add animation classes
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.6s ease-out;
+        }
+        .animate-slideUp {
+            animation: slideUp 0.6s ease-out;
+        }
+    `;
+    document.head.appendChild(style);
+});
 </script>
-<style>
-.animate-fadeIn { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both; }
-@keyframes fadeIn { from { opacity:0; transform:translateY(20px);} to { opacity:1; transform:translateY(0);} }
-.animate-slideUp { animation: slideUp 0.7s cubic-bezier(.4,0,.2,1) both; }
-@keyframes slideUp { from { opacity:0; transform:translateY(40px);} to { opacity:1; transform:translateY(0);} }
-</style>
 {% endblock %} 

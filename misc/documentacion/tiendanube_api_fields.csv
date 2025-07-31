@@ -1,0 +1,83 @@
+Tabla,Campo,Tipo,Tamaño,Obligatorio,Descripción,Valores_Posibles,Restricciones
+Productos,id,Integer,-,Sí,ID único del producto (FK),-,Único e inmutable
+Productos,name,String,255 chars,Sí,Nombre del producto,-,Máximo 255 caracteres
+Productos,description,Text,-,No,Descripción del producto,-,-
+Productos,handle,String,255 chars,No,URL slug del producto,-,Máximo 255 caracteres, debe ser único
+Productos,sku,String,100 chars,Sí,Código SKU único,-,Máximo 100 caracteres, debe ser único
+Productos,price,Decimal,999999.99,Sí,Precio de venta,-,Debe ser mayor a 0
+Productos,compare_at_price,Decimal,999999.99,No,Precio comparativo,-,-
+Productos,cost,Decimal,999999.99,No,Precio de costo,-,-
+Productos,stock,Integer,-,No,Stock disponible,-,No puede ser negativo
+Productos,weight,Decimal,-,No,Peso en kg,-,-
+Productos,width,Decimal,-,No,Ancho en cm,-,-
+Productos,height,Decimal,-,No,Alto en cm,-,-
+Productos,depth,Decimal,-,No,Profundidad en cm,-,-
+Productos,published,Boolean,-,No,Si el producto está publicado,true/false,-
+Productos,featured,Boolean,-,No,Si el producto es destacado,true/false,-
+Productos,free_shipping,Boolean,-,No,Si tiene envío gratuito,true/false,-
+Productos,product_type,String,-,No,Tipo de producto,physical/digital/service,-
+Productos,seo_title,String,-,No,Título para SEO,-,-
+Productos,seo_description,Text,-,No,Descripción para SEO,-,-
+Productos,brand,String,-,No,Marca del producto,-,-
+Productos,categories,Array,-,No,Categorías del producto,-,-
+Productos,tags,Array,-,No,Etiquetas del producto,-,-
+Productos,images,Array,-,No,Imágenes del producto,-,-
+Productos,variants,Array,-,No,Variantes del producto,-,-
+Productos,created_at,DateTime,-,No,Fecha de creación,-,-
+Productos,updated_at,DateTime,-,No,Fecha de última modificación,-,-
+Variantes,id,Integer,-,Sí,ID único de la variante (FK),-,Único e inmutable
+Variantes,product_id,Integer,-,Sí,ID del producto padre (FK),-,-
+Variantes,name,String,-,No,Nombre de la variante,-,-
+Variantes,sku,String,-,No,SKU de la variante,-,-
+Variantes,price,Decimal,-,No,Precio de la variante,-,-
+Variantes,stock,Integer,-,No,Stock de la variante,-,-
+Variantes,weight,Decimal,-,No,Peso de la variante,-,-
+Variantes,width,Decimal,-,No,Ancho de la variante,-,-
+Variantes,height,Decimal,-,No,Alto de la variante,-,-
+Variantes,depth,Decimal,-,No,Profundidad de la variante,-,-
+Variantes,options,Array,-,No,Opciones de la variante,-,-
+Imágenes,src,String,-,Sí,URL de la imagen,-,-
+Imágenes,alt,String,-,No,Texto alternativo,-,-
+Imágenes,position,Integer,-,No,Posición de la imagen,-,-
+Clientes,id,Integer,-,Sí,ID único del cliente (FK),-,Único e inmutable
+Clientes,name,String,-,Sí,Nombre completo,-,-
+Clientes,email,String,-,Sí,Email del cliente,-,Debe ser único, formato válido
+Clientes,document,String,-,No,Documento de identidad,-,Formato válido según país
+Clientes,phone,String,-,No,Teléfono,-,-
+Clientes,address.street,String,-,No,Calle y número,-,-
+Clientes,address.city,String,-,No,Ciudad,-,-
+Clientes,address.province,String,-,No,Provincia/Estado,-,-
+Clientes,address.country,String,-,No,País,-,-
+Clientes,address.zip,String,-,No,Código postal,-,-
+Clientes,created_at,DateTime,-,No,Fecha de creación,-,-
+Clientes,updated_at,DateTime,-,No,Fecha de última modificación,-,-
+Pedidos,id,Integer,-,Sí,ID único del pedido (FK),-,Único e inmutable
+Pedidos,number,String,-,Sí,Número de pedido,-,Debe ser único
+Pedidos,total,Decimal,-,Sí,Total del pedido,-,Debe ser mayor a 0
+Pedidos,currency,String,-,Sí,Moneda,-,-
+Pedidos,status,String,-,Sí,Estado del pedido,pending/confirmed/cancelled/shipped/delivered/returned,-
+Pedidos,payment_status,String,-,Sí,Estado del pago,pending/paid/cancelled/refunded,-
+Pedidos,notes,Text,-,No,Notas del pedido,-,-
+Pedidos,customer.id,Integer,-,Sí,ID del cliente,-,-
+Pedidos,customer.name,String,-,No,Nombre del cliente,-,-
+Pedidos,customer.email,String,-,No,Email del cliente,-,-
+Pedidos,shipping_address.street,String,-,No,Calle de envío,-,-
+Pedidos,shipping_address.city,String,-,No,Ciudad de envío,-,-
+Pedidos,shipping_address.province,String,-,No,Provincia de envío,-,-
+Pedidos,shipping_address.country,String,-,No,País de envío,-,-
+Pedidos,shipping_address.zip,String,-,No,Código postal de envío,-,-
+Pedidos,billing_address.street,String,-,No,Calle de facturación,-,-
+Pedidos,billing_address.city,String,-,No,Ciudad de facturación,-,-
+Pedidos,billing_address.province,String,-,No,Provincia de facturación,-,-
+Pedidos,billing_address.country,String,-,No,País de facturación,-,-
+Pedidos,billing_address.zip,String,-,No,Código postal de facturación,-,-
+Pedidos,payment_method,String,-,No,Método de pago,-,-
+Pedidos,shipping_method,String,-,No,Método de envío,-,-
+Pedidos,created_at,DateTime,-,No,Fecha de creación,-,-
+Pedidos,updated_at,DateTime,-,No,Fecha de última modificación,-,-
+Items_Pedido,product_id,Integer,-,Sí,ID del producto (FK),-,-
+Items_Pedido,variant_id,Integer,-,No,ID de la variante (FK),-,-
+Items_Pedido,name,String,-,Sí,Nombre del item,-,-
+Items_Pedido,quantity,Integer,-,Sí,Cantidad,-,Debe ser mayor a 0
+Items_Pedido,price,Decimal,-,Sí,Precio unitario,-,-
+Items_Pedido,total,Decimal,-,Sí,Total del item,-,- 

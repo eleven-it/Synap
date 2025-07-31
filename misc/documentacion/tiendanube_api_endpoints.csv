@@ -1,0 +1,42 @@
+Entidad,Endpoint,Método,Descripción,Parámetros,Respuesta,Autenticación
+Productos,/products,GET,Listar productos,limit, offset, search, sort, Array de productos,Required
+Productos,/products/{id},GET,Obtener producto específico,id (path),Producto individual,Required
+Productos,/products,POST,Crear nuevo producto,product_data (body),Producto creado,Required
+Productos,/products/{id},PUT,Actualizar producto,id (path), product_data (body),Producto actualizado,Required
+Productos,/products/{id},DELETE,Eliminar producto,id (path),Status 204,Required
+Productos,/products/{id}/variants,GET,Listar variantes de producto,id (path),Array de variantes,Required
+Productos,/products/{id}/variants,POST,Crear variante,id (path), variant_data (body),Variante creada,Required
+Productos,/products/{id}/variants/{variant_id},PUT,Actualizar variante,id (path), variant_id (path), variant_data (body),Variante actualizada,Required
+Productos,/products/{id}/variants/{variant_id},DELETE,Eliminar variante,id (path), variant_id (path),Status 204,Required
+Productos,/products/{id}/images,GET,Listar imágenes de producto,id (path),Array de imágenes,Required
+Productos,/products/{id}/images,POST,Subir imagen,id (path), image_data (body),Imagen creada,Required
+Productos,/products/{id}/images/{image_id},DELETE,Eliminar imagen,id (path), image_id (path),Status 204,Required
+Clientes,/customers,GET,Listar clientes,limit, offset, search, sort, Array de clientes,Required
+Clientes,/customers/{id},GET,Obtener cliente específico,id (path),Cliente individual,Required
+Clientes,/customers,POST,Crear nuevo cliente,customer_data (body),Cliente creado,Required
+Clientes,/customers/{id},PUT,Actualizar cliente,id (path), customer_data (body),Cliente actualizado,Required
+Clientes,/customers/{id},DELETE,Eliminar cliente,id (path),Status 204,Required
+Pedidos,/orders,GET,Listar pedidos,limit, offset, status, payment_status, date_from, date_to, Array de pedidos,Required
+Pedidos,/orders/{id},GET,Obtener pedido específico,id (path),Pedido individual,Required
+Pedidos,/orders,POST,Crear nuevo pedido,order_data (body),Pedido creado,Required
+Pedidos,/orders/{id},PUT,Actualizar pedido,id (path), order_data (body),Pedido actualizado,Required
+Pedidos,/orders/{id},DELETE,Eliminar pedido,id (path),Status 204,Required
+Pedidos,/orders/{id}/items,GET,Listar items del pedido,id (path),Array de items,Required
+Pedidos,/orders/{id}/items,POST,Agregar item al pedido,id (path), item_data (body),Item creado,Required
+Pedidos,/orders/{id}/items/{item_id},PUT,Actualizar item del pedido,id (path), item_id (path), item_data (body),Item actualizado,Required
+Pedidos,/orders/{id}/items/{item_id},DELETE,Eliminar item del pedido,id (path), item_id (path),Status 204,Required
+Categorías,/categories,GET,Listar categorías,-,Array de categorías,Required
+Categorías,/categories/{id},GET,Obtener categoría específica,id (path),Categoría individual,Required
+Categorías,/categories,POST,Crear nueva categoría,category_data (body),Categoría creada,Required
+Categorías,/categories/{id},PUT,Actualizar categoría,id (path), category_data (body),Categoría actualizada,Required
+Categorías,/categories/{id},DELETE,Eliminar categoría,id (path),Status 204,Required
+Marcas,/brands,GET,Listar marcas,-,Array de marcas,Required
+Marcas,/brands/{id},GET,Obtener marca específica,id (path),Marca individual,Required
+Marcas,/brands,POST,Crear nueva marca,brand_data (body),Marca creada,Required
+Marcas,/brands/{id},PUT,Actualizar marca,id (path), brand_data (body),Marca actualizada,Required
+Marcas,/brands/{id},DELETE,Eliminar marca,id (path),Status 204,Required
+Webhooks,/webhooks,GET,Listar webhooks,-,Array de webhooks,Required
+Webhooks,/webhooks/{id},GET,Obtener webhook específico,id (path),Webhook individual,Required
+Webhooks,/webhooks,POST,Crear nuevo webhook,webhook_data (body),Webhook creado,Required
+Webhooks,/webhooks/{id},PUT,Actualizar webhook,id (path), webhook_data (body),Webhook actualizado,Required
+Webhooks,/webhooks/{id},DELETE,Eliminar webhook,id (path),Status 204,Required 

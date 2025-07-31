@@ -16,6 +16,7 @@ from ..models import (
     SyncLog, ProductMapping, OrderMapping
 )
 from ..services.sync_service import TiendanubeAdministraNETSyncService
+from ..services.customer_order_mapping_service import CustomerOrderMappingService
 from .serializers import (
     TiendanubeConfigSerializer, AdministraNETConfigSerializer,
     CustomerMappingSerializer, SyncLogSerializer,
@@ -142,30 +143,128 @@ class CustomerMappingViewSet(viewsets.ModelViewSet):
         mapping = self.get_object()
         
         try:
-            sync_service = TiendanubeAdministraNETSyncService()
+            # Obtener configuraciones
+            tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+            adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+            
+            if not tiendanube_config or not adminet_config:
+                return Response({
+                    'success': False,
+                    'error': 'Configuraciones de Tiendanube o AdministraNET no encontradas'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Usar el nuevo servicio de mapeo
+            mapping_service = CustomerOrderMappingService(tiendanube_config, adminet_config)
             
             direction = request.data.get('direction', 'auto')
             
             if direction == 'to_tiendanube':
-                success, message = sync_service.sync_customer_to_tiendanube(mapping)
+                # Simular datos de AdministraNET para el mapeo
+                adminet_customer = {
+                    'Codigo': mapping.adminet_codigo,
+                    'nombre_cliente': mapping.adminet_nombre,
+                    'Email': mapping.adminet_email,
+                    'CUIT': mapping.adminet_documento,
+                    'telefono': mapping.adminet_telefono,
+                    'Calle': mapping.adminet_direccion,
+                    'Estado': mapping.adminet_estado,
+                    'IDDepartamento': mapping.adminet_id_departamento,
+                    'CodProvincia': mapping.adminet_cod_provincia,
+                    'FechaAlta': mapping.adminet_fecha_alta,
+                }
+                result = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
             elif direction == 'to_adminet':
-                success, message = sync_service.sync_customer_to_adminet(mapping)
+                # Simular datos de Tiendanube para el mapeo
+                tiendanube_customer = {
+                    'id': mapping.tiendanube_id,
+                    'name': mapping.tiendanube_name,
+                    'email': mapping.tiendanube_email,
+                    'document': mapping.tiendanube_document,
+                    'phone': mapping.tiendanube_phone,
+                    'address': {
+                        'street': mapping.tiendanube_address,
+                        'city': mapping.tiendanube_city,
+                        'province': mapping.tiendanube_state,
+                        'country': mapping.tiendanube_country,
+                        'zip': mapping.tiendanube_postal_code,
+                    },
+                    'created_at': mapping.tiendanube_created_at,
+                }
+                result = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
             else:
-                # Sincronización automática
+                # Sincronización automática basada en la dirección configurada
                 if mapping.sync_direction == 'tiendanube_to_adminet':
-                    success, message = sync_service.sync_customer_to_adminet(mapping)
+                    tiendanube_customer = {
+                        'id': mapping.tiendanube_id,
+                        'name': mapping.tiendanube_name,
+                        'email': mapping.tiendanube_email,
+                        'document': mapping.tiendanube_document,
+                        'phone': mapping.tiendanube_phone,
+                        'address': {
+                            'street': mapping.tiendanube_address,
+                            'city': mapping.tiendanube_city,
+                            'province': mapping.tiendanube_state,
+                            'country': mapping.tiendanube_country,
+                            'zip': mapping.tiendanube_postal_code,
+                        },
+                        'created_at': mapping.tiendanube_created_at,
+                    }
+                    result = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
                 elif mapping.sync_direction == 'adminet_to_tiendanube':
-                    success, message = sync_service.sync_customer_to_tiendanube(mapping)
+                    adminet_customer = {
+                        'Codigo': mapping.adminet_codigo,
+                        'nombre_cliente': mapping.adminet_nombre,
+                        'Email': mapping.adminet_email,
+                        'CUIT': mapping.adminet_documento,
+                        'telefono': mapping.adminet_telefono,
+                        'Calle': mapping.adminet_direccion,
+                        'Estado': mapping.adminet_estado,
+                        'IDDepartamento': mapping.adminet_id_departamento,
+                        'CodProvincia': mapping.adminet_cod_provincia,
+                        'FechaAlta': mapping.adminet_fecha_alta,
+                    }
+                    result = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
                 else:
-                    # Bidireccional
-                    success1, message1 = sync_service.sync_customer_to_adminet(mapping)
-                    success2, message2 = sync_service.sync_customer_to_tiendanube(mapping)
-                    success = success1 and success2
-                    message = f"Adminet: {message1}, Tiendanube: {message2}"
+                    # Bidireccional - sincronizar en ambas direcciones
+                    tiendanube_customer = {
+                        'id': mapping.tiendanube_id,
+                        'name': mapping.tiendanube_name,
+                        'email': mapping.tiendanube_email,
+                        'document': mapping.tiendanube_document,
+                        'phone': mapping.tiendanube_phone,
+                        'address': {
+                            'street': mapping.tiendanube_address,
+                            'city': mapping.tiendanube_city,
+                            'province': mapping.tiendanube_state,
+                            'country': mapping.tiendanube_country,
+                            'zip': mapping.tiendanube_postal_code,
+                        },
+                        'created_at': mapping.tiendanube_created_at,
+                    }
+                    adminet_customer = {
+                        'Codigo': mapping.adminet_codigo,
+                        'nombre_cliente': mapping.adminet_nombre,
+                        'Email': mapping.adminet_email,
+                        'CUIT': mapping.adminet_documento,
+                        'telefono': mapping.adminet_telefono,
+                        'Calle': mapping.adminet_direccion,
+                        'Estado': mapping.adminet_estado,
+                        'IDDepartamento': mapping.adminet_id_departamento,
+                        'CodProvincia': mapping.adminet_cod_provincia,
+                        'FechaAlta': mapping.adminet_fecha_alta,
+                    }
+                    
+                    result1 = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
+                    result2 = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
+                    
+                    result = {
+                        'success': result1['success'] and result2['success'],
+                        'message': f"Tiendanube: {result1['message']}, AdministraNET: {result2['message']}"
+                    }
             
             return Response({
-                'success': success,
-                'message': message,
+                'success': result['success'],
+                'message': result['message'],
                 'mapping_id': mapping.id
             })
             
@@ -189,7 +288,18 @@ class CustomerMappingViewSet(viewsets.ModelViewSet):
                     'error': 'No se proporcionaron IDs de mapeos'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            sync_service = TiendanubeAdministraNETSyncService()
+            # Obtener configuraciones
+            tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+            adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+            
+            if not tiendanube_config or not adminet_config:
+                return Response({
+                    'success': False,
+                    'error': 'Configuraciones de Tiendanube o AdministraNET no encontradas'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Usar el nuevo servicio de mapeo
+            mapping_service = CustomerOrderMappingService(tiendanube_config, adminet_config)
             results = []
             
             for mapping_id in mapping_ids:
@@ -197,26 +307,113 @@ class CustomerMappingViewSet(viewsets.ModelViewSet):
                     mapping = CustomerMapping.objects.get(id=mapping_id)
                     
                     if direction == 'to_tiendanube':
-                        success, message = sync_service.sync_customer_to_tiendanube(mapping)
+                        # Simular datos de AdministraNET para el mapeo
+                        adminet_customer = {
+                            'Codigo': mapping.adminet_codigo,
+                            'nombre_cliente': mapping.adminet_nombre,
+                            'Email': mapping.adminet_email,
+                            'CUIT': mapping.adminet_documento,
+                            'telefono': mapping.adminet_telefono,
+                            'Calle': mapping.adminet_direccion,
+                            'Estado': mapping.adminet_estado,
+                            'IDDepartamento': mapping.adminet_id_departamento,
+                            'CodProvincia': mapping.adminet_cod_provincia,
+                            'FechaAlta': mapping.adminet_fecha_alta,
+                        }
+                        result = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
                     elif direction == 'to_adminet':
-                        success, message = sync_service.sync_customer_to_adminet(mapping)
+                        # Simular datos de Tiendanube para el mapeo
+                        tiendanube_customer = {
+                            'id': mapping.tiendanube_id,
+                            'name': mapping.tiendanube_name,
+                            'email': mapping.tiendanube_email,
+                            'document': mapping.tiendanube_document,
+                            'phone': mapping.tiendanube_phone,
+                            'address': {
+                                'street': mapping.tiendanube_address,
+                                'city': mapping.tiendanube_city,
+                                'province': mapping.tiendanube_state,
+                                'country': mapping.tiendanube_country,
+                                'zip': mapping.tiendanube_postal_code,
+                            },
+                            'created_at': mapping.tiendanube_created_at,
+                        }
+                        result = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
                     else:
-                        # Sincronización automática
+                        # Sincronización automática basada en la dirección configurada
                         if mapping.sync_direction == 'tiendanube_to_adminet':
-                            success, message = sync_service.sync_customer_to_adminet(mapping)
+                            tiendanube_customer = {
+                                'id': mapping.tiendanube_id,
+                                'name': mapping.tiendanube_name,
+                                'email': mapping.tiendanube_email,
+                                'document': mapping.tiendanube_document,
+                                'phone': mapping.tiendanube_phone,
+                                'address': {
+                                    'street': mapping.tiendanube_address,
+                                    'city': mapping.tiendanube_city,
+                                    'province': mapping.tiendanube_state,
+                                    'country': mapping.tiendanube_country,
+                                    'zip': mapping.tiendanube_postal_code,
+                                },
+                                'created_at': mapping.tiendanube_created_at,
+                            }
+                            result = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
                         elif mapping.sync_direction == 'adminet_to_tiendanube':
-                            success, message = sync_service.sync_customer_to_tiendanube(mapping)
+                            adminet_customer = {
+                                'Codigo': mapping.adminet_codigo,
+                                'nombre_cliente': mapping.adminet_nombre,
+                                'Email': mapping.adminet_email,
+                                'CUIT': mapping.adminet_documento,
+                                'telefono': mapping.adminet_telefono,
+                                'Calle': mapping.adminet_direccion,
+                                'Estado': mapping.adminet_estado,
+                                'IDDepartamento': mapping.adminet_id_departamento,
+                                'CodProvincia': mapping.adminet_cod_provincia,
+                                'FechaAlta': mapping.adminet_fecha_alta,
+                            }
+                            result = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
                         else:
-                            # Bidireccional
-                            success1, message1 = sync_service.sync_customer_to_adminet(mapping)
-                            success2, message2 = sync_service.sync_customer_to_tiendanube(mapping)
-                            success = success1 and success2
-                            message = f"Adminet: {message1}, Tiendanube: {message2}"
+                            # Bidireccional - sincronizar en ambas direcciones
+                            tiendanube_customer = {
+                                'id': mapping.tiendanube_id,
+                                'name': mapping.tiendanube_name,
+                                'email': mapping.tiendanube_email,
+                                'document': mapping.tiendanube_document,
+                                'phone': mapping.tiendanube_phone,
+                                'address': {
+                                    'street': mapping.tiendanube_address,
+                                    'city': mapping.tiendanube_city,
+                                    'province': mapping.tiendanube_state,
+                                    'country': mapping.tiendanube_country,
+                                    'zip': mapping.tiendanube_postal_code,
+                                },
+                                'created_at': mapping.tiendanube_created_at,
+                            }
+                            adminet_customer = {
+                                'Codigo': mapping.adminet_codigo,
+                                'nombre_cliente': mapping.adminet_nombre,
+                                'Email': mapping.adminet_email,
+                                'CUIT': mapping.adminet_documento,
+                                'telefono': mapping.adminet_telefono,
+                                'Calle': mapping.adminet_direccion,
+                                'Estado': mapping.adminet_estado,
+                                'IDDepartamento': mapping.adminet_id_departamento,
+                                'CodProvincia': mapping.adminet_cod_provincia,
+                                'FechaAlta': mapping.adminet_fecha_alta,
+                            }
+                            
+                            result1 = mapping_service.sync_customer_from_tiendanube(mapping, tiendanube_customer)
+                            result2 = mapping_service.sync_customer_from_adminet(mapping, adminet_customer)
+                            
+                            result = {
+                                'success': result1['success'] and result2['success'],
+                                'message': f"Tiendanube: {result1['message']}, AdministraNET: {result2['message']}"
+                            }
                     
                     results.append({
                         'mapping_id': mapping_id,
-                        'success': success,
-                        'message': message
+                        'success': result['success'],
+                        'message': result['message']
                     })
                     
                 except CustomerMapping.DoesNotExist:

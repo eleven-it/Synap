@@ -1,0 +1,23 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Webhook Config Detail" %}{% endblock %}
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">{% trans "Webhook Config Detail" %}</h1>
+    <div class="bg-white dark:bg-gray-900 rounded-lg shadow p-4 mb-4">
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 text-xs">
+            <dt class="font-semibold">{% trans "ID" %}</dt>
+            <dd>{{ webhook_config.id }}</dd>
+            <dt class="font-semibold">{% trans "Event Type" %}</dt>
+            <dd>{{ webhook_config.event_type }}</dd>
+            <dt class="font-semibold">{% trans "URL" %}</dt>
+            <dd>{{ webhook_config.url }}</dd>
+            <dt class="font-semibold">{% trans "Active" %}</dt>
+            <dd>{{ webhook_config.active|yesno:_('Yes,No') }}</dd>
+            <dt class="font-semibold">{% trans "Created At" %}</dt>
+            <dd>{{ webhook_config.created_at|date:'SHORT_DATETIME_FORMAT' }}</dd>
+        </dl>
+    </div>
+    <a href="{% url 'tiendanube_administranet:webhook_config_list' %}" class="btn btn-secondary">{% trans "Back to list" %}</a>
+</div>
+{% endblock %}

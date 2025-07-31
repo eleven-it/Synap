@@ -23,23 +23,12 @@ import json
 from django.utils.translation import gettext_lazy as _
 from inventory.models import Product, Warehouse
 
-# Import unified views
-from .views_unified import (
-    UnifiedCustomerSyncDashboardView,
-    UnifiedCustomerMappingListView,
-    UnifiedCustomerMappingCreateView,
-    UnifiedCustomerMappingDetailView,
-    UnifiedCustomerMappingUpdateView,
-    UnifiedCustomerMappingDeleteView,
-    UnifiedSyncLogListView,
-    unified_sync_customers_from_tiendanube,
-    unified_sync_customers_to_tiendanube,
-    unified_sync_customers_with_adminet,
-    unified_migrate_from_old_systems,
-    unified_create_mapping_ajax,
-    unified_delete_mapping_ajax,
-    unified_get_adminet_customers,
-    unified_get_tiendanube_customers,
+# Import enhanced views
+from .views_enhanced import (
+    TiendaNubeConfigWizardView,
+    TiendaNubeConfigWizardCallbackView,
+    TiendaNubeDashboardView,
+    TiendaNubeManualSyncView,
 )
 
 class TiendaNubePermissionMixin(UserPassesTestMixin):
@@ -48,51 +37,11 @@ class TiendaNubePermissionMixin(UserPassesTestMixin):
     def test_func(self):
         return self.request.user.tiene_permiso("tiendanube.access")
 
-# Vistas generales o utilidades compartidas para Tiendanube
-# Las vistas de integración Synap <-> Tiendanube están en views_synap.py
-# Las vistas de integración administraNET <-> Tiendanube están en views_adminet.py
+# Vistas generales para TiendaNube <-> Synap integration
 
 # Create your views here.
 
-class TiendaNubeDashboardView(TiendaNubePermissionMixin, TemplateView):
-    """Main dashboard for TiendaNube integration."""
-    template_name = 'tiendanube/tiendanube_dashboard.html'
-
-    def get_tiendanube_service(self, config=None):
-        if config is None:
-            config = TiendaNubeConfig.objects.first()
-        from .services_main import TiendaNubeService
-        return TiendaNubeService(config)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        config = TiendaNubeConfig.objects.first()
-        if config:
-            context['env_configured'] = True
-            context['store_id'] = config.store_id
-            context['api_url'] = getattr(config, 'api_url', 'https://api.tiendanube.com/v1')
-            context['auto_sync'] = getattr(config, 'auto_sync', False)
-            context['sync_interval'] = getattr(config, 'sync_interval', 30)
-            context['tiendanube_config'] = config
-            
-            # Obtener estadísticas del servicio
-            service = self.get_tiendanube_service(config)
-            context['sync_status'] = service.get_sync_status()
-            context['recent_logs'] = service.get_recent_logs(limit=10)
-            
-            logging.info(f"[TiendaNubeDashboard] Usando configuración de BD: store_id={config.store_id}, api_url={getattr(config, 'api_url', 'https://api.tiendanube.com/v1')}, auto_sync={getattr(config, 'auto_sync', False)}, sync_interval={getattr(config, 'sync_interval', 30)}")
-        else:
-            context['env_configured'] = bool(
-                getattr(settings, 'TIENDANUBE_STORE_ID', None) and 
-                getattr(settings, 'TIENDANUBE_ACCESS_TOKEN', None)
-            )
-            context['store_id'] = getattr(settings, 'TIENDANUBE_STORE_ID', 'No configurado')
-            context['api_url'] = getattr(settings, 'TIENDANUBE_API_URL', 'https://api.tiendanube.com/v1')
-            context['auto_sync'] = getattr(settings, 'TIENDANUBE_AUTO_SYNC', False)
-            context['sync_interval'] = getattr(settings, 'TIENDANUBE_SYNC_INTERVAL', 30)
-            context['tiendanube_config'] = None
-            logging.info(f"[TiendaNubeDashboard] Usando configuración de entorno: store_id={context['store_id']}, api_url={context['api_url']}, auto_sync={context['auto_sync']}, sync_interval={context['sync_interval']}")
-        return context
+# Dashboard view is now in views_enhanced.py
 
 class TiendaNubeConfigListView(TiendaNubePermissionMixin, ListView):
     """List all TiendaNube configurations."""
@@ -577,51 +526,7 @@ class TiendaNubeReportsView(TiendaNubePermissionMixin, TemplateView):
         
         return context
 
-# Vistas para sincronización manual
-class TiendaNubeManualSyncView(TiendaNubePermissionMixin, View):
-    """Manual sync operations."""
-    def get_tiendanube_service(self, config=None):
-        if config is None:
-            config = TiendaNubeConfig.objects.first()
-        from .services_main import TiendaNubeService
-        return TiendaNubeService(config)
-
-    def post(self, request, *args, **kwargs):
-        sync_type = request.POST.get('sync_type')
-        config = TiendaNubeConfig.objects.first()
-        if not config:
-            messages.error(request, 'No hay configuración de Tiendanube activa.')
-            return JsonResponse({'success': False, 'message': 'No configuration found'})
-        service = self.get_tiendanube_service(config)
-        try:
-            if sync_type == 'products':
-                success_count, failed_count = service.sync_products_from_tiendanube()
-                message = f'Sincronización de productos completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            elif sync_type == 'customers':
-                success_count, failed_count = service.sync_customers_from_tiendanube()
-                message = f'Sincronización de clientes completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            elif sync_type == 'orders':
-                success_count, failed_count = service.sync_orders_from_tiendanube()
-                message = f'Sincronización de pedidos completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            elif sync_type == 'stock':
-                success_count, failed_count = service.sync_stock_to_tiendanube()
-                message = f'Sincronización de stock completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            elif sync_type == 'all_stock':
-                success_count, failed_count = service.sync_all_stock_to_tiendanube()
-                message = f'Sincronización de stock de productos Tiendanube completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            elif sync_type == 'restock':
-                success_count, failed_count = service.check_and_restock_products()
-                message = f'Verificación de reabastecimiento completada. Exitosos: {success_count}, Fallidos: {failed_count}'
-            else:
-                return JsonResponse({'success': False, 'message': 'Tipo de sincronización no válido'})
-            
-            messages.success(request, message)
-            return JsonResponse({'success': True, 'message': message})
-            
-        except Exception as e:
-            error_message = f'Error en sincronización: {str(e)}'
-            messages.error(request, error_message)
-            return JsonResponse({'success': False, 'message': error_message})
+# Manual sync view is now in views_enhanced.py
 
 # Vistas para webhooks
 class TiendaNubeWebhookView(View):
@@ -650,182 +555,7 @@ class TiendaNubeWebhookView(View):
             logging.error(f"Error processing webhook: {str(e)}")
             return HttpResponse(status=500)
 
-class TiendaNubeConfigWizardView(TiendaNubePermissionMixin, TemplateView):
-    template_name = 'tiendanube/tiendanube_config_wizard.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        session = self.request.session
-        context['app_id'] = session.get('wizard_app_id', '')
-        context['client_secret'] = session.get('wizard_client_secret', '')
-        context['step'] = session.get('wizard_step', 1)
-        context['scopes'] = session.get('wizard_scopes', ['read_products', 'write_products'])
-        context['redirect_uri'] = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
-        context['redirect_uri'] = context['redirect_uri'].replace('http://', 'https://')
-        if context['step'] == 4:
-            context['code'] = session.get('wizard_code')
-            context['state'] = session.get('wizard_state')
-            context['access_token'] = session.get('wizard_access_token', '')
-            context['user_id'] = session.get('wizard_user_id', '')
-        if context['step'] == 5:
-            context['auto_sync'] = session.get('wizard_auto_sync', True)
-            context['sync_interval'] = session.get('wizard_sync_interval', 30)
-            context['sync_products'] = session.get('wizard_sync_products', True)
-            context['sync_stock'] = session.get('wizard_sync_stock', True)
-            context['sync_variants'] = session.get('wizard_sync_variants', True)
-        if context['step'] == 6:
-            # Resumen final con datos de la tienda desde Tiendanube
-            access_token = session.get('wizard_access_token')
-            user_id = session.get('wizard_user_id')
-            tienda_data = session.get('wizard_tienda_data')
-            if not tienda_data and access_token and user_id:
-                # Consultar la API de TiendaNube
-                try:
-                    resp = requests.get(f'https://api.tiendanube.com/v1/{user_id}/store',
-                        headers={
-                            'Content-Type': 'application/json',
-                            'Authentication': f'bearer {access_token}',
-                            'User-Agent': 'administranet_tiendanube - tiendanube@administranet.com.ar'
-                        })
-                    if resp.status_code == 200:
-                        tienda_data = resp.json()
-                        session['wizard_tienda_data'] = tienda_data
-                    else:
-                        tienda_data = None
-                except Exception:
-                    tienda_data = None
-            context['tienda_data'] = tienda_data
-            context['summary'] = {
-                'app_id': session.get('wizard_app_id'),
-                'user_id': user_id,
-                'access_token': access_token,
-                'scopes': session.get('wizard_scopes'),
-                'auto_sync': session.get('wizard_auto_sync'),
-                'sync_interval': session.get('wizard_sync_interval'),
-                'sync_products': session.get('wizard_sync_products'),
-                'sync_stock': session.get('wizard_sync_stock'),
-                'sync_variants': session.get('wizard_sync_variants'),
-            }
-        if context['step'] == 3:
-            app_id = context['app_id']
-            scopes = context['scopes']
-            redirect_uri = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
-            redirect_uri = redirect_uri.replace('http://', 'https://')
-            scope_str = ','.join(scopes)
-            state = 'synap-' + self.request.session.session_key
-            auth_url = f"https://www.tiendanube.com/apps/{app_id}/authorize?response_type=code&client_id={app_id}&scope={scope_str}&redirect_uri={redirect_uri}&state={state}"
-            context['auth_url'] = auth_url
-            context['state'] = state
-        context['wizard_steps'] = [
-            'Credentials',
-            'Authorize',
-            'Token',
-            'Preferences',
-            'Summary'
-        ]
-        return context
-
-    def post(self, request, *args, **kwargs):
-        session = request.session
-        step = int(session.get('wizard_step', 1))
-        if step == 1:
-            app_id = request.POST.get('app_id', '').strip()
-            client_secret = request.POST.get('client_secret', '').strip()
-            session['wizard_app_id'] = app_id
-            session['wizard_client_secret'] = client_secret
-            session['wizard_step'] = 3
-            return self.get(request, *args, **kwargs)
-        elif step == 4 and 'get_token' in request.POST:
-            # Obtener access_token desde TiendaNube
-            app_id = session.get('wizard_app_id')
-            client_secret = session.get('wizard_client_secret')
-            code = session.get('wizard_code')
-            redirect_uri = self.request.build_absolute_uri('/tiendanube/config/wizard/callback/')
-            redirect_uri = redirect_uri.replace('http://', 'https://')
-            data = {
-                'client_id': app_id,
-                'client_secret': client_secret,
-                'grant_type': 'authorization_code',
-                'code': code,
-                'redirect_uri': redirect_uri
-            }
-            # Logging para depuración
-            logging.info(f"[TiendaNube Wizard] POST /apps/authorize/token data: {data}")
-            resp = requests.post('https://www.tiendanube.com/apps/authorize/token', json=data, headers={'Content-Type': 'application/json'})
-            logging.info(f"[TiendaNube Wizard] Response status: {resp.status_code}")
-            logging.info(f"[TiendaNube Wizard] Response text: {resp.text}")
-            if resp.status_code == 200:
-                token_data = resp.json()
-                session['wizard_access_token'] = token_data.get('access_token')
-                session['wizard_user_id'] = token_data.get('user_id')
-                session['wizard_step'] = 5
-            else:
-                session['wizard_access_token'] = ''
-                session['wizard_user_id'] = ''
-            return self.get(request, *args, **kwargs)
-        elif step == 4 and 'continue_prefs' in request.POST:
-            session['wizard_step'] = 5
-            return self.get(request, *args, **kwargs)
-        elif step == 5:
-            session['wizard_auto_sync'] = bool(request.POST.get('auto_sync'))
-            session['wizard_sync_interval'] = int(request.POST.get('sync_interval', 30))
-            session['wizard_sync_products'] = bool(request.POST.get('sync_products'))
-            session['wizard_sync_stock'] = bool(request.POST.get('sync_stock'))
-            session['wizard_sync_variants'] = bool(request.POST.get('sync_variants'))
-            session['wizard_step'] = 6
-            return self.get(request, *args, **kwargs)
-        elif step == 6 and 'save_store' in request.POST:
-            from .models import TiendaNubeConfig
-            # Verificar si ya existe la tienda en Synap
-            store_id = session.get('wizard_user_id')
-            access_token = session.get('wizard_access_token')
-            if not store_id or not access_token:
-                context = self.get_context_data()
-                context['wizard_error'] = 'No se pudo obtener la autorización de Tiendanube. Por favor, completa el proceso de autorización antes de continuar.'
-                return self.render_to_response(context)
-            if TiendaNubeConfig.objects.filter(store_id=store_id).exists():
-                # Ya existe, mostrar error amigable
-                context = self.get_context_data()
-                context['wizard_error'] = 'This store is already registered in Synap.'
-                return self.render_to_response(context)
-            # Crear nueva configuración
-            config = TiendaNubeConfig.objects.create(
-                store_id=store_id,
-                access_token=access_token,
-                auto_sync=session.get('wizard_auto_sync', True),
-                sync_interval=session.get('wizard_sync_interval', 30),
-                sync_products=session.get('wizard_sync_products', True),
-                sync_stock=session.get('wizard_sync_stock', True),
-                sync_variants=session.get('wizard_sync_variants', True),
-            )
-            # Limpiar sesión
-            session.pop('wizard_app_id', None)
-            session.pop('wizard_client_secret', None)
-            session.pop('wizard_code', None)
-            session.pop('wizard_state', None)
-            session.pop('wizard_access_token', None)
-            session.pop('wizard_user_id', None)
-            session.pop('wizard_tienda_data', None)
-            session.pop('wizard_auto_sync', None)
-            session.pop('wizard_sync_interval', None)
-            session.pop('wizard_sync_products', None)
-            session.pop('wizard_sync_stock', None)
-            session.pop('wizard_sync_variants', None)
-            session.pop('wizard_step', None)
-            messages.success(request, 'TiendaNube configuration created successfully!')
-            return redirect('tiendanube:dashboard')
-        return self.get(request, *args, **kwargs)
-
-class TiendaNubeConfigWizardCallbackView(View):
-    def get(self, request, *args, **kwargs):
-        # Redirigir directamente a la app tiendanube_administranet
-        code = request.GET.get('code')
-        state = request.GET.get('state')
-        
-        # Construir la URL de redirección con los parámetros
-        redirect_url = f'/tiendanube-adminet/config/tiendanube/wizard/callback/?code={code}&state={state}'
-        print(f"Tiendanube callback redirecting to: {redirect_url}")
-        return redirect(redirect_url)
+# Wizard views are now in views_enhanced.py
 
 class TiendaNubeSyncAllProductsView(TiendaNubePermissionMixin, View):
     """Sincroniza todos los productos con tag tiendanube hacia Tiendanube."""
