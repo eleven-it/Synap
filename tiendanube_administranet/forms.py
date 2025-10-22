@@ -81,9 +81,18 @@ class AdministraNETConfigForm(forms.ModelForm):
     Formulario para configuración de AdministraNET.
     """
     
+    deposito_tiendanube_id = forms.ChoiceField(
+        required=False,
+        label=_('Depósito TiendaNube'),
+        help_text=_('Seleccione el depósito que se sincronizará con TiendaNube'),
+        widget=forms.Select(attrs={
+            'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400'
+        })
+    )
+    
     class Meta:
         model = AdministraNETConfig
-        fields = ['name', 'host', 'port', 'database', 'user', 'password', 'is_active']
+        fields = ['name', 'host', 'port', 'database', 'user', 'password', 'deposito_tiendanube_id', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400',
@@ -131,6 +140,40 @@ class AdministraNETConfigForm(forms.ModelForm):
             'password': _('Contraseña del usuario'),
             'is_active': _('Activar esta configuración')
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Cargar depósitos disponibles si hay una instancia con conexión configurada
+        depositos_choices = [('', _('Seleccione un depósito'))]
+        
+        if self.instance and self.instance.pk:
+            try:
+                from .services.adminet_service import AdministraNETService
+                service = AdministraNETService(self.instance)
+                result = service.get_depositos()
+                
+                if result['success']:
+                    for deposito in result['depositos']:
+                        depositos_choices.append((
+                            deposito.get('id'),
+                            f"{deposito.get('nombre')} (ID: {deposito.get('id')})"
+                        ))
+            except Exception as e:
+                # Si hay error al conectar, solo mostrar opción vacía
+                pass
+        
+        self.fields['deposito_tiendanube_id'].choices = depositos_choices
+        
+        # Si ya hay un valor seleccionado, asegurarse de que esté en las opciones
+        if self.instance and self.instance.deposito_tiendanube_id:
+            current_value = str(self.instance.deposito_tiendanube_id)
+            if not any(str(choice[0]) == current_value for choice in depositos_choices):
+                depositos_choices.append((
+                    self.instance.deposito_tiendanube_id,
+                    f"Depósito {self.instance.deposito_tiendanube_id} (Configurado)"
+                ))
+                self.fields['deposito_tiendanube_id'].choices = depositos_choices
     
     def clean(self):
         """Validar que solo haya una configuración activa."""

@@ -163,6 +163,19 @@
             <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">{% trans "You have authorized Synap. Now, obtain your access token to complete the connection." %}</p>
         </div>
         
+        <!-- Mostrar código de autorización si está disponible -->
+        {% if wizard_code %}
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 animate-fadeIn">
+            <div class="flex items-center mb-2">
+                <span class="material-icons text-green-600 dark:text-green-400 mr-2">check_circle</span>
+                <span class="text-green-700 dark:text-green-300 font-semibold">{% trans "Authorization code received successfully!" %}</span>
+            </div>
+            <div class="text-xs text-gray-700 dark:text-gray-300 break-all">
+                <b>{% trans "Code:" %}</b> <span class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{{ wizard_code }}</span>
+            </div>
+        </div>
+        {% endif %}
+        
         <!-- Mostrar mensajes de error o éxito -->
         {% if wizard_message %}
         <div class="mb-6 p-4 rounded-lg border {% if wizard_message_type == 'success' %}bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200{% elif wizard_message_type == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200{% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200{% endif %} animate-fadeIn">
@@ -190,7 +203,7 @@
         {% else %}
         <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4 animate-fadeIn">
             <div class="text-green-700 dark:text-green-300 font-semibold mb-2">{% trans "Access Token Obtained Successfully!" %}</div>
-            <div class="text-xs text-gray-700 dark:text-gray-300 break-all mb-2"><b>{% trans "Access Token:" %}</b> {{ access_token|slice:":20 }}...{{ access_token|slice:"-10:" }}</div>
+            <div class="text-xs text-gray-700 dark:text-gray-300 break-all mb-2"><b>{% trans "Access Token:" %}</b> {{ access_token|truncatechars:30 }}</div>
             <div class="text-xs text-gray-700 dark:text-gray-300"><b>{% trans "Store ID:" %}</b> {{ user_id }}</div>
         </div>
         <form method="post" class="animate-fadeIn">

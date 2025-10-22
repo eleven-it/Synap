@@ -32,6 +32,37 @@ class TiendanubeAdministraNETSyncService:
         self.product_service = TiendanubeProductService(tiendanube_config)
         self.mapping_service = AutomaticMappingService(tiendanube_config, adminet_config)
     
+    def map_adminet_estado_to_tiendanube(self, estado: str, anulado: str) -> Dict[str, str]:
+        """
+        Mapear estado de AdministraNET a estados de TiendaNube.
+        
+        Args:
+            estado: Estado del pedido en AdministraNET
+            anulado: Campo anulado ("Si" o "No")
+            
+        Returns:
+            Dict con order_status y fulfillment_status para TiendaNube
+        """
+        # Si está anulado, siempre es cancelled
+        if anulado == "Si":
+            return {
+                'order_status': 'cancelled',
+                'fulfillment_status': None
+            }
+        
+        # Mapeo según estado
+        estado_map = {
+            'Pendiente': {'order_status': 'open', 'fulfillment_status': 'pending'},
+            'En preparación': {'order_status': 'open', 'fulfillment_status': 'pending'},
+            'Preparado': {'order_status': 'open', 'fulfillment_status': 'pending'},
+            'En Remito': {'order_status': 'open', 'fulfillment_status': 'in_transit'},
+            'Parcial': {'order_status': 'open', 'fulfillment_status': 'in_transit'},
+            'Facturado': {'order_status': 'closed', 'fulfillment_status': 'delivered'},
+            'Cerrado': {'order_status': 'closed', 'fulfillment_status': 'delivered'},
+        }
+        
+        return estado_map.get(estado, {'order_status': 'open', 'fulfillment_status': 'pending'})
+    
     def sync_customers_from_tiendanube(self) -> Dict[str, Any]:
         """Sincronizar clientes desde Tiendanube hacia AdministraNET."""
         try:
@@ -342,12 +373,26 @@ class TiendanubeAdministraNETSyncService:
                 adminet_config=self.adminet_config
             )
             
-            # Obtener productos de AdministraNET (solo ecommerce)
-            adminet_result = self.adminet_service.get_products(
-                limit=100, 
-                ecommerce='Si',
-                disponible_vta='Si'
-            )
+            # Obtener depósito configurado
+            deposito_id = self.adminet_config.deposito_tiendanube_id
+            
+            # Obtener productos de AdministraNET con stock del depósito específico
+            if deposito_id:
+                logger.info(f"Sincronizando productos desde depósito {deposito_id}")
+                adminet_result = self.adminet_service.get_products_with_stock_by_deposito(
+                    deposito_id=deposito_id,
+                    limit=100, 
+                    ecommerce='Si',
+                    disponible_vta='Si'
+                )
+            else:
+                logger.warning("No hay depósito configurado, usando stock general")
+                adminet_result = self.adminet_service.get_products(
+                    limit=100, 
+                    ecommerce='Si',
+                    disponible_vta='Si'
+                )
+            
             if not adminet_result['success']:
                 sync_log.complete_sync(False, adminet_result['message'])
                 return adminet_result
@@ -372,21 +417,59 @@ class TiendanubeAdministraNETSyncService:
                     )
                     
                     if created or mapping.sync_status != ProductMapping.SyncStatus.SYNCED:
-                        # Mapear datos de AdministraNET a Tiendanube
-                        tiendanube_data = self.mapping_service.map_adminet_to_tiendanube_product(product)
+                        # Actualizar mapeo con datos de AdministraNET PRIMERO
+                        self.mapping_service.update_product_mapping_from_adminet(mapping, product)
+                        
+                        # Mapear datos de AdministraNET a Tiendanube (pasando deposito_id)
+                        tiendanube_data = self.mapping_service.map_adminet_to_tiendanube_product(
+                            product, 
+                            deposito_id=deposito_id
+                        )
                         
                         if mapping.tiendanube_id:
-                            # Actualizar producto existente
-                            result = self.product_service.update_product(mapping.tiendanube_id, tiendanube_data)
+                            # Obtener el producto existente para verificar variantes
+                            existing_product = self.product_service.get_product(mapping.tiendanube_id)
+                            if existing_product['success']:
+                                product_data = existing_product['product']
+                                variants = product_data.get('variants', [])
+                                
+                                if variants:
+                                    # Actualizar la primera variante (asumiendo una variante por producto)
+                                    variant = variants[0]
+                                    variant_id = variant.get('id')
+                                    
+                                    # Preparar datos de la variante
+                                    variant_data = {
+                                        'sku': tiendanube_data.get('variants', [{}])[0].get('sku'),
+                                        'price': tiendanube_data.get('variants', [{}])[0].get('price'),
+                                        'stock': tiendanube_data.get('variants', [{}])[0].get('stock'),
+                                        'stock_management': True
+                                    }
+                                    
+                                    # Actualizar variante usando el método correcto
+                                    result = self.product_service.update_variant(
+                                        mapping.tiendanube_id, 
+                                        variant_id, 
+                                        variant_data
+                                    )
+                                else:
+                                    # No hay variantes, crear una nueva
+                                    variant_data = tiendanube_data.get('variants', [{}])[0]
+                                    result = self.product_service.create_variant(
+                                        mapping.tiendanube_id, 
+                                        variant_data
+                                    )
+                            else:
+                                result = existing_product
                         else:
                             # Crear nuevo producto
                             result = self.product_service.create_product(tiendanube_data)
                             if result['success']:
-                                mapping.tiendanube_id = result.get('product_id')
+                                # El ID del producto está en result['product']['id']
+                                product = result.get('product', {})
+                                mapping.tiendanube_id = product.get('id')
                         
                         if result['success']:
-                            # Actualizar mapeo con datos de AdministraNET
-                            self.mapping_service.update_product_mapping_from_adminet(mapping, product)
                             mapping.sync_status = ProductMapping.SyncStatus.SYNCED
                             mapping.last_synced = timezone.now()
                             mapping.save()
@@ -556,26 +639,68 @@ class TiendanubeAdministraNETSyncService:
                     )
                     
                     if created or mapping.sync_status != OrderMapping.SyncStatus.SYNCED:
-                        # Crear/actualizar en AdministraNET
-                        adminet_data = {
-                            'numero': order.get('number', ''),
-                            'cliente_email': order.get('customer_email', ''),
-                            'total': order.get('total', 0),
-                            'estado': order.get('status', 'pending')
-                        }
-                        
-                        if mapping.adminet_codigo:
-                            # Actualizar orden existente (implementar según estructura de AdministraNET)
-                            pass
+                        # Verificar si la orden debe crearse en AdministraNET
+                        if not mapping.adminet_codigo:
+                            # Preparar datos de la orden para AdministraNET
+                            order_data_for_adminet = {
+                                'id': order.get('id'),
+                                'number': order.get('number'),
+                                'customer': order.get('customer', {}),
+                                'shipping_address': order.get('shipping_address', {}),
+                                'shipping': order.get('shipping', {}),
+                                'payment': order.get('payment', {}),
+                                'products': order.get('products', []),
+                                'subtotal': order.get('subtotal', 0),
+                                'total': order.get('total', 0),
+                                'discount': order.get('discount', 0),
+                                'shipping_cost': order.get('shipping_cost', 0),
+                                'payment_status': order.get('payment_status', ''),
+                                'created_at': order.get('created_at', ''),
+                                'updated_at': order.get('updated_at', ''),
+                                'adminet_customer_id': mapping.adminet_codigo_cliente or 1
+                            }
+                            
+                            # Mapear productos de TiendaNube a AdministraNET
+                            for product in order_data_for_adminet['products']:
+                                # Buscar mapeo del producto
+                                product_mapping = ProductMapping.objects.filter(
+                                    tiendanube_id=product.get('product_id')
+                                ).first()
+                                
+                                if product_mapping and product_mapping.adminet_id:
+                                    product['adminet_product_id'] = product_mapping.adminet_id
+                                else:
+                                    product['adminet_product_id'] = 0  # No mapeado
+                                    logger.warning(f"Producto {product.get('product_id')} no está mapeado")
+                            
+                            # Crear orden en AdministraNET
+                            result = self.adminet_service.create_order_from_tiendanube(
+                                order_data_for_adminet,
+                                deposito_id=self.adminet_config.deposito_tiendanube_id or 1,
+                                user_id=1,  # Usuario del sistema
+                                sucursal_id=1  # Sucursal por defecto
+                            )
+                            
+                            if result['success']:
+                                mapping.adminet_codigo = result['codigo_movimiento']
+                                mapping.adminet_numero = result['nro_comprobante']
+                                mapping.sync_status = OrderMapping.SyncStatus.SYNCED
+                                mapping.last_synced = timezone.now()
+                                mapping.save()
+                                successful_syncs += 1
+                                logger.info(f"Orden {order.get('number')} creada en AdministraNET: {result['nro_comprobante']}")
+                            else:
+                                mapping.sync_status = OrderMapping.SyncStatus.ERROR
+                                mapping.error_message = result['message']
+                                mapping.save()
+                                failed_syncs += 1
+                                logger.error(f"Error creando orden {order.get('number')}: {result['message']}")
                         else:
-                            # Crear nueva orden (implementar según estructura de AdministraNET)
-                            pass
-                        
-                        # Por ahora, marcamos como sincronizado
-                        mapping.sync_status = OrderMapping.SyncStatus.SYNCED
-                        mapping.last_synced = timezone.now()
-                        mapping.save()
-                        successful_syncs += 1
+                            # La orden ya existe en AdministraNET
+                            mapping.sync_status = OrderMapping.SyncStatus.SYNCED
+                            mapping.last_synced = timezone.now()
+                            mapping.save()
+                            successful_syncs += 1
                     
                     sync_log.processed_items += 1
                     sync_log.save()
@@ -607,6 +732,76 @@ class TiendanubeAdministraNETSyncService:
             return {
                 'success': False,
                 'message': f'Error en sincronización: {str(e)}'
+            }
+    
+    def sync_order_status_to_tiendanube(self, hours: int = 24) -> Dict[str, Any]:
+        """
+        Sincronizar estados de órdenes desde AdministraNET hacia TiendaNube.
+        
+        Args:
+            hours: Horas hacia atrás para buscar cambios (default: 24)
+            
+        Returns:
+            Dict con el resultado de la sincronización
+        """
+        try:
+            logger.info(f"Iniciando sincronización de estados de órdenes (últimas {hours} horas)")
+            
+            # Obtener pedidos de TiendaNube modificados recientemente
+            result = self.adminet_service.get_tiendanube_orders_with_changes(hours=hours)
+            
+            if not result['success']:
+                return result
+            
+            orders = result['orders']
+            successful_updates = 0
+            failed_updates = 0
+            
+            for order in orders:
+                try:
+                    tiendanube_id = order.get('id_tiendanube')
+                    estado = order.get('Estado', '')
+                    anulado = order.get('anulado', 'No')
+                    
+                    # Mapear estado de AdministraNET a TiendaNube
+                    mapped_status = self.map_adminet_estado_to_tiendanube(estado, anulado)
+                    
+                    logger.info(f"Sincronizando orden {tiendanube_id}: {estado} → {mapped_status}")
+                    
+                    # Actualizar estado en TiendaNube
+                    # Nota: TiendaNube API puede tener limitaciones en actualización de estados
+                    # Por ahora, solo registramos el cambio
+                    
+                    # Actualizar OrderMapping si existe
+                    order_mapping = OrderMapping.objects.filter(
+                        tiendanube_id=tiendanube_id
+                    ).first()
+                    
+                    if order_mapping:
+                        order_mapping.adminet_estado = estado
+                        order_mapping.tiendanube_status = mapped_status['order_status']
+                        order_mapping.last_synced = timezone.now()
+                        order_mapping.save()
+                    
+                    successful_updates += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error actualizando estado de orden {order.get('id_tiendanube')}: {e}")
+                    failed_updates += 1
+            
+            return {
+                'success': True,
+                'message': f'Sincronización de estados completada: {successful_updates} exitosas, {failed_updates} fallidas',
+                'total_processed': len(orders),
+                'successful': successful_updates,
+                'failed': failed_updates
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in sync_order_status_to_tiendanube: {e}")
+            return {
+                'success': False,
+                'message': f'Error en sincronización de estados: {str(e)}'
             }
     
     def get_sync_statistics(self) -> Dict[str, Any]:

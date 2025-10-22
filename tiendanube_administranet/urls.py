@@ -4,6 +4,7 @@ URLs para la aplicación tiendanube_administranet.
 
 from django.urls import path
 from . import views
+from .views import mapping_configuration
 
 app_name = 'tiendanube_administranet'
 
@@ -21,6 +22,14 @@ urlpatterns = [
     path('config/tiendanube/wizard/', views.TiendanubeConfigWizardView.as_view(), name='tiendanube_config_wizard'),
     path('config/tiendanube/wizard/callback/', views.TiendanubeConfigWizardCallbackView.as_view(), name='tiendanube_config_wizard_callback'),
     path('config/adminet/', views.AdministraNETConfigView.as_view(), name='adminet_config'),
+    
+    # Configuración dinámica de mapeos
+    path('mappings/<str:mapping_type>/', mapping_configuration.DynamicMappingConfigurationView.as_view(), name='dynamic_mapping_config'),
+    path('mappings/', mapping_configuration.FieldMappingListView.as_view(), name='field_mapping_list'),
+    path('mappings/create/', mapping_configuration.FieldMappingCreateView.as_view(), name='field_mapping_create'),
+    path('mappings/<int:pk>/edit/', mapping_configuration.FieldMappingUpdateView.as_view(), name='field_mapping_update'),
+    path('mappings/initialize/', mapping_configuration.initialize_mappings_view, name='initialize_mappings'),
+    path('mappings/refresh-cache/', mapping_configuration.refresh_mappings_cache, name='refresh_mappings_cache'),
     
     # Clientes
     path('customers/', views.CustomerMappingListView.as_view(), name='customer_mapping_list'),
@@ -100,6 +109,9 @@ urlpatterns = [
     path('api/customers/statistics/', views.get_customer_statistics_ajax, name='get_customer_statistics_ajax'),
     path('api/customers/bulk-update/', views.bulk_update_customers_ajax, name='bulk_update_customers_ajax'),
     path('api/customers/export/', views.export_customers_ajax, name='export_customers_ajax'),
+    
+    # APIs de mapeos dinámicos
+    path('api/mappings/<str:mapping_type>/', mapping_configuration.get_mappings_api, name='get_mappings_api'),
     
     # Webhooks
     path('api/webhooks/<int:webhook_id>/test/', views.test_webhook_ajax, name='test_webhook_ajax'),

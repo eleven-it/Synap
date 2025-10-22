@@ -14,22 +14,26 @@ class TiendanubeService:
     
     def __init__(self, config: TiendanubeConfig):
         self.config = config
-        self.base_url = config.api_url
+        # Usar la versión 2025-03 de la API según documentación oficial
+        self.base_url = f"https://api.tiendanube.com/2025-03/{config.store_id}"
         self.headers = {
-            'Authentication': f'token {config.access_token}',
+            'Authentication': f'bearer {config.access_token}',
             'Content-Type': 'application/json',
-            'User-Agent': 'Synap-Tiendanube-Integration/1.0'
+            'User-Agent': 'AdministraNET (soporte@administranet.com.ar)'
         }
     
     def test_connection(self) -> Dict[str, Any]:
         """Probar conexión con Tiendanube."""
         try:
-            response = requests.get(f"{self.base_url}/stores/{self.config.store_id}", headers=self.headers)
+            # Usar endpoint correcto según documentación 2025-03
+            url = f"{self.base_url}/products"
+            params = {'limit': 1}
+            response = requests.get(url, headers=self.headers, params=params)
             if response.status_code == 200:
                 return {
                     'success': True,
                     'message': 'Conexión exitosa con Tiendanube',
-                    'store_info': response.json()
+                    'store_info': {'status': 'connected', 'store_id': self.config.store_id}
                 }
             else:
                 return {
@@ -54,7 +58,7 @@ class TiendanubeService:
             **filters: Filtros adicionales (email, name, document, etc.)
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers"
+            url = f"{self.base_url}/customers"
             params = {'limit': limit, 'offset': offset}
             
             # Agregar filtros adicionales
@@ -96,7 +100,7 @@ class TiendanubeService:
     def get_customer(self, customer_id: int) -> Dict[str, Any]:
         """Obtener cliente específico de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers/{customer_id}"
+            url = f"{self.base_url}/customers/{customer_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -120,7 +124,7 @@ class TiendanubeService:
     def create_customer(self, customer_data: Dict[str, Any]) -> Dict[str, Any]:
         """Crear nuevo cliente en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers"
+            url = f"{self.base_url}/customers"
             response = requests.post(url, headers=self.headers, json=customer_data)
             
             if response.status_code in [200, 201]:
@@ -145,7 +149,7 @@ class TiendanubeService:
     def update_customer(self, customer_id: int, customer_data: Dict[str, Any]) -> Dict[str, Any]:
         """Actualizar cliente existente en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers/{customer_id}"
+            url = f"{self.base_url}/customers/{customer_id}"
             response = requests.put(url, headers=self.headers, json=customer_data)
             
             if response.status_code == 200:
@@ -170,7 +174,7 @@ class TiendanubeService:
     def delete_customer(self, customer_id: int) -> Dict[str, Any]:
         """Eliminar cliente de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers/{customer_id}"
+            url = f"{self.base_url}/customers/{customer_id}"
             response = requests.delete(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -200,7 +204,7 @@ class TiendanubeService:
             limit: Número máximo de resultados
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers"
+            url = f"{self.base_url}/customers"
             params = {
                 'limit': limit,
                 'q': query
@@ -238,7 +242,7 @@ class TiendanubeService:
             offset: Número de órdenes a saltar
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/customers/{customer_id}/orders"
+            url = f"{self.base_url}/{self.config.store_id}/customers/{customer_id}/orders"
             params = {'limit': limit, 'offset': offset}
             response = requests.get(url, headers=self.headers, params=params)
             
@@ -370,7 +374,7 @@ class TiendanubeService:
     def get_products(self, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         """Obtener lista de productos de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products"
+            url = f"{self.base_url}/products"
             params = {'limit': limit, 'offset': offset}
             response = requests.get(url, headers=self.headers, params=params)
             
@@ -396,7 +400,7 @@ class TiendanubeService:
     def get_product(self, product_id: int) -> Dict[str, Any]:
         """Obtener producto específico de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            url = f"{self.base_url}/products/{product_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -420,7 +424,24 @@ class TiendanubeService:
     def create_product(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """Crear nuevo producto en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products"
+            # Validar SKU antes de crear
+            if 'variants' in product_data and product_data['variants']:
+                for variant in product_data['variants']:
+                    if variant.get('sku'):
+                        # Verificar si el SKU ya existe
+                        sku_check = self.check_sku_exists(variant['sku'])
+                        if not sku_check['success']:
+                            return {
+                                'success': False,
+                                'message': f'Error verificando SKU: {sku_check["message"]}'
+                            }
+                        if sku_check['exists']:
+                            return {
+                                'success': False,
+                                'message': f'El SKU {variant["sku"]} ya existe en TiendaNube'
+                            }
+            
+            url = f"{self.base_url}/products"
             response = requests.post(url, headers=self.headers, json=product_data)
             
             if response.status_code in [200, 201]:
@@ -445,7 +466,24 @@ class TiendanubeService:
     def update_product(self, product_id: int, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """Actualizar producto existente en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            # Validar SKUs antes de actualizar
+            if 'variants' in product_data and product_data['variants']:
+                for variant in product_data['variants']:
+                    if variant.get('sku'):
+                        # Verificar si el SKU ya existe en otro producto
+                        sku_check = self.check_sku_exists(variant['sku'], exclude_product_id=product_id)
+                        if not sku_check['success']:
+                            return {
+                                'success': False,
+                                'message': f'Error verificando SKU: {sku_check["message"]}'
+                            }
+                        if sku_check['exists']:
+                            return {
+                                'success': False,
+                                'message': f'El SKU {variant["sku"]} ya existe en otro producto'
+                            }
+            
+            url = f"{self.base_url}/products/{product_id}"
             response = requests.put(url, headers=self.headers, json=product_data)
             
             if response.status_code == 200:
@@ -470,7 +508,7 @@ class TiendanubeService:
     def delete_product(self, product_id: int) -> Dict[str, Any]:
         """Eliminar producto de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            url = f"{self.base_url}/products/{product_id}"
             response = requests.delete(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -494,7 +532,7 @@ class TiendanubeService:
     def get_orders(self, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         """Obtener lista de órdenes de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/orders"
+            url = f"{self.base_url}/orders"
             params = {'limit': limit, 'offset': offset}
             response = requests.get(url, headers=self.headers, params=params)
             
@@ -520,7 +558,7 @@ class TiendanubeService:
     def get_order(self, order_id: int) -> Dict[str, Any]:
         """Obtener orden específica de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/orders/{order_id}"
+            url = f"{self.base_url}/orders/{order_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -544,7 +582,7 @@ class TiendanubeService:
     def update_order(self, order_id: int, order_data: Dict[str, Any]) -> Dict[str, Any]:
         """Actualizar orden existente en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/orders/{order_id}"
+            url = f"{self.base_url}/orders/{order_id}"
             response = requests.put(url, headers=self.headers, json=order_data)
             
             if response.status_code == 200:
@@ -569,7 +607,7 @@ class TiendanubeService:
     def get_categories(self) -> Dict[str, Any]:
         """Obtener categorías de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/categories"
+            url = f"{self.base_url}/categories"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -593,7 +631,7 @@ class TiendanubeService:
     def get_payment_methods(self) -> Dict[str, Any]:
         """Obtener métodos de pago de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/payment_methods"
+            url = f"{self.base_url}/payment_methods"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -617,7 +655,7 @@ class TiendanubeService:
     def get_shipping_methods(self) -> Dict[str, Any]:
         """Obtener métodos de envío de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/shipping_methods"
+            url = f"{self.base_url}/shipping_methods"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -641,7 +679,7 @@ class TiendanubeService:
     def get_store_info(self) -> Dict[str, Any]:
         """Obtener información de la tienda."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}"
+            url = f"{self.base_url}/store"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -665,7 +703,7 @@ class TiendanubeService:
     def get_statistics(self) -> Dict[str, Any]:
         """Obtener estadísticas de la tienda."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/statistics"
+            url = f"{self.base_url}/statistics"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -684,4 +722,158 @@ class TiendanubeService:
             return {
                 'success': False,
                 'message': f'Error obteniendo estadísticas: {str(e)}'
+            }
+    
+    def check_sku_exists(self, sku: str, exclude_product_id: int = None) -> Dict[str, Any]:
+        """
+        Verificar si un SKU ya existe en TiendaNube.
+        
+        Args:
+            sku: SKU a verificar
+            exclude_product_id: ID del producto a excluir de la búsqueda (para actualizaciones)
+            
+        Returns:
+            Dict con success, exists y message
+        """
+        try:
+            # Buscar productos con el SKU específico
+            url = f"{self.base_url}/products"
+            params = {'per_page': 200}  # Obtener todos los productos
+            response = requests.get(url, headers=self.headers, params=params)
+            
+            if response.status_code == 200:
+                products = response.json()
+                
+                for product in products:
+                    # Excluir el producto actual si se especifica
+                    if exclude_product_id and product.get('id') == exclude_product_id:
+                        continue
+                    
+                    # Verificar variantes del producto
+                    variants = product.get('variants', [])
+                    for variant in variants:
+                        if variant.get('sku') == sku:
+                            return {
+                                'success': True,
+                                'exists': True,
+                                'message': f'SKU {sku} encontrado en producto {product.get("id")}',
+                                'product_id': product.get('id'),
+                                'variant_id': variant.get('id')
+                            }
+                
+                return {
+                    'success': True,
+                    'exists': False,
+                    'message': f'SKU {sku} no encontrado'
+                }
+            else:
+                return {
+                    'success': False,
+                    'exists': False,
+                    'message': f'Error obteniendo productos: {response.status_code}'
+                }
+        except Exception as e:
+            logger.error(f"Error checking SKU existence: {e}")
+            return {
+                'success': False,
+                'exists': False,
+                'message': f'Error verificando SKU: {str(e)}'
+            }
+    
+    def update_variant(self, product_id: int, variant_id: int, variant_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Actualizar una variante específica de un producto.
+        Este es el método correcto para actualizar stock, precio y SKU.
+        
+        Args:
+            product_id: ID del producto
+            variant_id: ID de la variante
+            variant_data: Datos de la variante a actualizar
+            
+        Returns:
+            Dict con el resultado de la actualización
+        """
+        try:
+            # Validar SKU antes de actualizar
+            if variant_data.get('sku'):
+                sku_check = self.check_sku_exists(variant_data['sku'], exclude_product_id=product_id)
+                if not sku_check['success']:
+                    return {
+                        'success': False,
+                        'message': f'Error verificando SKU: {sku_check["message"]}'
+                    }
+                if sku_check['exists']:
+                    return {
+                        'success': False,
+                        'message': f'El SKU {variant_data["sku"]} ya existe en otro producto'
+                    }
+            
+            url = f"{self.base_url}/products/{product_id}/variants/{variant_id}"
+            response = requests.put(url, headers=self.headers, json=variant_data)
+            
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'variant': response.json(),
+                    'message': 'Variante actualizada exitosamente'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error actualizando variante: {response.status_code}',
+                    'error': response.text
+                }
+        except Exception as e:
+            logger.error(f"Error updating variant in Tiendanube: {e}")
+            return {
+                'success': False,
+                'message': f'Error actualizando variante: {str(e)}'
+            }
+    
+    def create_variant(self, product_id: int, variant_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Crear una nueva variante para un producto.
+        
+        Args:
+            product_id: ID del producto
+            variant_data: Datos de la variante a crear
+            
+        Returns:
+            Dict con el resultado de la creación
+        """
+        try:
+            # Validar SKU antes de crear
+            if variant_data.get('sku'):
+                sku_check = self.check_sku_exists(variant_data['sku'])
+                if not sku_check['success']:
+                    return {
+                        'success': False,
+                        'message': f'Error verificando SKU: {sku_check["message"]}'
+                    }
+                if sku_check['exists']:
+                    return {
+                        'success': False,
+                        'message': f'El SKU {variant_data["sku"]} ya existe'
+                    }
+            
+            url = f"{self.base_url}/products/{product_id}/variants"
+            response = requests.post(url, headers=self.headers, json=variant_data)
+            
+            if response.status_code in [200, 201]:
+                return {
+                    'success': True,
+                    'variant': response.json(),
+                    'message': 'Variante creada exitosamente'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error creando variante: {response.status_code}',
+                    'error': response.text
+                }
+        except Exception as e:
+            logger.error(f"Error creating variant in Tiendanube: {e}")
+            return {
+                'success': False,
+                'message': f'Error creando variante: {str(e)}'
             } 

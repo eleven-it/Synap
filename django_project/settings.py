@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Seguridad
 SECRET_KEY = config('SECRET_KEY', default='insecure-placeholder')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar,n8n.estrategiasdenegocios.ar,beardlike-unsavingly-candra.ngrok-free.dev', cast=Csv())
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
@@ -50,12 +50,12 @@ INSTALLED_APPS = [
     'celery',
     'accounting',
     'purchases',
-    'reports',
     'mercadopago',
     'clover',
     'administraNET_integration',
     'logistics',
     'finance',
+    "support_ai",
 ]
 
 MIDDLEWARE = [
@@ -66,6 +66,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',  # Movido antes de los middlewares personalizados
     'core.middleware.RequestUserMiddleware',
     'core.middleware.AdminAccessMiddleware',
     'core.middleware.IdiomaUsuarioMiddleware',
@@ -74,7 +75,6 @@ MIDDLEWARE = [
     'core.middleware.module_middleware.ModulePermissionMiddleware',  # Permisos de módulos
     'core.middleware.module_middleware.ModuleContextMiddleware',  # Contexto de módulos
     'core.middleware.module_middleware.ModuleCacheMiddleware',  # Cache de módulos
-    'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_project.settings.custom_ajax_login_required',
     # 'core.middleware.CDNCacheMiddleware',  # Comentado temporalmente
@@ -260,6 +260,19 @@ TIENDANUBE_API_URL = config('TIENDANUBE_API_URL', default='https://api.tiendanub
 TIENDANUBE_AUTO_SYNC = config('TIENDANUBE_AUTO_SYNC', default=True, cast=bool)
 TIENDANUBE_SYNC_INTERVAL = config('TIENDANUBE_SYNC_INTERVAL', default=30, cast=int)
 
+# API Keys para integraciones
+# Esta clave debe definirse en variables de entorno tanto en Django como en n8n
+# para la autenticación del endpoint de ingesta de datos financieros
+INGEST_API_KEY = os.getenv('INGEST_API_KEY', 'posdif9834usidf@iiu$@&ujsid')
+
+# Configuración de n8n
+# URL del webhook de n8n para el agente IA de SQL chat
+# Este valor debe apuntar al endpoint público del workflow de n8n que implementará el agente IA
+N8N_SQL_CHAT_WEBHOOK = os.getenv('N8N_SQL_CHAT_WEBHOOK', '')
+
+# Configuración para el chat SQL de IA
+FINANCE_MAX_ROWS = int(os.getenv('FINANCE_MAX_ROWS', '200'))
+
 # Configuración de caché para TiendaNube
 CACHES = {
     'default': {
@@ -320,3 +333,11 @@ CDN_CACHE_HEADERS = {
     }
 }
 
+
+# Celery Configuration
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"

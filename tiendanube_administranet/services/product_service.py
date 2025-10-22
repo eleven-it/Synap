@@ -19,15 +19,15 @@ class TiendanubeProductService:
         self.config = config
         self.base_url = config.api_url
         self.headers = {
-            'Authentication': f'token {config.access_token}',
+            'Authentication': f'bearer {config.access_token}',
             'Content-Type': 'application/json',
-            'User-Agent': 'Synap-Tiendanube-Integration/1.0'
+            'User-Agent': 'AdministraNET (soporte@administranet.com.ar)'
         }
     
     def test_connection(self) -> Dict[str, Any]:
         """Probar conexión con Tiendanube."""
         try:
-            response = requests.get(f"{self.base_url}/stores/{self.config.store_id}", headers=self.headers)
+            response = requests.get(f"{self.base_url}/{self.config.store_id}", headers=self.headers)
             if response.status_code == 200:
                 return {
                     'success': True,
@@ -61,7 +61,7 @@ class TiendanubeProductService:
             **filters: Filtros adicionales (name, sku, handle, etc.)
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products"
+            url = f"{self.base_url}/{self.config.store_id}/products"
             params = {'limit': limit, 'offset': offset}
             
             # Agregar filtros adicionales
@@ -103,7 +103,7 @@ class TiendanubeProductService:
     def get_product(self, product_id: int) -> Dict[str, Any]:
         """Obtener producto específico de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -132,7 +132,7 @@ class TiendanubeProductService:
             product_data: Datos del producto según documentación de Tiendanube
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products"
+            url = f"{self.base_url}/{self.config.store_id}/products"
             
             # Validar datos requeridos
             validation_result = self._validate_product_data(product_data)
@@ -176,7 +176,7 @@ class TiendanubeProductService:
             product_data: Datos actualizados del producto
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}"
             
             # Validar datos
             validation_result = self._validate_product_data(product_data, is_update=True)
@@ -214,7 +214,7 @@ class TiendanubeProductService:
     def delete_product(self, product_id: int) -> Dict[str, Any]:
         """Eliminar producto de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}"
             response = requests.delete(url, headers=self.headers)
             
             if response.status_code in [200, 204]:
@@ -240,7 +240,7 @@ class TiendanubeProductService:
     def search_products(self, query: str, limit: int = 50) -> Dict[str, Any]:
         """Buscar productos en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products"
+            url = f"{self.base_url}/{self.config.store_id}/products"
             params = {
                 'q': query,
                 'limit': limit
@@ -276,7 +276,7 @@ class TiendanubeProductService:
     def get_product_variants(self, product_id: int) -> Dict[str, Any]:
         """Obtener variantes de un producto de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -302,7 +302,7 @@ class TiendanubeProductService:
     def get_variant(self, product_id: int, variant_id: int) -> Dict[str, Any]:
         """Obtener variante específica de un producto."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -332,7 +332,7 @@ class TiendanubeProductService:
             variant_data: Datos de la variante
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants"
             
             # Validar datos de variante
             validation_result = self._validate_variant_data(variant_data)
@@ -377,7 +377,7 @@ class TiendanubeProductService:
             variant_data: Datos actualizados de la variante
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
             
             # Validar datos
             validation_result = self._validate_variant_data(variant_data, is_update=True)
@@ -415,7 +415,7 @@ class TiendanubeProductService:
     def delete_variant(self, product_id: int, variant_id: int) -> Dict[str, Any]:
         """Eliminar variante de producto de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants/{variant_id}"
             response = requests.delete(url, headers=self.headers)
             
             if response.status_code in [200, 204]:
@@ -451,7 +451,7 @@ class TiendanubeProductService:
             stock_data: Datos del stock {'stock': cantidad}
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/stock"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/stock"
             response = requests.put(url, headers=self.headers, json=stock_data)
             
             if response.status_code in [200, 201]:
@@ -486,7 +486,7 @@ class TiendanubeProductService:
             stock_data: Datos del stock {'stock': cantidad}
         """
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/products/{product_id}/variants/{variant_id}/stock"
+            url = f"{self.base_url}/{self.config.store_id}/products/{product_id}/variants/{variant_id}/stock"
             response = requests.put(url, headers=self.headers, json=stock_data)
             
             if response.status_code in [200, 201]:
@@ -518,7 +518,7 @@ class TiendanubeProductService:
     def get_categories(self, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         """Obtener categorías de productos de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/categories"
+            url = f"{self.base_url}/{self.config.store_id}/categories"
             params = {'limit': limit, 'offset': offset}
             response = requests.get(url, headers=self.headers, params=params)
             
@@ -545,7 +545,7 @@ class TiendanubeProductService:
     def get_category(self, category_id: int) -> Dict[str, Any]:
         """Obtener categoría específica de Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/categories/{category_id}"
+            url = f"{self.base_url}/{self.config.store_id}/categories/{category_id}"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -569,7 +569,7 @@ class TiendanubeProductService:
     def create_category(self, category_data: Dict[str, Any]) -> Dict[str, Any]:
         """Crear categoría en Tiendanube."""
         try:
-            url = f"{self.base_url}/stores/{self.config.store_id}/categories"
+            url = f"{self.base_url}/{self.config.store_id}/categories"
             response = requests.post(url, headers=self.headers, json=category_data)
             
             if response.status_code in [200, 201]:
@@ -611,20 +611,46 @@ class TiendanubeProductService:
         
         # Campos requeridos
         if not is_update:
-            if not product_data.get('name'):
+            # Verificar nombre (puede ser un objeto con idiomas)
+            name = product_data.get('name')
+            if not name:
                 errors.append("El nombre del producto es obligatorio")
-            if not product_data.get('sku'):
-                errors.append("El SKU del producto es obligatorio")
+            elif isinstance(name, dict):
+                if not any(name.values()):
+                    errors.append("El nombre del producto debe tener al menos un idioma")
+            elif not isinstance(name, str):
+                errors.append("El nombre del producto debe ser una cadena válida")
+            
+            # Verificar SKU en variantes
+            variants = product_data.get('variants', [])
+            if not variants:
+                errors.append("El producto debe tener al menos una variante")
+            else:
+                for i, variant in enumerate(variants):
+                    if not variant.get('sku'):
+                        errors.append(f"La variante {i+1} debe tener un SKU")
         
         # Validar longitud de campos
-        if product_data.get('name') and len(product_data['name']) > 255:
-            errors.append("El nombre del producto no puede exceder 255 caracteres")
+        name = product_data.get('name')
+        if name:
+            if isinstance(name, dict):
+                for lang, text in name.items():
+                    if text and len(text) > 255:
+                        errors.append(f"El nombre del producto en {lang} no puede exceder 255 caracteres")
+            elif isinstance(name, str) and len(name) > 255:
+                errors.append("El nombre del producto no puede exceder 255 caracteres")
         
         if product_data.get('sku') and len(product_data['sku']) > 100:
             errors.append("El SKU del producto no puede exceder 100 caracteres")
         
-        if product_data.get('handle') and len(product_data['handle']) > 255:
-            errors.append("El handle del producto no puede exceder 255 caracteres")
+        handle = product_data.get('handle')
+        if handle:
+            if isinstance(handle, dict):
+                for lang, text in handle.items():
+                    if text and len(text) > 255:
+                        errors.append(f"El handle del producto en {lang} no puede exceder 255 caracteres")
+            elif isinstance(handle, str) and len(handle) > 255:
+                errors.append("El handle del producto no puede exceder 255 caracteres")
         
         # Validar precio
         if product_data.get('price') is not None:

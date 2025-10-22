@@ -38,6 +38,12 @@ class AdministraNETConfig(models.Model):
     database = models.CharField(max_length=255, verbose_name=_("Database"))
     user = models.CharField(max_length=255, verbose_name=_("User"))
     password = models.CharField(max_length=255, verbose_name=_("Password"))
+    deposito_tiendanube_id = models.IntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name=_("Depósito TiendaNube"),
+        help_text=_("ID del depósito en AdministraNET que se sincronizará con TiendaNube")
+    )
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated At"))
@@ -1117,3 +1123,113 @@ class WebhookDeliveryLog(models.Model):
 
     def __str__(self):
         return f"Delivery {self.id} - {self.status} ({self.sent_at})"
+
+
+class FieldMappingConfig(models.Model):
+    """
+    Configuración dinámica de mapeos de campos entre Tiendanube y AdministraNET.
+    Permite configurar los mapeos sin modificar código.
+    """
+    class MappingType(models.TextChoices):
+        CUSTOMER = 'customer', _('Customer')
+        PRODUCT = 'product', _('Product')
+        ORDER = 'order', _('Order')
+        VARIANT = 'variant', _('Product Variant')
+        CATEGORY = 'category', _('Category')
+
+    class FieldType(models.TextChoices):
+        ADMINET = 'adminet', _('AdministraNET')
+        TIENDANUBE = 'tiendanube', _('Tiendanube')
+
+    # Configuración básica
+    mapping_type = models.CharField(
+        max_length=20,
+        choices=MappingType.choices,
+        verbose_name=_("Mapping Type")
+    )
+    field_type = models.CharField(
+        max_length=20,
+        choices=FieldType.choices,
+        verbose_name=_("Field Type")
+    )
+    
+    # Información del campo
+    field_name = models.CharField(max_length=100, verbose_name=_("Field Name"))
+    field_display_name = models.CharField(max_length=200, verbose_name=_("Display Name"))
+    field_description = models.TextField(blank=True, verbose_name=_("Field Description"))
+    
+    # Configuración de mapeo
+    is_mappable = models.BooleanField(default=True, verbose_name=_("Is Mappable"))
+    is_required = models.BooleanField(default=False, verbose_name=_("Is Required"))
+    is_primary_key = models.BooleanField(default=False, verbose_name=_("Is Primary Key"))
+    
+    # Mapeo con campo correspondiente
+    mapped_to_field = models.CharField(
+        max_length=100, 
+        blank=True, 
+        verbose_name=_("Mapped To Field"),
+        help_text=_("Field name in the other system")
+    )
+    mapping_notes = models.TextField(blank=True, verbose_name=_("Mapping Notes"))
+    
+    # Configuración de transformación
+    transformation_type = models.CharField(
+        max_length=50,
+        choices=[
+            ('direct', 'Direct Mapping'),
+            ('address_parse', 'Address Parsing'),
+            ('name_mapping', 'Name Mapping'),
+            ('custom', 'Custom Transformation'),
+        ],
+        default='direct',
+        verbose_name=_("Transformation Type")
+    )
+    transformation_config = models.JSONField(
+        default=dict, 
+        blank=True, 
+        verbose_name=_("Transformation Configuration")
+    )
+    
+    # Estado y orden
+    is_active = models.BooleanField(default=True, verbose_name=_("Active"))
+    display_order = models.IntegerField(default=0, verbose_name=_("Display Order"))
+    
+    # Metadatos
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated At"))
+
+    class Meta:
+        verbose_name = _("Field Mapping Configuration")
+        verbose_name_plural = _("Field Mapping Configurations")
+        ordering = ['mapping_type', 'field_type', 'display_order']
+        unique_together = ['mapping_type', 'field_type', 'field_name']
+
+    def __str__(self):
+        return f"{self.get_mapping_type_display()} - {self.get_field_type_display()} - {self.field_name}"
+
+    @classmethod
+    def get_mappings_for_type(cls, mapping_type: str, field_type: str = None):
+        """Obtener todos los mapeos para un tipo específico."""
+        queryset = cls.objects.filter(
+            mapping_type=mapping_type,
+            is_active=True
+        )
+        if field_type:
+            queryset = queryset.filter(field_type=field_type)
+        return queryset.order_by('display_order')
+
+    @classmethod
+    def get_mappable_fields(cls, mapping_type: str, field_type: str = None):
+        """Obtener solo campos mapeables."""
+        return cls.get_mappings_for_type(mapping_type, field_type).filter(is_mappable=True)
+
+    def get_mapped_field_info(self):
+        """Obtener información del campo mapeado."""
+        if not self.mapped_to_field:
+            return None
+        
+        return FieldMappingConfig.objects.filter(
+            mapping_type=self.mapping_type,
+            field_name=self.mapped_to_field,
+            is_active=True
+        ).first()

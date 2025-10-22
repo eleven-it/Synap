@@ -1,0 +1,410 @@
+{% extends "theme/base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Dynamic Field Mapping Configuration" %} - {{ mapping_type_display }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .mapping-row {
+        transition: all 0.3s ease;
+    }
+    .mapping-row:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .field-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+    }
+    .field-badge.adminet {
+        background-color: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+    .field-badge.tiendanube {
+        background-color: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+    }
+    .field-badge.required {
+        background-color: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+    .field-badge.primary {
+        background-color: #f3e8ff;
+        color: #7c3aed;
+        border: 1px solid #e9d5ff;
+    }
+    .transformation-badge {
+        font-size: 0.625rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+        font-weight: 400;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .transformation-badge.direct {
+        background-color: #f0f9ff;
+        color: #0369a1;
+    }
+    .transformation-badge.address_parse {
+        background-color: #f0fdf4;
+        color: #15803d;
+    }
+    .transformation-badge.name_mapping {
+        background-color: #fef7ff;
+        color: #a855f7;
+    }
+    .transformation-badge.custom {
+        background-color: #fff7ed;
+        color: #ea580c;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Dynamic Field Mapping Configuration" %}
+                    </h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {% trans "Configure field mappings between AdministraNET and Tiendanube" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'tiendanube_administranet:field_mapping_list' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                        {% trans "Manage Mappings" %}
+                    </a>
+                    <button onclick="refreshMappings()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        {% trans "Refresh" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Mapping Type Selector -->
+        <div class="mb-8">
+            <div class="flex space-x-4">
+                <a href="{% url 'tiendanube_administranet:dynamic_mapping_config' 'customer' %}" 
+                   class="px-4 py-2 rounded-md text-sm font-medium {% if mapping_type == 'customer' %}bg-orange-100 text-orange-700 border border-orange-300{% else %}text-gray-500 hover:text-gray-700 border border-gray-300 hover:border-gray-400{% endif %}">
+                    {% trans "Customer" %}
+                </a>
+                <a href="{% url 'tiendanube_administranet:dynamic_mapping_config' 'product' %}" 
+                   class="px-4 py-2 rounded-md text-sm font-medium {% if mapping_type == 'product' %}bg-orange-100 text-orange-700 border border-orange-300{% else %}text-gray-500 hover:text-gray-700 border border-gray-300 hover:border-gray-400{% endif %}">
+                    {% trans "Product" %}
+                </a>
+                <a href="{% url 'tiendanube_administranet:dynamic_mapping_config' 'order' %}" 
+                   class="px-4 py-2 rounded-md text-sm font-medium {% if mapping_type == 'order' %}bg-orange-100 text-orange-700 border border-orange-300{% else %}text-gray-500 hover:text-gray-700 border border-gray-300 hover:border-gray-400{% endif %}">
+                    {% trans "Order" %}
+                </a>
+                <a href="{% url 'tiendanube_administranet:dynamic_mapping_config' 'variant' %}" 
+                   class="px-4 py-2 rounded-md text-sm font-medium {% if mapping_type == 'variant' %}bg-orange-100 text-orange-700 border border-orange-300{% else %}text-gray-500 hover:text-gray-700 border border-gray-300 hover:border-gray-400{% endif %}">
+                    {% trans "Product Variant" %}
+                </a>
+                <a href="{% url 'tiendanube_administranet:dynamic_mapping_config' 'category' %}" 
+                   class="px-4 py-2 rounded-md text-sm font-medium {% if mapping_type == 'category' %}bg-orange-100 text-orange-700 border border-orange-300{% else %}text-gray-500 hover:text-gray-700 border border-gray-300 hover:border-gray-400{% endif %}">
+                    {% trans "Category" %}
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Total Fields" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ adminet_fields|length|add:tiendanube_fields|length }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Mappable Fields" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ mappable_fields|length }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "AdministraNET Fields" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ adminet_fields|length }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+                <div class="p-5">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-6 w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                    {% trans "Tiendanube Fields" %}
+                                </dt>
+                                <dd class="text-lg font-medium text-gray-900 dark:text-white">
+                                    {{ tiendanube_fields|length }}
+                                </dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mappings Table -->
+        <div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+            <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                    {% trans "Field Mappings" %} - {{ mapping_type_display }}
+                </h3>
+                <p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+                    {% trans "Dynamic field mappings between AdministraNET and Tiendanube systems" %}
+                </p>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "AdministraNET Field" %}
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Tiendanube Field" %}
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Transformation" %}
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                {% trans "Status" %}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for mapping in mappable_fields %}
+                        <tr class="mapping-row hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <!-- AdministraNET Field -->
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                            {{ mapping.adminet_field.display_name }}
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            {{ mapping.adminet_field.name }}
+                                        </div>
+                                        <div class="mt-1 flex space-x-1">
+                                            {% if mapping.adminet_field.is_required %}
+                                            <span class="field-badge required">{% trans "Required" %}</span>
+                                            {% endif %}
+                                            {% if mapping.adminet_field.is_primary_key %}
+                                            <span class="field-badge primary">{% trans "Primary Key" %}</span>
+                                            {% endif %}
+                                            <span class="field-badge adminet">{% trans "AdministraNET" %}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            <!-- Tiendanube Field -->
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <div class="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                            {{ mapping.tiendanube_field.display_name }}
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            {{ mapping.tiendanube_field.name }}
+                                        </div>
+                                        <div class="mt-1 flex space-x-1">
+                                            {% if mapping.tiendanube_field.is_required %}
+                                            <span class="field-badge required">{% trans "Required" %}</span>
+                                            {% endif %}
+                                            {% if mapping.tiendanube_field.is_primary_key %}
+                                            <span class="field-badge primary">{% trans "Primary Key" %}</span>
+                                            {% endif %}
+                                            <span class="field-badge tiendanube">{% trans "Tiendanube" %}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            
+                            <!-- Transformation -->
+                            <td class="px-6 py-4">
+                                <span class="transformation-badge {{ mapping.adminet_field.transformation_type }}">
+                                    {{ mapping.adminet_field.transformation_type|title }}
+                                </span>
+                                {% if mapping.adminet_field.mapping_notes %}
+                                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    {{ mapping.adminet_field.mapping_notes }}
+                                </div>
+                                {% endif %}
+                            </td>
+                            
+                            <!-- Status -->
+                            <td class="px-6 py-4">
+                                {% if mapping.is_mappable %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {% trans "Mappable" %}
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {% trans "Not Mappable" %}
+                                </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-6 py-12 text-center">
+                                <div class="text-gray-500 dark:text-gray-400">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">{% trans "No mappings found" %}</h3>
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                        {% trans "No field mappings are configured for this type." %}
+                                    </p>
+                                    <div class="mt-6">
+                                        <a href="{% url 'tiendanube_administranet:field_mapping_create' %}" 
+                                           class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                            </svg>
+                                            {% trans "Create Mapping" %}
+                                        </a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function refreshMappings() {
+    // Mostrar indicador de carga
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = `
+        <svg class="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        {% trans "Refreshing..." %}
+    `;
+    button.disabled = true;
+
+    // Hacer la petición AJAX
+    fetch(`/tiendanube-administranet/api/mappings/${mapping_type}/`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Recargar la página para mostrar los datos actualizados
+            window.location.reload();
+        } else {
+            alert('Error refreshing mappings: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error refreshing mappings');
+    })
+    .finally(() => {
+        // Restaurar el botón
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+</script>
+{% endblock %} 

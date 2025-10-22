@@ -551,7 +551,7 @@ class WebhookProcessor:
             
             # Procesar según el tipo de evento
             if webhook_event.event_type == 'order/created':
-                # Crear mapeo de orden
+                # Crear mapeo de orden (solo registro inicial)
                 from ..models import OrderMapping
                 mapping, created = OrderMapping.objects.get_or_create(
                     tiendanube_id=order_id,
@@ -568,10 +568,102 @@ class WebhookProcessor:
                     'success': True,
                     'action': 'order_created',
                     'mapping_created': created,
+                    'order_id': order_id,
+                    'message': 'Order mapping created, waiting for payment confirmation'
+                }
+                
+            elif webhook_event.event_type == 'order/paid':
+                # Orden pagada → Crear en AdministraNET
+                from ..models import OrderMapping, ProductMapping
+                
+                # Crear o actualizar mapeo
+                mapping, created = OrderMapping.objects.get_or_create(
+                    tiendanube_id=order_id,
+                    defaults={
+                        'tiendanube_number': order_data.get('number', ''),
+                        'tiendanube_status': order_data.get('status', ''),
+                        'tiendanube_total': order_data.get('total', 0),
+                        'tiendanube_customer_email': order_data.get('customer', {}).get('email', ''),
+                        'sync_status': OrderMapping.SyncStatus.PENDING
+                    }
+                )
+                
+                # Si aún no se creó en AdministraNET, crearlo ahora
+                if not mapping.adminet_codigo:
+                    # Preparar datos de la orden
+                    order_data_for_adminet = {
+                        'id': order_id,
+                        'number': order_data.get('number'),
+                        'customer': order_data.get('customer', {}),
+                        'shipping_address': order_data.get('shipping_address', {}),
+                        'shipping': order_data.get('shipping', {}),
+                        'payment': order_data.get('payment', {}),
+                        'products': order_data.get('products', []),
+                        'subtotal': order_data.get('subtotal', 0),
+                        'total': order_data.get('total', 0),
+                        'discount': order_data.get('discount', 0),
+                        'shipping_cost': order_data.get('shipping_cost', 0),
+                        'payment_status': order_data.get('payment_status', 'paid'),
+                        'created_at': order_data.get('created_at', ''),
+                        'updated_at': order_data.get('updated_at', ''),
+                        'adminet_customer_id': 1  # TODO: Obtener o crear cliente
+                    }
+                    
+                    # Mapear productos a AdministraNET IDs
+                    for product in order_data_for_adminet['products']:
+                        product_mapping = ProductMapping.objects.filter(
+                            tiendanube_id=product.get('product_id')
+                        ).first()
+                        
+                        if product_mapping and product_mapping.adminet_id:
+                            product['adminet_product_id'] = product_mapping.adminet_id
+                        else:
+                            product['adminet_product_id'] = 0
+                            logger.warning(f"Producto {product.get('product_id')} no mapeado en orden {order_id}")
+                    
+                    # Crear orden en AdministraNET
+                    result = sync_service.adminet_service.create_order_from_tiendanube(
+                        order_data_for_adminet,
+                        deposito_id=adminet_config.deposito_tiendanube_id or 1,
+                        user_id=1,
+                        sucursal_id=1
+                    )
+                    
+                    if result['success']:
+                        mapping.adminet_codigo = result['codigo_movimiento']
+                        mapping.adminet_numero = result['nro_comprobante']
+                        mapping.adminet_estado = 'Pendiente'
+                        mapping.sync_status = OrderMapping.SyncStatus.SYNCED
+                        mapping.last_synced = timezone.now()
+                        mapping.save()
+                        
+                        logger.info(f"Orden {order_id} creada en AdministraNET: {result['nro_comprobante']}")
+                        
+                        return {
+                            'success': True,
+                            'action': 'order_paid_and_created',
+                            'order_id': order_id,
+                            'adminet_nro': result['nro_comprobante'],
+                            'adminet_codigo': result['codigo_movimiento']
+                        }
+                    else:
+                        mapping.sync_status = OrderMapping.SyncStatus.ERROR
+                        mapping.error_message = result['message']
+                        mapping.save()
+                        
+                        return {
+                            'success': False,
+                            'error': f"Error creando orden en AdministraNET: {result['message']}"
+                        }
+                
+                return {
+                    'success': True,
+                    'action': 'order_paid',
+                    'message': 'Order already created in AdministraNET',
                     'order_id': order_id
                 }
                 
-            elif webhook_event.event_type in ['order/updated', 'order/paid', 'order/fulfilled']:
+            elif webhook_event.event_type in ['order/updated', 'order/fulfilled']:
                 # Actualizar mapeo de orden
                 from ..models import OrderMapping
                 try:
@@ -581,36 +673,87 @@ class WebhookProcessor:
                     mapping.sync_status = OrderMapping.SyncStatus.PENDING
                     mapping.save()
                     
+                    # Si el evento es fulfilled, podríamos registrar la entrega
+                    if webhook_event.event_type == 'order/fulfilled':
+                        logger.info(f"Orden {order_id} marcada como fulfilled en TiendaNube")
+                    
                     return {
                         'success': True,
                         'action': 'order_updated',
                         'order_id': order_id
                     }
                 except OrderMapping.DoesNotExist:
+                    # Si no existe el mapeo, crearlo
+                    mapping = OrderMapping.objects.create(
+                        tiendanube_id=order_id,
+                        tiendanube_number=order_data.get('number', ''),
+                        tiendanube_status=order_data.get('status', ''),
+                        tiendanube_total=order_data.get('total', 0),
+                        tiendanube_customer_email=order_data.get('customer', {}).get('email', ''),
+                        sync_status=OrderMapping.SyncStatus.PENDING
+                    )
+                    
                     return {
-                        'success': False,
-                        'error': f'Order mapping not found for ID {order_id}'
+                        'success': True,
+                        'action': 'order_updated',
+                        'mapping_created': True,
+                        'order_id': order_id
                     }
                     
             elif webhook_event.event_type == 'order/cancelled':
-                # Marcar orden como cancelada
+                # Marcar orden como cancelada en TiendaNube y AdministraNET
                 from ..models import OrderMapping
                 try:
                     mapping = OrderMapping.objects.get(tiendanube_id=order_id)
                     mapping.tiendanube_status = 'cancelled'
-                    mapping.sync_status = OrderMapping.SyncStatus.PENDING
+                    mapping.sync_status = OrderMapping.SyncStatus.SYNCED
                     mapping.save()
                     
-                    return {
-                        'success': True,
-                        'action': 'order_cancelled',
-                        'order_id': order_id
-                    }
+                    # Si existe en AdministraNET, marcar como anulada
+                    if mapping.adminet_codigo:
+                        cancel_query = """
+                        UPDATE comp_ped 
+                        SET anulado = 'Si'
+                        WHERE CodigoMovimiento = %s
+                        """
+                        
+                        result = sync_service.adminet_service.execute_query(
+                            cancel_query, 
+                            (mapping.adminet_codigo,)
+                        )
+                        
+                        if result['success']:
+                            logger.info(f"Orden {mapping.adminet_numero} (CodigoMovimiento: {mapping.adminet_codigo}) marcada como anulada en AdministraNET")
+                            
+                            # También liberar stock comprometido
+                            # (AdministraNET debería hacer esto automáticamente con un trigger o procedimiento)
+                            
+                            return {
+                                'success': True,
+                                'action': 'order_cancelled_both_systems',
+                                'order_id': order_id,
+                                'adminet_codigo': mapping.adminet_codigo
+                            }
+                        else:
+                            logger.error(f"Error anulando orden en AdministraNET: {result.get('message')}")
+                            return {
+                                'success': False,
+                                'error': f"Error anulando orden en AdministraNET: {result.get('message')}"
+                            }
+                    else:
+                        # Solo existe en TiendaNube
+                        return {
+                            'success': True,
+                            'action': 'order_cancelled',
+                            'order_id': order_id,
+                            'message': 'Order cancelled in TiendaNube only (not yet created in AdministraNET)'
+                        }
+                    
                 except OrderMapping.DoesNotExist:
                     return {
                         'success': True,
                         'action': 'order_cancelled',
-                        'message': f'Order mapping not found for ID {order_id}'
+                        'message': f'Order mapping not found for ID {order_id} (order was never synced)'
                     }
             
             return {
