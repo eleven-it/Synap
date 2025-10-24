@@ -1,0 +1,531 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Configuraciones" %} - Eleven Support{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    .settings-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 2rem;
+        transition: all 0.3s ease;
+    }
+    
+    .settings-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .settings-section {
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .settings-section:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+    
+    .setting-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    
+    .setting-item:last-child {
+        border-bottom: none;
+    }
+    
+    .setting-label {
+        font-weight: 600;
+        color: #374151;
+        flex: 1;
+    }
+    
+    .setting-description {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    
+    .setting-control {
+        flex-shrink: 0;
+        margin-left: 1rem;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+        background-color: #667eea;
+    }
+    
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+    
+    .select-control {
+        padding: 0.5rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        background-color: white;
+        min-width: 150px;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 2rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-save:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn-save:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .permission-badge {
+        background: #10b981;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+    
+    .permission-badge.admin {
+        background: #f59e0b;
+    }
+    
+    .permission-badge.agent {
+        background: #3b82f6;
+    }
+    
+    .ai-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .ai-status.enabled {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .ai-status.disabled {
+        background: #fef2f2;
+        color: #dc2626;
+    }
+    
+    .ai-status-icon {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    
+    .ai-status.enabled .ai-status-icon {
+        background: #22c55e;
+    }
+    
+    .ai-status.disabled .ai-status-icon {
+        background: #ef4444;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <div class="container mx-auto px-4">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">⚙️ Configuraciones</h1>
+            <p class="text-white/80 text-lg">Personaliza tu experiencia en Eleven Support</p>
+        </div>
+
+        <!-- Configuraciones del Usuario -->
+        <div class="settings-card">
+            <h2 class="text-2xl font-bold mb-6 flex items-center">
+                👤 Configuraciones de Usuario
+                {% if user.is_superuser %}
+                    <span class="permission-badge admin">Admin</span>
+                {% elif is_agent %}
+                    <span class="permission-badge agent">Agente</span>
+                {% endif %}
+            </h2>
+            
+            <form id="user-settings-form" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Notificaciones -->
+                <div class="settings-section">
+                    <h3 class="text-lg font-semibold mb-4">🔔 Notificaciones</h3>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Notificaciones por Email</div>
+                            <div class="setting-description">Recibe notificaciones por correo electrónico sobre tus tickets</div>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="email-notifications" 
+                                       {% if user_settings.notifications_enabled %}checked{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Notificaciones Push</div>
+                            <div class="setting-description">Recibe notificaciones en tiempo real en el navegador</div>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="push-notifications" 
+                                       {% if user_settings.push_notifications %}checked{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Preferencias -->
+                <div class="settings-section">
+                    <h3 class="text-lg font-semibold mb-4">🎨 Preferencias</h3>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Idioma</div>
+                            <div class="setting-description">Selecciona el idioma de la interfaz</div>
+                        </div>
+                        <div class="setting-control">
+                            <select id="language" class="select-control">
+                                <option value="es" {% if user_settings.language == 'es' %}selected{% endif %}>Español</option>
+                                <option value="en" {% if user_settings.language == 'en' %}selected{% endif %}>English</option>
+                                <option value="fr" {% if user_settings.language == 'fr' %}selected{% endif %}>Français</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Tema</div>
+                            <div class="setting-description">Elige entre tema claro u oscuro</div>
+                        </div>
+                        <div class="setting-control">
+                            <select id="theme" class="select-control">
+                                <option value="light" {% if user_settings.theme == 'light' %}selected{% endif %}>Claro</option>
+                                <option value="dark" {% if user_settings.theme == 'dark' %}selected{% endif %}>Oscuro</option>
+                                <option value="auto" {% if user_settings.theme == 'auto' %}selected{% endif %}>Automático</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Botón de Guardar -->
+                <div class="text-center pt-4">
+                    <button type="submit" class="btn-save" id="save-user-settings">
+                        💾 Guardar Configuraciones
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Configuraciones del Sistema (Solo Admin) -->
+        {% if is_admin %}
+        <div class="settings-card">
+            <h2 class="text-2xl font-bold mb-6">🔧 Configuraciones del Sistema</h2>
+            
+            <form id="system-settings-form" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Configuración de IA -->
+                <div class="settings-section">
+                    <h3 class="text-lg font-semibold mb-4">🤖 Inteligencia Artificial</h3>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Estado de IA</div>
+                            <div class="setting-description">Activa o desactiva las respuestas automáticas de IA</div>
+                        </div>
+                        <div class="setting-control">
+                            <div class="ai-status {% if ai_config and ai_config.ai_enabled %}enabled{% else %}disabled{% endif %}">
+                                <div class="ai-status-icon"></div>
+                                {% if ai_config and ai_config.ai_enabled %}Activada{% else %}Desactivada{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Modelo de IA Predeterminado</div>
+                            <div class="setting-description">Selecciona el modelo de IA para respuestas automáticas</div>
+                        </div>
+                        <div class="setting-control">
+                            <select id="ai-model" class="select-control">
+                                <option value="gpt-4o-mini" {% if system_settings.ai_model == 'gpt-4o-mini' %}selected{% endif %}>GPT-4o Mini</option>
+                                <option value="gpt-4o" {% if system_settings.ai_model == 'gpt-4o' %}selected{% endif %}>GPT-4o</option>
+                                <option value="claude-3-haiku" {% if system_settings.ai_model == 'claude-3-haiku' %}selected{% endif %}>Claude 3 Haiku</option>
+                                <option value="claude-3-sonnet" {% if system_settings.ai_model == 'claude-3-sonnet' %}selected{% endif %}>Claude 3 Sonnet</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Límite de Costos Diarios</div>
+                            <div class="setting-description">Establece un límite diario para gastos en IA (USD)</div>
+                        </div>
+                        <div class="setting-control">
+                            <input type="number" id="daily-cost-limit" class="select-control" 
+                                   value="{% if system_settings %}{{ system_settings.daily_cost_limit }}{% else %}10.00{% endif %}" 
+                                   min="0" step="0.01">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Configuración de Tickets -->
+                <div class="settings-section">
+                    <h3 class="text-lg font-semibold mb-4">🎫 Gestión de Tickets</h3>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Asignación Automática</div>
+                            <div class="setting-description">Asigna tickets automáticamente a agentes disponibles</div>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="auto-assignment" 
+                                       {% if system_settings and system_settings.auto_assignment %}checked{% endif %}>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">Tiempo de Respuesta Máximo</div>
+                            <div class="setting-description">Tiempo máximo para primera respuesta (horas)</div>
+                        </div>
+                        <div class="setting-control">
+                            <input type="number" id="max-response-time" class="select-control" 
+                                   value="{% if system_settings %}{{ system_settings.max_response_time }}{% else %}24{% endif %}" 
+                                   min="1" max="168">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Botón de Guardar -->
+                <div class="text-center pt-4">
+                    <button type="submit" class="btn-save" id="save-system-settings">
+                        💾 Guardar Configuraciones del Sistema
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- Enlaces Rápidos -->
+        <div class="settings-card">
+            <h2 class="text-2xl font-bold mb-6">🔗 Enlaces Rápidos</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <a href="{% url 'support_ai:ai_dashboard' %}" class="block p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300">
+                    <div class="text-lg font-semibold">📊 Dashboard IA</div>
+                    <div class="text-sm opacity-90">Métricas y configuración de IA</div>
+                </a>
+                
+                <a href="{% url 'support_ai:portal_home' %}" class="block p-4 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 transition-all duration-300">
+                    <div class="text-lg font-semibold">🏠 Portal Principal</div>
+                    <div class="text-sm opacity-90">Volver al portal de soporte</div>
+                </a>
+                
+                {% if is_admin %}
+                <a href="/admin/" class="block p-4 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg hover:from-red-600 hover:to-pink-700 transition-all duration-300">
+                    <div class="text-lg font-semibold">⚙️ Panel Admin</div>
+                    <div class="text-sm opacity-90">Administración avanzada</div>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Formulario de configuraciones de usuario
+    const userSettingsForm = document.getElementById('user-settings-form');
+    const saveUserButton = document.getElementById('save-user-settings');
+    
+    if (userSettingsForm) {
+        userSettingsForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            saveUserButton.disabled = true;
+            saveUserButton.textContent = '💾 Guardando...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('notifications_enabled', document.getElementById('email-notifications').checked);
+                formData.append('push_notifications', document.getElementById('push-notifications').checked);
+                formData.append('language', document.getElementById('language').value);
+                formData.append('theme', document.getElementById('theme').value);
+                
+                const response = await fetch('/support/api/user-settings/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showNotification('✅ ' + (result.message || 'Configuraciones guardadas exitosamente'), 'success');
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    showNotification('❌ ' + (errorData.error || 'Error al guardar configuraciones'), 'error');
+                }
+            } catch (error) {
+                showNotification('❌ Error de conexión', 'error');
+            } finally {
+                saveUserButton.disabled = false;
+                saveUserButton.textContent = '💾 Guardar Configuraciones';
+            }
+        });
+    }
+    
+    // Formulario de configuraciones del sistema (solo admin)
+    const systemSettingsForm = document.getElementById('system-settings-form');
+    const saveSystemButton = document.getElementById('save-system-settings');
+    
+    if (systemSettingsForm) {
+        systemSettingsForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            saveSystemButton.disabled = true;
+            saveSystemButton.textContent = '💾 Guardando...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('ai_model', document.getElementById('ai-model').value);
+                formData.append('daily_cost_limit', document.getElementById('daily-cost-limit').value);
+                formData.append('auto_assignment', document.getElementById('auto-assignment').checked);
+                formData.append('max_response_time', document.getElementById('max-response-time').value);
+                
+                const response = await fetch('/support/api/ai-settings/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showNotification('✅ ' + (result.message || 'Configuraciones del sistema guardadas'), 'success');
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    showNotification('❌ ' + (errorData.error || 'Error al guardar configuraciones del sistema'), 'error');
+                }
+            } catch (error) {
+                showNotification('❌ Error de conexión', 'error');
+            } finally {
+                saveSystemButton.disabled = false;
+                saveSystemButton.textContent = '💾 Guardar Configuraciones del Sistema';
+            }
+        });
+    }
+    
+    // Función para mostrar notificaciones
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 p-4 rounded-lg text-white font-semibold z-50 ${
+            type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        }`;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+    
+    // Aplicar tema seleccionado
+    const themeSelect = document.getElementById('theme');
+    if (themeSelect) {
+        themeSelect.addEventListener('change', function() {
+            const theme = this.value;
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        });
+    }
+});
+</script>
+{% endblock %} 

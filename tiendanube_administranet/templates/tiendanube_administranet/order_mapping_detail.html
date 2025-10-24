@@ -33,7 +33,7 @@
                 <span class="material-icons text-sm mr-2">arrow_back</span>
                 {% trans "Back to List" %}
             </a>
-            <a href="{% url 'tiendanube_administranet:order_mapping_edit' object.pk %}" 
+            <a href="{% url 'tiendanube_administranet:order_mapping_update' object.pk %}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
                 <span class="material-icons text-sm mr-2">edit</span>
                 {% trans "Edit" %}
@@ -92,13 +92,13 @@
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Currency" %}</span>
                         <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                            {{ object.tiendanube_currency|default:object.adminet_moneda|default:"USD" }}
+                            {{ object.tiendanube_currency|default:"USD" }}
                         </span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Payment Status" %}</span>
                         <span class="text-sm font-semibold text-gray-900 dark:text-white">
-                            {{ object.tiendanube_payment_status|default:object.adminet_estado_pago|default:"Unknown" }}
+                            {{ object.tiendanube_payment_status|default:"Unknown" }}
                         </span>
                     </div>
                 </div>
@@ -208,11 +208,11 @@
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Email" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_cliente_email|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_customer_email|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customer Name" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_cliente_nombre|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_customer_name|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Total" %}</p>
@@ -224,18 +224,18 @@
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Currency" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_moneda|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_currency|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Payment Status" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_estado_pago|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_payment_status|default:"N/A" }}</p>
                     </div>
                 </div>
                 
-                {% if object.adminet_observaciones %}
+                {% if object.tiendanube_notes %}
                 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{% trans "Observations" %}</h4>
-                    <p class="text-gray-900 dark:text-white">{{ object.adminet_observaciones }}</p>
+                    <p class="text-gray-900 dark:text-white">{{ object.tiendanube_notes }}</p>
                 </div>
                 {% endif %}
             </div>

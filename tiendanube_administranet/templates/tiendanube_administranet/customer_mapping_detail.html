@@ -32,7 +32,7 @@
                 <span class="material-icons text-sm mr-2">arrow_back</span>
                 {% trans "Back to List" %}
             </a>
-            <a href="{% url 'tiendanube_administranet:customer_mapping_edit' object.pk %}" 
+            <a href="{% url 'tiendanube_administranet:customer_mapping_update' object.pk %}" 
                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
                 <span class="material-icons text-sm mr-2">edit</span>
                 {% trans "Edit" %}
@@ -206,15 +206,15 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Code" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_code|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_codigo|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Name" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_name|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_nombre|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Document" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_document|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.adminet_documento|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Email" %}</p>
@@ -230,11 +230,11 @@
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "City" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_city|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_city|default:"N/A" }}</p>
                     </div>
                     <div>
                         <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Country" %}</p>
-                        <p class="text-gray-900 dark:text-white">{{ object.adminet_country|default:"N/A" }}</p>
+                        <p class="text-gray-900 dark:text-white">{{ object.tiendanube_country|default:"N/A" }}</p>
                     </div>
                 </div>
                 

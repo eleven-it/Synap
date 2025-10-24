@@ -60,4 +60,42 @@ class FinancialReport(models.Model):
     file = models.FileField(upload_to='financial_reports/', null=True, blank=True)
 
     def __str__(self):
-        return f"{self.name} ({self.report_type}) - {self.generated_at}" 
+        return f"{self.name} ({self.report_type}) - {self.generated_at}"
+
+
+class FinancialEntry(models.Model):
+    """
+    Tabla intermedia para consolidar entradas financieras de administraNET.
+    Consolida ventas y compras de diferentes tablas en un modelo uniforme.
+    """
+    idempotency_key = models.CharField(max_length=128, unique=True)
+    source_table = models.CharField(max_length=64)
+    entry_type = models.CharField(
+        max_length=10,
+        choices=[
+            ('sale', 'Sale'),
+            ('purchase', 'Purchase'),
+        ]
+    )
+    date = models.DateField()
+    currency = models.CharField(max_length=8, default='ARS')
+    net_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    cost_center = models.CharField(max_length=64, null=True, blank=True)
+    counterparty_id = models.CharField(max_length=64, null=True, blank=True)
+    source_id = models.CharField(max_length=64)
+    source_updated_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['entry_type', 'date']),
+            models.Index(fields=['source_updated_at']),
+        ]
+        verbose_name = 'Financial Entry'
+        verbose_name_plural = 'Financial Entries'
+
+    def __str__(self):
+        return f"{self.entry_type} {self.source_id}" 

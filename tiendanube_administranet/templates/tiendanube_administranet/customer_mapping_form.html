@@ -65,10 +65,10 @@
             
             <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    {{ form.tiendanube_customer_id|as_crispy_field }}
+                    {{ form.tiendanube_id|as_crispy_field }}
                 </div>
                 <div>
-                    {{ form.adminet_customer_id|as_crispy_field }}
+                    {{ form.adminet_codigo|as_crispy_field }}
                 </div>
                 <div class="md:col-span-2">
                     {{ form.sync_direction|as_crispy_field }}
@@ -177,16 +177,10 @@
                     {{ form.sync_status|as_crispy_field }}
                 </div>
                 <div>
-                    {{ form.last_sync_at|as_crispy_field }}
-                </div>
-                <div>
-                    {{ form.sync_errors|as_crispy_field }}
-                </div>
-                <div>
-                    {{ form.retry_count|as_crispy_field }}
+                    {{ form.sync_enabled|as_crispy_field }}
                 </div>
                 <div class="md:col-span-2">
-                    {{ form.notes|as_crispy_field }}
+                    {{ form.error_message|as_crispy_field }}
                 </div>
             </div>
         </div>

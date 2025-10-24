@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Chat SQL de IA - Finance{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                Chat SQL de IA
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                Haz consultas en lenguaje natural sobre tus datos financieros
+            </p>
+        </div>
+
+        <!-- Webhook Configuration Warning -->
+        {% if not webhook_configured %}
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">
+                        Webhook no configurado
+                    </h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <p>El webhook de n8n no está configurado. Contacta al administrador para configurar N8N_SQL_CHAT_WEBHOOK.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Formulario -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    Nueva Consulta
+                </h2>
+                
+                <form method="post" id="sql-chat-form">
+                    {% csrf_token %}
+                    
+                    <!-- Campo de consulta -->
+                    <div class="mb-4">
+                        {{ form.message|as_crispy_field }}
+                    </div>
+                    
+                    <!-- Filtros opcionales -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            {{ form.year|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.currency|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            {{ form.date_from|as_crispy_field }}
+                        </div>
+                        <div>
+                            {{ form.date_to|as_crispy_field }}
+                        </div>
+                    </div>
+                    
+                    <!-- Botón de envío -->
+                    <button type="submit" 
+                            id="submit-btn"
+                            class="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center">
+                        <span id="submit-text">Enviar Consulta</span>
+                        <svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Resultados -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                    Resultados
+                </h2>
+                
+                {% if response %}
+                    {% if has_error %}
+                        <!-- Error -->
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <h3 class="text-sm font-medium text-red-800">
+                                        Error en la consulta
+                                    </h3>
+                                    <div class="mt-2 text-sm text-red-700">
+                                        <p><strong>Razón:</strong> {{ error_reason }}</p>
+                                        {% if error_details %}
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer font-medium">Detalles técnicos</summary>
+                                            <pre class="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">{{ error_details|pprint }}</pre>
+                                        </details>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Respuesta exitosa -->
+                        <div class="space-y-6">
+                            <!-- Resumen -->
+                            <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">
+                                    Resumen
+                                </h3>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div class="text-center">
+                                        <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                            {{ rowcount }}
+                                        </div>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                                            Filas
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-center">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                            {% if meta.risk == 'bajo' %}bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100
+                                            {% elif meta.risk == 'medio' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100
+                                            {% else %}bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100{% endif %}">
+                                            {{ meta.risk|default:"bajo" }}
+                                        </span>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                            Riesgo
+                                        </div>
+                                    </div>
+                                    
+                                    {% if meta.autoLimited %}
+                                    <div class="text-center">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-800 dark:text-orange-100">
+                                            Limitado
+                                        </span>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                            Resultado
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if meta.tables_detected %}
+                                    <div class="text-center">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                            {{ meta.tables_detected|length }}
+                                        </div>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                                            Tablas
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if meta.explanation %}
+                                <div class="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                    <p class="text-sm text-blue-800 dark:text-blue-200">
+                                        <strong>Explicación:</strong> {{ meta.explanation }}
+                                    </p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- SQL generada -->
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">
+                                    Consulta SQL Generada
+                                </h3>
+                                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-auto text-sm"><code>{{ sql }}</code></pre>
+                            </div>
+                            
+                            <!-- Tabla de resultados -->
+                            {% if columns and rows %}
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-3">
+                                    Resultados
+                                </h3>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                        <thead class="bg-gray-50 dark:bg-gray-700">
+                                            <tr>
+                                                {% for column in columns %}
+                                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                                    {{ column }}
+                                                </th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {% for row in rows %}
+                                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                {% for column in columns %}
+                                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                                                    {{ row|default_if_none:"" }}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <!-- Estado inicial -->
+                    <div class="text-center py-12">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                            Sin consultas
+                        </h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Haz tu primera consulta usando el formulario
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('sql-chat-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitText = document.getElementById('submit-text');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    
+    form.addEventListener('submit', function() {
+        // Deshabilitar botón y mostrar spinner
+        submitBtn.disabled = true;
+        submitText.textContent = 'Procesando...';
+        loadingSpinner.classList.remove('hidden');
+        
+        // Scroll a resultados
+        setTimeout(() => {
+            document.querySelector('.grid').scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+    });
+});
+</script>
+{% endblock %}
+
+

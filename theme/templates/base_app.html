@@ -10,6 +10,26 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
+        /* Corrección de alineación del menú dropdown del navbar */
+        .app-card > h3 {
+            padding: 0 !important;
+            margin: 0 0 12px 0 !important;
+        }
+        .app-card > div {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        .app-card .app-menu-item {
+            display: flex !important;
+            align-items: center !important;
+            padding: 8px 0px !important;
+            margin: 0 !important;
+        }
+        .app-card .app-menu-item .material-icons {
+            margin-right: 8px !important;
+            margin-left: 0 !important;
+        }
+        
         .gradient-icon {
             background: linear-gradient(90deg, #a855f7, #3b82f6);
             -webkit-background-clip: text;

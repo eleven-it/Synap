@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eleven Support - Chat IA</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chat-container { height: calc(100vh - 140px); }
+        .message-bubble { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .typing-indicator { animation: pulse 1.5s ease-in-out infinite; }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                
+                <!-- Logo and Title -->
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-robot text-white text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="ml-3">
+                        <h1 class="text-xl font-semibold text-gray-900">Eleven Support</h1>
+                        <p class="text-sm text-gray-500">Chat IA Inteligente</p>
+                    </div>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    
+                    <!-- User Info -->
+                    <div class="flex items-center space-x-3">
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-gray-900" id="userName">Usuario</p>
+                            <p class="text-xs text-gray-500" id="userRole">Cliente</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-white text-sm"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Notifications -->
+                    <button class="p-2 text-gray-400 hover:text-gray-500 relative">
+                        <i class="fas fa-bell text-lg"></i>
+                        <span class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400"></span>
+                    </button>
+                    
+                    <!-- Profile Dropdown -->
+                    <div class="relative">
+                        <button id="profileDropdown" class="p-2 text-gray-400 hover:text-gray-500">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div id="profileMenu" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                            <a href="/support/auth/profile/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i>Mi Perfil
+                            </a>
+                            <a href="/support/auth/user-tickets/" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                <i class="fas fa-ticket-alt mr-2"></i>Mis Tickets
+                            </a>
+                            <div class="border-t border-gray-100"></div>
+                            <button id="logoutBtn" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Cerrar Sesión
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Chat Container -->
+        <div class="bg-white rounded-lg shadow-lg border border-gray-200">
+            
+            <!-- Chat Header -->
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Chat con IA</h2>
+                        <p class="text-sm text-gray-600">Tu asistente inteligente está listo para ayudarte</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="flex items-center space-x-1">
+                            <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <span class="text-xs text-gray-500">IA Activa</span>
+                        </div>
+                        <button id="clearChatBtn" class="text-gray-400 hover:text-gray-600 p-1">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Chat Messages -->
+            <div class="chat-container overflow-y-auto p-6" id="chatMessages">
+                
+                <!-- Welcome Message -->
+                <div class="flex justify-center mb-6">
+                    <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full shadow-lg">
+                        <i class="fas fa-robot mr-2"></i>
+                        ¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy?
+                    </div>
+                </div>
+                
+                <!-- Initial Suggestions -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <button class="suggestion-btn bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-question-circle mr-2"></i>
+                        ¿Cómo puedo crear un ticket?
+                    </button>
+                    <button class="suggestion-btn bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-tools mr-2"></i>
+                        Necesito soporte técnico
+                    </button>
+                    <button class="suggestion-btn bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 px-4 py-3 rounded-lg text-sm font-medium transition-colors">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Información general
+                    </button>
+                </div>
+                
+            </div>
+            
+            <!-- Chat Input -->
+            <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <form id="chatForm" class="flex space-x-4">
+                    <div class="flex-1 relative">
+                        <input 
+                            type="text" 
+                            id="messageInput" 
+                            placeholder="Escribe tu mensaje aquí..." 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            rows="1"
+                        >
+                        <button 
+                            type="button" 
+                            id="voiceInputBtn" 
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                    </div>
+                    <button 
+                        type="submit" 
+                        id="sendBtn"
+                        class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <i class="fas fa-paper-plane mr-2"></i>
+                        Enviar
+                    </button>
+                </form>
+                
+                <!-- Typing Indicator -->
+                <div id="typingIndicator" class="hidden mt-3 flex items-center space-x-2 text-gray-500">
+                    <div class="typing-indicator w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <div class="typing-indicator w-2 h-2 bg-gray-400 rounded-full" style="animation-delay: 0.2s;"></div>
+                    <div class="typing-indicator w-2 h-2 bg-gray-400 rounded-full" style="animation-delay: 0.4s;"></div>
+                    <span class="text-sm">IA está escribiendo...</span>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200 text-center">
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-ticket-alt text-blue-600 text-xl"></i>
+                </div>
+                <h3 class="font-medium text-gray-900 mb-1">Crear Ticket</h3>
+                <p class="text-sm text-gray-500">Solicita ayuda especializada</p>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200 text-center">
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-history text-green-600 text-xl"></i>
+                </div>
+                <h3 class="font-medium text-gray-900 mb-1">Historial</h3>
+                <p class="text-sm text-gray-500">Revisa conversaciones anteriores</p>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200 text-center">
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-book text-purple-600 text-xl"></i>
+                </div>
+                <h3 class="font-medium text-gray-900 mb-1">Base de Conocimiento</h3>
+                <p class="text-sm text-gray-500">Encuentra respuestas rápidas</p>
+            </div>
+            
+            <div class="bg-white p-4 rounded-lg shadow border border-gray-200 text-center">
+                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <i class="fas fa-headset text-orange-600 text-xl"></i>
+                </div>
+                <h3 class="font-medium text-gray-900 mb-1">Soporte</h3>
+                <p class="text-sm text-gray-500">Contacta con un agente humano</p>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-700 font-medium">Procesando mensaje...</p>
+        </div>
+    </div>
+    
+    <!-- Message Container -->
+    <div id="messageContainer" class="fixed top-4 right-4 z-50 hidden">
+        <div id="messageContent" class="rounded-lg p-4 shadow-lg max-w-sm">
+            <div class="flex items-center">
+                <i id="messageIcon" class="mr-3 text-lg"></i>
+                <span id="messageText"></span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global variables
+        let conversationHistory = [];
+        let isTyping = false;
+        
+        // DOM Elements
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const profileDropdown = document.getElementById('profileDropdown');
+        const profileMenu = document.getElementById('profileMenu');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const clearChatBtn = document.getElementById('clearChatBtn');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
+            loadChatHistory();
+            setupEventListeners();
+        });
+        
+        // Setup Event Listeners
+        function setupEventListeners() {
+            // Chat form submission
+            chatForm.addEventListener('submit', handleMessageSubmit);
+            
+            // Suggestion buttons
+            document.querySelectorAll('.suggestion-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    messageInput.value = btn.textContent.trim();
+                    handleMessageSubmit(new Event('submit'));
+                });
+            });
+            
+            // Profile dropdown
+            profileDropdown.addEventListener('click', toggleProfileMenu);
+            document.addEventListener('click', closeProfileMenu);
+            
+            // Logout
+            logoutBtn.addEventListener('click', handleLogout);
+            
+            // Clear chat
+            clearChatBtn.addEventListener('click', clearChat);
+            
+            // Auto-resize textarea
+            messageInput.addEventListener('input', autoResize);
+        }
+        
+        // Load User Info
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/support/auth/user-info/');
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('userName').textContent = data.user.username;
+                    document.getElementById('userRole').textContent = data.user.roles.type === 'staff' ? 'Staff' : 'Cliente';
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
+        }
+        
+        // Load Chat History
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/support/auth/get-history/');
+                const data = await response.json();
+                
+                if (data.success && data.history.length > 0) {
+                    conversationHistory = data.history;
+                    displayChatHistory();
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        }
+        
+        // Display Chat History
+        function displayChatHistory() {
+            conversationHistory.forEach(message => {
+                if (message.role === 'user') {
+                    addUserMessage(message.content);
+                } else if (message.role === 'assistant') {
+                    addAIMessage(message.content);
+                }
+            });
+        }
+        
+        // Handle Message Submit
+        async function handleMessageSubmit(e) {
+            e.preventDefault();
+            
+            const message = messageInput.value.trim();
+            if (!message || isTyping) return;
+            
+            // Add user message to chat
+            addUserMessage(message);
+            
+            // Clear input
+            messageInput.value = '';
+            autoResize();
+            
+            // Show typing indicator
+            showTypingIndicator(true);
+            
+            try {
+                // Send message to backend
+                const response = await fetch('/support/auth/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Add AI response
+                    addAIMessage(data.response.content);
+                    
+                    // Show ticket info if created
+                    if (data.ticket_created && data.ticket_info) {
+                        addTicketInfo(data.ticket_info);
+                    }
+                    
+                    // Update conversation history
+                    conversationHistory = data.conversation_history || [];
+                    
+                } else {
+                    addErrorMessage(data.error || 'Error procesando mensaje');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addErrorMessage('Error de conexión. Inténtalo de nuevo.');
+            } finally {
+                showTypingIndicator(false);
+            }
+        }
+        
+        // Add User Message
+        function addUserMessage(content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex justify-end mb-4';
+            messageDiv.innerHTML = `
+                <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-blue-500 text-white message-bubble">
+                    ${escapeHtml(content)}
+                </div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Add AI Message
+        function addAIMessage(content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex justify-start mb-4';
+            messageDiv.innerHTML = `
+                <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-gray-100 text-gray-800 message-bubble">
+                    <div class="flex items-center mb-2">
+                        <div class="w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-2">
+                            <i class="fas fa-robot text-white text-xs"></i>
+                        </div>
+                        <span class="text-xs text-gray-500">IA Asistente</span>
+                    </div>
+                    ${escapeHtml(content)}
+                </div>
+            `;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Add Ticket Info
+        function addTicketInfo(ticketInfo) {
+            const ticketDiv = document.createElement('div');
+            ticketDiv.className = 'flex justify-center mb-4';
+            ticketDiv.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 max-w-md text-center">
+                    <div class="flex items-center justify-center mb-2">
+                        <i class="fas fa-ticket-alt text-green-600 mr-2"></i>
+                        <span class="font-medium text-green-800">Ticket Creado</span>
+                    </div>
+                    <p class="text-sm text-green-700 mb-2">
+                        Se ha creado un ticket para tu consulta
+                    </p>
+                    <div class="bg-white rounded border border-green-200 p-2">
+                        <p class="text-xs text-green-600">
+                            <strong>Número:</strong> ${ticketInfo.ticket_number || 'N/A'}
+                        </p>
+                        <p class="text-xs text-green-600">
+                            <strong>Estado:</strong> ${ticketInfo.status || 'Abierto'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            chatMessages.appendChild(ticketDiv);
+            scrollToBottom();
+        }
+        
+        // Add Error Message
+        function addErrorMessage(error) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'flex justify-center mb-4';
+            errorDiv.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-red-700 text-sm">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    ${escapeHtml(error)}
+                </div>
+            `;
+            chatMessages.appendChild(errorDiv);
+            scrollToBottom();
+        }
+        
+        // Show/Hide Typing Indicator
+        function showTypingIndicator(show) {
+            isTyping = show;
+            if (show) {
+                typingIndicator.classList.remove('hidden');
+            } else {
+                typingIndicator.classList.add('hidden');
+            }
+        }
+        
+        // Scroll to Bottom
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // Auto-resize Textarea
+        function autoResize() {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = messageInput.scrollHeight + 'px';
+        }
+        
+        // Toggle Profile Menu
+        function toggleProfileMenu() {
+            profileMenu.classList.toggle('hidden');
+        }
+        
+        // Close Profile Menu
+        function closeProfileMenu(e) {
+            if (!profileDropdown.contains(e.target)) {
+                profileMenu.classList.add('hidden');
+            }
+        }
+        
+        // Handle Logout
+        async function handleLogout() {
+            try {
+                const response = await fetch('/support/auth/logout/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/support/auth/login-page/';
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+            }
+        }
+        
+        // Clear Chat
+        function clearChat() {
+            if (confirm('¿Estás seguro de que quieres limpiar el chat?')) {
+                chatMessages.innerHTML = `
+                    <div class="flex justify-center mb-6">
+                        <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-full shadow-lg">
+                            <i class="fas fa-robot mr-2"></i>
+                            ¡Hola! Soy tu asistente de IA. ¿En qué puedo ayudarte hoy?
+                        </div>
+                    </div>
+                `;
+                conversationHistory = [];
+            }
+        }
+        
+        // Utility Functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            const content = document.getElementById('messageContent');
+            const icon = document.getElementById('messageIcon');
+            const text = document.getElementById('messageText');
+            
+            text.textContent = message;
+            
+            if (type === 'success') {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-green-500 text-white';
+                icon.className = 'fas fa-check-circle mr-3 text-lg';
+            } else {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-red-500 text-white';
+                icon.className = 'fas fa-exclamation-circle mr-3 text-lg';
+            }
+            
+            container.classList.remove('hidden');
+            
+            setTimeout(() => {
+                container.classList.add('hidden');
+            }, 5000);
+        }
+    </script>
+    
+</body>
+</html>

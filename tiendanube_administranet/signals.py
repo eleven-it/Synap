@@ -157,11 +157,11 @@ def sync_log_post_save(sender, instance, created, **kwargs):
         if created:
             # Log de nivel apropiado según el estado
             if instance.status == 'error':
-                logger.error(f"Log de sincronización: {instance.message}")
-            elif instance.status == 'warning':
-                logger.warning(f"Log de sincronización: {instance.message}")
+                logger.error(f"Log de sincronización: {instance.error_message}")
+            elif instance.status == 'failed':
+                logger.warning(f"Log de sincronización: {instance.error_message}")
             else:
-                logger.info(f"Log de sincronización: {instance.message}")
+                logger.info(f"Log de sincronización: {instance.sync_type} - {instance.status}")
                 
     except Exception as e:
         logger.error(f"Error en señal post_save de SyncLog: {str(e)}")

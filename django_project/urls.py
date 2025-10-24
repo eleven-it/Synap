@@ -37,7 +37,6 @@ urlpatterns = [
 # URLs críticas siempre disponibles (workaround para tests y desarrollo)
 urlpatterns.extend([
     path('accounting/', include('accounting.urls', namespace='accounting')),
-    path('reports/', include('reports.urls', namespace='reports')),
     path('sales/', include('sales.urls', namespace='sales')),
     path('api/sales/', include('sales.api.urls')),
     path('core/api/', include('core.api.urls', namespace='core_api')),
@@ -58,7 +57,6 @@ except ImportError:
         path('api/sales/', include('sales.api.urls')),
         path('purchases/', include('purchases.urls', namespace='purchases')),
         path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),
-        path('reports/', include('reports.urls', namespace='reports')),
     ])
 
 if settings.DEBUG:
@@ -76,6 +74,7 @@ urlpatterns.extend([
 # Finance web
 urlpatterns.extend([
     path('finance/', include('finance.urls', namespace='finance')),
+    path('support/', include('support_ai.urls', namespace='support_ai')),
 ])
 
 # Logistics API

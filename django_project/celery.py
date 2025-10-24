@@ -1,13 +1,19 @@
 import os
 from celery import Celery
-from django.conf import settings
 
+# Establecer la variable de entorno para las configuraciones de Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_project.settings')
 
-app = Celery('django_project')
+# Crear la instancia de Celery
+app = Celery('synap')
 
 # Usar la configuración de Django para Celery
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Descubrir tareas en todas las apps
-app.autodiscover_tasks(lambda: settings.INSTALLED_APPS) 
+# Descubrir automáticamente las tareas en todas las aplicaciones instaladas
+app.autodiscover_tasks()
+
+@app.task(bind=True)
+def debug_task(self):
+    """Tarea de debug para probar Celery"""
+    print(f'Request: {self.request!r}') 

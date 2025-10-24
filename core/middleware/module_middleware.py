@@ -38,6 +38,11 @@ class ModuleMiddleware:
             response = self.get_response(request)
             return response
         
+        # Permitir rutas de API dentro de módulos (ej: finance/api/, sales/api/, etc.)
+        if '/api/' in path:
+            response = self.get_response(request)
+            return response
+        
         # Verificar módulos inactivos
         for module_name in MODULE_CONFIGS.keys():
             if path.startswith(f'{module_name}/') and not module_manager.is_module_active(module_name):

@@ -16,6 +16,55 @@ class TiendanubeConfig(models.Model):
     access_token = models.CharField(max_length=255, verbose_name=_("Access Token"))
     api_url = models.URLField(default="https://api.tiendanube.com/v1", verbose_name=_("API URL"))
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
+    
+    # Configuración de sincronización automática
+    auto_sync = models.BooleanField(
+        default=True, 
+        verbose_name=_("Auto Sync"),
+        help_text=_("Habilitar sincronización automática")
+    )
+    sync_interval = models.IntegerField(
+        default=30,
+        verbose_name=_("Sync Interval (minutes)"),
+        help_text=_("Intervalo en minutos para sincronización automática")
+    )
+    last_sync = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        verbose_name=_("Last Sync"),
+        help_text=_("Última sincronización realizada")
+    )
+    
+    # Configuración de qué sincronizar
+    sync_products = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Products"),
+        help_text=_("Sincronizar productos")
+    )
+    sync_customers = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Customers"),
+        help_text=_("Sincronizar clientes")
+    )
+    sync_orders = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Orders"),
+        help_text=_("Sincronizar pedidos")
+    )
+    sync_stock = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Stock"),
+        help_text=_("Sincronizar stock")
+    )
+    
+    # Configuración de webhooks
+    webhook_secret = models.CharField(
+        max_length=255, 
+        blank=True, 
+        verbose_name=_("Webhook Secret"),
+        help_text=_("Secret para verificación de webhooks de TiendaNube")
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated At"))
 
@@ -43,6 +92,23 @@ class AdministraNETConfig(models.Model):
         blank=True, 
         verbose_name=_("Depósito TiendaNube"),
         help_text=_("ID del depósito en AdministraNET que se sincronizará con TiendaNube")
+    )
+    sucursal_tiendanube_id = models.IntegerField(
+        default=1,
+        verbose_name=_("Sucursal Tiendanube ID"),
+        help_text=_("ID de la sucursal para órdenes de Tiendanube")
+    )
+    punto_venta_tiendanube_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Punto de Venta Tiendanube ID"),
+        help_text=_("ID del punto de venta para numeración de comprobantes (ej: 0001-00000001)")
+    )
+    viajante_tiendanube_id = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Vendedor Tiendanube ID"),
+        help_text=_("ID del vendedor para órdenes de Tiendanube")
     )
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created At"))

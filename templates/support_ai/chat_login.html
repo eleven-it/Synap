@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eleven Support - Chat IA | Login</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .glass-effect { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.1); }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-20px); } }
+        .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center p-4">
+    
+    <!-- Background Elements -->
+    <div class="absolute inset-0 overflow-hidden">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full animate-float"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-white/10 rounded-full animate-float" style="animation-delay: -3s;"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-white/5 rounded-full animate-pulse-slow"></div>
+    </div>
+    
+    <!-- Main Login Container -->
+    <div class="relative z-10 w-full max-w-md">
+        
+        <!-- Logo and Title -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-full mb-4 backdrop-blur-sm">
+                <i class="fas fa-robot text-3xl text-white"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-white mb-2">Eleven Support</h1>
+            <p class="text-white/80 text-lg">Chat IA Inteligente</p>
+        </div>
+        
+        <!-- Login Form -->
+        <div class="glass-effect rounded-2xl p-8 shadow-2xl border border-white/20">
+            
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-semibold text-white mb-2">Iniciar Sesión</h2>
+                <p class="text-white/70">Usa tus credenciales de osTicket</p>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" class="space-y-6">
+                
+                <!-- Username/Email Field -->
+                <div>
+                    <label for="username" class="block text-sm font-medium text-white/90 mb-2">
+                        <i class="fas fa-user mr-2"></i>Usuario o Email
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required
+                        class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all duration-200"
+                        placeholder="Ingresa tu usuario o email"
+                    >
+                </div>
+                
+                <!-- Password Field -->
+                <div>
+                    <label for="password" class="block text-sm font-medium text-white/90 mb-2">
+                        <i class="fas fa-lock mr-2"></i>Contraseña
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            class="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-transparent transition-all duration-200 pr-12"
+                            placeholder="Ingresa tu contraseña"
+                        >
+                        <button 
+                            type="button" 
+                            id="togglePassword"
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white transition-colors"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Remember Me -->
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center text-white/80">
+                        <input type="checkbox" class="mr-2 rounded border-white/20 bg-white/10 text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm">Recordarme</span>
+                    </label>
+                    <a href="#" class="text-sm text-white/70 hover:text-white transition-colors">¿Olvidaste tu contraseña?</a>
+                </div>
+                
+                <!-- Submit Button -->
+                <button 
+                    type="submit" 
+                    id="loginBtn"
+                    class="w-full bg-white text-gray-800 py-3 px-6 rounded-lg font-semibold hover:bg-white/90 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                >
+                    <span class="flex items-center justify-center">
+                        <i class="fas fa-sign-in-alt mr-2"></i>
+                        Iniciar Sesión
+                    </span>
+                </button>
+                
+            </form>
+            
+            <!-- Divider -->
+            <div class="my-6 flex items-center">
+                <div class="flex-1 border-t border-white/20"></div>
+                <span class="px-4 text-white/50 text-sm">o</span>
+                <div class="flex-1 border-t border-white/20"></div>
+            </div>
+            
+            <!-- Demo Credentials -->
+            <div class="text-center">
+                <p class="text-white/60 text-sm mb-3">Credenciales de demostración:</p>
+                <div class="bg-white/10 rounded-lg p-3 text-xs text-white/80 font-mono">
+                    <div>Email: test@eleven.com</div>
+                    <div>Contraseña: test123</div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Footer -->
+        <div class="text-center mt-6 text-white/60 text-sm">
+            <p>¿No tienes cuenta? <a href="#" class="text-white hover:underline">Contacta al administrador</a></p>
+        </div>
+        
+    </div>
+    
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p class="text-gray-700 font-medium">Iniciando sesión...</p>
+        </div>
+    </div>
+    
+    <!-- Success/Error Messages -->
+    <div id="messageContainer" class="fixed top-4 right-4 z-50 hidden">
+        <div id="messageContent" class="rounded-lg p-4 shadow-lg max-w-sm">
+            <div class="flex items-center">
+                <i id="messageIcon" class="mr-3 text-lg"></i>
+                <span id="messageText"></span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Toggle Password Visibility
+        document.getElementById('togglePassword').addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            const icon = this.querySelector('i');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                passwordInput.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        });
+        
+        // Login Form Handler
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) {
+                showMessage('Por favor completa todos los campos', 'error');
+                return;
+            }
+            
+            // Show loading
+            showLoading(true);
+            
+            try {
+                const response = await fetch('/support/auth/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('¡Inicio de sesión exitoso! Redirigiendo...', 'success');
+                    
+                    // Redirect to chat interface
+                    setTimeout(() => {
+                        window.location.href = '/support/auth/chat/';
+                    }, 1500);
+                    
+                } else {
+                    showMessage(data.error || 'Error de autenticación', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Error de conexión. Inténtalo de nuevo.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+        
+        // Utility Functions
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) {
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+            } else {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+        
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            const content = document.getElementById('messageContent');
+            const icon = document.getElementById('messageIcon');
+            const text = document.getElementById('messageText');
+            
+            // Set message content
+            text.textContent = message;
+            
+            // Set styling based on type
+            if (type === 'success') {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-green-500 text-white';
+                icon.className = 'fas fa-check-circle mr-3 text-lg';
+            } else {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-red-500 text-white';
+                icon.className = 'fas fa-exclamation-circle mr-3 text-lg';
+            }
+            
+            // Show message
+            container.classList.remove('hidden');
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                container.classList.add('hidden');
+            }, 5000);
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Auto-fill demo credentials for testing
+        document.addEventListener('DOMContentLoaded', function() {
+            // Uncomment the following lines to auto-fill demo credentials
+            // document.getElementById('username').value = 'test@eleven.com';
+            // document.getElementById('password').value = 'test123';
+        });
+    </script>
+    
+</body>
+</html>

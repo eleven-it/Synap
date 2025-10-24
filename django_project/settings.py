@@ -7,8 +7,8 @@ import os
 from decouple import config, Csv
 from pathlib import Path
 
-DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
-ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
+DEBUG = config('DEBUG', default=False, cast=bool)
+ENVIRONMENT = config('ENVIRONMENT', default='production')
 
 # Base Directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -127,11 +127,11 @@ TEMPLATES = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB', 'mydatabase'),
-        'USER': os.getenv('POSTGRES_USER', 'myuser'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'mypassword'),
-        'HOST': os.getenv('POSTGRES_HOST', 'db'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        'NAME': config('POSTGRES_DB', default='mydatabase'),
+        'USER': config('POSTGRES_USER', default='myuser'),
+        'PASSWORD': config('POSTGRES_PASSWORD', default='mypassword'),
+        'HOST': config('POSTGRES_HOST', default='db'),
+        'PORT': config('POSTGRES_PORT', default='5432'),
     },
     'mysql': {
         'ENGINE': 'django.db.backends.mysql',
@@ -193,16 +193,16 @@ LOGIN_URL = '/login/'
 
 # Firebase
 FIREBASE_CONFIG = {
-    "apiKey": os.getenv("FIREBASE_API_KEY"),
-    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
-    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
-    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
-    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
-    "appId": os.getenv("FIREBASE_APP_ID"),
-    "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
-    "clientId": os.getenv("FIREBASE_CLIENT_ID"),  
+    "apiKey": config("FIREBASE_API_KEY", default=""),
+    "authDomain": config("FIREBASE_AUTH_DOMAIN", default=""),
+    "projectId": config("FIREBASE_PROJECT_ID", default=""),
+    "storageBucket": config("FIREBASE_STORAGE_BUCKET", default=""),
+    "messagingSenderId": config("FIREBASE_MESSAGING_SENDER_ID", default=""),
+    "appId": config("FIREBASE_APP_ID", default=""),
+    "measurementId": config("FIREBASE_MEASUREMENT_ID", default=""),
+    "clientId": config("FIREBASE_CLIENT_ID", default=""),  
 }
-FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH")
+FIREBASE_CREDENTIALS_PATH = config("FIREBASE_CREDENTIALS_PATH", default="")
 
 # Django REST Framework
 REST_FRAMEWORK = {
@@ -263,15 +263,15 @@ TIENDANUBE_SYNC_INTERVAL = config('TIENDANUBE_SYNC_INTERVAL', default=30, cast=i
 # API Keys para integraciones
 # Esta clave debe definirse en variables de entorno tanto en Django como en n8n
 # para la autenticación del endpoint de ingesta de datos financieros
-INGEST_API_KEY = os.getenv('INGEST_API_KEY', 'posdif9834usidf@iiu$@&ujsid')
+INGEST_API_KEY = config('INGEST_API_KEY', default='posdif9834usidf@iiu$@&ujsid')
 
 # Configuración de n8n
 # URL del webhook de n8n para el agente IA de SQL chat
 # Este valor debe apuntar al endpoint público del workflow de n8n que implementará el agente IA
-N8N_SQL_CHAT_WEBHOOK = os.getenv('N8N_SQL_CHAT_WEBHOOK', '')
+N8N_SQL_CHAT_WEBHOOK = config('N8N_SQL_CHAT_WEBHOOK', default='')
 
 # Configuración para el chat SQL de IA
-FINANCE_MAX_ROWS = int(os.getenv('FINANCE_MAX_ROWS', '200'))
+FINANCE_MAX_ROWS = config('FINANCE_MAX_ROWS', default=200, cast=int)
 
 # Configuración de caché para TiendaNube
 CACHES = {
@@ -280,6 +280,9 @@ CACHES = {
         'LOCATION': config('REDIS_URL', default='redis://redis:6379/0'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'decode_responses': False,  # Importante para datos serializados
+            }
         }
     }
 }
@@ -302,7 +305,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # URL base pública del sitio (para imágenes, enlaces externos, etc.)
-SITE_URL = os.getenv('SITE_URL', 'https://tudominio.com')
+SITE_URL = config('SITE_URL', default='https://synap.administranet.com.ar')
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "tailwind"
 CRISPY_TEMPLATE_PACK = "tailwind"
@@ -316,7 +319,7 @@ if DEBUG or ENVIRONMENT == 'development':
     STATIC_URL = '/static/'
     MEDIA_URL = '/media/'
 else:
-    CLOUDFLARE_DOMAIN = os.getenv('CLOUDFLARE_DOMAIN', 'synap.administranet.com.ar')
+    CLOUDFLARE_DOMAIN = config('CLOUDFLARE_DOMAIN', default='synap.administranet.com.ar')
     STATIC_URL = f'https://{CLOUDFLARE_DOMAIN}/static/'
     MEDIA_URL = f'https://{CLOUDFLARE_DOMAIN}/media/'
 

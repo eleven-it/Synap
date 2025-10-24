@@ -97,29 +97,42 @@
                         </div>
                     </div>
                     
-                    <!-- TiendaNube Integration Settings -->
+                    <!-- Tiendanube Integration Settings -->
                     <div>
                         <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4 flex items-center">
-                            <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">store</span>
-                            {% trans "TiendaNube Integration" %}
+                            <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">store</span>
+                            {% trans "Tiendanube Integration Settings" %}
                         </h4>
-                        <div class="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                {{ form.deposito_tiendanube_choice|as_crispy_field }}
+                            </div>
+                            <div>
+                                {{ form.punto_venta_tiendanube_choice|as_crispy_field }}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                {{ form.viajante_tiendanube_choice|as_crispy_field }}
+                            </div>
+                            <div style="display: none;">
+                                <!-- Campo oculto para sucursal (mantener compatibilidad) -->
+                                {{ form.sucursal_tiendanube_id|as_crispy_field }}
+                            </div>
+                        </div>
+                        <div class="mt-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-700">
                             <div class="flex items-start">
-                                <span class="material-icons text-blue-600 dark:text-blue-400 mr-3 mt-0.5">info</span>
-                                <div class="text-xs text-blue-800 dark:text-blue-200">
-                                    <p class="font-medium mb-1">{% trans "Stock Management by Warehouse" %}</p>
-                                    <p>{% trans "Select the warehouse in AdministraNET that will be synchronized with TiendaNube. The stock of this warehouse will be displayed in your online store." %}</p>
+                                <span class="material-icons text-orange-600 dark:text-orange-400 mr-2 mt-0.5">info</span>
+                                <div class="text-sm text-orange-800 dark:text-orange-200">
+                                    <p class="font-medium mb-1">{% trans "Integration Settings" %}</p>
+                                    <ul class="list-disc list-inside space-y-1 text-xs">
+                                        <li>{% trans "Depósito: Used for product synchronization" %}</li>
+                                        <li>{% trans "Punto de Venta: Used for order numbering (e.g., 0004-00001637)" %}</li>
+                                        <li>{% trans "Vendedor: Assigned to Tiendanube orders" %}</li>
+                                        <li>{% trans "Sucursal: Legacy field for compatibility" %}</li>
+                                    </ul>
                                 </div>
                             </div>
-                        </div>
-                        <div class="grid grid-cols-1 gap-4">
-                            <div>
-                                {{ form.deposito_tiendanube_id|as_crispy_field }}
-                            </div>
-                        </div>
-                        <div class="mt-3 text-xs text-gray-600 dark:text-gray-400 flex items-center">
-                            <span class="material-icons text-xs mr-1">lightbulb</span>
-                            {% trans "Tip: You can create a warehouse called 'TiendaNube' in AdministraNET exclusively for your online store." %}
                         </div>
                     </div>
                     

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Menu Alignment</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f9fbfd;
+            padding: 40px;
+        }
+        
+        .app-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px !important;
+            margin-bottom: 20px;
+            border: 1px solid #f1f5f9;
+            max-width: 300px;
+        }
+        
+        .app-card > h3 {
+            padding: 0 !important;
+            margin: 0 0 12px 0 !important;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .app-card > div {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .app-card .app-menu-item {
+            display: flex !important;
+            align-items: center !important;
+            padding: 8px 0px !important;
+            margin: 0 !important;
+            color: #475569;
+            font-size: 14px;
+            text-decoration: none;
+        }
+        
+        .app-card .app-menu-item .material-icons {
+            margin-right: 8px !important;
+            margin-left: 0 !important;
+            font-size: 18px;
+        }
+        
+        .test-line {
+            border-left: 2px solid red;
+            position: absolute;
+            left: 16px;
+            top: 0;
+            bottom: 0;
+            width: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Alineación del Menú</h1>
+    <p>La línea roja indica donde deberían alinearse todos los elementos</p>
+    
+    <div class="app-card" style="position: relative;">
+        <div class="test-line"></div>
+        <h3>PANEL PRINCIPAL</h3>
+        <div>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">dashboard</span>
+                Panel Principal
+            </a>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">monitor_heart</span>
+                Status
+            </a>
+        </div>
+    </div>
+    
+    <div class="app-card" style="position: relative;">
+        <div class="test-line"></div>
+        <h3>CONFIGURACIÓN</h3>
+        <div>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">cloud</span>
+                Tiendanube Settings
+            </a>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">database</span>
+                AdministraNET Settings
+            </a>
+        </div>
+    </div>
+    
+    <div class="app-card" style="position: relative;">
+        <div class="test-line"></div>
+        <h3>WEBHOOKS</h3>
+        <div>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">zap</span>
+                Webhook Configurations
+            </a>
+            <a href="#" class="app-menu-item">
+                <span class="material-icons">activity</span>
+                Webhook Events
+            </a>
+        </div>
+    </div>
+    
+    <div style="margin-top: 40px; padding: 20px; background: #fff3cd; border-radius: 8px;">
+        <h3 style="margin-top: 0;">Instrucciones:</h3>
+        <ol>
+            <li>Abre este archivo en tu navegador</li>
+            <li>Verifica que todos los títulos y textos estén alineados con la línea roja</li>
+            <li>Si están alineados aquí pero no en la app, el problema es otro CSS externo</li>
+        </ol>
+    </div>
+</body>
+</html>
+

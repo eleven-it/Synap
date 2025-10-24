@@ -1,0 +1,514 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}Data Validation - TiendaNube AdministraNET{% endblock %}
+
+{% block extra_css %}
+<style>
+    .validation-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #667eea;
+        margin-bottom: 0.5rem;
+    }
+    
+    .stat-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 2rem;
+    }
+    
+    .btn-validation {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-validation:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+    
+    .btn-validation:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .btn-sync {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    
+    .btn-fix {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+    
+    .results-section {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        margin-top: 2rem;
+    }
+    
+    .inconsistency-item {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .inconsistency-item.error {
+        background: #fef2f2;
+        border-color: #fecaca;
+    }
+    
+    .inconsistency-item.warning {
+        background: #fffbeb;
+        border-color: #fed7aa;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .alert-success {
+        background: #d1fae5;
+        border: 1px solid #a7f3d0;
+        color: #065f46;
+    }
+    
+    .alert-error {
+        background: #fee2e2;
+        border: 1px solid #fca5a5;
+        color: #991b1b;
+    }
+    
+    .alert-warning {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        color: #92400e;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Data Validation</h1>
+            <p class="text-muted">Validate and fix data consistency between TiendaNube and AdministraNET</p>
+        </div>
+        <div>
+            <a href="{% url 'tiendanube_administranet:customer_mapping_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Customers
+            </a>
+        </div>
+    </div>
+
+    <!-- Configuration Status -->
+    {% if not stats.has_configs %}
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Configuration Required:</strong> Please configure TiendaNube and AdministraNET connections before running validation.
+        <a href="{% url 'tiendanube_administranet:config_tiendanube' %}" class="btn btn-sm btn-warning ms-2">Configure Now</a>
+    </div>
+    {% endif %}
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total_mappings }}</div>
+            <div class="stat-label">Total Mappings</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="inconsistencies-count">-</div>
+            <div class="stat-label">Inconsistencies</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="last-validation">-</div>
+            <div class="stat-label">Last Validation</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="sync-status">-</div>
+            <div class="stat-label">Sync Status</div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <button class="btn-validation" id="validate-btn" {% if not stats.has_configs %}disabled{% endif %}>
+            <i class="fas fa-search me-2"></i>
+            <span class="btn-text">Validate Data</span>
+            <div class="loading-spinner" style="display: none;"></div>
+        </button>
+        
+        <button class="btn-validation btn-sync" id="sync-btn" {% if not stats.has_configs %}disabled{% endif %}>
+            <i class="fas fa-sync me-2"></i>
+            <span class="btn-text">Sync Updates</span>
+            <div class="loading-spinner" style="display: none;"></div>
+        </button>
+        
+        <button class="btn-validation btn-fix" id="fix-btn" disabled>
+            <i class="fas fa-wrench me-2"></i>
+            <span class="btn-text">Fix Inconsistencies</span>
+            <div class="loading-spinner" style="display: none;"></div>
+        </button>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results-section" id="results-section" style="display: none;">
+        <h5 class="mb-3">Validation Results</h5>
+        <div id="results-content"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const validateBtn = document.getElementById('validate-btn');
+    const syncBtn = document.getElementById('sync-btn');
+    const fixBtn = document.getElementById('fix-btn');
+    const resultsSection = document.getElementById('results-section');
+    const resultsContent = document.getElementById('results-content');
+    
+    let currentInconsistencies = [];
+    
+    // Validate Data
+    validateBtn.addEventListener('click', function() {
+        if (validateBtn.disabled) return;
+        
+        setLoading(validateBtn, true);
+        resultsSection.style.display = 'block';
+        resultsContent.innerHTML = '<div class="text-center"><div class="loading-spinner"></div><p class="mt-2">Validating data consistency...</p></div>';
+        
+        fetch('{% url "tiendanube_administranet:validate_data_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            setLoading(validateBtn, false);
+            
+            if (data.success) {
+                currentInconsistencies = data.inconsistencies || [];
+                displayValidationResults(data);
+                updateStats(data);
+                
+                if (data.inconsistencies && data.inconsistencies.length > 0) {
+                    fixBtn.disabled = false;
+                }
+            } else {
+                showAlert('error', 'Validation Error', data.message);
+            }
+        })
+        .catch(error => {
+            setLoading(validateBtn, false);
+            showAlert('error', 'Validation Error', 'An error occurred during validation');
+            console.error('Validation error:', error);
+        });
+    });
+    
+    // Sync Updates
+    syncBtn.addEventListener('click', function() {
+        if (syncBtn.disabled) return;
+        
+        setLoading(syncBtn, true);
+        resultsSection.style.display = 'block';
+        resultsContent.innerHTML = '<div class="text-center"><div class="loading-spinner"></div><p class="mt-2">Syncing customer updates...</p></div>';
+        
+        fetch('{% url "tiendanube_administranet:sync_updates_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                hours_back: 24
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            setLoading(syncBtn, false);
+            
+            if (data.success) {
+                displaySyncResults(data);
+                showAlert('success', 'Sync Completed', data.message);
+            } else {
+                showAlert('error', 'Sync Error', data.message);
+            }
+        })
+        .catch(error => {
+            setLoading(syncBtn, false);
+            showAlert('error', 'Sync Error', 'An error occurred during sync');
+            console.error('Sync error:', error);
+        });
+    });
+    
+    // Fix Inconsistencies
+    fixBtn.addEventListener('click', function() {
+        if (fixBtn.disabled || currentInconsistencies.length === 0) return;
+        
+        setLoading(fixBtn, true);
+        resultsSection.style.display = 'block';
+        resultsContent.innerHTML = '<div class="text-center"><div class="loading-spinner"></div><p class="mt-2">Fixing inconsistencies...</p></div>';
+        
+        fetch('{% url "tiendanube_administranet:fix_inconsistencies_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                inconsistencies: currentInconsistencies,
+                prefer_tiendanube: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            setLoading(fixBtn, false);
+            
+            if (data.success) {
+                displayFixResults(data);
+                showAlert('success', 'Fix Completed', data.message);
+                fixBtn.disabled = true;
+                currentInconsistencies = [];
+            } else {
+                showAlert('error', 'Fix Error', data.message);
+            }
+        })
+        .catch(error => {
+            setLoading(fixBtn, false);
+            showAlert('error', 'Fix Error', 'An error occurred during fix');
+            console.error('Fix error:', error);
+        });
+    });
+    
+    function setLoading(button, loading) {
+        const spinner = button.querySelector('.loading-spinner');
+        const text = button.querySelector('.btn-text');
+        
+        if (loading) {
+            button.disabled = true;
+            spinner.style.display = 'inline-block';
+            text.style.display = 'none';
+        } else {
+            button.disabled = false;
+            spinner.style.display = 'none';
+            text.style.display = 'inline';
+        }
+    }
+    
+    function displayValidationResults(data) {
+        let html = `
+            <div class="alert alert-${data.inconsistency_count > 0 ? 'warning' : 'success'}">
+                <h6><i class="fas fa-${data.inconsistency_count > 0 ? 'exclamation-triangle' : 'check-circle'} me-2"></i>
+                Validation Results</h6>
+                <p class="mb-0">${data.message}</p>
+            </div>
+        `;
+        
+        if (data.inconsistencies && data.inconsistencies.length > 0) {
+            html += '<h6>Inconsistencies Found:</h6>';
+            data.inconsistencies.forEach((inconsistency, index) => {
+                html += `
+                    <div class="inconsistency-item ${inconsistency.issue ? 'error' : 'warning'}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <strong>Customer ${inconsistency.tiendanube_id}</strong>
+                                <small class="text-muted d-block">Adminet Code: ${inconsistency.adminet_codigo}</small>
+                            </div>
+                            <span class="badge bg-${inconsistency.issue ? 'danger' : 'warning'}">
+                                ${inconsistency.issue ? 'Error' : 'Inconsistency'}
+                            </span>
+                        </div>
+                `;
+                
+                if (inconsistency.inconsistencies) {
+                    html += '<div class="mt-2"><small>Field differences:</small><ul class="mb-0">';
+                    inconsistency.inconsistencies.forEach(field => {
+                        html += `<li><strong>${field.field}:</strong> TiendaNube="${field.tiendanube}" vs Adminet="${field.adminet}"</li>`;
+                    });
+                    html += '</ul></div>';
+                } else if (inconsistency.issue) {
+                    html += `<div class="mt-2"><small class="text-danger">${inconsistency.issue}</small></div>`;
+                }
+                
+                html += '</div>';
+            });
+        }
+        
+        resultsContent.innerHTML = html;
+    }
+    
+    function displaySyncResults(data) {
+        let html = `
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle me-2"></i>Sync Results</h6>
+                <p class="mb-0">${data.message}</p>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number">${data.total_processed || 0}</div>
+                        <div class="stat-label">Total Processed</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-success">${data.successful || 0}</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-warning">${data.skipped || 0}</div>
+                        <div class="stat-label">Skipped</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-card">
+                        <div class="stat-number text-danger">${data.failed || 0}</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        resultsContent.innerHTML = html;
+    }
+    
+    function displayFixResults(data) {
+        let html = `
+            <div class="alert alert-success">
+                <h6><i class="fas fa-check-circle me-2"></i>Fix Results</h6>
+                <p class="mb-0">${data.message}</p>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-number text-success">${data.fixed_count || 0}</div>
+                        <div class="stat-label">Fixed</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-number text-danger">${data.failed_count || 0}</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (data.errors && data.errors.length > 0) {
+            html += '<h6>Errors:</h6><ul>';
+            data.errors.forEach(error => {
+                html += `<li class="text-danger">${error}</li>`;
+            });
+            html += '</ul>';
+        }
+        
+        resultsContent.innerHTML = html;
+    }
+    
+    function updateStats(data) {
+        document.getElementById('inconsistencies-count').textContent = data.inconsistency_count || 0;
+        document.getElementById('last-validation').textContent = 'Now';
+    }
+    
+    function showAlert(type, title, message) {
+        const alertClass = type === 'error' ? 'alert-error' : type === 'warning' ? 'alert-warning' : 'alert-success';
+        const icon = type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'check-circle';
+        
+        const alert = document.createElement('div');
+        alert.className = `alert ${alertClass}`;
+        alert.innerHTML = `
+            <i class="fas fa-${icon} me-2"></i>
+            <strong>${title}:</strong> ${message}
+        `;
+        
+        // Insert at the top of the content
+        const container = document.querySelector('.container-fluid');
+        container.insertBefore(alert, container.firstChild);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (alert.parentNode) {
+                alert.parentNode.removeChild(alert);
+            }
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}
+
+

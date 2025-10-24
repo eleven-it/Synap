@@ -5,9 +5,14 @@ Vistas principales para la integración Tiendanube-AdministraNET.
 import logging
 import requests
 import uuid
+import json
 from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.db.models import Q
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.auth.decorators import login_required, permission_required
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView, RedirectView, View
 from django.views.generic.edit import FormView
 from django.urls import reverse_lazy, reverse
@@ -131,143 +136,135 @@ class DashboardView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
 
 class CustomerMappingListView(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     """
-    Vista para listar mapeos de clientes con filtros avanzados.
+    Vista para listar mapeos de clientes con datos reales de AdministraNET.
     """
     model = CustomerMapping
     template_name = 'tiendanube_administranet/customer_mapping_list.html'
-    context_object_name = 'mappings'
+    context_object_name = 'page_obj'
     permission_required = 'tiendanube_administranet.view_customermapping'
-    paginate_by = 50
+    paginate_by = 20
     
     def get_queryset(self):
-        queryset = CustomerMapping.objects.all()
-        
-        # Aplicar filtros del formulario
-        form = CustomerMappingFilterForm(self.request.GET)
-        if form.is_valid():
-            # Filtro de búsqueda
-            search = form.cleaned_data.get('search')
+        """
+        Obtiene solo mapeos reales de clientes que existen tanto en TiendaNube como en AdministraNET.
+        """
+        try:
+            # Solo mostrar mapeos reales que tienen tanto TiendaNube ID como AdministraNET código
+            queryset = CustomerMapping.objects.filter(
+                tiendanube_id__isnull=False,
+                adminet_codigo__isnull=False,
+                adminet_codigo__gt=0
+            ).order_by('-last_synced', '-created_at')
+            
+            # Aplicar filtros de búsqueda
+            search = self.request.GET.get('search', '')
             if search:
                 queryset = queryset.filter(
                     Q(tiendanube_email__icontains=search) |
-                    Q(tiendanube_name__icontains=search) |
                     Q(tiendanube_first_name__icontains=search) |
                     Q(tiendanube_last_name__icontains=search) |
-                    Q(tiendanube_document__icontains=search) |
-                    Q(adminet_nombre__icontains=search) |
-                    Q(adminet_documento__icontains=search)
+                    Q(adminet_codigo__icontains=search) |
+                    Q(adminet_nombre__icontains=search)
                 )
             
-            # Filtros de estado
-            sync_status = form.cleaned_data.get('sync_status')
-            if sync_status:
-                queryset = queryset.filter(sync_status=sync_status)
+            # Aplicar filtro de estado
+            status = self.request.GET.get('status', '')
+            if status:
+                queryset = queryset.filter(sync_status=status)
             
-            sync_direction = form.cleaned_data.get('sync_direction')
-            if sync_direction:
-                queryset = queryset.filter(sync_direction=sync_direction)
-            
-            sync_enabled = form.cleaned_data.get('sync_enabled')
+            # Aplicar filtro de sincronización
+            sync_enabled = self.request.GET.get('sync_enabled', '')
             if sync_enabled:
-                enabled = sync_enabled == 'true'
-                queryset = queryset.filter(sync_enabled=enabled)
+                queryset = queryset.filter(sync_enabled=sync_enabled == 'true')
             
-            # Filtros de Tiendanube
-            verified_email = form.cleaned_data.get('tiendanube_verified_email')
-            if verified_email:
-                verified = verified_email == 'true'
-                queryset = queryset.filter(tiendanube_verified_email=verified)
-            
-            accepts_marketing = form.cleaned_data.get('tiendanube_accepts_marketing')
-            if accepts_marketing:
-                marketing = accepts_marketing == 'true'
-                queryset = queryset.filter(tiendanube_accepts_marketing=marketing)
-            
-            has_orders = form.cleaned_data.get('tiendanube_has_orders')
-            if has_orders:
-                if has_orders == 'true':
-                    queryset = queryset.filter(tiendanube_orders_count__gt=0)
-                else:
-                    queryset = queryset.filter(tiendanube_orders_count=0)
-            
-            country = form.cleaned_data.get('tiendanube_country')
-            if country:
-                queryset = queryset.filter(tiendanube_country__icontains=country)
-            
-            city = form.cleaned_data.get('tiendanube_city')
-            if city:
-                queryset = queryset.filter(tiendanube_city__icontains=city)
-            
-            # Filtros de fecha
-            created_from = form.cleaned_data.get('created_date_from')
-            if created_from:
-                queryset = queryset.filter(created_at__date__gte=created_from)
-            
-            created_to = form.cleaned_data.get('created_date_to')
-            if created_to:
-                queryset = queryset.filter(created_at__date__lte=created_to)
-            
-            synced_from = form.cleaned_data.get('last_synced_from')
-            if synced_from:
-                queryset = queryset.filter(last_synced__date__gte=synced_from)
-            
-            synced_to = form.cleaned_data.get('last_synced_to')
-            if synced_to:
-                queryset = queryset.filter(last_synced__date__lte=synced_to)
-            
-            # Filtros de rango
-            spent_min = form.cleaned_data.get('total_spent_min')
-            if spent_min is not None:
-                queryset = queryset.filter(tiendanube_total_spent__gte=spent_min)
-            
-            spent_max = form.cleaned_data.get('total_spent_max')
-            if spent_max is not None:
-                queryset = queryset.filter(tiendanube_total_spent__lte=spent_max)
-            
-            orders_min = form.cleaned_data.get('orders_count_min')
-            if orders_min is not None:
-                queryset = queryset.filter(tiendanube_orders_count__gte=orders_min)
-            
-            orders_max = form.cleaned_data.get('orders_count_max')
-            if orders_max is not None:
-                queryset = queryset.filter(tiendanube_orders_count__lte=orders_max)
-        
-        return queryset.order_by('-created_at')
+            return queryset
+                
+        except Exception as e:
+            logger.error(f"Error obteniendo mapeos de clientes: {str(e)}")
+            # Fallback a datos existentes
+            return CustomerMapping.objects.filter(
+                tiendanube_id__isnull=False,
+                adminet_codigo__isnull=False,
+                adminet_codigo__gt=0
+            ).order_by('-last_synced', '-created_at')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Formulario de filtros
-        context['filter_form'] = CustomerMappingFilterForm(self.request.GET)
+        # Parámetros de búsqueda
+        context['search'] = self.request.GET.get('search', '')
+        context['status'] = self.request.GET.get('status', '')
+        context['sync_enabled'] = self.request.GET.get('sync_enabled', '')
         
-        # Estadísticas
+        # Estadísticas básicas
         queryset = self.get_queryset()
-        context['total_mappings'] = CustomerMapping.objects.count()
-        context['filtered_mappings'] = queryset.count()
-        context['synced_mappings'] = CustomerMapping.objects.filter(sync_status='synced').count()
-        context['pending_mappings'] = CustomerMapping.objects.filter(sync_status='pending').count()
-        context['error_mappings'] = CustomerMapping.objects.filter(sync_status='error').count()
         
-        # Estadísticas adicionales
-        context['verified_customers'] = CustomerMapping.objects.filter(tiendanube_verified_email=True).count()
-        context['marketing_customers'] = CustomerMapping.objects.filter(tiendanube_accepts_marketing=True).count()
-        context['customers_with_orders'] = CustomerMapping.objects.filter(tiendanube_orders_count__gt=0).count()
+        # Manejar tanto QuerySet como lista
+        if hasattr(queryset, 'filter') and hasattr(queryset, 'model'):
+            # Es un QuerySet
+            total = queryset.count()
+            synced = queryset.filter(sync_status=CustomerMapping.SyncStatus.SYNCED).count()
+            pending = queryset.filter(sync_status=CustomerMapping.SyncStatus.PENDING).count()
+            error = queryset.filter(sync_status=CustomerMapping.SyncStatus.ERROR).count()
+        else:
+            # Es una lista
+            total = len(queryset)
+            synced = len([c for c in queryset if c.sync_status == CustomerMapping.SyncStatus.SYNCED])
+            pending = len([c for c in queryset if c.sync_status == CustomerMapping.SyncStatus.PENDING])
+            error = len([c for c in queryset if c.sync_status == CustomerMapping.SyncStatus.ERROR])
         
-        # Top clientes por gasto
-        context['top_customers'] = CustomerMapping.objects.filter(
-            tiendanube_total_spent__gt=0
-        ).order_by('-tiendanube_total_spent')[:5]
-        
-        # Distribución por país
-        context['country_distribution'] = CustomerMapping.objects.exclude(
-            tiendanube_country__isnull=True
-        ).exclude(
-            tiendanube_country=''
-        ).values('tiendanube_country').annotate(
-            count=Count('id')
-        ).order_by('-count')[:10]
+        context['stats'] = {
+            'total': total,
+            'synced': synced,
+            'pending': pending,
+            'error': error,
+        }
         
         return context
+
+
+class SyncCustomersView(LoginRequiredMixin, View):
+    """
+    Vista para sincronizar clientes desde AdministraNET.
+    """
+    permission_required = 'tiendanube_administranet.add_customermapping'
+    
+    def post(self, request, *args, **kwargs):
+        """
+        Ejecuta la sincronización de clientes desde AdministraNET.
+        """
+        try:
+            import json
+            from ..services.customer_sync_service import CustomerSyncService
+            from ..models import AdministraNETConfig
+            
+            # Obtener parámetros del request
+            data = json.loads(request.body)
+            limit = data.get('limit', 100)
+            offset = data.get('offset', 0)
+            
+            # Obtener configuración de AdministraNET
+            adminet_config = AdministraNETConfig.objects.first()
+            if not adminet_config:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No hay configuración de AdministraNET'
+                })
+            
+            # Crear servicio de sincronización
+            sync_service = CustomerSyncService(adminet_config)
+            
+            # Ejecutar sincronización
+            result = sync_service.sync_customers_from_adminet(limit=limit, offset=offset)
+            
+            return JsonResponse(result)
+            
+        except Exception as e:
+            logger.error(f"Error en sincronización de clientes: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': f'Error en sincronización: {str(e)}'
+            })
 
 
 class CustomerMappingCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
@@ -333,9 +330,9 @@ class CustomerMappingDetailView(LoginRequiredMixin, PermissionRequiredMixin, Det
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Obtener logs relacionados
+        # Obtener logs relacionados de tipo customer
         context['related_logs'] = SyncLog.objects.filter(
-            mapping=self.object
+            sync_type=SyncLog.SyncType.CUSTOMER
         ).order_by('-started_at')[:10]
         
         return context
@@ -391,10 +388,21 @@ class SyncLogDetailView(LoginRequiredMixin, PermissionRequiredMixin, DetailView)
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Obtener estadísticas relacionadas
-        context['related_mappings'] = CustomerMapping.objects.filter(
-            sync_logs=self.object
-        )[:10]
+        # Obtener estadísticas relacionadas basadas en el tipo de sincronización
+        if self.object.sync_type == 'customer':
+            # Para logs de clientes, obtener mapeos recientes
+            context['related_mappings'] = CustomerMapping.objects.filter(
+                last_synced__gte=self.object.started_at
+            ).order_by('-last_synced')[:10]
+        elif self.object.sync_type == 'product':
+            # Para logs de productos, obtener mapeos recientes
+            from tiendanube_administranet.models import ProductMapping
+            context['related_mappings'] = ProductMapping.objects.filter(
+                last_synced__gte=self.object.started_at
+            ).order_by('-last_synced')[:10]
+        else:
+            # Para otros tipos, no mostrar mapeos relacionados
+            context['related_mappings'] = []
         
         return context
 
@@ -805,7 +813,7 @@ class ProductMappingDetailView(LoginRequiredMixin, PermissionRequiredMixin, Deta
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['sync_logs'] = SyncLog.objects.filter(
-            mapping=self.object
+            sync_type='product'
         ).order_by('-started_at')[:10]
         return context
 
@@ -910,7 +918,7 @@ class OrderMappingDetailView(LoginRequiredMixin, PermissionRequiredMixin, Detail
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['sync_logs'] = SyncLog.objects.filter(
-            mapping=self.object
+            sync_type='order'
         ).order_by('-started_at')[:10]
         return context
 
@@ -996,23 +1004,80 @@ class StatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
             tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
             context['tiendanube_configured'] = tiendanube_config is not None
             context['tiendanube_config'] = tiendanube_config
-        except:
+            
+            # Probar conexión a Tiendanube
+            if tiendanube_config:
+                try:
+                    from .services.tiendanube_service import TiendanubeService
+                    tiendanube_service = TiendanubeService(tiendanube_config)
+                    connection_test = tiendanube_service.test_connection()
+                    context['tiendanube_connection_status'] = connection_test.get('success', False)
+                    context['tiendanube_connection_message'] = connection_test.get('message', '')
+                except Exception as e:
+                    context['tiendanube_connection_status'] = False
+                    context['tiendanube_connection_message'] = str(e)
+            else:
+                context['tiendanube_connection_status'] = False
+                context['tiendanube_connection_message'] = 'No configuration found'
+        except Exception as e:
             context['tiendanube_configured'] = False
+            context['tiendanube_connection_status'] = False
+            context['tiendanube_connection_message'] = str(e)
         
         try:
             adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
             context['adminet_configured'] = adminet_config is not None
             context['adminet_config'] = adminet_config
-        except:
+            
+            # Probar conexión a AdministraNET
+            if adminet_config:
+                try:
+                    from .services.adminet_service import AdministraNETService
+                    adminet_service = AdministraNETService(adminet_config)
+                    connection_test = adminet_service.test_connection()
+                    context['adminet_connection_status'] = connection_test.get('success', False)
+                    context['adminet_connection_message'] = connection_test.get('message', '')
+                except Exception as e:
+                    context['adminet_connection_status'] = False
+                    context['adminet_connection_message'] = str(e)
+            else:
+                context['adminet_connection_status'] = False
+                context['adminet_connection_message'] = 'No configuration found'
+        except Exception as e:
             context['adminet_configured'] = False
+            context['adminet_connection_status'] = False
+            context['adminet_connection_message'] = str(e)
         
         # Estadísticas de mapeos
         context['customer_mappings'] = CustomerMapping.objects.count()
         context['product_mappings'] = ProductMapping.objects.count()
         context['order_mappings'] = OrderMapping.objects.count()
         
+        # Estadísticas adicionales
+        context['total_products'] = ProductMapping.objects.count()
+        context['total_customers'] = CustomerMapping.objects.count()
+        context['total_orders'] = OrderMapping.objects.count()
+        
         # Últimos logs
         context['recent_logs'] = SyncLog.objects.all().order_by('-started_at')[:5]
+        
+        # Estadísticas de sincronización
+        context['successful_syncs'] = SyncLog.objects.filter(status='success').count()
+        context['failed_syncs'] = SyncLog.objects.filter(status='error').count()
+        context['pending_syncs'] = SyncLog.objects.filter(status='pending').count()
+        
+        # Última sincronización
+        last_sync = SyncLog.objects.filter(status='success').order_by('-started_at').first()
+        context['last_sync'] = last_sync
+        
+        # Webhooks
+        try:
+            from .models import WebhookEvent
+            context['total_webhook_events'] = WebhookEvent.objects.count()
+            context['recent_webhook_events'] = WebhookEvent.objects.order_by('-received_at')[:5]
+        except:
+            context['total_webhook_events'] = 0
+            context['recent_webhook_events'] = []
         
         return context
 
@@ -1154,6 +1219,13 @@ def trigger_sync_ajax(request):
                 'message': _('Invalid direction. Must be tiendanube or adminet')
             })
         
+        # Validar restricciones de sincronización
+        if sync_type == 'products' and direction == 'tiendanube':
+            return JsonResponse({
+                'success': False,
+                'message': _('Product synchronization from Tiendanube to AdministraNET is not allowed')
+            })
+        
         # Obtener configuraciones activas
         tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
         adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
@@ -1228,12 +1300,15 @@ def get_sync_history_ajax(request):
                 'status': log.status,
                 'started_at': log.started_at.isoformat() if log.started_at else None,
                 'completed_at': log.completed_at.isoformat() if log.completed_at else None,
-                'duration': str(log.duration) if log.duration else None,
-                'records_processed': log.records_processed,
-                'records_synced': log.records_synced,
+                'duration_seconds': log.duration_seconds,
+                'processed_items': log.processed_items,
+                'successful_items': log.successful_items,
+                'failed_items': log.failed_items,
+                'total_items': log.total_items,
                 'error_message': log.error_message,
                 'get_status_display': log.get_status_display(),
                 'get_direction_display': log.get_direction_display(),
+                'get_sync_type_display': log.get_sync_type_display(),
             })
         
         return JsonResponse({
@@ -1481,7 +1556,7 @@ class WebhookEventDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         
         # Logs de entrega del evento
-        context['delivery_logs'] = self.object.webhook_delivery_logs.order_by('-sent_at')
+        context['delivery_logs'] = self.object.delivery_logs.order_by('-sent_at')
         
         return context
 
@@ -1653,6 +1728,7 @@ def retry_webhook_event_ajax(request, event_id):
 # WEBHOOK ENDPOINT
 # =============================================================================
 
+@csrf_exempt
 def webhook_endpoint(request):
     """
     Endpoint para recibir webhooks de Tiendanube.
@@ -1692,8 +1768,24 @@ def webhook_endpoint(request):
             return JsonResponse({'error': 'Invalid JSON'}, status=400)
         
         # Procesar evento
-        from ..services.webhook_service import WebhookProcessor
-        result = WebhookProcessor.process_webhook_event(webhook_config, event_data, headers)
+        from ..services.webhook_processor import WebhookProcessor
+        from ..models import AdministraNETConfig
+        
+        # Obtener configuración de AdministraNET
+        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+        if not adminet_config:
+            return JsonResponse({'error': 'AdministraNET configuration not found'}, status=500)
+        
+        # Crear procesador de webhook
+        processor = WebhookProcessor(webhook_config.tiendanube_config, adminet_config)
+        
+        # Crear request mock para el procesador
+        from django.test import RequestFactory
+        factory = RequestFactory()
+        mock_request = factory.post('/webhook/', data=json.dumps(event_data), content_type='application/json')
+        mock_request.headers = headers
+        
+        result = processor.process_webhook(mock_request)
         
         if result['success']:
             return JsonResponse({'status': 'success'}, status=200)
@@ -2818,9 +2910,6 @@ class TiendanubeConfigCreateView(LoginRequiredMixin, PermissionRequiredMixin, Cr
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Agregar lista de warehouses disponibles
-        from inventory.models import Warehouse
-        context['warehouses'] = Warehouse.objects.filter(is_active=True)
         return context
 
     def form_valid(self, form):
@@ -2845,9 +2934,6 @@ class TiendanubeConfigUpdateView(LoginRequiredMixin, PermissionRequiredMixin, Up
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Agregar lista de warehouses disponibles
-        from inventory.models import Warehouse
-        context['warehouses'] = Warehouse.objects.filter(is_active=True)
         return context
 
     def form_valid(self, form):
@@ -2991,7 +3077,6 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             context['sync_interval'] = self.request.session.get('wizard_sync_interval', 30)
             context['sync_products'] = self.request.session.get('wizard_sync_products', True)
             context['sync_stock'] = self.request.session.get('wizard_sync_stock', True)
-            context['sync_variants'] = self.request.session.get('wizard_sync_variants', True)
             
             # Verificar que tenemos los datos necesarios para continuar
             access_token = self.request.session.get('wizard_access_token')
@@ -3021,7 +3106,6 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                         'sync_interval': self.request.session.get('wizard_sync_interval', 30),
                         'sync_products': self.request.session.get('wizard_sync_products', True),
                         'sync_stock': self.request.session.get('wizard_sync_stock', True),
-                        'sync_variants': self.request.session.get('wizard_sync_variants', True),
                     }
                     # Obtener datos de la tienda si están disponibles
             context['tienda_data'] = self.request.session.get('wizard_tienda_data')
@@ -3173,7 +3257,6 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
             request.session['wizard_sync_interval'] = int(request.POST.get('sync_interval', 30))
             request.session['wizard_sync_products'] = 'sync_products' in request.POST
             request.session['wizard_sync_stock'] = 'sync_stock' in request.POST
-            request.session['wizard_sync_variants'] = 'sync_variants' in request.POST
             return redirect(f"{reverse('tiendanube_administranet:tiendanube_config_wizard')}?step=6")
             
         elif step == 6:
@@ -3231,7 +3314,7 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
                         'wizard_app_id', 'wizard_client_secret', 'wizard_state', 
                         'wizard_access_token', 'wizard_user_id', 'wizard_auto_sync',
                         'wizard_sync_interval', 'wizard_sync_products', 'wizard_sync_stock',
-                        'wizard_sync_variants', 'wizard_scopes', 'wizard_tienda_data',
+                        'wizard_scopes', 'wizard_tienda_data',
                         'wizard_message', 'wizard_message_type'
                     ]
                     
@@ -3259,3 +3342,86 @@ class TiendanubeConfigWizardView(LoginRequiredMixin, PermissionRequiredMixin, Te
 import uuid
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
+
+# =============================================================================
+# IMPORTAR VISTAS DE WEBHOOKS
+# =============================================================================
+
+from .webhook_views import (
+    webhook_status,
+    configure_webhooks,
+    webhook_receiver,
+    webhook_events,
+    webhook_delivery_logs
+)
+
+from .validation_views import (
+    DataValidationView,
+    ValidateDataAjaxView,
+    FixInconsistenciesAjaxView,
+    SyncUpdatesAjaxView
+)
+
+# Vista de debug temporal
+class WebhookEventDebugView(LoginRequiredMixin, DetailView):
+    model = WebhookEvent
+    template_name = 'tiendanube_administranet/webhook_event_debug.html'
+    context_object_name = 'event'
+
+
+# =============================================================================
+# FUNCIONES AJAX PARA WEBHOOKS
+# =============================================================================
+
+@login_required
+@require_http_methods(["POST"])
+def toggle_webhook_ajax(request, webhook_id):
+    """
+    Activar/desactivar webhook en Tiendanube.
+    """
+    try:
+        # Obtener configuración de webhook
+        webhook_config = get_object_or_404(WebhookConfig, id=webhook_id)
+        
+        # Obtener configuración de Tiendanube
+        tiendanube_config = webhook_config.tiendanube_config
+        
+        if not tiendanube_config:
+            return JsonResponse({
+                'success': False,
+                'message': _('Tiendanube configuration not found')
+            })
+        
+        # Crear servicio de webhooks
+        from ..services.webhook_service import WebhookService
+        webhook_service = WebhookService(tiendanube_config)
+        
+        # Obtener estado actual del webhook
+        if webhook_config.webhook_id:
+            # Determinar el nuevo estado basado en el estado actual
+            current_status = webhook_config.status
+            new_status = 'inactive' if current_status == 'active' else 'active'
+            
+            # Por ahora, solo actualizar el estado local
+            # TODO: Implementar sincronización real con Tiendanube cuando la API lo permita
+            webhook_config.status = new_status
+            webhook_config.save()
+            
+            action = _('activated') if new_status == 'active' else _('deactivated')
+            return JsonResponse({
+                'success': True,
+                'message': _('Webhook {action} successfully (local only)').format(action=action),
+                'new_status': new_status
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': _('Webhook not configured in Tiendanube')
+            })
+            
+    except Exception as e:
+        logger.error(f"Error toggling webhook {webhook_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'message': _('Error toggling webhook: {error}').format(error=str(e))
+        })

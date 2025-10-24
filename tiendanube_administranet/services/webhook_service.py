@@ -24,10 +24,130 @@ class WebhookService:
         self.tiendanube_config = tiendanube_config
         self.base_url = tiendanube_config.api_url
         self.headers = {
-            'Authentication': f'token {tiendanube_config.access_token}',
+            'Authentication': f'bearer {tiendanube_config.access_token}',
             'Content-Type': 'application/json',
             'User-Agent': 'Synap-Tiendanube-Webhook/1.0'
         }
+    
+    def ensure_webhooks_configured(self) -> Dict[str, Any]:
+        """
+        Asegurar que los webhooks estén configurados automáticamente.
+        Se ejecuta la primera vez que se usa el sistema.
+        
+        Returns:
+            Dict con el resultado de la configuración
+        """
+        try:
+            logger.info("Verificando configuración automática de webhooks...")
+            
+            # Obtener webhooks existentes
+            existing_result = self.get_webhooks()
+            if not existing_result['success']:
+                return {
+                    'success': False,
+                    'message': f'Error obteniendo webhooks existentes: {existing_result.get("error")}'
+                }
+            
+            existing_webhooks = existing_result.get('webhooks', [])
+            existing_events = [wh.get('event') for wh in existing_webhooks]
+            
+            # Eventos requeridos
+            required_events = [
+                'order/created',
+                'order/paid',
+                'order/updated', 
+                'order/fulfilled',
+                'order/cancelled',
+                'customer/created',
+                'customer/updated'
+            ]
+            
+            # URL del webhook (construir desde la configuración)
+            webhook_url = self._get_webhook_url()
+            
+            created_webhooks = []
+            skipped_webhooks = []
+            
+            for event in required_events:
+                if event in existing_events:
+                    logger.info(f"Webhook {event} ya existe, omitiendo...")
+                    skipped_webhooks.append(event)
+                    continue
+                
+                # Crear webhook faltante
+                webhook_data = {
+                    'webhook_url': webhook_url,
+                    'events': [event],
+                    'description': f'Webhook automático para {event} - Synap AdministraNET'
+                }
+                
+                result = self.create_webhook(webhook_data)
+                if result['success']:
+                    logger.info(f"✅ Webhook {event} creado automáticamente")
+                    created_webhooks.append(event)
+                else:
+                    logger.error(f"❌ Error creando webhook {event}: {result.get('error')}")
+            
+            return {
+                'success': True,
+                'message': f'Configuración de webhooks completada',
+                'created': created_webhooks,
+                'skipped': skipped_webhooks,
+                'total_required': len(required_events),
+                'webhook_url': webhook_url
+            }
+            
+        except Exception as e:
+            logger.error(f"Error en configuración automática de webhooks: {e}")
+            return {
+                'success': False,
+                'message': f'Error configurando webhooks automáticamente: {str(e)}'
+            }
+    
+    def _get_webhook_url(self) -> str:
+        """
+        Construir la URL del webhook basada en la configuración.
+        
+        Returns:
+            URL completa del webhook
+        """
+        from django.conf import settings
+        
+        # Intentar obtener la URL base de la configuración
+        try:
+            # 1. Prioridad: TIENDANUBE_WEBHOOK_BASE_URL específico
+            if hasattr(settings, 'TIENDANUBE_WEBHOOK_BASE_URL'):
+                base_url = settings.TIENDANUBE_WEBHOOK_BASE_URL
+                logger.info(f"Usando TIENDANUBE_WEBHOOK_BASE_URL: {base_url}")
+            
+            # 2. Prioridad: SITE_URL del settings
+            elif hasattr(settings, 'SITE_URL') and settings.SITE_URL != 'https://tudominio.com':
+                base_url = settings.SITE_URL
+                logger.info(f"Usando SITE_URL: {base_url}")
+            
+            # 3. Fallback: Construir desde ALLOWED_HOSTS
+            else:
+                allowed_hosts = getattr(settings, 'ALLOWED_HOSTS', [])
+                if allowed_hosts and allowed_hosts[0] != '*':
+                    host = allowed_hosts[0]
+                    if not host.startswith('http'):
+                        base_url = f"https://{host}"
+                    else:
+                        base_url = host
+                    logger.info(f"Usando ALLOWED_HOSTS[0]: {base_url}")
+                else:
+                    # Fallback para desarrollo
+                    base_url = "https://synap.administranet.com.ar"
+                    logger.info(f"Usando fallback: {base_url}")
+            
+            webhook_url = f"{base_url}/tiendanube-adminet/webhook/"
+            logger.info(f"URL final del webhook: {webhook_url}")
+            return webhook_url
+            
+        except Exception as e:
+            logger.warning(f"Error construyendo URL del webhook: {e}")
+            # Fallback
+            return "https://synap.administranet.com.ar/tiendanube-adminet/webhook/"
     
     def create_webhook(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -40,16 +160,18 @@ class WebhookService:
             Dict con resultado de la operación
         """
         try:
-            url = f"{self.base_url}/stores/{self.tiendanube_config.store_id}/webhooks"
+            # Usar la API correcta según documentación oficial
+            url = f"https://api.tiendanube.com/2025-03/{self.tiendanube_config.store_id}/webhooks"
             
-            # Preparar datos del webhook
+            # Preparar datos del webhook (un evento por webhook según la API)
+            event = webhook_data.get('events', ['order/paid'])[0]  # Tomar el primer evento
+            
             webhook_payload = {
                 "url": webhook_data['webhook_url'],
-                "events": webhook_data.get('events', []),
-                "description": webhook_data.get('description', '')
+                "event": event
             }
             
-            logger.info(f"Creating webhook: {webhook_payload['url']}")
+            logger.info(f"Creating webhook for event {event}: {webhook_payload['url']}")
             response = requests.post(url, headers=self.headers, json=webhook_payload)
             
             if response.status_code in [200, 201]:
@@ -60,7 +182,8 @@ class WebhookService:
                     'success': True,
                     'webhook_id': webhook_response.get('id'),
                     'webhook_data': webhook_response,
-                    'message': 'Webhook created successfully'
+                    'event': event,
+                    'message': f'Webhook {event} created successfully'
                 }
             else:
                 error_msg = f"Error creating webhook: {response.status_code} - {response.text}"
@@ -87,7 +210,8 @@ class WebhookService:
             Dict con lista de webhooks
         """
         try:
-            url = f"{self.base_url}/stores/{self.tiendanube_config.store_id}/webhooks"
+            # Usar la API correcta según documentación oficial
+            url = f"https://api.tiendanube.com/2025-03/{self.tiendanube_config.store_id}/webhooks"
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 200:
@@ -199,6 +323,60 @@ class WebhookService:
                 
         except Exception as e:
             error_msg = f"Exception updating webhook {webhook_id}: {str(e)}"
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    def toggle_webhook_status(self, webhook_id: int, active: bool) -> Dict[str, Any]:
+        """
+        Activar/desactivar webhook en Tiendanube.
+        
+        Args:
+            webhook_id: ID del webhook
+            active: True para activar, False para desactivar
+            
+        Returns:
+            Dict con resultado de la operación
+        """
+        try:
+            # Obtener todos los webhooks para encontrar el correcto
+            webhooks_result = self.get_webhooks()
+            if not webhooks_result.get('success'):
+                return {
+                    'success': False,
+                    'message': f'Error getting webhooks: {webhooks_result.get("message")}'
+                }
+            
+            webhooks = webhooks_result.get('webhooks', [])
+            target_webhook = None
+            
+            # Buscar el webhook específico
+            for webhook in webhooks:
+                if webhook.get('id') == webhook_id:
+                    target_webhook = webhook
+                    break
+            
+            if not target_webhook:
+                return {
+                    'success': False,
+                    'message': f'Webhook {webhook_id} not found in Tiendanube'
+                }
+            
+            # Preparar datos para actualización
+            update_data = {
+                'webhook_url': target_webhook.get('url', ''),
+                'events': target_webhook.get('events', []),
+                'description': target_webhook.get('description', ''),
+                'active': active
+            }
+            
+            # Actualizar webhook
+            return self.update_webhook(webhook_id, update_data)
+            
+        except Exception as e:
+            error_msg = f"Exception toggling webhook {webhook_id}: {str(e)}"
             logger.error(error_msg)
             return {
                 'success': False,

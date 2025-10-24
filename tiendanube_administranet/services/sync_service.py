@@ -31,6 +31,66 @@ class TiendanubeAdministraNETSyncService:
         self.adminet_service = AdministraNETService(adminet_config)
         self.product_service = TiendanubeProductService(tiendanube_config)
         self.mapping_service = AutomaticMappingService(tiendanube_config, adminet_config)
+        
+        # Configurar webhooks automáticamente al inicializar
+        self._ensure_webhooks_configured()
+    
+    def _complete_sync_with_status(self, sync_log, successful_syncs, failed_syncs, total_items):
+        """
+        Completar sincronización con lógica de estado correcta.
+        
+        Args:
+            sync_log: Instancia del log de sincronización
+            successful_syncs: Número de items exitosos
+            failed_syncs: Número de items fallidos
+            total_items: Total de items procesados
+        """
+        sync_log.successful_items = successful_syncs
+        sync_log.failed_items = failed_syncs
+        
+        # Determinar si la sincronización fue exitosa
+        if failed_syncs == total_items and successful_syncs == 0:
+            # Todos los items fallaron
+            sync_log.complete_sync(False, f"Todos los {failed_syncs} items fallaron en la sincronización")
+        elif failed_syncs > 0:
+            # Sincronización parcial - marcar como completada pero con advertencia
+            sync_log.complete_sync(True)
+            sync_log.error_message = f"Sincronización parcial: {successful_syncs} exitosas, {failed_syncs} fallidas"
+            sync_log.save()
+        else:
+            # Sincronización completamente exitosa
+            sync_log.complete_sync(True)
+    
+    def _ensure_webhooks_configured(self):
+        """
+        Asegurar que los webhooks estén configurados automáticamente.
+        Se ejecuta la primera vez que se usa el sistema.
+        """
+        try:
+            from .webhook_auto_config import WebhookAutoConfig
+            
+            webhook_config = WebhookAutoConfig(self.tiendanube_config)
+            result = webhook_config.configure_all_webhooks()
+            
+            if result['success']:
+                created = result.get('created', [])
+                skipped = result.get('skipped', [])
+                failed = result.get('failed', [])
+                
+                if created:
+                    logger.info(f"✅ Webhooks creados automáticamente: {', '.join(created)}")
+                if skipped:
+                    logger.info(f"ℹ️  Webhooks ya existían: {', '.join(skipped)}")
+                if failed:
+                    logger.warning(f"⚠️  Webhooks fallidos: {len(failed)}")
+                
+                logger.info(f"🔗 URL base del webhook: {result.get('webhook_base_url')}")
+                logger.info(f"📊 Total: {result.get('total_created')} creados, {result.get('total_skipped')} omitidos, {result.get('total_failed')} fallidos")
+            else:
+                logger.warning(f"⚠️  No se pudieron configurar webhooks automáticamente: {result.get('message')}")
+                
+        except Exception as e:
+            logger.warning(f"⚠️  Error configurando webhooks automáticamente: {e}")
     
     def map_adminet_estado_to_tiendanube(self, estado: str, anulado: str) -> Dict[str, str]:
         """
@@ -140,9 +200,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.save()
             
             # Completar sincronización
-            sync_log.successful_items = successful_syncs
-            sync_log.failed_items = failed_syncs
-            sync_log.complete_sync(True)
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
             
             return {
                 'success': True,
@@ -162,6 +220,104 @@ class TiendanubeAdministraNETSyncService:
                 'message': f'Error en sincronización: {str(e)}'
             }
     
+    def sync_customers_from_tiendanube(self) -> Dict[str, Any]:
+        """Sincronizar clientes desde TiendaNube hacia AdministraNET."""
+        try:
+            # Crear log de sincronización
+            sync_log = SyncLog.objects.create(
+                sync_type=SyncLog.SyncType.CUSTOMER,
+                direction='tiendanube_to_admin',
+                status=SyncLog.Status.IN_PROGRESS,
+                tiendanube_config=self.tiendanube_config,
+                adminet_config=self.adminet_config
+            )
+            
+            # Obtener clientes de TiendaNube
+            tiendanube_result = self.tiendanube_service.get_customers(limit=100)
+            if not tiendanube_result['success']:
+                sync_log.complete_sync(False, tiendanube_result['message'])
+                return tiendanube_result
+            
+            customers = tiendanube_result['customers']
+            sync_log.total_items = len(customers)
+            sync_log.save()
+            
+            successful_syncs = 0
+            failed_syncs = 0
+            
+            for customer in customers:
+                try:
+                    # Verificar si ya existe el mapeo
+                    mapping, created = CustomerMapping.objects.get_or_create(
+                        tiendanube_id=customer['id'],
+                        defaults={
+                            'tiendanube_email': customer.get('email', ''),
+                            'tiendanube_first_name': customer.get('name', ''),
+                            'sync_status': CustomerMapping.SyncStatus.PENDING
+                        }
+                    )
+                    
+                    if created or mapping.sync_status != CustomerMapping.SyncStatus.SYNCED:
+                        # Crear/actualizar en AdministraNET
+                        adminet_data = {
+                            'nombre_cliente': customer.get('name', ''),
+                            'Email': customer.get('email', ''),
+                            'telefono': customer.get('phone', ''),
+                            'Calle': customer.get('address', ''),
+                            'CUIT': customer.get('document', ''),
+                            'Estado': 'Activo'
+                        }
+                        
+                        if mapping.adminet_codigo:
+                            # Actualizar cliente existente en AdministraNET
+                            result = self.adminet_service.update_customer(mapping.adminet_codigo, adminet_data)
+                        else:
+                            # Crear nuevo cliente en AdministraNET
+                            result = self.adminet_service.create_customer(adminet_data)
+                            if result['success']:
+                                mapping.adminet_codigo = result.get('customer_id')
+                        
+                        if result['success']:
+                            mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+                            mapping.last_synced = timezone.now()
+                            mapping.save()
+                            successful_syncs += 1
+                        else:
+                            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+                            mapping.error_message = result['message']
+                            mapping.save()
+                            failed_syncs += 1
+                    
+                    sync_log.processed_items += 1
+                    sync_log.save()
+                    
+                except Exception as e:
+                    logger.error(f"Error syncing customer {customer.get('id')}: {e}")
+                    failed_syncs += 1
+                    sync_log.processed_items += 1
+                    sync_log.save()
+            
+            # Completar log de sincronización
+            sync_log.complete_sync(True, f"Sincronización completada: {successful_syncs} exitosas, {failed_syncs} fallidas")
+            
+            return {
+                'success': True,
+                'message': f'Sincronización completada: {successful_syncs} exitosas, {failed_syncs} fallidas',
+                'sync_log_id': sync_log.id,
+                'total_processed': len(customers),
+                'successful': successful_syncs,
+                'failed': failed_syncs
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in sync_customers_from_tiendanube: {e}")
+            if 'sync_log' in locals():
+                sync_log.complete_sync(False, str(e))
+            return {
+                'success': False,
+                'message': f'Error en sincronización: {str(e)}'
+            }
+
     def sync_customers_from_adminet(self) -> Dict[str, Any]:
         """Sincronizar clientes desde AdministraNET hacia Tiendanube."""
         try:
@@ -180,7 +336,7 @@ class TiendanubeAdministraNETSyncService:
                 sync_log.complete_sync(False, adminet_result['message'])
                 return adminet_result
             
-            customers = adminet_result['results']
+            customers = adminet_result['data']
             sync_log.total_items = len(customers)
             sync_log.save()
             
@@ -191,21 +347,30 @@ class TiendanubeAdministraNETSyncService:
                 try:
                     # Verificar si ya existe el mapeo
                     mapping, created = CustomerMapping.objects.get_or_create(
-                        adminet_codigo=customer['codigo'],
+                        adminet_codigo=customer['Codigo'],
                         defaults={
-                            'adminet_nombre': customer.get('nombre', ''),
+                            'adminet_nombre': customer.get('nombre_cliente', ''),
                             'sync_status': CustomerMapping.SyncStatus.PENDING
                         }
                     )
                     
                     if created or mapping.sync_status != CustomerMapping.SyncStatus.SYNCED:
                         # Crear/actualizar en Tiendanube
+                        # Generar email único si no existe
+                        customer_email = customer.get('Email', '').strip()
+                        if not customer_email:
+                            customer_code = customer.get('Codigo', 0) or 0
+                            # Asegurar que el código no sea 0 o None
+                            if customer_code == 0:
+                                customer_code = hash(customer.get('nombre_cliente', '')) % 1000000
+                            customer_email = f"adminet_{customer_code}@noemail.local"
+                        
                         tiendanube_data = {
-                            'name': customer.get('nombre', ''),
-                            'email': customer.get('email', ''),
-                            'document': customer.get('documento', ''),
+                            'name': customer.get('nombre_cliente', ''),
+                            'email': customer_email,
+                            'document': customer.get('CUIT', ''),
                             'phone': customer.get('telefono', ''),
-                            'address': customer.get('direccion', '')
+                            'address': f"{customer.get('Calle', '')} {customer.get('NroCalle', '')}".strip()
                         }
                         
                         if mapping.tiendanube_id:
@@ -215,9 +380,21 @@ class TiendanubeAdministraNETSyncService:
                             # Crear nuevo cliente
                             result = self.tiendanube_service.create_customer(tiendanube_data)
                             if result['success']:
-                                mapping.tiendanube_id = result.get('customer_id')
+                                customer_data = result.get('customer', {})
+                                mapping.tiendanube_id = customer_data.get('id')
+                                mapping.tiendanube_email = customer_data.get('email', '')
+                                mapping.tiendanube_first_name = customer_data.get('name', '')
                         
                         if result['success']:
+                            # Actualizar el campo id_tiendanube en AdministraNET
+                            if mapping.tiendanube_id and customer.get('Codigo'):
+                                update_result = self.adminet_service.update_customer_tiendanube_id(
+                                    customer['Codigo'], 
+                                    mapping.tiendanube_id
+                                )
+                                if not update_result['success']:
+                                    logger.warning(f"Error actualizando id_tiendanube en AdministraNET: {update_result['message']}")
+                            
                             mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
                             mapping.last_synced = timezone.now()
                             mapping.save()
@@ -238,9 +415,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.save()
             
             # Completar sincronización
-            sync_log.successful_items = successful_syncs
-            sync_log.failed_items = failed_syncs
-            sync_log.complete_sync(True)
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
             
             return {
                 'success': True,
@@ -277,7 +452,7 @@ class TiendanubeAdministraNETSyncService:
             )
             
             # Obtener productos de Tiendanube
-            tiendanube_result = self.product_service.get_products(limit=100)
+            tiendanube_result = self.product_service.get_products(limit=None)  # Sin límite - sincronizar todos
             if not tiendanube_result['success']:
                 sync_log.complete_sync(False, tiendanube_result['message'])
                 return tiendanube_result
@@ -339,9 +514,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.save()
             
             # Completar sincronización
-            sync_log.successful_items = successful_syncs
-            sync_log.failed_items = failed_syncs
-            sync_log.complete_sync(True)
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
             
             return {
                 'success': True,
@@ -381,14 +554,14 @@ class TiendanubeAdministraNETSyncService:
                 logger.info(f"Sincronizando productos desde depósito {deposito_id}")
                 adminet_result = self.adminet_service.get_products_with_stock_by_deposito(
                     deposito_id=deposito_id,
-                    limit=100, 
+                    limit=None,  # Sin límite - sincronizar todos
                     ecommerce='Si',
                     disponible_vta='Si'
                 )
             else:
                 logger.warning("No hay depósito configurado, usando stock general")
                 adminet_result = self.adminet_service.get_products(
-                    limit=100, 
+                    limit=None,  # Sin límite - sincronizar todos
                     ecommerce='Si',
                     disponible_vta='Si'
                 )
@@ -470,6 +643,15 @@ class TiendanubeAdministraNETSyncService:
                                 mapping.tiendanube_id = product.get('id')
                         
                         if result['success']:
+                            # Actualizar el campo id_tiendanube en AdministraNET
+                            if mapping.tiendanube_id and product.get('IDArt'):
+                                update_result = self.adminet_service.update_product_tiendanube_id(
+                                    product['IDArt'], 
+                                    mapping.tiendanube_id
+                                )
+                                if not update_result['success']:
+                                    logger.warning(f"Error actualizando id_tiendanube en AdministraNET: {update_result['message']}")
+                            
                             mapping.sync_status = ProductMapping.SyncStatus.SYNCED
                             mapping.last_synced = timezone.now()
                             mapping.save()
@@ -490,9 +672,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.save()
             
             # Completar sincronización
-            sync_log.successful_items = successful_syncs
-            sync_log.failed_items = failed_syncs
-            sync_log.complete_sync(True)
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(products))
             
             return {
                 'success': True,
@@ -633,10 +813,40 @@ class TiendanubeAdministraNETSyncService:
                         tiendanube_id=order['id'],
                         defaults={
                             'tiendanube_number': order.get('number', ''),
-                            'tiendanube_customer_email': order.get('customer_email', ''),
+                            'tiendanube_total': order.get('total', 0),
+                            'tiendanube_currency': order.get('currency', ''),
+                            'tiendanube_status': order.get('status', ''),
+                            'tiendanube_payment_status': order.get('payment_status', ''),
+                            'tiendanube_customer_id': order.get('customer', {}).get('id'),
+                            'tiendanube_customer_email': order.get('customer', {}).get('email', ''),
+                            'tiendanube_customer_name': order.get('customer', {}).get('name', ''),
+                            'tiendanube_shipping_address': order.get('shipping_address', {}),
+                            'tiendanube_billing_address': order.get('billing_address', {}),
+                            'tiendanube_payment_method': order.get('payment', {}).get('method', ''),
+                            'tiendanube_shipping_method': order.get('shipping', {}).get('method', ''),
+                            'tiendanube_created_at': order.get('created_at'),
+                            'tiendanube_updated_at': order.get('updated_at'),
                             'sync_status': OrderMapping.SyncStatus.PENDING
                         }
                     )
+                    
+                    # Actualizar campos si el mapeo ya existía
+                    if not created:
+                        mapping.tiendanube_number = order.get('number', '')
+                        mapping.tiendanube_total = order.get('total', 0)
+                        mapping.tiendanube_currency = order.get('currency', '')
+                        mapping.tiendanube_status = order.get('status', '')
+                        mapping.tiendanube_payment_status = order.get('payment_status', '')
+                        mapping.tiendanube_customer_id = order.get('customer', {}).get('id')
+                        mapping.tiendanube_customer_email = order.get('customer', {}).get('email', '')
+                        mapping.tiendanube_customer_name = order.get('customer', {}).get('name', '')
+                        mapping.tiendanube_shipping_address = order.get('shipping_address', {})
+                        mapping.tiendanube_billing_address = order.get('billing_address', {})
+                        mapping.tiendanube_payment_method = order.get('payment', {}).get('method', '')
+                        mapping.tiendanube_shipping_method = order.get('shipping', {}).get('method', '')
+                        mapping.tiendanube_created_at = order.get('created_at')
+                        mapping.tiendanube_updated_at = order.get('updated_at')
+                        mapping.save()
                     
                     if created or mapping.sync_status != OrderMapping.SyncStatus.SYNCED:
                         # Verificar si la orden debe crearse en AdministraNET
@@ -657,7 +867,7 @@ class TiendanubeAdministraNETSyncService:
                                 'payment_status': order.get('payment_status', ''),
                                 'created_at': order.get('created_at', ''),
                                 'updated_at': order.get('updated_at', ''),
-                                'adminet_customer_id': mapping.adminet_codigo_cliente or 1
+                                'adminet_customer_id': mapping.tiendanube_customer_id or 1
                             }
                             
                             # Mapear productos de TiendaNube a AdministraNET
@@ -678,12 +888,14 @@ class TiendanubeAdministraNETSyncService:
                                 order_data_for_adminet,
                                 deposito_id=self.adminet_config.deposito_tiendanube_id or 1,
                                 user_id=1,  # Usuario del sistema
-                                sucursal_id=1  # Sucursal por defecto
+                                punto_venta_id=self.adminet_config.punto_venta_tiendanube_id or 1  # Punto de venta configurado
                             )
                             
                             if result['success']:
                                 mapping.adminet_codigo = result['codigo_movimiento']
                                 mapping.adminet_numero = result['nro_comprobante']
+                                mapping.adminet_total = order.get('total', 0)
+                                mapping.adminet_estado = 'Pendiente'  # Estado por defecto
                                 mapping.sync_status = OrderMapping.SyncStatus.SYNCED
                                 mapping.last_synced = timezone.now()
                                 mapping.save()
@@ -712,9 +924,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.save()
             
             # Completar sincronización
-            sync_log.successful_items = successful_syncs
-            sync_log.failed_items = failed_syncs
-            sync_log.complete_sync(True)
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(orders))
             
             return {
                 'success': True,

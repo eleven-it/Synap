@@ -1,0 +1,718 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Analytics Avanzado" %} - Eleven Support{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-container {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    .analytics-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        margin-bottom: 2rem;
+    }
+    
+    .analytics-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .metric-highlight {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .insight-card {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .recommendation-card {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .trend-card {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    
+    .chart-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 2rem;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-item {
+        background: rgba(255, 255, 255, 0.9);
+        padding: 1rem;
+        border-radius: 8px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2a5298;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #2a5298;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .period-selector {
+        background: rgba(255, 255, 255, 0.9);
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .period-button {
+        background: #2a5298;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .period-button:hover {
+        background: #1e3c72;
+        transform: translateY(-2px);
+    }
+    
+    .period-button.active {
+        background: #43e97b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-container">
+    <div class="container mx-auto px-4">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">📊 Analytics Avanzado</h1>
+            <p class="text-white/80 text-lg">Análisis comprehensivo de métricas de IA y soporte</p>
+        </div>
+
+        <!-- Selector de Período -->
+        <div class="period-selector">
+            <span class="font-semibold text-gray-700">Período:</span>
+            <button class="period-button" onclick="loadAnalytics(7)">7 días</button>
+            <button class="period-button active" onclick="loadAnalytics(30)">30 días</button>
+            <button class="period-button" onclick="loadAnalytics(90)">90 días</button>
+            <button class="period-button" onclick="loadRealtime()">Tiempo Real</button>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="text-center py-8">
+            <div class="loading-spinner"></div>
+            <p class="text-white mt-2">Cargando analytics...</p>
+        </div>
+
+        <!-- Contenido Principal -->
+        <div id="analytics-content" class="hidden">
+            <!-- Métricas Principales -->
+            <div class="analytics-card">
+                <h2 class="text-2xl font-bold mb-4">🎯 Métricas Principales</h2>
+                <div class="stats-grid" id="main-metrics">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Resumen Ejecutivo -->
+            <div class="analytics-card">
+                <h2 class="text-2xl font-bold mb-4">📋 Resumen Ejecutivo</h2>
+                <div id="executive-summary">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Gráficos -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Gráfico de Tickets -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4">📈 Tendencia de Tickets</h3>
+                    <canvas id="ticketsChart" width="400" height="200"></canvas>
+                </div>
+
+                <!-- Gráfico de IA -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4">🤖 Uso de IA</h3>
+                    <canvas id="aiChart" width="400" height="200"></canvas>
+                </div>
+
+                <!-- Gráfico de Satisfacción -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4">⭐ Satisfacción del Cliente</h3>
+                    <canvas id="satisfactionChart" width="400" height="200"></canvas>
+                </div>
+
+                <!-- Gráfico de Rendimiento -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold mb-4">⚡ Rendimiento del Sistema</h3>
+                    <canvas id="performanceChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Insights y Recomendaciones -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Insights Clave -->
+                <div class="analytics-card">
+                    <h3 class="text-lg font-semibold mb-4">💡 Insights Clave</h3>
+                    <div id="key-insights">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Recomendaciones -->
+                <div class="analytics-card">
+                    <h3 class="text-lg font-semibold mb-4">🎯 Recomendaciones</h3>
+                    <div id="recommendations">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Tendencias -->
+                <div class="analytics-card">
+                    <h3 class="text-lg font-semibold mb-4">📈 Tendencias</h3>
+                    <div id="trends">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Métricas Detalladas -->
+            <div class="analytics-card">
+                <h2 class="text-2xl font-bold mb-4">📊 Métricas Detalladas</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Métricas de Tickets -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3">🎫 Métricas de Tickets</h3>
+                        <div id="tickets-details">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Métricas de IA -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-3">🤖 Métricas de IA</h3>
+                        <div id="ai-details">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Variables globales
+let ticketsChart, aiChart, satisfactionChart, performanceChart;
+let currentPeriod = 30;
+let currentData = {};
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalytics(30);
+    setInterval(() => {
+        if (currentPeriod === 'realtime') {
+            loadRealtime();
+        }
+    }, 30000); // Actualizar cada 30 segundos si es tiempo real
+});
+
+// Cargar analytics
+async function loadAnalytics(days) {
+    currentPeriod = days;
+    showLoading(true);
+    
+    try {
+        const response = await fetch(`/support/api/ai-analytics/?type=comprehensive&days=${days}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            currentData = data.data;
+            updateAnalyticsDisplay();
+            updateCharts();
+        } else {
+            showError('Error cargando analytics: ' + data.error);
+        }
+    } catch (error) {
+        showError('Error de conexión: ' + error.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Cargar datos en tiempo real
+async function loadRealtime() {
+    currentPeriod = 'realtime';
+    showLoading(true);
+    
+    try {
+        const response = await fetch('/support/api/ai-analytics/?type=realtime');
+        const data = await response.json();
+        
+        if (data.success) {
+            currentData = data.data;
+            updateRealtimeDisplay();
+        } else {
+            showError('Error cargando datos en tiempo real: ' + data.error);
+        }
+    } catch (error) {
+        showError('Error de conexión: ' + error.message);
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Actualizar display de analytics
+function updateAnalyticsDisplay() {
+    const data = currentData;
+    
+    // Métricas principales
+    updateMainMetrics(data);
+    
+    // Resumen ejecutivo
+    updateExecutiveSummary(data);
+    
+    // Insights y recomendaciones
+    updateInsightsAndRecommendations(data);
+    
+    // Métricas detalladas
+    updateDetailedMetrics(data);
+}
+
+// Actualizar métricas principales
+function updateMainMetrics(data) {
+    const container = document.getElementById('main-metrics');
+    const tickets = data.tickets || {};
+    const ai = data.ai || {};
+    const satisfaction = data.satisfaction || {};
+    
+    container.innerHTML = `
+        <div class="stat-item">
+            <div class="stat-value">${tickets.total || 0}</div>
+            <div class="stat-label">Total Tickets</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${tickets.resolution_rate?.toFixed(1) || 0}%</div>
+            <div class="stat-label">Tasa de Resolución</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${ai.success_rate?.toFixed(1) || 0}%</div>
+            <div class="stat-label">Éxito IA</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">$${(ai.total_cost || 0).toFixed(4)}</div>
+            <div class="stat-label">Costo Total IA</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${satisfaction.avg_overall_rating?.toFixed(1) || 0}/5</div>
+            <div class="stat-label">Satisfacción</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${tickets.avg_resolution_time_hours?.toFixed(1) || 0}h</div>
+            <div class="stat-label">Tiempo Resolución</div>
+        </div>
+    `;
+}
+
+// Actualizar resumen ejecutivo
+function updateExecutiveSummary(data) {
+    const container = document.getElementById('executive-summary');
+    const summary = data.summary || {};
+    
+    container.innerHTML = `
+        <div class="metric-highlight">
+            <div class="metric-value">${data.period || 'Período'}</div>
+            <div class="metric-label">Período de Análisis</div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <h4 class="font-semibold mb-2">📊 Resumen</h4>
+                <ul class="space-y-1 text-sm">
+                    ${(summary.key_insights || []).map(insight => `<li>• ${insight}</li>`).join('')}
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-2">📈 Rendimiento</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span>Tickets Procesados:</span>
+                        <span class="font-semibold">${(data.tickets || {}).total || 0}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Solicitudes IA:</span>
+                        <span class="font-semibold">${(data.ai || {}).total_requests || 0}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Costo Promedio IA:</span>
+                        <span class="font-semibold">$${((data.ai || {}).cost_per_request || 0).toFixed(6)}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Actualizar insights y recomendaciones
+function updateInsightsAndRecommendations(data) {
+    const summary = data.summary || {};
+    
+    // Insights clave
+    const insightsContainer = document.getElementById('key-insights');
+    insightsContainer.innerHTML = (summary.key_insights || []).map(insight => 
+        `<div class="insight-card">${insight}</div>`
+    ).join('');
+    
+    // Recomendaciones
+    const recommendationsContainer = document.getElementById('recommendations');
+    recommendationsContainer.innerHTML = (summary.recommendations || []).map(rec => 
+        `<div class="recommendation-card">${rec}</div>`
+    ).join('');
+    
+    // Tendencias
+    const trendsContainer = document.getElementById('trends');
+    trendsContainer.innerHTML = (summary.trends || []).map(trend => 
+        `<div class="trend-card">${trend}</div>`
+    ).join('');
+}
+
+// Actualizar métricas detalladas
+function updateDetailedMetrics(data) {
+    const tickets = data.tickets || {};
+    const ai = data.ai || {};
+    
+    // Métricas de tickets
+    const ticketsContainer = document.getElementById('tickets-details');
+    ticketsContainer.innerHTML = `
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span>Abiertos:</span>
+                <span class="font-semibold">${tickets.open || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>En Progreso:</span>
+                <span class="font-semibold">${tickets.in_progress || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>Resueltos:</span>
+                <span class="font-semibold">${tickets.resolved || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>Tiempo Promedio:</span>
+                <span class="font-semibold">${tickets.avg_resolution_time_hours?.toFixed(1) || 0}h</span>
+            </div>
+        </div>
+    `;
+    
+    // Métricas de IA
+    const aiContainer = document.getElementById('ai-details');
+    aiContainer.innerHTML = `
+        <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <span>Total Solicitudes:</span>
+                <span class="font-semibold">${ai.total_requests || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>Exitosas:</span>
+                <span class="font-semibold">${ai.successful_requests || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>Fallidas:</span>
+                <span class="font-semibold">${ai.failed_requests || 0}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>Tiempo Promedio:</span>
+                <span class="font-semibold">${ai.avg_response_time?.toFixed(2) || 0}s</span>
+            </div>
+        </div>
+    `;
+}
+
+// Actualizar display en tiempo real
+function updateRealtimeDisplay() {
+    const data = currentData;
+    
+    // Métricas principales
+    const container = document.getElementById('main-metrics');
+    container.innerHTML = `
+        <div class="stat-item">
+            <div class="stat-value">${data.tickets?.last_hour || 0}</div>
+            <div class="stat-label">Tickets (1h)</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${data.tickets?.last_24h || 0}</div>
+            <div class="stat-label">Tickets (24h)</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${data.tickets?.open_now || 0}</div>
+            <div class="stat-label">Abiertos Ahora</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${data.conversations?.last_hour || 0}</div>
+            <div class="stat-label">Conversaciones (1h)</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">${data.ai?.requests_last_hour || 0}</div>
+            <div class="stat-label">Solicitudes IA (1h)</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">$${(data.ai?.cost_last_hour || 0).toFixed(4)}</div>
+            <div class="stat-label">Costo IA (1h)</div>
+        </div>
+    `;
+    
+    // Resumen ejecutivo
+    const summaryContainer = document.getElementById('executive-summary');
+    summaryContainer.innerHTML = `
+        <div class="metric-highlight">
+            <div class="metric-value">Tiempo Real</div>
+            <div class="metric-label">Última actualización: ${new Date(data.timestamp).toLocaleTimeString()}</div>
+        </div>
+    `;
+}
+
+// Inicializar gráficos
+function initializeCharts() {
+    // Gráfico de tickets
+    const ticketsCtx = document.getElementById('ticketsChart').getContext('2d');
+    ticketsChart = new Chart(ticketsCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Tickets',
+                data: [],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Gráfico de IA
+    const aiCtx = document.getElementById('aiChart').getContext('2d');
+    aiChart = new Chart(aiCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: ['#667eea', '#764ba2', '#f093fb', '#f5576c']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+    
+    // Gráfico de satisfacción
+    const satisfactionCtx = document.getElementById('satisfactionChart').getContext('2d');
+    satisfactionChart = new Chart(satisfactionCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Satisfacción',
+                data: [],
+                backgroundColor: '#43e97b'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // Gráfico de rendimiento
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    performanceChart = new Chart(performanceCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Tiempo de Respuesta',
+                data: [],
+                borderColor: '#4facfe',
+                backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// Actualizar gráficos
+function updateCharts() {
+    const data = currentData;
+    
+    // Gráfico de tickets
+    if (data.tickets?.daily_trend) {
+        ticketsChart.data.labels = data.tickets.daily_trend.map(item => item.date);
+        ticketsChart.data.datasets[0].data = data.tickets.daily_trend.map(item => item.count);
+        ticketsChart.update();
+    }
+    
+    // Gráfico de IA (distribución por proveedor)
+    if (data.ai?.provider_distribution) {
+        const providers = Object.keys(data.ai.provider_distribution);
+        const requests = providers.map(provider => data.ai.provider_distribution[provider].requests);
+        
+        aiChart.data.labels = providers;
+        aiChart.data.datasets[0].data = requests;
+        aiChart.update();
+    }
+    
+    // Gráfico de satisfacción
+    if (data.satisfaction?.rating_distribution) {
+        const ratings = Object.keys(data.satisfaction.rating_distribution);
+        const counts = ratings.map(rating => data.satisfaction.rating_distribution[rating]);
+        
+        satisfactionChart.data.labels = ratings;
+        satisfactionChart.data.datasets[0].data = counts;
+        satisfactionChart.update();
+    }
+    
+    // Gráfico de rendimiento (simulado)
+    if (data.performance?.ai_performance?.hourly_performance) {
+        const hours = data.performance.ai_performance.hourly_performance.map(item => item.hour);
+        const responseTimes = data.performance.ai_performance.hourly_performance.map(item => item.avg_response_time);
+        
+        performanceChart.data.labels = hours;
+        performanceChart.data.datasets[0].data = responseTimes;
+        performanceChart.update();
+    }
+}
+
+// Mostrar/ocultar loading
+function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+    document.getElementById('analytics-content').classList.toggle('hidden', show);
+}
+
+// Mostrar error
+function showError(message) {
+    const container = document.getElementById('analytics-content');
+    container.innerHTML = `
+        <div class="analytics-card">
+            <div class="text-center text-red-600">
+                <h3 class="text-lg font-semibold mb-2">Error</h3>
+                <p>${message}</p>
+                <button class="mt-4 px-4 py-2 bg-blue-600 text-white rounded" onclick="loadAnalytics(30)">
+                    Reintentar
+                </button>
+            </div>
+        </div>
+    `;
+    showLoading(false);
+}
+
+// Inicializar gráficos cuando se carga la página
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+});
+</script>
+{% endblock %} 

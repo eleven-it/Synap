@@ -1,14 +1,15 @@
 {% extends "base_app.html" %}
-{% load i18n crispy_forms_tags %}
+{% load static %}
+{% load i18n %}
 
-{% block title %}{% trans "Customer Mappings" %}{% endblock %}
+{% block title %}{% trans "Customers" %} - {% trans "Tiendanube-AdministraNET" %}{% endblock %}
 
 {% block content %}
 <!-- Breadcrumb -->
 <div class="breadcrumb">
     <div class="breadcrumb-item">
         <span class="material-icons text-sm">people</span>
-        <span>{% trans "Customer Mappings" %}</span>
+        <span>{% trans "Customers" %}</span>
     </div>
 </div>
 
@@ -17,169 +18,58 @@
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                {% trans "Customer Mappings" %}
+                {% trans "Customers" %}
             </h1>
             <p class="text-gray-600 dark:text-gray-400">
-                {% trans "Manage customer mappings between Tiendanube and AdministraNET" %}
+                {% trans "Manage customer synchronization between Tiendanube and AdministraNET" %}
             </p>
         </div>
         <div class="flex items-center space-x-3">
-            <a href="{% url 'tiendanube_administranet:customer_mapping_create' %}" 
-               class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
+            <a href="{% url 'tiendanube_administranet:customer_mapping_create' %}" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
                 <span class="material-icons text-sm mr-2">add</span>
-                {% trans "Create Mapping" %}
+                {% trans "New Customer" %}
             </a>
-            <button onclick="syncCustomersFromTiendanube()" 
-                    class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
-                <span class="material-icons text-sm mr-2">sync</span>
-                {% trans "Sync from Tiendanube" %}
-            </button>
-            <button onclick="exportCustomers()" 
-                    class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
-                <span class="material-icons text-sm mr-2">download</span>
-                {% trans "Export" %}
-            </button>
         </div>
     </div>
 </div>
 
-<!-- Statistics Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-4">
-                <span class="material-icons text-blue-600">people</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Total Customers" %}</p>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ total_mappings }}</p>
-            </div>
+<!-- Search Section -->
+<div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white mb-8">
+    <form method="get" class="flex items-center space-x-4">
+        <div class="flex-1">
+            <input type="text" name="search" value="{{ search }}" 
+                   class="w-full px-4 py-3 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+                   placeholder="{% trans 'Search customers...' %}">
         </div>
+        <button type="submit" class="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors duration-200">
+            <span class="material-icons">search</span>
+        </button>
+    </form>
+</div>
+
+<!-- Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 text-center">
+        <div class="text-3xl font-bold text-blue-600 mb-2">{{ stats.total }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "Total Customers" %}</div>
     </div>
-    
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mr-4">
-                <span class="material-icons text-green-600">check_circle</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Synced" %}</p>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ synced_mappings }}</p>
-            </div>
-        </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 text-center">
+        <div class="text-3xl font-bold text-green-600 mb-2">{{ stats.synced }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "Synced" %}</div>
     </div>
-    
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center mr-4">
-                <span class="material-icons text-yellow-600">schedule</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Pending" %}</p>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ pending_mappings }}</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center">
-            <div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center mr-4">
-                <span class="material-icons text-red-600">error</span>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Errors" %}</p>
-                <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ error_mappings }}</p>
-            </div>
-        </div>
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 text-center">
+        <div class="text-3xl font-bold text-red-600 mb-2">{{ stats.error }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "Errors" %}</div>
     </div>
 </div>
 
-<!-- Additional Statistics -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Verified Emails" %}</p>
-                <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ verified_customers }}</p>
-            </div>
-            <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-green-600">verified</span>
-            </div>
-        </div>
-    </div>
-    
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Active Customers" %}</p>
-                <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ active_customers }}</p>
-            </div>
-            <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-blue-600">person</span>
-            </div>
-        </div>
-    </div>
-    
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Last Sync" %}</p>
-                <p class="text-xl font-semibold text-gray-900 dark:text-white">{{ last_sync_time|default:"Never" }}</p>
-            </div>
-            <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-purple-600">sync</span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Search and Filters -->
-<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-8">
-    <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Search & Filters" %}</h3>
-    </div>
-    <div class="p-6">
-        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Search" %}</label>
-                <input type="text" name="search" value="{{ search }}" 
-                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-                       placeholder="{% trans 'Search by email, name...' %}">
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Status" %}</label>
-                <select name="status" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-                    <option value="">{% trans "All Statuses" %}</option>
-                    <option value="synced" {% if status == 'synced' %}selected{% endif %}>{% trans "Synced" %}</option>
-                    <option value="pending" {% if status == 'pending' %}selected{% endif %}>{% trans "Pending" %}</option>
-                    <option value="error" {% if status == 'error' %}selected{% endif %}>{% trans "Error" %}</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Verified" %}</label>
-                <select name="verified" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white">
-                    <option value="">{% trans "All" %}</option>
-                    <option value="true" {% if verified == 'true' %}selected{% endif %}>{% trans "Verified" %}</option>
-                    <option value="false" {% if verified == 'false' %}selected{% endif %}>{% trans "Not Verified" %}</option>
-                </select>
-            </div>
-            <div class="flex items-end">
-                <button type="submit" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200">
-                    <span class="material-icons text-sm mr-2">search</span>
-                    {% trans "Search" %}
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Customer Mappings Table -->
+<!-- Customers List -->
 <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
     <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Customer Mappings" %}</h3>
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Customer List" %}</h3>
     </div>
     
-    {% if customer_mappings %}
+    {% if page_obj %}
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-50 dark:bg-gray-700">
@@ -194,10 +84,13 @@
                         {% trans "AdministraNET ID" %}
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        {% trans "Email" %}
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         {% trans "Status" %}
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        {% trans "Verified" %}
+                        {% trans "Sync" %}
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         {% trans "Last Sync" %}
@@ -208,82 +101,99 @@
                 </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {% for mapping in customer_mappings %}
+                {% for customer in page_obj %}
                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
                             <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm mr-3">
-                                {{ mapping.tiendanube_email|first|upper|default:"C" }}
+                                {{ customer.tiendanube_first_name|first|upper|default:customer.tiendanube_email|first|upper|default:"C" }}
                             </div>
                             <div>
                                 <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ mapping.tiendanube_email|default:"N/A" }}
+                                    {{ customer.tiendanube_first_name|default:"" }} {{ customer.tiendanube_last_name|default:"" }}{% if not customer.tiendanube_first_name %}N/A{% endif %}
                                 </div>
                                 <div class="text-sm text-gray-500 dark:text-gray-400">
-                                    {{ mapping.tiendanube_first_name|default:"" }} {{ mapping.tiendanube_last_name|default:"" }}
+                                    {{ customer.tiendanube_phone|default:"No phone" }}
                                 </div>
                             </div>
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {{ mapping.tiendanube_id|default:"N/A" }}
+                        {{ customer.tiendanube_id|default:"N/A" }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {{ mapping.adminet_code|default:"N/A" }}
+                        <div>
+                            <div class="font-medium">{{ customer.adminet_codigo|default:"N/A" }}</div>
+                            <div class="text-xs text-gray-500">{{ customer.adminet_nombre|default:"No info" }}</div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                        <div>
+                            <div class="font-medium">{{ customer.tiendanube_email|default:"N/A" }}</div>
+                            <div class="text-xs text-gray-500">
+                                {% if customer.tiendanube_verified_email %}
+                                    <span class="text-green-600">{% trans "Verified" %}</span>
+                                {% else %}
+                                    <span class="text-gray-400">{% trans "Not verified" %}</span>
+                                {% endif %}
+                            </div>
+                        </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                            {% if mapping.sync_status == 'synced' %}
+                            {% if customer.sync_status == 'synced' %}
                                 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                            {% elif mapping.sync_status == 'pending' %}
+                            {% elif customer.sync_status == 'pending' %}
                                 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400
-                            {% elif mapping.sync_status == 'error' %}
+                            {% elif customer.sync_status == 'error' %}
                                 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
+                            {% elif customer.sync_status == 'conflict' %}
+                                bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400
                             {% else %}
                                 bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400
                             {% endif %}">
-                            {{ mapping.get_sync_status_display }}
+                            {{ customer.get_sync_status_display }}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                            {% if mapping.tiendanube_verified_email %}
+                            {% if customer.sync_enabled %}
                                 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
                             {% else %}
                                 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
                             {% endif %}">
-                            {% if mapping.tiendanube_verified_email %}
-                                <span class="material-icons text-xs mr-1">verified</span>
-                                {% trans "Yes" %}
+                            {% if customer.sync_enabled %}
+                                <span class="material-icons text-xs mr-1">check_circle</span>
+                                {% trans "Enabled" %}
                             {% else %}
                                 <span class="material-icons text-xs mr-1">cancel</span>
-                                {% trans "No" %}
+                                {% trans "Disabled" %}
                             {% endif %}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {% if mapping.last_sync_at %}
-                            {{ mapping.last_sync_at|timesince }} {% trans "ago" %}
+                        {% if customer.last_synced %}
+                            {{ customer.last_synced|timesince }} {% trans "ago" %}
                         {% else %}
                             {% trans "Never" %}
                         {% endif %}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div class="flex items-center justify-end space-x-2">
-                            <a href="{% url 'tiendanube_administranet:customer_mapping_detail' mapping.pk %}" 
+                            <a href="{% url 'tiendanube_administranet:customer_mapping_detail' customer.id %}" 
                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                title="{% trans 'View Details' %}">
                                 <span class="material-icons text-sm">visibility</span>
                             </a>
-                            <a href="{% url 'tiendanube_administranet:customer_mapping_edit' mapping.pk %}" 
+                            <a href="{% url 'tiendanube_administranet:customer_mapping_update' customer.id %}" 
                                class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                                title="{% trans 'Edit' %}">
                                 <span class="material-icons text-sm">edit</span>
                             </a>
-                            <a href="{% url 'tiendanube_administranet:customer_mapping_delete' mapping.pk %}" 
+                            <a href="{% url 'tiendanube_administranet:customer_mapping_delete' customer.id %}" 
                                class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                                title="{% trans 'Delete' %}"
-                               onclick="return confirm('{% trans 'Are you sure you want to delete this customer mapping?' %}')">
+                               onclick="return confirm('{% trans 'Are you sure you want to delete this customer?' %}')">
                                 <span class="material-icons text-sm">delete</span>
                             </a>
                         </div>
@@ -337,30 +247,15 @@
         <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
             <span class="material-icons text-2xl text-gray-400">people</span>
         </div>
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "No customer mappings found" %}</h3>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">{% trans "No customers found" %}</h3>
         <p class="text-gray-500 dark:text-gray-400 mb-6">{% trans "Create your first customer mapping to get started with synchronization." %}</p>
         <a href="{% url 'tiendanube_administranet:customer_mapping_create' %}" 
            class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
             <span class="material-icons text-sm mr-2">add</span>
-            {% trans "Create First Mapping" %}
+            {% trans "Create First Customer" %}
         </a>
     </div>
     {% endif %}
 </div>
 
-<script>
-function syncCustomersFromTiendanube() {
-    if (!confirm('{% trans "Are you sure you want to sync customers from Tiendanube?" %}')) {
-        return;
-    }
-    
-    // Implement sync functionality
-    console.log('Syncing customers from Tiendanube...');
-}
-
-function exportCustomers() {
-    // Implement export functionality
-    console.log('Exporting customers...');
-}
-</script>
 {% endblock %} 

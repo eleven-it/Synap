@@ -230,7 +230,6 @@
                 <div class="flex flex-wrap gap-4 mt-4">
                     <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_products" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_products %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Products" %}</span></label>
                     <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_stock" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_stock %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Stock" %}</span></label>
-                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_variants" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_variants %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Variants" %}</span></label>
                 </div>
             </div>
             <div class="mt-8 flex justify-center animate-fadeIn">
@@ -263,7 +262,6 @@
                 <div><b>{% trans "Sync Interval:" %}</b> {{ summary.sync_interval }} {% trans "min" %}</div>
                 <div><b>{% trans "Sync Products:" %}</b> {{ summary.sync_products|yesno:"Yes,No" }}</div>
                 <div><b>{% trans "Sync Stock:" %}</b> {{ summary.sync_stock|yesno:"Yes,No" }}</div>
-                <div><b>{% trans "Sync Variants:" %}</b> {{ summary.sync_variants|yesno:"Yes,No" }}</div>
             </div>
         </div>
         {% if wizard_error %}

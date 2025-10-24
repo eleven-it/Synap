@@ -10,7 +10,7 @@ app_name = 'tiendanube_administranet'
 
 urlpatterns = [
     # Dashboard y vistas principales
-    path('', views.DashboardView.as_view(), name='dashboard'),
+    path('', views.StatusView.as_view(), name='dashboard'),
     path('test/', views.TestView.as_view(), name='test'),
     
     # Configuraciones
@@ -37,6 +37,7 @@ urlpatterns = [
     path('customers/<int:pk>/', views.CustomerMappingDetailView.as_view(), name='customer_mapping_detail'),
     path('customers/<int:pk>/edit/', views.CustomerMappingUpdateView.as_view(), name='customer_mapping_update'),
     path('customers/<int:pk>/delete/', views.CustomerMappingDeleteView.as_view(), name='customer_mapping_delete'),
+    path('customers/sync/', views.SyncCustomersView.as_view(), name='sync_customers'),
     
     # Productos
     path('products/', views.product_list, name='product_list'),
@@ -72,7 +73,6 @@ urlpatterns = [
     path('status/', views.StatusView.as_view(), name='status'),
     
     # Logs de sincronización
-    path('logs/', views.SyncLogListView.as_view(), name='sync_log_list'),
     path('logs/<int:pk>/', views.SyncLogDetailView.as_view(), name='sync_log_detail'),
     
     # Webhooks
@@ -85,6 +85,7 @@ urlpatterns = [
     # Eventos de webhook
     path('webhook-events/', views.WebhookEventListView.as_view(), name='webhook_event_list'),
     path('webhook-events/<int:pk>/', views.WebhookEventDetailView.as_view(), name='webhook_event_detail'),
+    path('webhook-events/<int:pk>/debug/', views.WebhookEventDebugView.as_view(), name='webhook_event_debug'),
     
     # APIs AJAX
     path('api/customers/sync-from-tiendanube/', views.sync_customers_from_tiendanube_ajax, name='sync_customers_from_tiendanube_ajax'),
@@ -115,7 +116,16 @@ urlpatterns = [
     
     # Webhooks
     path('api/webhooks/<int:webhook_id>/test/', views.test_webhook_ajax, name='test_webhook_ajax'),
+    path('api/webhooks/<int:webhook_id>/toggle/', views.toggle_webhook_ajax, name='toggle_webhook_ajax'),
     path('api/webhooks/sync/', views.sync_webhooks_ajax, name='sync_webhooks_ajax'),
     path('api/webhook-events/<int:event_id>/retry/', views.retry_webhook_event_ajax, name='retry_webhook_event_ajax'),
     path('webhook/', views.webhook_endpoint, name='webhook_endpoint'),
+    path('webhook-status/', views.webhook_status, name='webhook_status'),
+    path('webhook-configure/', views.configure_webhooks, name='configure_webhooks'),
+    
+    # Validation URLs
+    path('validation/', views.DataValidationView.as_view(), name='data_validation'),
+    path('validation/validate/', views.ValidateDataAjaxView.as_view(), name='validate_data_ajax'),
+    path('validation/fix/', views.FixInconsistenciesAjaxView.as_view(), name='fix_inconsistencies_ajax'),
+    path('validation/sync/', views.SyncUpdatesAjaxView.as_view(), name='sync_updates_ajax'),
 ] 

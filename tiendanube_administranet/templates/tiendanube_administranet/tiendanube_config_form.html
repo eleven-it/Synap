@@ -154,69 +154,6 @@
                 </div>
             </div>
 
-            <!-- Warehouse Configuration -->
-            <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
-                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
-                    <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">warehouse</span>
-                    {% trans "Warehouse Configuration" %}
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="{{ form.tiendanube_warehouse.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Tiendanube Warehouse" %} *
-                        </label>
-                        <select name="tiendanube_warehouse" id="{{ form.tiendanube_warehouse.id_for_label }}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">{% trans "Select warehouse..." %}</option>
-                            {% for warehouse in warehouses %}
-                                <option value="{{ warehouse.id }}" {% if form.tiendanube_warehouse.value == warehouse.id %}selected{% endif %}>{{ warehouse.name }}</option>
-                            {% endfor %}
-                        </select>
-                        {% if form.tiendanube_warehouse.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.tiendanube_warehouse.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Select the warehouse dedicated to Tiendanube stock management" %}</p>
-                    </div>
-                    
-                    <div>
-                        <label for="{{ form.auto_restock.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Auto Restock" %}
-                        </label>
-                        <div class="flex items-center">
-                            <input type="checkbox" name="auto_restock" id="{{ form.auto_restock.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.auto_restock.value %}checked{% endif %}>
-                            <label for="{{ form.auto_restock.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                {% trans "Enable automatic restocking" %}
-                            </label>
-                        </div>
-                        {% if form.auto_restock.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.auto_restock.errors|first }}</p>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                    <div>
-                        <label for="{{ form.restock_threshold.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Restock Threshold" %}
-                        </label>
-                        <input type="number" name="restock_threshold" id="{{ form.restock_threshold.id_for_label }}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="{{ form.restock_threshold.value|default:0 }}" min="0">
-                        {% if form.restock_threshold.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.restock_threshold.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Minimum stock level to trigger auto restock" %}</p>
-                    </div>
-                    
-                    <div>
-                        <label for="{{ form.restock_quantity.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            {% trans "Restock Quantity" %}
-                        </label>
-                        <input type="number" name="restock_quantity" id="{{ form.restock_quantity.id_for_label }}" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" value="{{ form.restock_quantity.value|default:0 }}" min="0">
-                        {% if form.restock_quantity.errors %}
-                            <p class="text-red-500 text-sm mt-1">{{ form.restock_quantity.errors|first }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Quantity to restock when threshold is reached" %}</p>
-                    </div>
-                </div>
-            </div>
 
             <!-- Sync Options -->
             <div class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
@@ -235,12 +172,6 @@
                         <input type="checkbox" name="sync_stock" id="{{ form.sync_stock.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.sync_stock.value %}checked{% endif %}>
                         <label for="{{ form.sync_stock.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
                             {% trans "Sync Stock" %}
-                        </label>
-                    </div>
-                    <div class="flex items-center">
-                        <input type="checkbox" name="sync_variants" id="{{ form.sync_variants.id_for_label }}" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" {% if form.sync_variants.value %}checked{% endif %}>
-                        <label for="{{ form.sync_variants.id_for_label }}" class="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            {% trans "Sync Variants" %}
                         </label>
                     </div>
                 </div>

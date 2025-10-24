@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dropdown Menu Alignment</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f9fbfd;
+            padding: 40px;
+        }
+        
+        /* CSS EXACTO del navbar.html */
+        .app-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px !important;
+            transition: all 0.2s ease;
+            border: 1px solid #f1f5f9;
+            margin-bottom: 24px;
+        }
+        
+        .app-card > h3 {
+            padding: 0 !important;
+            margin: 0 0 12px 0 !important;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .app-card > div {
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        .app-card .app-menu-item {
+            display: flex !important;
+            align-items: center !important;
+            padding: 8px 0px !important;
+            margin: 0 !important;
+            border-radius: 8px;
+            color: #475569;
+            font-size: 14px;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+        
+        .app-card .app-menu-item:hover {
+            background: #f8fafc;
+            color: #1e293b;
+        }
+        
+        .app-card .app-menu-item .material-icons {
+            margin-right: 8px !important;
+            margin-left: 0 !important;
+        }
+        
+        /* Línea de referencia */
+        .reference-line {
+            position: absolute;
+            left: 16px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: red;
+            opacity: 0.3;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="margin-bottom: 20px;">Test de Alineación del Dropdown del Navbar</h1>
+    <p style="margin-bottom: 40px; color: #6b7280;">Las líneas rojas indican donde deberían alinearse los títulos y los items (borde del padding del card = 16px desde el borde)</p>
+    
+    <div class="container">
+        <!-- PANEL PRINCIPAL (que está bien alineado según el usuario) -->
+        <div class="app-card" style="position: relative;">
+            <div class="reference-line"></div>
+            <h3>PANEL PRINCIPAL</h3>
+            <div class="space-y-1">
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">dashboard</span>
+                    Panel Principal
+                </a>
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">monitor_heart</span>
+                    Status
+                </a>
+            </div>
+        </div>
+        
+        <!-- CONFIGURACIÓN (que está mal alineado según el usuario) -->
+        <div class="app-card" style="position: relative;">
+            <div class="reference-line"></div>
+            <h3>CONFIGURACIÓN</h3>
+            <div class="space-y-1">
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">cloud</span>
+                    Tiendanube Settings
+                </a>
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">database</span>
+                    AdministraNET Settings
+                </a>
+            </div>
+        </div>
+        
+        <!-- WEBHOOKS (que está mal alineado según el usuario) -->
+        <div class="app-card" style="position: relative;">
+            <div class="reference-line"></div>
+            <h3>WEBHOOKS</h3>
+            <div class="space-y-1">
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">webhook</span>
+                    Webhook Configurations
+                </a>
+                <a href="#" class="app-menu-item">
+                    <span class="material-icons text-base mr-2">timeline</span>
+                    Webhook Events
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div style="margin-top: 40px; padding: 20px; background: #fff3cd; border-radius: 8px; max-width: 800px;">
+        <h3 style="margin-top: 0;">🔍 Instrucciones de Verificación:</h3>
+        <ol style="margin: 0; padding-left: 20px;">
+            <li style="margin: 10px 0;"><strong>Verifica visualmente</strong>: Todos los títulos y el inicio del texto de los items deben estar alineados con la línea roja.</li>
+            <li style="margin: 10px 0;"><strong>Si están alineados aquí</strong>: El problema es caché del navegador en la app real. Limpia la caché.</li>
+            <li style="margin: 10px 0;"><strong>Si NO están alineados aquí</strong>: Toma una captura y compártela conmigo.</li>
+            <li style="margin: 10px 0;"><strong>Nota</strong>: Los íconos tienen margen derecho (mr-2 = 8px), esto es correcto y necesario.</li>
+        </ol>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 20px; background: #e7f3ff; border-radius: 8px; max-width: 800px;">
+        <h3 style="margin-top: 0;">📋 CSS Aplicado:</h3>
+        <pre style="background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 12px;">
+.app-card {
+  padding: 16px !important;
+}
+
+.app-card > h3 {
+  padding: 0 !important;
+  margin: 0 0 12px 0 !important;
+}
+
+.app-card > div {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.app-card .app-menu-item {
+  padding: 8px 0px !important;
+  margin: 0 !important;
+}
+
+.app-card .app-menu-item .material-icons {
+  margin-left: 0 !important;
+  margin-right: 8px !important;
+}
+        </pre>
+    </div>
+</body>
+</html>
+

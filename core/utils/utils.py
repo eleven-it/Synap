@@ -1078,17 +1078,11 @@ APPS_MENU = [
         "color": "purple",
         "submenus": [
             {
-                "seccion": _("Dashboard"),
+                "seccion": _("Status"),
                 "items": [
-                    {"label": _("Dashboard"), "url": "tiendanube_administranet:dashboard", "icon": "dashboard", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
-                    {"label": _("Status"), "url": "tiendanube_administranet:status", "icon": "monitor_heart", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
-                ]
-            },
-            {
-                "seccion": _("Configuration"),
-                "items": [
-                    {"label": _("Tiendanube Settings"), "url": "tiendanube_administranet:tiendanube_config_list", "icon": "cloud", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
-                    {"label": _("AdministraNET Settings"), "url": "tiendanube_administranet:adminet_config", "icon": "database", "permission": "tiendanube_administranet.view_administranetconfig"},
+                    {"label": _("Status"), "url": "tiendanube_administranet:dashboard", "icon": "monitor_heart", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
+                    {"label": _("Tiendanube Configuration"), "url": "tiendanube_administranet:tiendanube_config_list", "icon": "settings", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
+                    {"label": _("AdministraNET Configuration"), "url": "tiendanube_administranet:adminet_config", "icon": "storage", "permission": "tiendanube_administranet.view_administranetconfig"},
                 ]
             },
             {
@@ -1100,18 +1094,12 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Webhooks"),
-                "items": [
-                    {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "zap", "permission": "tiendanube_administranet.view_webhookconfig"},
-                    {"label": _("Webhook Events"), "url": "tiendanube_administranet:webhook_event_list", "icon": "activity", "permission": "tiendanube_administranet.view_webhookevent"},
-                ]
-            },
-            {
                 "seccion": _("Synchronization"),
                 "items": [
                     {"label": _("Manual Sync"), "url": "tiendanube_administranet:manual_sync", "icon": "sync", "permission": "tiendanube_administranet.run_sync"},
                     {"label": _("Sync History"), "url": "tiendanube_administranet:sync_history", "icon": "history", "permission": "tiendanube_administranet.view_synclog"},
-                    {"label": _("Sync Logs"), "url": "tiendanube_administranet:sync_log_list", "icon": "article", "permission": "tiendanube_administranet.view_synclog"},
+                    {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "webhook", "permission": "tiendanube_administranet.view_webhookconfig"},
+                    {"label": _("Webhook Events"), "url": "tiendanube_administranet:webhook_event_list", "icon": "notifications", "permission": "tiendanube_administranet.view_webhookevent"},
                 ]
             }
         ]

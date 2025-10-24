@@ -21,7 +21,11 @@ class TiendanubeConfigForm(forms.ModelForm):
     
     class Meta:
         model = TiendanubeConfig
-        fields = ['name', 'store_id', 'access_token', 'api_url', 'is_active']
+        fields = [
+            'name', 'store_id', 'access_token', 'api_url', 'is_active',
+            'auto_sync', 'sync_interval', 'sync_products', 'sync_customers', 
+            'sync_orders', 'sync_stock', 'webhook_secret'
+        ]
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -41,6 +45,31 @@ class TiendanubeConfigForm(forms.ModelForm):
             }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
+            }),
+            'auto_sync': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'sync_interval': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '5',
+                'max': '1440',
+                'step': '5'
+            }),
+            'sync_products': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'sync_customers': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'sync_orders': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'sync_stock': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'webhook_secret': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': _('Optional secret for webhook verification')
             })
         }
         labels = {
@@ -48,13 +77,27 @@ class TiendanubeConfigForm(forms.ModelForm):
             'store_id': _('ID de Tienda'),
             'access_token': _('Token de Acceso'),
             'api_url': _('URL de la API'),
-            'is_active': _('Activo')
+            'is_active': _('Activo'),
+            'auto_sync': _('Sincronización Automática'),
+            'sync_interval': _('Intervalo de Sincronización (minutos)'),
+            'sync_products': _('Sincronizar Productos'),
+            'sync_customers': _('Sincronizar Clientes'),
+            'sync_orders': _('Sincronizar Pedidos'),
+            'sync_stock': _('Sincronizar Stock'),
+            'webhook_secret': _('Webhook Secret'),
         }
         help_texts = {
             'store_id': _('ID único de tu tienda en Tiendanube'),
             'access_token': _('Token de acceso para la API de Tiendanube'),
             'api_url': _('URL base de la API de Tiendanube'),
-            'is_active': _('Activar esta configuración')
+            'is_active': _('Activar esta configuración'),
+            'auto_sync': _('Habilitar sincronización automática programada'),
+            'sync_interval': _('Frecuencia de sincronización en minutos (5-1440)'),
+            'sync_products': _('Sincronizar productos entre sistemas'),
+            'sync_customers': _('Sincronizar clientes entre sistemas'),
+            'sync_orders': _('Sincronizar pedidos entre sistemas'),
+            'sync_stock': _('Sincronizar stock entre sistemas'),
+            'webhook_secret': _('Secret para verificación de webhooks de TiendaNube'),
         }
     
     def clean_store_id(self):
@@ -81,18 +124,123 @@ class AdministraNETConfigForm(forms.ModelForm):
     Formulario para configuración de AdministraNET.
     """
     
-    deposito_tiendanube_id = forms.ChoiceField(
+    # Campos adicionales para listas desplegables
+    deposito_tiendanube_choice = forms.ChoiceField(
+        choices=[],
         required=False,
-        label=_('Depósito TiendaNube'),
-        help_text=_('Seleccione el depósito que se sincronizará con TiendaNube'),
+        label=_('Depósito Tiendanube'),
+        help_text=_('Seleccione el depósito para productos de Tiendanube'),
         widget=forms.Select(attrs={
-            'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400'
+            'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white'
+        })
+    )
+    
+    punto_venta_tiendanube_choice = forms.ChoiceField(
+        choices=[],
+        required=False,
+        label=_('Punto de Venta Tiendanube'),
+        help_text=_('Seleccione el punto de venta para órdenes de Tiendanube (ej: 0001-00000001)'),
+        widget=forms.Select(attrs={
+            'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white'
+        })
+    )
+    
+    viajante_tiendanube_choice = forms.ChoiceField(
+        choices=[],
+        required=False,
+        label=_('Vendedor Tiendanube'),
+        help_text=_('Seleccione el vendedor para órdenes de Tiendanube'),
+        widget=forms.Select(attrs={
+            'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white'
         })
     )
     
     class Meta:
         model = AdministraNETConfig
-        fields = ['name', 'host', 'port', 'database', 'user', 'password', 'deposito_tiendanube_id', 'is_active']
+        fields = ['name', 'host', 'port', 'database', 'user', 'password', 'deposito_tiendanube_id', 'sucursal_tiendanube_id', 'punto_venta_tiendanube_id', 'viajante_tiendanube_id', 'is_active']
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        # Cargar opciones desde AdministraNET si la conexión está disponible
+        try:
+            from .services.adminet_service import AdministraNETService
+            
+            # Intentar obtener datos de AdministraNET
+            adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+            if adminet_config:
+                service = AdministraNETService(adminet_config)
+                
+                # Cargar depósitos
+                depositos_result = service.get_depositos()
+                if depositos_result.get('success'):
+                    depositos_choices = [('', _('Seleccione un depósito...'))]
+                    for deposito in depositos_result.get('depositos', []):
+                        depositos_choices.append((
+                            deposito['CodDeposito'], 
+                            f"ID {deposito['CodDeposito']} - {deposito['NombreDeposito']}"
+                        ))
+                    self.fields['deposito_tiendanube_choice'].choices = depositos_choices
+                    
+                    # Preseleccionar el valor actual si existe
+                    if self.instance and self.instance.deposito_tiendanube_id:
+                        self.fields['deposito_tiendanube_choice'].initial = self.instance.deposito_tiendanube_id
+                
+                # Cargar puntos de venta
+                puntos_venta_result = service.get_puntos_venta()
+                if puntos_venta_result.get('success'):
+                    puntos_venta_choices = [('', _('Seleccione un punto de venta...'))]
+                    for punto_venta in puntos_venta_result.get('puntos_venta', []):
+                        # Formato simple: solo el número del punto de venta
+                        puntos_venta_choices.append((
+                            punto_venta['id_punto_venta'], 
+                            str(punto_venta['nro_punto_venta'])
+                        ))
+                    self.fields['punto_venta_tiendanube_choice'].choices = puntos_venta_choices
+                    
+                    # Preseleccionar el valor actual si existe
+                    if self.instance and self.instance.punto_venta_tiendanube_id:
+                        self.fields['punto_venta_tiendanube_choice'].initial = self.instance.punto_venta_tiendanube_id
+                
+                # Cargar viajantes
+                viajantes_result = service.get_viajantes()
+                if viajantes_result.get('success'):
+                    viajantes_choices = [('', _('Seleccione un vendedor...'))]
+                    for viajante in viajantes_result.get('viajantes', []):
+                        viajantes_choices.append((
+                            viajante['CodViajante'], 
+                            f"ID {viajante['CodViajante']} - {viajante['Nombre']}"
+                        ))
+                    self.fields['viajante_tiendanube_choice'].choices = viajantes_choices
+                    
+                    # Preseleccionar el valor actual si existe
+                    if self.instance and hasattr(self.instance, 'viajante_tiendanube_id'):
+                        self.fields['viajante_tiendanube_choice'].initial = getattr(self.instance, 'viajante_tiendanube_id', None)
+                        
+        except Exception as e:
+            # Si hay error, mostrar opciones vacías
+            self.fields['deposito_tiendanube_choice'].choices = [('', _('Error cargando depósitos...'))]
+            self.fields['sucursal_tiendanube_choice'].choices = [('', _('Error cargando sucursales...'))]
+            self.fields['viajante_tiendanube_choice'].choices = [('', _('Error cargando vendedores...'))]
+    
+    def save(self, commit=True):
+        """Guardar el formulario y sincronizar los campos de selección."""
+        instance = super().save(commit=False)
+        
+        # Sincronizar valores de los campos de selección
+        if self.cleaned_data.get('deposito_tiendanube_choice'):
+            instance.deposito_tiendanube_id = int(self.cleaned_data['deposito_tiendanube_choice'])
+        
+        if self.cleaned_data.get('punto_venta_tiendanube_choice'):
+            instance.punto_venta_tiendanube_id = int(self.cleaned_data['punto_venta_tiendanube_choice'])
+        
+        if self.cleaned_data.get('viajante_tiendanube_choice'):
+            instance.viajante_tiendanube_id = int(self.cleaned_data['viajante_tiendanube_choice'])
+        
+        if commit:
+            instance.save()
+        
+        return instance
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400',
@@ -119,6 +267,16 @@ class AdministraNETConfigForm(forms.ModelForm):
                 'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400',
                 'placeholder': _('Contraseña de la base de datos')
             }),
+            'deposito_tiendanube_id': forms.NumberInput(attrs={
+                'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400',
+                'placeholder': _('ID del depósito para productos'),
+                'min': 1
+            }),
+            'sucursal_tiendanube_id': forms.NumberInput(attrs={
+                'class': 'block w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400',
+                'placeholder': _('ID de la sucursal para órdenes'),
+                'min': 1
+            }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600'
             })
@@ -130,6 +288,8 @@ class AdministraNETConfigForm(forms.ModelForm):
             'database': _('Base de Datos'),
             'user': _('Usuario'),
             'password': _('Contraseña'),
+            'deposito_tiendanube_id': _('Depósito Tiendanube ID'),
+            'sucursal_tiendanube_id': _('Sucursal Tiendanube ID'),
             'is_active': _('Activo')
         }
         help_texts = {
@@ -138,42 +298,10 @@ class AdministraNETConfigForm(forms.ModelForm):
             'database': _('Nombre de la base de datos de AdministraNET'),
             'user': _('Usuario con permisos de lectura/escritura'),
             'password': _('Contraseña del usuario'),
+            'deposito_tiendanube_id': _('ID del depósito en AdministraNET para sincronización de productos'),
+            'sucursal_tiendanube_id': _('ID de la sucursal en AdministraNET para numeración de órdenes (ej: 0001-00000001)'),
             'is_active': _('Activar esta configuración')
         }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        # Cargar depósitos disponibles si hay una instancia con conexión configurada
-        depositos_choices = [('', _('Seleccione un depósito'))]
-        
-        if self.instance and self.instance.pk:
-            try:
-                from .services.adminet_service import AdministraNETService
-                service = AdministraNETService(self.instance)
-                result = service.get_depositos()
-                
-                if result['success']:
-                    for deposito in result['depositos']:
-                        depositos_choices.append((
-                            deposito.get('id'),
-                            f"{deposito.get('nombre')} (ID: {deposito.get('id')})"
-                        ))
-            except Exception as e:
-                # Si hay error al conectar, solo mostrar opción vacía
-                pass
-        
-        self.fields['deposito_tiendanube_id'].choices = depositos_choices
-        
-        # Si ya hay un valor seleccionado, asegurarse de que esté en las opciones
-        if self.instance and self.instance.deposito_tiendanube_id:
-            current_value = str(self.instance.deposito_tiendanube_id)
-            if not any(str(choice[0]) == current_value for choice in depositos_choices):
-                depositos_choices.append((
-                    self.instance.deposito_tiendanube_id,
-                    f"Depósito {self.instance.deposito_tiendanube_id} (Configurado)"
-                ))
-                self.fields['deposito_tiendanube_id'].choices = depositos_choices
     
     def clean(self):
         """Validar que solo haya una configuración activa."""
@@ -220,7 +348,11 @@ class CustomerMappingForm(forms.ModelForm):
             'adminet_saldo', 'adminet_id_manual_cli', 'adminet_nombre_fantasia', 'adminet_cliente_ecommerce',
             
             # Configuración de sincronización
-            'sync_direction', 'sync_status', 'sync_enabled'
+            'sync_direction', 'sync_status', 'sync_enabled',
+            
+            # Campos de control y workflow
+            'error_message', 'datos_completos', 'workflow_estado',
+            'fecha_registro_incompleto', 'intentos_completar_datos', 'ultimo_intento_completar'
         ]
         widgets = {
             'tiendanube_email': forms.EmailInput(attrs={
@@ -1050,16 +1182,29 @@ class WebhookConfigForm(forms.ModelForm):
     Formulario para configuración de webhooks.
     """
     
+    # Campo personalizado para la URL del webhook
+    webhook_url_auto = forms.BooleanField(
+        required=False,
+        initial=True,
+        label=_('Auto-generate webhook URL'),
+        help_text=_('Automatically generate webhook URL based on site configuration'),
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input',
+            'onchange': 'toggleWebhookUrlField()'
+        })
+    )
+    
     class Meta:
         model = WebhookConfig
         fields = [
             'tiendanube_config', 'webhook_url', 'webhook_secret', 
-            'events', 'description', 'is_active', 'max_retries', 'retry_delay'
+            'events', 'description', 'status', 'is_active', 'max_retries', 'retry_delay'
         ]
         widgets = {
             'webhook_url': forms.URLInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'https://your-domain.com/webhooks/tiendanube/'
+                'placeholder': 'https://your-domain.com/webhooks/tiendanube/',
+                'id': 'id_webhook_url'
             }),
             'webhook_secret': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -1082,6 +1227,9 @@ class WebhookConfigForm(forms.ModelForm):
                 'class': 'form-control',
                 'min': 60,
                 'max': 3600
+            }),
+            'status': forms.Select(attrs={
+                'class': 'form-control'
             })
         }
     
@@ -1125,6 +1273,24 @@ class WebhookConfigForm(forms.ModelForm):
             event_choices.append((group_name, events))
         
         self.fields['events'].choices = event_choices
+        
+        # Auto-generar URL si está habilitado
+        if self.initial.get('webhook_url_auto', True):
+            from django.conf import settings
+            site_url = getattr(settings, 'SITE_URL', 'https://localhost:8002')
+            self.initial['webhook_url'] = f"{site_url}/tiendanube_administranet/webhook/"
+    
+    def clean(self):
+        """Validación personalizada del formulario."""
+        cleaned_data = super().clean()
+        
+        # Auto-generar URL si está habilitado
+        if cleaned_data.get('webhook_url_auto', True):
+            from django.conf import settings
+            site_url = getattr(settings, 'SITE_URL', 'https://localhost:8002')
+            cleaned_data['webhook_url'] = f"{site_url}/tiendanube_administranet/webhook/"
+        
+        return cleaned_data
     
     def clean_webhook_url(self):
         """Validar URL del webhook."""

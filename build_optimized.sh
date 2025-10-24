@@ -108,8 +108,6 @@ echo -e "${BLUE}🏗️  Construyendo servicios...${NC}"
 # Construir imagen principal de Django
 build_with_cache "web" "Dockerfile" "." "python:3.10-slim"
 
-# Construir imagen de reports-ai
-build_with_cache "reports-ai" "reports_ai/Dockerfile" "." "pytorch/pytorch:latest"
 
 # Esperar a que terminen las construcciones paralelas
 if [ "$PARALLEL" = true ]; then

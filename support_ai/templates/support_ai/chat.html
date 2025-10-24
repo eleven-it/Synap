@@ -1,0 +1,830 @@
+{% extends "base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Soporte IA - Chat" %} - Eleven Support{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilos inspirados en Cal.com */
+    .chat-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        height: calc(100vh - 100px);
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-color);
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .chat-header {
+        background: var(--primary-color);
+        color: white;
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        background: var(--bg-secondary);
+    }
+
+    .message {
+        margin-bottom: 1rem;
+        display: flex;
+        gap: 0.75rem;
+        animation: fadeInUp 0.3s ease-out;
+    }
+
+    .message.user {
+        flex-direction: row-reverse;
+    }
+
+    .message-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .message.user .message-avatar {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .message.ai .message-avatar {
+        background: var(--accent-color);
+        color: white;
+    }
+
+    .message-content {
+        max-width: 70%;
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+        position: relative;
+    }
+
+    .message.user .message-content {
+        background: var(--primary-color);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message.ai .message-content {
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-bottom-left-radius: 4px;
+    }
+
+    .message-time {
+        font-size: 0.75rem;
+        opacity: 0.7;
+        margin-top: 0.25rem;
+    }
+
+    .chat-input {
+        padding: 1rem;
+        background: var(--bg-color);
+        border-top: 1px solid var(--border-color);
+    }
+
+    .input-container {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-end;
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .input-container:focus-within {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.1);
+    }
+
+    .message-input {
+        flex: 1;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem;
+        resize: none;
+        min-height: 44px;
+        max-height: 120px;
+        font-family: inherit;
+        background: var(--bg-secondary);
+        color: var(--text-color);
+        outline: none;
+    }
+
+    .message-input:focus {
+        outline: none;
+        background: var(--bg-color);
+    }
+
+    .send-button {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 100px;
+        justify-content: center;
+        font-weight: 500;
+    }
+
+    .send-button:hover {
+        background: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(var(--primary-rgb), 0.3);
+    }
+
+    .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+
+    .send-button i {
+        font-size: 0.9rem;
+    }
+
+    .file-upload {
+        display: none;
+    }
+
+    .upload-button {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+    }
+
+    .upload-button:hover {
+        background: var(--bg-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+
+    .upload-button i {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+    }
+
+    .upload-button:hover i {
+        color: var(--primary-color);
+        transform: scale(1.1);
+    }
+
+    .voice-button {
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+    }
+
+    .voice-button:hover {
+        background: var(--accent-dark);
+        transform: translateY(-1px);
+    }
+
+    .voice-button.recording {
+        background: var(--error-color);
+        animation: pulse 1s infinite;
+    }
+
+    .voice-button i {
+        font-size: 1.2rem;
+    }
+
+    .voice-button.recording i {
+        animation: pulse 1s infinite;
+    }
+
+    .typing-indicator {
+        display: none;
+        padding: 0.75rem 1rem;
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        border-bottom-left-radius: 4px;
+        margin-bottom: 1rem;
+    }
+
+    .typing-dots {
+        display: flex;
+        gap: 0.25rem;
+    }
+
+    .typing-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-muted);
+        animation: typing 1.4s infinite;
+    }
+
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    .suggestions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .suggestion-chip {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.875rem;
+    }
+
+    .suggestion-chip:hover {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+    }
+
+    .ticket-info {
+        background: var(--bg-secondary);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        border-left: 4px solid var(--primary-color);
+    }
+
+    .ticket-status {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-open { background: var(--warning-bg); color: var(--warning-color); }
+    .status-in-progress { background: var(--info-bg); color: var(--info-color); }
+    .status-resolved { background: var(--success-bg); color: var(--success-color); }
+    .status-closed { background: var(--bg-color); color: var(--text-muted); }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); }
+        30% { transform: translateY(-10px); }
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    /* Dark mode support */
+    [data-theme="dark"] {
+        --bg-color: #1a1a1a;
+        --bg-secondary: #2a2a2a;
+        --text-color: #ffffff;
+        --text-muted: #a0a0a0;
+        --border-color: #404040;
+        --primary-color: #3b82f6;
+        --primary-dark: #2563eb;
+        --primary-rgb: 59, 130, 246;
+        --accent-color: #10b981;
+        --accent-dark: #059669;
+        --error-color: #ef4444;
+        --warning-color: #f59e0b;
+        --warning-bg: rgba(245, 158, 11, 0.1);
+        --info-color: #3b82f6;
+        --info-bg: rgba(59, 130, 246, 0.1);
+        --success-color: #10b981;
+        --success-bg: rgba(16, 185, 129, 0.1);
+    }
+
+    [data-theme="light"] {
+        --bg-color: #ffffff;
+        --bg-secondary: #f9fafb;
+        --text-color: #111827;
+        --text-muted: #6b7280;
+        --border-color: #e5e7eb;
+        --primary-color: #3b82f6;
+        --primary-dark: #2563eb;
+        --primary-rgb: 59, 130, 246;
+        --accent-color: #10b981;
+        --accent-dark: #059669;
+        --error-color: #ef4444;
+        --warning-color: #f59e0b;
+        --warning-bg: rgba(245, 158, 11, 0.1);
+        --info-color: #3b82f6;
+        --info-bg: rgba(59, 130, 246, 0.1);
+        --success-color: #10b981;
+        --success-bg: rgba(16, 185, 129, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Header -->
+    <div class="chat-header">
+        <div>
+            <h2 class="mb-0">Soporte IA</h2>
+            {% if ticket %}
+                <small>Ticket #{{ ticket.ticket_number }}</small>
+            {% else %}
+                <small>Nuevo ticket</small>
+            {% endif %}
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-light" onclick="toggleTheme()">
+                <i class="fas fa-moon"></i>
+            </button>
+            <a href="{% url 'support_ai:ticket_list' %}" class="btn btn-sm btn-outline-light">
+                <i class="fas fa-list"></i> Tickets
+            </a>
+        </div>
+    </div>
+
+    <!-- Ticket Info -->
+    {% if ticket %}
+    <div class="ticket-info">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h5 class="mb-1">{{ ticket.subject }}</h5>
+                <p class="mb-2 text-muted">{{ ticket.description|truncatewords:20 }}</p>
+                <span class="ticket-status status-{{ ticket.status }}">
+                    {{ ticket.get_status_display }}
+                </span>
+            </div>
+            <div class="text-end">
+                <small class="text-muted">Creado: {{ ticket.created_at|date:"d/m/Y H:i" }}</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Messages -->
+    <div class="chat-messages" id="chatMessages">
+        <!-- Welcome message -->
+        <div class="message ai">
+            <div class="message-avatar">AI</div>
+            <div class="message-content">
+                <div>¡Hola! Soy tu asistente de soporte IA. ¿En qué puedo ayudarte hoy?</div>
+                <div class="message-time">{{ now|date:"H:i" }}</div>
+            </div>
+        </div>
+
+        <!-- Previous conversations -->
+        {% if conversations %}
+            {% for conv in conversations %}
+            <div class="message {% if conv.message_type == 'user' %}user{% else %}ai{% endif %}">
+                <div class="message-avatar">
+                    {% if conv.message_type == 'user' %}U{% else %}AI{% endif %}
+                </div>
+                <div class="message-content">
+                    <div>{{ conv.content }}</div>
+                    <div class="message-time">{{ conv.created_at|date:"H:i" }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input">
+        <div class="input-container">
+            <textarea 
+                class="message-input" 
+                id="messageInput" 
+                placeholder="Escribe tu mensaje..."
+                rows="1"
+                maxlength="1000"
+            ></textarea>
+            
+            <input type="file" id="fileUpload" class="file-upload" accept="image/*,.pdf,.doc,.docx">
+            <button class="upload-button" onclick="document.getElementById('fileUpload').click()" title="Adjuntar archivo">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </button>
+            
+            <button class="voice-button" id="voiceButton" onclick="toggleVoiceRecording()" title="Grabar mensaje de voz">
+                <i class="fas fa-microphone"></i>
+            </button>
+            
+            <button class="send-button" id="sendButton" onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i>
+                <span>Enviar</span>
+            </button>
+        </div>
+
+        <!-- Suggestions -->
+        <div class="suggestions" id="suggestions">
+            <div class="suggestion-chip" onclick="sendSuggestion('Tengo un problema con la facturación')">
+                Problema con facturación
+            </div>
+            <div class="suggestion-chip" onclick="sendSuggestion('Necesito ayuda con la configuración')">
+                Ayuda con configuración
+            </div>
+            <div class="suggestion-chip" onclick="sendSuggestion('¿Cómo crear un nuevo producto?')">
+                Crear producto
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File preview modal -->
+<div class="modal fade" id="filePreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-upload me-2"></i>
+                    Vista previa del archivo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="filePreview" class="text-center"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="confirmFileUpload()">
+                    <i class="fas fa-paper-plane me-1"></i>
+                    Enviar archivo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentFile = null;
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+
+// Theme management
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+}
+
+// Initialize theme
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    
+    // Auto-resize textarea
+    const textarea = document.getElementById('messageInput');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    
+    // Enter to send
+    textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+});
+
+// Send message
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Disable input and button while sending
+    input.disabled = true;
+    sendButton.disabled = true;
+    sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    
+    // Add user message to chat
+    addMessage(message, 'user');
+    input.value = '';
+    input.style.height = 'auto';
+    
+    // Show typing indicator
+    showTypingIndicator();
+    
+    try {
+        const ticketId = '{{ ticket.id|default:"" }}';
+        const url = ticketId ? `{% url "support_ai:send_message" ticket_id="00000000-0000-0000-0000-000000000000" %}`.replace('00000000-0000-0000-0000-000000000000', ticketId) : '{% url "support_ai:send_message" ticket_id="00000000-0000-0000-0000-000000000000" %}';
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                message: message,
+                ticket_id: ticketId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Mostrar respuesta de IA automáticamente
+            setTimeout(() => {
+                addMessage(data.response, 'ai');
+                updateSuggestions(data.suggestions);
+            }, 1000); // Pequeña pausa para simular procesamiento
+        } else {
+            addMessage('Lo siento, hubo un error. Inténtalo de nuevo.', 'ai');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        addMessage('Error de conexión. Verifica tu internet.', 'ai');
+    } finally {
+        hideTypingIndicator();
+        // Re-enable input and button
+        input.disabled = false;
+        sendButton.disabled = false;
+        sendButton.innerHTML = '<i class="fas fa-paper-plane"></i><span>Enviar</span>';
+        input.focus();
+    }
+}
+
+// Add message to chat
+function addMessage(content, type) {
+    const messagesContainer = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type}`;
+    
+    const now = new Date();
+    const time = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${type === 'user' ? 'U' : 'AI'}</div>
+        <div class="message-content">
+            <div>${content}</div>
+            <div class="message-time">${time}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// Show/hide typing indicator
+function showTypingIndicator() {
+    document.getElementById('typingIndicator').style.display = 'block';
+    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+}
+
+function hideTypingIndicator() {
+    document.getElementById('typingIndicator').style.display = 'none';
+}
+
+// Update suggestions
+function updateSuggestions(suggestions) {
+    const container = document.getElementById('suggestions');
+    if (suggestions && suggestions.length > 0) {
+        container.innerHTML = suggestions.map(suggestion => 
+            `<div class="suggestion-chip" onclick="sendSuggestion('${suggestion}')">${suggestion}</div>`
+        ).join('');
+    }
+}
+
+// Send suggestion
+function sendSuggestion(text) {
+    document.getElementById('messageInput').value = text;
+    sendMessage();
+}
+
+// File upload
+document.getElementById('fileUpload').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        currentFile = file;
+        showFilePreview(file);
+    }
+});
+
+function showFilePreview(file) {
+    const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
+    const preview = document.getElementById('filePreview');
+    
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = `
+                <div class="mb-3">
+                    <img src="${e.target.result}" class="img-fluid rounded shadow-sm" alt="Preview" style="max-height: 300px;">
+                </div>
+                <div class="text-center">
+                    <p class="mb-1"><strong>${file.name}</strong></p>
+                    <small class="text-muted">${(file.size / 1024).toFixed(1)} KB • Imagen</small>
+                </div>
+            `;
+        };
+        reader.readAsDataURL(file);
+    } else if (file.type === 'application/pdf') {
+        preview.innerHTML = `
+            <div class="text-center mb-3">
+                <i class="fas fa-file-pdf fa-4x text-danger mb-3"></i>
+                <p class="mb-1"><strong>${file.name}</strong></p>
+                <small class="text-muted">${(file.size / 1024).toFixed(1)} KB • Documento PDF</small>
+            </div>
+        `;
+    } else if (file.type.includes('word') || file.type.includes('document')) {
+        preview.innerHTML = `
+            <div class="text-center mb-3">
+                <i class="fas fa-file-word fa-4x text-primary mb-3"></i>
+                <p class="mb-1"><strong>${file.name}</strong></p>
+                <small class="text-muted">${(file.size / 1024).toFixed(1)} KB • Documento Word</small>
+            </div>
+        `;
+    } else {
+        preview.innerHTML = `
+            <div class="text-center mb-3">
+                <i class="fas fa-file fa-4x text-muted mb-3"></i>
+                <p class="mb-1"><strong>${file.name}</strong></p>
+                <small class="text-muted">${(file.size / 1024).toFixed(1)} KB • Archivo</small>
+            </div>
+        `;
+    }
+    
+    modal.show();
+}
+
+async function confirmFileUpload() {
+    if (!currentFile) return;
+    
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    formData.append('ticket_id', '{{ ticket.id|default:"" }}');
+    
+    try {
+        const response = await fetch('{% url "support_ai:api_upload_file" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addMessage(`Archivo enviado: ${currentFile.name}`, 'user');
+            addMessage(data.analysis, 'ai');
+        } else {
+            addMessage('Error al subir el archivo.', 'ai');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        addMessage('Error al procesar el archivo.', 'ai');
+    }
+    
+    currentFile = null;
+    bootstrap.Modal.getInstance(document.getElementById('filePreviewModal')).hide();
+}
+
+// Voice recording
+async function toggleVoiceRecording() {
+    const button = document.getElementById('voiceButton');
+    
+    if (!isRecording) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = function(event) {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async function() {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                await sendVoiceMessage(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            button.classList.add('recording');
+            button.innerHTML = '<i class="fas fa-stop-circle"></i>';
+        } catch (error) {
+            console.error('Error accessing microphone:', error);
+            alert('No se pudo acceder al micrófono');
+        }
+    } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        button.classList.remove('recording');
+        button.innerHTML = '<i class="fas fa-microphone"></i>';
+    }
+}
+
+async function sendVoiceMessage(audioBlob) {
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    formData.append('ticket_id', '{{ ticket.id|default:"" }}');
+    
+    try {
+        const response = await fetch('{% url "support_ai:api_voice_input" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addMessage(data.transcription, 'user');
+            addMessage(data.response, 'ai');
+        } else {
+            addMessage('Error al procesar el audio.', 'ai');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        addMessage('Error al procesar el audio.', 'ai');
+    }
+}
+
+// Utility function to get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,840 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Dashboard de IA" %} - Eleven Support{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    .metric-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #4f46e5;
+        margin-bottom: 0.5rem;
+    }
+    
+    .metric-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .metric-change {
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .metric-change.positive {
+        color: #10b981;
+    }
+    
+    .metric-change.negative {
+        color: #ef4444;
+    }
+    
+    .chart-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        margin-bottom: 2rem;
+    }
+    
+    .model-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .model-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+    
+    .model-card.active {
+        border: 2px solid #4f46e5;
+        background: rgba(79, 70, 229, 0.05);
+    }
+    
+    .model-provider {
+        font-size: 0.75rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .model-cost {
+        font-size: 0.875rem;
+        color: #10b981;
+        font-weight: 600;
+    }
+    
+    .test-panel {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .test-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: border-color 0.3s ease;
+    }
+    
+    .test-input:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    
+    .test-button {
+        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .test-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
+    }
+    
+    .test-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .test-result {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+        line-height: 1.6;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #4f46e5;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .tab-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .tab-nav {
+        display: flex;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .tab-button {
+        flex: 1;
+        padding: 1rem;
+        background: none;
+        border: none;
+        font-weight: 600;
+        color: #6b7280;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .tab-button.active {
+        color: #4f46e5;
+        background: white;
+        border-bottom: 3px solid #4f46e5;
+    }
+    
+    .tab-content {
+        padding: 1.5rem;
+        display: none;
+    }
+    
+    .tab-content.active {
+        display: block;
+    }
+    
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #10b981 0%, #4f46e5 100%);
+        transition: width 0.3s ease;
+    }
+    
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+    
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+    }
+    
+    .alert-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
+    
+    .alert-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fde68a;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="container mx-auto px-4">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">🤖 Dashboard de IA</h1>
+            <p class="text-white/80 text-lg">Monitoreo y configuración de servicios de inteligencia artificial</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Métricas Principales -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card">
+                <div class="metric-value" id="total-requests">0</div>
+                <div class="metric-label">Solicitudes Totales</div>
+                <div class="metric-change positive" id="requests-change">+0%</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-value" id="total-cost">$0.00</div>
+                <div class="metric-label">Costo Total</div>
+                <div class="metric-change" id="cost-change">+0%</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-value" id="success-rate">0%</div>
+                <div class="metric-label">Tasa de Éxito</div>
+                <div class="metric-change positive" id="success-change">+0%</div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-value" id="avg-response-time">0s</div>
+                <div class="metric-label">Tiempo Promedio</div>
+                <div class="metric-change" id="time-change">+0%</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-container">
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="showTab('overview')">📊 Resumen</button>
+                <button class="tab-button" onclick="showTab('models')">🤖 Modelos</button>
+                <button class="tab-button" onclick="showTab('testing')">🧪 Pruebas</button>
+                <button class="tab-button" onclick="showTab('settings')">⚙️ Configuración</button>
+            </div>
+
+            <!-- Tab: Resumen -->
+            <div id="overview" class="tab-content active">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Gráfico de Costos -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">📈 Análisis de Costos (7 días)</h3>
+                        <canvas id="costChart" width="400" height="200"></canvas>
+                    </div>
+
+                    <!-- Gráfico de Rendimiento -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">⚡ Rendimiento (24h)</h3>
+                        <canvas id="performanceChart" width="400" height="200"></canvas>
+                    </div>
+
+                    <!-- Uso por Proveedor -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">🏢 Uso por Proveedor</h3>
+                        <div id="provider-usage" class="space-y-3">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+
+                    <!-- Uso por Modelo -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">🎯 Uso por Modelo</h3>
+                        <div id="model-usage" class="space-y-3">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Modelos -->
+            <div id="models" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for model in available_models %}
+                    <div class="model-card" data-model-id="{{ model.model_id }}">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <h4 class="font-semibold text-gray-900">{{ model.name }}</h4>
+                                <div class="model-provider">{{ model.provider|title }}</div>
+                            </div>
+                            <div class="model-cost">${{ model.cost_per_1k_tokens|floatformat:5 }}</div>
+                        </div>
+                        
+                        <div class="text-sm text-gray-600 mb-3">
+                            <div>Max tokens: {{ model.max_tokens|floatformat:0 }}</div>
+                            <div>Temperature: {{ model.temperature }}</div>
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-1 mb-3">
+                            {% for feature in model.features %}
+                            <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{{ feature }}</span>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-500">
+                                {% if model.is_available %}
+                                <span class="text-green-600">● Disponible</span>
+                                {% else %}
+                                <span class="text-red-600">● No disponible</span>
+                                {% endif %}
+                            </span>
+                            <button class="text-xs text-blue-600 hover:text-blue-800" 
+                                    onclick="testModel('{{ model.model_id }}')">
+                                Probar
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Tab: Pruebas -->
+            <div id="testing" class="tab-content">
+                <div class="test-panel">
+                    <h3 class="text-lg font-semibold mb-4">🧪 Prueba de Modelos</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Modelo</label>
+                            <select id="test-model" class="test-input">
+                                {% for model in available_models %}
+                                <option value="{{ model.model_id }}">{{ model.name }} ({{ model.provider }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Prompt</label>
+                            <select id="test-prompt-type" class="test-input">
+                                <option value="support_general">Soporte General</option>
+                                <option value="support_technical">Soporte Técnico</option>
+                                <option value="support_billing">Soporte de Facturación</option>
+                                <option value="sentiment_analysis">Análisis de Sentimientos</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Mensaje de Prueba</label>
+                        <textarea id="test-message" class="test-input" rows="4" 
+                                  placeholder="Escribe un mensaje para probar el modelo...">Hola, tengo un problema con la facturación de mi cuenta. ¿Puedes ayudarme?</textarea>
+                    </div>
+                    
+                    <button id="test-button" class="test-button" onclick="runTest()">
+                        <span id="test-button-text">🚀 Ejecutar Prueba</span>
+                        <span id="test-button-spinner" class="loading-spinner hidden"></span>
+                    </button>
+                    
+                    <div id="test-result" class="test-result hidden">
+                        <!-- Resultados de la prueba -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Configuración -->
+            <div id="settings" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Configuración de Proveedores -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">🔑 Configuración de Proveedores</h3>
+                        <div class="space-y-4">
+                            {% for provider, config in providers.items %}
+                            <div class="border rounded-lg p-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h4 class="font-semibold">{{ provider|title }}</h4>
+                                    <span class="text-sm {% if config.has_api_key %}text-green-600{% else %}text-red-600{% endif %}">
+                                        {% if config.has_api_key %}● Configurado{% else %}● No configurado{% endif %}
+                                    </span>
+                                </div>
+                                <div class="text-sm text-gray-600">
+                                    <div>URL: {{ config.base_url }}</div>
+                                    <div>Timeout: {{ config.timeout }}s</div>
+                                    <div>Reintentos: {{ config.max_retries }}</div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Configuración de Modelos -->
+                    <div class="chart-container">
+                        <h3 class="text-lg font-semibold mb-4">⚙️ Configuración de Modelos</h3>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center">
+                                <span>Modelo por defecto</span>
+                                <select id="default-model" class="test-input" style="width: auto;">
+                                    {% for model in available_models %}
+                                    <option value="{{ model.model_id }}" 
+                                            {% if model.model_id == 'gpt-4o-mini' %}selected{% endif %}>
+                                        {{ model.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="flex justify-between items-center">
+                                <span>Habilitar caché</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="enable-cache" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex justify-between items-center">
+                                <span>Registrar métricas</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="enable-metrics" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <button class="test-button mt-4" onclick="saveSettings()">
+                            💾 Guardar Configuración
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Variables globales
+let costChart, performanceChart;
+let currentMetrics = {};
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    loadMetrics();
+    initializeCharts();
+    setInterval(loadMetrics, 30000); // Actualizar cada 30 segundos
+});
+
+// Funciones de navegación
+function showTab(tabName) {
+    // Ocultar todos los tabs
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+    });
+    
+    // Mostrar tab seleccionado
+    document.getElementById(tabName).classList.add('active');
+    event.target.classList.add('active');
+    
+    // Actualizar gráficos si es necesario
+    if (tabName === 'overview') {
+        updateCharts();
+    }
+}
+
+// Cargar métricas
+async function loadMetrics() {
+    try {
+        const response = await fetch('/support/api/ai-metrics/?type=daily');
+        const data = await response.json();
+        
+        if (data.success) {
+            currentMetrics = data.data;
+            updateMetricsDisplay();
+            updateProviderUsage();
+            updateModelUsage();
+        }
+    } catch (error) {
+        console.error('Error cargando métricas:', error);
+    }
+}
+
+// Actualizar display de métricas
+function updateMetricsDisplay() {
+    const metrics = currentMetrics;
+    
+    document.getElementById('total-requests').textContent = metrics.total_requests || 0;
+    document.getElementById('total-cost').textContent = `$${(metrics.total_cost || 0).toFixed(4)}`;
+    document.getElementById('success-rate').textContent = 
+        metrics.total_requests > 0 ? 
+        `${((metrics.total_successful_requests / metrics.total_requests) * 100).toFixed(1)}%` : '0%';
+    document.getElementById('avg-response-time').textContent = 
+        `${(metrics.avg_response_time || 0).toFixed(2)}s`;
+}
+
+// Actualizar uso por proveedor
+function updateProviderUsage() {
+    const container = document.getElementById('provider-usage');
+    const providers = currentMetrics.providers || {};
+    
+    container.innerHTML = '';
+    
+    Object.entries(providers).forEach(([provider, data]) => {
+        const percentage = currentMetrics.total_requests > 0 ? 
+            ((data.requests / currentMetrics.total_requests) * 100).toFixed(1) : 0;
+        
+        container.innerHTML += `
+            <div class="flex justify-between items-center">
+                <span class="font-medium">${provider}</span>
+                <span class="text-sm text-gray-600">${data.requests} (${percentage}%)</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${percentage}%"></div>
+            </div>
+        `;
+    });
+}
+
+// Actualizar uso por modelo
+function updateModelUsage() {
+    const container = document.getElementById('model-usage');
+    const models = currentMetrics.models || {};
+    
+    container.innerHTML = '';
+    
+    Object.entries(models).forEach(([model, data]) => {
+        const percentage = currentMetrics.total_requests > 0 ? 
+            ((data.requests / currentMetrics.total_requests) * 100).toFixed(1) : 0;
+        
+        container.innerHTML += `
+            <div class="flex justify-between items-center">
+                <span class="font-medium">${model}</span>
+                <span class="text-sm text-gray-600">${data.requests} (${percentage}%)</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: ${percentage}%"></div>
+            </div>
+        `;
+    });
+}
+
+// Inicializar gráficos
+function initializeCharts() {
+    // Gráfico de costos
+    const costCtx = document.getElementById('costChart').getContext('2d');
+    costChart = new Chart(costCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Costo Diario ($)',
+                data: [],
+                borderColor: '#4f46e5',
+                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(4);
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfico de rendimiento
+    const perfCtx = document.getElementById('performanceChart').getContext('2d');
+    performanceChart = new Chart(perfCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Solicitudes por Hora',
+                data: [],
+                backgroundColor: '#10b981',
+                borderColor: '#059669',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Actualizar gráficos
+async function updateCharts() {
+    try {
+        // Cargar datos de costos
+        const costResponse = await fetch('/support/api/ai-metrics/?type=cost_analysis&days=7');
+        const costData = await costResponse.json();
+        
+        if (costData.success) {
+            const costTrend = costData.data.cost_trend || [];
+            costChart.data.labels = costTrend.map(item => item.date);
+            costChart.data.datasets[0].data = costTrend.map(item => item.cost);
+            costChart.update();
+        }
+        
+        // Cargar datos de rendimiento
+        const perfResponse = await fetch('/support/api/ai-metrics/?type=performance&hours=24');
+        const perfData = await perfResponse.json();
+        
+        if (perfData.success) {
+            const hourlyData = perfData.data.hourly_performance || [];
+            performanceChart.data.labels = hourlyData.map(item => item.hour.split('-')[3] + 'h');
+            performanceChart.data.datasets[0].data = hourlyData.map(item => item.requests);
+            performanceChart.update();
+        }
+    } catch (error) {
+        console.error('Error actualizando gráficos:', error);
+    }
+}
+
+// Probar modelo
+async function testModel(modelId) {
+    // Cambiar a tab de pruebas
+    showTab('testing');
+    
+    // Seleccionar modelo
+    document.getElementById('test-model').value = modelId;
+}
+
+// Ejecutar prueba
+async function runTest() {
+    const button = document.getElementById('test-button');
+    const buttonText = document.getElementById('test-button-text');
+    const buttonSpinner = document.getElementById('test-button-spinner');
+    const resultDiv = document.getElementById('test-result');
+    
+    // Mostrar loading
+    button.disabled = true;
+    buttonText.textContent = '⏳ Procesando...';
+    buttonSpinner.classList.remove('hidden');
+    resultDiv.classList.add('hidden');
+    
+    try {
+        const modelId = document.getElementById('test-model').value;
+        const promptType = document.getElementById('test-prompt-type').value;
+        const message = document.getElementById('test-message').value;
+        
+        const response = await fetch('/support/api/ai-model-test/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                model_id: modelId,
+                prompt_type: promptType,
+                message: message
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const result = data.test_result;
+            resultDiv.innerHTML = `
+                <div class="mb-3">
+                    <strong>Respuesta:</strong>
+                    <p class="mt-2">${result.content}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <strong>Modelo:</strong> ${result.model}<br>
+                        <strong>Proveedor:</strong> ${result.provider}<br>
+                        <strong>Tiempo:</strong> ${data.test_time.toFixed(2)}s
+                    </div>
+                    <div>
+                        <strong>Tokens:</strong> ${result.usage?.total_tokens || 0}<br>
+                        <strong>Costo:</strong> $${(result.cost || 0).toFixed(6)}<br>
+                        <strong>Confianza:</strong> ${(result.confidence || 0).toFixed(2)}
+                    </div>
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${data.error}
+                </div>
+            `;
+        }
+        
+        resultDiv.classList.remove('hidden');
+        
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div class="alert alert-error">
+                <strong>Error:</strong> ${error.message}
+            </div>
+        `;
+        resultDiv.classList.remove('hidden');
+    } finally {
+        // Restaurar botón
+        button.disabled = false;
+        buttonText.textContent = '🚀 Ejecutar Prueba';
+        buttonSpinner.classList.add('hidden');
+    }
+}
+
+// Guardar configuración
+async function saveSettings() {
+    try {
+        const defaultModel = document.getElementById('default-model').value;
+        const enableCache = document.getElementById('enable-cache').checked;
+        const enableMetrics = document.getElementById('enable-metrics').checked;
+        
+        // Aquí se enviaría la configuración al servidor
+        console.log('Configuración guardada:', {
+            defaultModel,
+            enableCache,
+            enableMetrics
+        });
+        
+        // Mostrar mensaje de éxito
+        showAlert('Configuración guardada exitosamente', 'success');
+        
+    } catch (error) {
+        showAlert('Error guardando configuración: ' + error.message, 'error');
+    }
+}
+
+// Mostrar alerta
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.textContent = message;
+    
+    document.querySelector('.dashboard-container').insertBefore(
+        alertDiv, 
+        document.querySelector('.container')
+    );
+    
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 5000);
+}
+
+// Obtener cookie CSRF
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %} 

@@ -24,4 +24,12 @@ urlpatterns = [
     path('financial-reports/<int:pk>/', views.FinancialReportDetailView.as_view(), name='financialreport_detail'),
     path('financial-reports/<int:pk>/edit/', views.FinancialReportUpdateView.as_view(), name='financialreport_edit'),
     path('financial-reports/<int:pk>/delete/', views.FinancialReportDeleteView.as_view(), name='financialreport_delete'),
+
+    # AI SQL Chat UI
+    path('ai-sql-chat/', views.SqlChatView.as_view(), name='ai_sql_chat'),
+
+    # API Endpoints
+    path('api/finance/ingest', views.ingest, name='finance_ingest'),
+    path('api/finance/monthly-report', views.monthly_report, name='finance_monthly_report'),
+    path('api/ai/sql-chat', views.sql_chat, name='sql_chat'),
 ] 

@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eleven Support - Mi Perfil</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .gradient-text { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-gray-50">
+    
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                
+                <!-- Logo and Navigation -->
+                <div class="flex items-center space-x-8">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-robot text-white text-xl"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h1 class="text-xl font-semibold text-gray-900">Eleven Support</h1>
+                        </div>
+                    </div>
+                    
+                    <!-- Navigation -->
+                    <nav class="hidden md:flex space-x-8">
+                        <a href="/support/auth/chat/" class="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-comments mr-2"></i>Chat
+                        </a>
+                        <a href="/support/auth/profile/" class="text-blue-600 bg-blue-50 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-user mr-2"></i>Mi Perfil
+                        </a>
+                        <a href="/support/auth/user-tickets/" class="text-gray-500 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+                            <i class="fas fa-ticket-alt mr-2"></i>Mis Tickets
+                        </a>
+                    </nav>
+                </div>
+                
+                <!-- User Menu -->
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-gray-900" id="userName">Usuario</p>
+                            <p class="text-xs text-gray-500" id="userRole">Cliente</p>
+                        </div>
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-white text-sm"></i>
+                        </div>
+                    </div>
+                    
+                    <a href="/support/auth/chat/" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i>Volver al Chat
+                    </a>
+                </div>
+                
+            </div>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Mi Perfil</h1>
+            <p class="text-gray-600">Gestiona tu información personal y configuración</p>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Profile Information -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Personal Information Card -->
+                <div class="bg-white rounded-lg shadow border border-gray-200 p-6 card-hover">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900">
+                            <i class="fas fa-user-circle mr-3 text-blue-600"></i>
+                            Información Personal
+                        </h2>
+                        <button id="editProfileBtn" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                            <i class="fas fa-edit mr-2"></i>Editar
+                        </button>
+                    </div>
+                    
+                    <div id="profileInfo" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                                <p class="text-gray-900" id="fullName">Cargando...</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <p class="text-gray-900" id="userEmail">Cargando...</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Usuario</label>
+                                <span id="userType" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Cargando...
+                                </span>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                                <span id="userStatus" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Activo
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Edit Profile Form (Hidden by default) -->
+                    <form id="editProfileForm" class="hidden space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="editFullName" class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                                <input type="text" id="editFullName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="editEmail" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input type="email" id="editEmail" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">
+                                <i class="fas fa-save mr-2"></i>Guardar Cambios
+                            </button>
+                            <button type="button" id="cancelEditBtn" class="bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-400">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Recent Tickets Card -->
+                <div class="bg-white rounded-lg shadow border border-gray-200 p-6 card-hover">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-xl font-semibold text-gray-900">
+                            <i class="fas fa-ticket-alt mr-3 text-green-600"></i>
+                            Tickets Recientes
+                        </h2>
+                        <a href="/support/auth/user-tickets/" class="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                            Ver Todos <i class="fas fa-arrow-right ml-1"></i>
+                        </a>
+                    </div>
+                    
+                    <div id="recentTickets" class="space-y-3">
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-spinner fa-spin text-2xl mb-3"></i>
+                            <p>Cargando tickets...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Account Statistics Card -->
+                <div class="bg-white rounded-lg shadow border border-gray-200 p-6 card-hover">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-6">
+                        <i class="fas fa-chart-bar mr-3 text-purple-600"></i>
+                        Estadísticas de la Cuenta
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fas fa-comments text-blue-600 text-2xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-900" id="totalMessages">0</p>
+                            <p class="text-sm text-gray-500">Mensajes Enviados</p>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fas fa-ticket-alt text-green-600 text-2xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-900" id="totalTickets">0</p>
+                            <p class="text-sm text-gray-500">Tickets Creados</p>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fas fa-clock text-purple-600 text-2xl"></i>
+                            </div>
+                            <p class="text-2xl font-bold text-gray-900" id="avgResponseTime">0</p>
+                            <p class="text-sm text-gray-500">Min. Respuesta Prom.</p>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                
+                <!-- Change Password Card -->
+                <div class="bg-white rounded-lg shadow border border-gray-200 p-6 card-hover">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-lock mr-3 text-orange-600"></i>
+                        Cambiar Contraseña
+                    </h3>
+                    
+                    <form id="changePasswordForm" class="space-y-4">
+                        <div>
+                            <label for="currentPassword" class="block text-sm font-medium text-gray-700 mb-1">Contraseña Actual</label>
+                            <input type="password" id="currentPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label for="newPassword" class="block text-sm font-medium text-gray-700 mb-1">Nueva Contraseña</label>
+                            <input type="password" id="newPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label for="confirmPassword" class="block text-sm font-medium text-gray-700 mb-1">Confirmar Nueva Contraseña</label>
+                            <input type="password" id="confirmPassword" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-orange-600 text-white py-2 px-4 rounded-md text-sm font-medium hover:bg-orange-700 transition-colors">
+                            <i class="fas fa-key mr-2"></i>Cambiar Contraseña
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Quick Actions Card -->
+                <div class="bg-white rounded-lg shadow border border-gray-200 p-6 card-hover">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-bolt mr-3 text-yellow-600"></i>
+                        Acciones Rápidas
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <a href="/support/auth/chat/" class="flex items-center p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                            <i class="fas fa-comments text-blue-600 mr-3"></i>
+                            <span class="text-blue-800 font-medium">Nuevo Chat</span>
+                        </a>
+                        
+                        <a href="/support/auth/user-tickets/" class="flex items-center p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+                            <i class="fas fa-ticket-alt text-green-600 mr-3"></i>
+                            <span class="text-green-800 font-medium">Ver Mis Tickets</span>
+                        </a>
+                        
+                        <button id="exportDataBtn" class="w-full flex items-center p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+                            <i class="fas fa-download text-purple-600 mr-3"></i>
+                            <span class="text-purple-800 font-medium">Exportar Datos</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Support Card -->
+                <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
+                    <h3 class="text-lg font-semibold mb-3">
+                        <i class="fas fa-headset mr-3"></i>
+                        ¿Necesitas Ayuda?
+                    </h3>
+                    <p class="text-blue-100 mb-4 text-sm">
+                        Nuestro equipo de soporte está disponible 24/7 para ayudarte
+                    </p>
+                    <button class="w-full bg-white text-blue-600 py-2 px-4 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors">
+                        <i class="fas fa-phone mr-2"></i>Contactar Soporte
+                    </button>
+                </div>
+                
+            </div>
+            
+        </div>
+        
+    </div>
+    
+    <!-- Message Container -->
+    <div id="messageContainer" class="fixed top-4 right-4 z-50 hidden">
+        <div id="messageContent" class="rounded-lg p-4 shadow-lg max-w-sm">
+            <div class="flex items-center">
+                <i id="messageIcon" class="mr-3 text-lg"></i>
+                <span id="messageText"></span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // DOM Elements
+        const editProfileBtn = document.getElementById('editProfileBtn');
+        const profileInfo = document.getElementById('profileInfo');
+        const editProfileForm = document.getElementById('editProfileForm');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const changePasswordForm = document.getElementById('changePasswordForm');
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUserProfile();
+            loadRecentTickets();
+            loadAccountStats();
+            setupEventListeners();
+        });
+        
+        // Setup Event Listeners
+        function setupEventListeners() {
+            editProfileBtn.addEventListener('click', toggleEditProfile);
+            cancelEditBtn.addEventListener('click', toggleEditProfile);
+            editProfileForm.addEventListener('submit', handleProfileUpdate);
+            changePasswordForm.addEventListener('submit', handlePasswordChange);
+            exportDataBtn.addEventListener('click', handleExportData);
+        }
+        
+        // Load User Profile
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/support/auth/user-info/');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const user = data.user;
+                    
+                    // Update profile information
+                    document.getElementById('fullName').textContent = user.username;
+                    document.getElementById('userEmail').textContent = user.email;
+                    document.getElementById('userName').textContent = user.username;
+                    
+                    // Update user type and role
+                    const userType = user.roles.type === 'staff' ? 'Staff' : 'Cliente';
+                    document.getElementById('userType').textContent = userType;
+                    document.getElementById('userRole').textContent = userType;
+                    
+                    // Update edit form
+                    document.getElementById('editFullName').value = user.username;
+                    document.getElementById('editEmail').value = user.email;
+                    
+                } else {
+                    showMessage('Error cargando información del usuario', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading user profile:', error);
+                showMessage('Error de conexión', 'error');
+            }
+        }
+        
+        // Load Recent Tickets
+        async function loadRecentTickets() {
+            try {
+                const response = await fetch('/support/auth/user-tickets/');
+                const data = await response.json();
+                
+                const ticketsContainer = document.getElementById('recentTickets');
+                
+                if (data.success && data.tickets.length > 0) {
+                    const recentTickets = data.tickets.slice(0, 5); // Show only 5 most recent
+                    
+                    ticketsContainer.innerHTML = recentTickets.map(ticket => `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-ticket-alt text-blue-600 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900">Ticket #${ticket.number}</p>
+                                    <p class="text-xs text-gray-500">${new Date(ticket.created).toLocaleDateString()}</p>
+                                </div>
+                            </div>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                ticket.status_id === 1 ? 'bg-green-100 text-green-800' : 
+                                ticket.status_id === 2 ? 'bg-yellow-100 text-yellow-800' : 
+                                'bg-gray-100 text-gray-800'
+                            }">
+                                ${ticket.status_id === 1 ? 'Abierto' : ticket.status_id === 2 ? 'En Proceso' : 'Cerrado'}
+                            </span>
+                        </div>
+                    `).join('');
+                    
+                } else {
+                    ticketsContainer.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-ticket-alt text-3xl mb-3"></i>
+                            <p>No tienes tickets aún</p>
+                            <p class="text-sm">¡Comienza un chat para crear tu primer ticket!</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading recent tickets:', error);
+                document.getElementById('recentTickets').innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-triangle text-3xl mb-3"></i>
+                        <p>Error cargando tickets</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Load Account Statistics
+        async function loadAccountStats() {
+            try {
+                // This would typically come from an API endpoint
+                // For now, we'll use placeholder data
+                document.getElementById('totalMessages').textContent = '12';
+                document.getElementById('totalTickets').textContent = '3';
+                document.getElementById('avgResponseTime').textContent = '5';
+                
+            } catch (error) {
+                console.error('Error loading account stats:', error);
+            }
+        }
+        
+        // Toggle Edit Profile
+        function toggleEditProfile() {
+            profileInfo.classList.toggle('hidden');
+            editProfileForm.classList.toggle('hidden');
+            
+            if (editProfileForm.classList.contains('hidden')) {
+                editProfileBtn.innerHTML = '<i class="fas fa-edit mr-2"></i>Editar';
+            } else {
+                editProfileBtn.innerHTML = '<i class="fas fa-eye mr-2"></i>Ver';
+            }
+        }
+        
+        // Handle Profile Update
+        async function handleProfileUpdate(e) {
+            e.preventDefault();
+            
+            const fullName = document.getElementById('editFullName').value.trim();
+            const email = document.getElementById('editEmail').value.trim();
+            
+            if (!fullName || !email) {
+                showMessage('Por favor completa todos los campos', 'error');
+                return;
+            }
+            
+            try {
+                // This would typically update the profile via API
+                // For now, we'll just show a success message
+                showMessage('Perfil actualizado exitosamente', 'success');
+                toggleEditProfile();
+                
+                // Update the display
+                document.getElementById('fullName').textContent = fullName;
+                document.getElementById('userEmail').textContent = email;
+                document.getElementById('userName').textContent = fullName;
+                
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                showMessage('Error actualizando perfil', 'error');
+            }
+        }
+        
+        // Handle Password Change
+        async function handlePasswordChange(e) {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                showMessage('Por favor completa todos los campos', 'error');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                showMessage('Las contraseñas no coinciden', 'error');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showMessage('La nueva contraseña debe tener al menos 6 caracteres', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/support/auth/change-password/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        old_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Contraseña actualizada exitosamente', 'success');
+                    changePasswordForm.reset();
+                } else {
+                    showMessage(data.error || 'Error cambiando contraseña', 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error changing password:', error);
+                showMessage('Error de conexión', 'error');
+            }
+        }
+        
+        // Handle Export Data
+        function handleExportData() {
+            // This would typically export user data
+            showMessage('Función de exportación en desarrollo', 'info');
+        }
+        
+        // Utility Functions
+        function showMessage(message, type) {
+            const container = document.getElementById('messageContainer');
+            const content = document.getElementById('messageContent');
+            const icon = document.getElementById('messageIcon');
+            const text = document.getElementById('messageText');
+            
+            text.textContent = message;
+            
+            if (type === 'success') {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-green-500 text-white';
+                icon.className = 'fas fa-check-circle mr-3 text-lg';
+            } else if (type === 'error') {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-red-500 text-white';
+                icon.className = 'fas fa-exclamation-circle mr-3 text-lg';
+            } else {
+                content.className = 'rounded-lg p-4 shadow-lg max-w-sm bg-blue-500 text-white';
+                icon.className = 'fas fa-info-circle mr-3 text-lg';
+            }
+            
+            container.classList.remove('hidden');
+            
+            setTimeout(() => {
+                container.classList.add('hidden');
+            }, 5000);
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+    
+</body>
+</html>

@@ -47,6 +47,7 @@ class AutomaticMappingService:
                 'PrecioCosto': float(tiendanube_product.get('cost', 0)),
                 'saldo_articulo': int(tiendanube_product.get('stock', 0)),
                 'NroCodBarra': tiendanube_product.get('sku', ''),
+                'id_tiendanube': tiendanube_product.get('id'),  # ID de TiendaNube para integridad referencial
                 
                 # Campos de configuración
                 'ecommerce': 'Si' if tiendanube_product.get('published', True) else 'No',
@@ -103,78 +104,60 @@ class AutomaticMappingService:
     def map_adminet_to_tiendanube_product(self, adminet_product: Dict[str, Any], deposito_id: int = None) -> Dict[str, Any]:
         """
         Mapear datos de producto de AdministraNET a Tiendanube.
-        Formato correcto según documentación de TiendaNube API.
-        
-        Args:
-            adminet_product: Datos del producto de AdministraNET
-            deposito_id: ID del depósito para obtener stock específico (opcional)
+        Incluye todos los campos actualizados según la documentación.
         """
         try:
-            # Obtener precio principal
-            precio_principal = float(adminet_product.get('Precio1V', 0))
-            precio_costo = float(adminet_product.get('PrecioCosto', 0))
-            
-            # Si se especifica un depósito, usar su stock; si no, usar saldo_articulo
-            if deposito_id and 'stock_deposito' in adminet_product:
-                stock = int(adminet_product.get('stock_deposito', 0))
-            else:
-                stock = int(adminet_product.get('saldo_articulo', 0))
-            
-            # Mapeo según formato de TiendaNube API
+            # Mapeo básico de campos
             tiendanube_data = {
-                # Campos principales del producto
-                'name': {
-                    'es': adminet_product.get('NombreArticulo', '')
-                },
-                'description': {
-                    'es': adminet_product.get('Detalle', '') or adminet_product.get('detalle_web', '')
-                },
-                'handle': {
-                    'es': self._generate_handle(adminet_product.get('NombreArticulo', ''))
-                },
+                # Campos principales
+                'name': adminet_product.get('NombreArticulo', ''),
+                'description': adminet_product.get('Detalle', ''),
                 
-                # Configuración del producto
+                # Campos de configuración
                 'published': adminet_product.get('ecommerce') == 'Si',
+                'handle': self._generate_handle(adminet_product.get('NombreArticulo', '')),
+                'product_type': 'physical',
                 'free_shipping': False,
-                'requires_shipping': True,
+                'featured': adminet_product.get('promo_destacado') == 'Si',
                 
-                # SEO
-                'seo_title': {
-                    'es': adminet_product.get('NombreArticulo', '')
-                },
-                'seo_description': {
-                    'es': adminet_product.get('detalle_web', '') or adminet_product.get('Detalle', '')
-                },
+                # Campos de SEO
+                'seo_title': adminet_product.get('NombreArticulo', ''),
+                'seo_description': adminet_product.get('detalle_web', ''),
                 
-                # Variante única con precio y stock
-                'variants': [
-                    {
-                        'price': precio_principal,
-                        'cost': precio_costo,
-                        'stock': stock,
-                        'stock_management': True,
-                        'sku': adminet_product.get('NroCodBarra', ''),
-                        'weight': 0.5,
-                        'width': 10.0,
-                        'height': 10.0,
-                        'depth': 10.0,
-                        'position': 1,
-                        'visible': True,
-                        'values': []
-                    }
-                ],
+                # Campos de marca y categoría
+                'brand': self._get_brand_name(adminet_product.get('CodigoMarca')),
+                'categories': self._get_category_names(adminet_product.get('CodigoRubro')),
                 
-                # Campos adicionales
-                'attributes': [],
-                'tags': '',
+                # Campos de dimensiones (por defecto)
+                'weight': 0.5,  # 500g por defecto
+                'width': 10.0,  # 10cm por defecto
+                'height': 10.0,  # 10cm por defecto
+                'depth': 10.0,  # 10cm por defecto
+                
+                # Campos de imágenes y videos (vacíos por defecto)
                 'images': [],
-                'categories': []
+                'videos': [],
+                'tags': [],
+                
+                # Campos de fecha (convertir datetime a string ISO)
+                'created_at': adminet_product.get('fecha_alta').isoformat() if adminet_product.get('fecha_alta') else None,
+                'updated_at': adminet_product.get('fecha_mod').isoformat() if adminet_product.get('fecha_mod') else None,
+                
+                # Variantes del producto (requerido por la API de Tiendanube)
+                'variants': [{
+                    'price': float(adminet_product.get('Precio1V', 0)),
+                    'cost': float(adminet_product.get('PrecioCosto', 0)),
+                    'stock': int(adminet_product.get('saldo_articulo', 0)),
+                    'sku': adminet_product.get('NroCodBarra', ''),
+                    'stock_management': True,
+                    'compare_at_price': float(adminet_product.get('Precio2V', 0)) if adminet_product.get('Precio2V', 0) > 0 else None
+                }]
             }
             
-            # Limpiar campos None y vacíos
-            tiendanube_data = {k: v for k, v in tiendanube_data.items() if v is not None and v != ''}
+            # Limpiar campos None
+            tiendanube_data = {k: v for k, v in tiendanube_data.items() if v is not None}
             
-            logger.info(f"Mapeo AdministraNET → Tiendanube producto: {adminet_product.get('NombreArticulo', 'N/A')} - Precio: ${precio_principal}")
+            logger.info(f"Mapeo AdministraNET → Tiendanube producto: {adminet_product.get('NombreArticulo', 'N/A')}")
             return tiendanube_data
             
         except Exception as e:
@@ -207,6 +190,7 @@ class AutomaticMappingService:
                 'Email': tiendanube_customer.get('email', ''),
                 'CUIT': tiendanube_customer.get('document', ''),
                 'telefono': tiendanube_customer.get('phone', ''),
+                'id_tiendanube': tiendanube_customer.get('id'),  # ID de TiendaNube para integridad referencial
                 
                 # Campos de dirección (datos de la cuenta)
                 'Calle': calle,
@@ -988,16 +972,6 @@ class AutomaticMappingService:
             mapping.adminet_promo_destacado = adminet_product.get('promo_destacado', '')
             mapping.adminet_fecha_alta = adminet_product.get('fecha_alta')
             mapping.adminet_fecha_mod = adminet_product.get('fecha_mod')
-            
-            # Actualizar campos de TiendaNube (mapeados desde AdministraNET)
-            mapping.tiendanube_name = adminet_product.get('NombreArticulo', '')
-            # Usar descripción o nombre si no hay descripción
-            description = adminet_product.get('Detalle', '') or adminet_product.get('detalle_web', '') or adminet_product.get('NombreArticulo', '')
-            mapping.tiendanube_description = description
-            mapping.tiendanube_sku = adminet_product.get('NroCodBarra', '')
-            mapping.tiendanube_price = float(adminet_product.get('Precio1V', 0)) if adminet_product.get('Precio1V') is not None else 0
-            mapping.tiendanube_cost = float(adminet_product.get('PrecioCosto', 0)) if adminet_product.get('PrecioCosto') is not None else 0
-            mapping.tiendanube_stock = int(adminet_product.get('saldo_articulo', 0)) if adminet_product.get('saldo_articulo') is not None else 0
             
             mapping.save()
             logger.info(f"Mapeo de producto actualizado desde AdministraNET: {mapping.adminet_nombre}")

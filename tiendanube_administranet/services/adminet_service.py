@@ -182,6 +182,157 @@ class AdministraNETService:
                 'message': f'Error obteniendo clientes: {str(e)}'
             }
 
+    def create_customer(self, customer_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Crear nuevo cliente en AdministraNET.
+        
+        Args:
+            customer_data: Datos del cliente a crear
+        
+        Returns:
+            Dict con success, customer_id y message
+        """
+        try:
+            # Obtener el siguiente código de cliente
+            next_code_result = self.get_next_customer_code()
+            if not next_code_result['success']:
+                return next_code_result
+            
+            customer_code = next_code_result['next_code']
+            
+            # Query para insertar cliente
+            query = """
+            INSERT INTO cliente (
+                Codigo, nombre_cliente, Email, telefono, Calle, CUIT, Estado,
+                TipoCliente, IDIva, Credito, fecha_alta, id_tiendanube
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s
+            )
+            """
+            
+            params = (
+                customer_code,
+                customer_data.get('nombre_cliente', ''),
+                customer_data.get('Email', ''),
+                customer_data.get('telefono', ''),
+                customer_data.get('Calle', ''),
+                customer_data.get('CUIT', ''),
+                customer_data.get('Estado', 'Activo'),
+                'Consumidor Final',  # TipoCliente por defecto
+                1,  # IDIva por defecto
+                0.0,  # Credito por defecto
+                customer_data.get('id_tiendanube', None),  # ID de TiendaNube
+            )
+            
+            result = self.execute_query(query, params)
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'customer_id': customer_code,
+                    'message': 'Cliente creado exitosamente'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error creando cliente: {result["message"]}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error creating customer in AdministraNET: {e}")
+            return {
+                'success': False,
+                'message': f'Error creando cliente: {str(e)}'
+            }
+
+    def update_customer(self, customer_code: int, customer_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Actualizar cliente existente en AdministraNET.
+        
+        Args:
+            customer_code: Código del cliente a actualizar
+            customer_data: Datos del cliente a actualizar
+        
+        Returns:
+            Dict con success y message
+        """
+        try:
+            # Query para actualizar cliente
+            query = """
+            UPDATE cliente SET 
+                nombre_cliente = %s,
+                Email = %s,
+                telefono = %s,
+                Calle = %s,
+                CUIT = %s,
+                Estado = %s,
+                id_tiendanube = %s,
+                fecha_control = NOW()
+            WHERE Codigo = %s
+            """
+            
+            params = (
+                customer_data.get('nombre_cliente', ''),
+                customer_data.get('Email', ''),
+                customer_data.get('telefono', ''),
+                customer_data.get('Calle', ''),
+                customer_data.get('CUIT', ''),
+                customer_data.get('Estado', 'Activo'),
+                customer_data.get('id_tiendanube', None),  # ID de TiendaNube
+                customer_code
+            )
+            
+            result = self.execute_query(query, params)
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'message': 'Cliente actualizado exitosamente'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error actualizando cliente: {result["message"]}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error updating customer in AdministraNET: {e}")
+            return {
+                'success': False,
+                'message': f'Error actualizando cliente: {str(e)}'
+            }
+
+    def get_next_customer_code(self) -> Dict[str, Any]:
+        """
+        Obtener el siguiente código de cliente disponible en AdministraNET.
+        
+        Returns:
+            Dict con success y next_code
+        """
+        try:
+            query = "SELECT MAX(Codigo) as max_code FROM cliente WHERE Codigo > 0"
+            result = self.execute_query(query)
+            
+            if result['success'] and result['results']:
+                max_code = result['results'][0].get('max_code', 0)
+                next_code = max_code + 1
+                return {
+                    'success': True,
+                    'next_code': next_code
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': 'Error obteniendo siguiente código de cliente'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting next customer code: {e}")
+            return {
+                'success': False,
+                'message': f'Error obteniendo siguiente código: {str(e)}'
+            }
+
     def get_customer(self, customer_code: int) -> Dict[str, Any]:
         """
         Obtener cliente específico de AdministraNET por código.
@@ -223,7 +374,8 @@ class AdministraNETService:
             NroAgenteRetencion,
             saldo,
             TipoCliente,
-            Fax
+            Fax,
+            id_tiendanube
         FROM cliente 
         WHERE Codigo = %s
         """
@@ -265,7 +417,7 @@ class AdministraNETService:
                 'NombreContacto', 'TelefonoContacto', 'CelularContacto',
                 'IDIva', 'Credito', 'Descuento', 'CodViajante',
                 'Observaciones', 'ListaPrecio', 'TipoCliente',
-                'NroIngBrutos', 'NroAgenteRetencion'
+                'NroIngBrutos', 'NroAgenteRetencion', 'id_tiendanube'
             ]
             
             # Filtrar solo los campos que existen en customer_data
@@ -334,7 +486,7 @@ class AdministraNETService:
                 'NombreContacto', 'TelefonoContacto', 'CelularContacto',
                 'IDIva', 'Credito', 'Descuento', 'CodViajante',
                 'Observaciones', 'ListaPrecio', 'TipoCliente',
-                'NroIngBrutos', 'NroAgenteRetencion', 'Estado', 'Fax'
+                'NroIngBrutos', 'NroAgenteRetencion', 'Estado', 'Fax', 'id_tiendanube'
             ]
             
             # Filtrar solo los campos que existen en customer_data
@@ -451,8 +603,10 @@ class AdministraNETService:
                 params.extend([search_term, search_term])
             
             # Agregar ordenamiento y límites
-            query += " ORDER BY NombreArticulo LIMIT %s OFFSET %s"
-            params.extend([limit, offset])
+            query += " ORDER BY NombreArticulo"
+            if limit is not None:
+                query += " LIMIT %s OFFSET %s"
+                params.extend([limit, offset])
             
             return self.execute_query(query, tuple(params))
             
@@ -526,7 +680,7 @@ class AdministraNETService:
                 'saldo_articulo', 'stock_max', 'stock_min', 'NroCodBarra', 'NroCodBarraF',
                 'CodigoProveedor', 'CodigoMarca', 'CodigoModelo', 'CodigoRubro', 'CodigoSubRubro',
                 'Alicuota', 'AlicuotaIB', 'Moneda', 'TipoIVA', 'TipoIB', 'Discontinuo',
-                'ecommerce', 'detalle_web', 'disponible_vta', 'disponible_comp'
+                'ecommerce', 'detalle_web', 'disponible_vta', 'disponible_comp', 'id_tiendanube'
             ]
             
             # Filtrar solo los campos que existen en product_data
@@ -581,7 +735,7 @@ class AdministraNETService:
                 'saldo_articulo', 'stock_max', 'stock_min', 'NroCodBarra', 'NroCodBarraF',
                 'CodigoProveedor', 'CodigoMarca', 'CodigoModelo', 'CodigoRubro', 'CodigoSubRubro',
                 'Alicuota', 'AlicuotaIB', 'Moneda', 'TipoIVA', 'TipoIB', 'Discontinuo',
-                'ecommerce', 'detalle_web', 'disponible_vta', 'disponible_comp'
+                'ecommerce', 'detalle_web', 'disponible_vta', 'disponible_comp', 'id_tiendanube'
             ]
             
             # Filtrar solo los campos que existen en product_data
@@ -806,8 +960,10 @@ class AdministraNETService:
                 params.extend([search_term, search_term])
             
             # Ordenamiento y límites
-            query += " ORDER BY a.NombreArticulo LIMIT %s"
-            params.append(limit)
+            query += " ORDER BY a.NombreArticulo"
+            if limit is not None:
+                query += " LIMIT %s"
+                params.append(limit)
             
             result = self.execute_query(query, tuple(params))
             
@@ -898,18 +1054,36 @@ class AdministraNETService:
                 'message': f'Error obteniendo código de movimiento: {str(e)}'
             }
     
-    def get_next_nro_comprobante(self, tipo_comp: str = 'PED', sucursal: int = 1) -> Dict[str, Any]:
+    def get_next_nro_comprobante(self, tipo_comp: str = 'PED', punto_venta_id: int = 1) -> Dict[str, Any]:
         """
-        Obtener el próximo número de comprobante.
+        Obtener el próximo número de comprobante usando punto de venta.
         
         Args:
             tipo_comp: Tipo de comprobante (PED, FA, FB, etc.)
-            sucursal: Código de sucursal
+            punto_venta_id: ID del punto de venta
             
         Returns:
             Dict con el próximo número de comprobante en formato XXXX-XXXXXXXX
         """
         try:
+            # Primero obtener el nro_punto_venta desde la tabla punto_venta
+            punto_venta_query = """
+            SELECT nro_punto_venta 
+            FROM punto_venta 
+            WHERE id_punto_venta = %s
+            """
+            
+            punto_result = self.execute_query(punto_venta_query, (punto_venta_id,))
+            
+            if not punto_result['success'] or not punto_result['results']:
+                return {
+                    'success': False,
+                    'message': f'Punto de venta {punto_venta_id} no encontrado'
+                }
+            
+            nro_punto_venta = punto_result['results'][0]['nro_punto_venta']
+            
+            # Ahora obtener el próximo número de comprobante
             query = """
             SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(NroComprobante, '-', -1) AS UNSIGNED)), 0) + 1 as next_number
             FROM comp_ped
@@ -917,19 +1091,20 @@ class AdministraNETService:
             AND NroComprobante LIKE %s
             """
             
-            sucursal_str = str(sucursal).zfill(4)
-            pattern = f"{sucursal_str}-%"
+            nro_punto_str = str(nro_punto_venta).zfill(4)
+            pattern = f"{nro_punto_str}-%"
             
             result = self.execute_query(query, (tipo_comp, pattern))
             
             if result['success'] and result['results']:
                 next_number = int(result['results'][0].get('next_number', 1))
-                nro_comprobante = f"{sucursal_str}-{str(next_number).zfill(8)}"
+                nro_comprobante = f"{nro_punto_str}-{str(next_number).zfill(8)}"
                 
                 return {
                     'success': True,
                     'nro_comprobante': nro_comprobante,
-                    'sucursal': sucursal,
+                    'punto_venta_id': punto_venta_id,
+                    'nro_punto_venta': nro_punto_venta,
                     'numero': next_number
                 }
             else:
@@ -946,7 +1121,7 @@ class AdministraNETService:
             }
 
     def create_order_from_tiendanube(self, order_data: Dict[str, Any], deposito_id: int = 1, 
-                                     user_id: int = 1, sucursal_id: int = 1) -> Dict[str, Any]:
+                                     user_id: int = 1, punto_venta_id: int = 1) -> Dict[str, Any]:
         """
         Crear pedido en AdministraNET desde orden de TiendaNube.
         
@@ -954,7 +1129,7 @@ class AdministraNETService:
             order_data: Datos de la orden de TiendaNube
             deposito_id: ID del depósito de despacho
             user_id: ID del usuario del sistema
-            sucursal_id: ID de la sucursal
+            punto_venta_id: ID del punto de venta
             
         Returns:
             Dict con el resultado de la creación
@@ -963,6 +1138,7 @@ class AdministraNETService:
             import json
             from datetime import datetime, timedelta
             from decimal import Decimal
+            from ..utils.number_to_words import number_to_words
             
             # 1. Obtener próximo código de movimiento
             codigo_result = self.get_next_codigo_movimiento()
@@ -972,7 +1148,7 @@ class AdministraNETService:
             codigo_movimiento = codigo_result['codigo_movimiento']
             
             # 2. Obtener próximo número de comprobante
-            nro_result = self.get_next_nro_comprobante('PED', sucursal_id)
+            nro_result = self.get_next_nro_comprobante('PED', punto_venta_id)
             if not nro_result['success']:
                 return nro_result
             
@@ -1044,11 +1220,14 @@ class AdministraNETService:
                 except:
                     pass
             
-            # 8. Insertar cabecera del pedido
+            # 8. Convertir total a palabras
+            importe_letras = number_to_words(float(total))
+            
+            # 9. Insertar cabecera del pedido
             insert_comp_ped = """
             INSERT INTO comp_ped (
                 Fecha, TipoComprobante, NroComprobante, CodigoMovimiento,
-                Estado, Codigo, ImporteVenta, SubtotalGral,
+                Estado, Codigo, ImporteVenta, ImporteVentaL, SubtotalGral,
                 Subtotal1, Subtotal2, IVA1, IVA2,
                 Alicuota1, Alicuota2, Exento,
                 PorDesc1, ImpDesc1, SubTotalDesc1, SubTotalDesc2, SubtotalDesc,
@@ -1060,7 +1239,7 @@ class AdministraNETService:
                 Vencimiento, TipoPedido, id_pv
             ) VALUES (
                 NOW(), 'PED', %s, %s,
-                'Pendiente', %s, %s, %s,
+                'Pendiente', %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s, %s, %s,
                 %s, %s, %s, %s, %s,
@@ -1069,32 +1248,66 @@ class AdministraNETService:
                 %s, %s, %s,
                 'Autorizado', 'No',
                 %s, %s, %s, %s,
-                %s, 'Automatico', %s
+                %s, 'tiendanube', %s
             )
             """
             
             # Cliente ID (debe existir o crearse antes)
             cliente_id = order_data.get('adminet_customer_id', 1)  # Default genérico
             
-            # Condición de venta (1 = Contado por defecto)
-            id_condventa = 1
-            cond_venta = "Contado"
+            # 10. Mapear medio de pago a condición de venta
+            payment_method = payment.get('method', '').lower() if payment else ''
+            payment_status = order_data.get('payment_status', 'pending').lower()
             
-            # Vendedor (0 = Sin vendedor / venta online)
-            cod_viajante = 0
+            # Mapeo de medios de pago a condiciones de venta
+            if payment_status == 'paid':
+                if any(method in payment_method for method in ['tarjeta', 'card', 'credit', 'debit']):
+                    id_condventa = 1
+                    cond_venta = "Contado"
+                elif any(method in payment_method for method in ['transferencia', 'bank', 'transfer']):
+                    id_condventa = 1
+                    cond_venta = "Contado"
+                elif any(method in payment_method for method in ['mercado', 'mercadopago', 'mp']):
+                    id_condventa = 1
+                    cond_venta = "Contado"
+                elif any(method in payment_method for method in ['efectivo', 'cash']):
+                    id_condventa = 1
+                    cond_venta = "Contado"
+                elif any(method in payment_method for method in ['cuenta', 'corriente', 'account']):
+                    id_condventa = 2
+                    cond_venta = "Cuenta Corriente"
+                else:
+                    # Por defecto, pago confirmado = contado
+                    id_condventa = 1
+                    cond_venta = "Contado"
+            else:
+                # Pago pendiente - determinar por método
+                if any(method in payment_method for method in ['contra', 'reembolso', 'cod', 'cash_on_delivery']):
+                    id_condventa = 1
+                    cond_venta = "Contado"
+                elif any(method in payment_method for method in ['cuenta', 'corriente', 'account']):
+                    id_condventa = 2
+                    cond_venta = "Cuenta Corriente"
+                else:
+                    # Por defecto, pago pendiente = contado
+                    id_condventa = 1
+                    cond_venta = "Contado"
+            
+            # Vendedor (usar el configurado o 0 por defecto)
+            cod_viajante = getattr(self.config, 'viajante_tiendanube_id', 0) or 0
             
             params = (
                 nro_comprobante, codigo_movimiento,
-                cliente_id, float(total), float(subtotal),
+                cliente_id, float(total), importe_letras, float(subtotal),
                 float(subtotal_sin_iva), Decimal(0), float(iva_21), Decimal(0),
                 Decimal(21.0), Decimal(0), Decimal(0),
                 float(discount), float(discount), Decimal(0), Decimal(0), float(subtotal - discount),
                 id_condventa, cond_venta, cod_viajante,
-                user_id, sucursal_id, deposito_id,
+                user_id, punto_venta_id, deposito_id,
                 fecha_entrega.strftime('%Y-%m-%d'), forma_entrega, shipping_method.get('carrier', ''),
                 str(order_data.get('id', '')), order_data.get('number', 0), info_ped_eco, 
-                order_data.get('payment_status', ''),
-                fecha_entrega.strftime('%Y-%m-%d'), sucursal_id
+                'P',  # Valor fijo corto para estado_pago_ecom
+                fecha_entrega.strftime('%Y-%m-%d'), punto_venta_id
             )
             
             result = self.execute_query(insert_comp_ped, params)
@@ -1115,7 +1328,8 @@ class AdministraNETService:
                     Alicuota, Pordesc, Impdesc,
                     PrecioVentaxR, PrecioCostoxR, PrecioNetoxR, PrecioBrutoxR, PrecioIVAxR,
                     CodigoMovimiento, CodDeposito, IDArt,
-                    Salida, Saldo, orden, codSucursal
+                    Salida, Saldo, orden, codSucursal,
+                    CodViajante, NroComprobante, Comprobante
                 ) VALUES (
                     NOW(), %s, %s, %s,
                     %s, %s,
@@ -1123,7 +1337,8 @@ class AdministraNETService:
                     %s, %s, %s,
                     %s, %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s
+                    %s, %s, %s, %s,
+                    %s, %s, %s
                 )
                 """
                 
@@ -1149,7 +1364,8 @@ class AdministraNETService:
                     float(precio_total), float(precio_total_sin_iva), float(precio_total_sin_iva),
                     float(precio_total), float(iva_producto * cantidad),
                     codigo_movimiento, deposito_id, id_art,
-                    float(cantidad), float(cantidad), index, sucursal_id
+                    float(cantidad), float(cantidad), index, punto_venta_id,
+                    cod_viajante, nro_comprobante, 'PED'
                 )
                 
                 result_item = self.execute_query(insert_stockp, params_item)
@@ -1238,6 +1454,103 @@ class AdministraNETService:
                 'message': f'Error obteniendo pedidos modificados: {str(e)}'
             }
     
+    def get_depositos(self) -> Dict[str, Any]:
+        """
+        Obtener lista de depósitos disponibles.
+        
+        Returns:
+            Dict con la lista de depósitos
+        """
+        try:
+            query = """
+            SELECT CodDeposito, NombreDeposito 
+            FROM deposito 
+            ORDER BY NombreDeposito
+            """
+            
+            result = self.execute_query(query)
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'depositos': result['results'],
+                    'count': len(result['results'])
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            logger.error(f"Error getting depositos: {e}")
+            return {
+                'success': False,
+                'message': f'Error obteniendo depósitos: {str(e)}'
+            }
+    
+    def get_puntos_venta(self) -> Dict[str, Any]:
+        """
+        Obtener lista de puntos de venta disponibles.
+        
+        Returns:
+            Dict con la lista de puntos de venta
+        """
+        try:
+            query = """
+            SELECT id_punto_venta, nro_punto_venta, id_sucursal, lista_precio_pv, anulado
+            FROM punto_venta 
+            WHERE anulado = 'No'
+            ORDER BY nro_punto_venta
+            """
+            
+            result = self.execute_query(query)
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'puntos_venta': result['results'],
+                    'count': len(result['results'])
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            logger.error(f"Error getting puntos_venta: {e}")
+            return {
+                'success': False,
+                'message': f'Error obteniendo puntos de venta: {str(e)}'
+            }
+    
+    def get_viajantes(self) -> Dict[str, Any]:
+        """
+        Obtener lista de viajantes disponibles.
+        
+        Returns:
+            Dict con la lista de viajantes
+        """
+        try:
+            query = """
+            SELECT CodViajante, Nombre 
+            FROM viajantes 
+            ORDER BY Nombre
+            """
+            
+            result = self.execute_query(query)
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'viajantes': result['results'],
+                    'count': len(result['results'])
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            logger.error(f"Error getting viajantes: {e}")
+            return {
+                'success': False,
+                'message': f'Error obteniendo viajantes: {str(e)}'
+            }
+
     def get_order_by_tiendanube_id(self, tiendanube_id: str) -> Dict[str, Any]:
         """
         Obtener un pedido por su ID de TiendaNube.
@@ -1674,4 +1987,80 @@ class AdministraNETService:
                 'success': False,
                 'message': f'Error: {str(e)}',
                 'count': 0
-            } 
+            }
+
+    def update_product_tiendanube_id(self, product_id: int, tiendanube_id: int) -> Dict[str, Any]:
+        """
+        Actualizar el campo id_tiendanube en la tabla articulo de AdministraNET.
+        
+        Args:
+            product_id: ID del producto en AdministraNET (IDArt)
+            tiendanube_id: ID del producto en TiendaNube
+        
+        Returns:
+            Dict con success y message
+        """
+        try:
+            query = """
+            UPDATE articulo 
+            SET id_tiendanube = %s 
+            WHERE IDArt = %s
+            """
+            
+            result = self.execute_query(query, (tiendanube_id, product_id))
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'message': f'Campo id_tiendanube actualizado para producto {product_id}'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error actualizando id_tiendanube: {result.get("message", "")}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error updating product tiendanube_id: {e}")
+            return {
+                'success': False,
+                'message': f'Error actualizando id_tiendanube: {str(e)}'
+            }
+
+    def update_customer_tiendanube_id(self, customer_code: int, tiendanube_id: int) -> Dict[str, Any]:
+        """
+        Actualizar el campo id_tiendanube en la tabla cliente de AdministraNET.
+        
+        Args:
+            customer_code: Código del cliente en AdministraNET (Codigo)
+            tiendanube_id: ID del cliente en TiendaNube
+        
+        Returns:
+            Dict con success y message
+        """
+        try:
+            query = """
+            UPDATE cliente 
+            SET id_tiendanube = %s 
+            WHERE Codigo = %s
+            """
+            
+            result = self.execute_query(query, (tiendanube_id, customer_code))
+            
+            if result['success']:
+                return {
+                    'success': True,
+                    'message': f'Campo id_tiendanube actualizado para cliente {customer_code}'
+                }
+            else:
+                return {
+                    'success': False,
+                    'message': f'Error actualizando id_tiendanube: {result.get("message", "")}'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error updating customer tiendanube_id: {e}")
+            return {
+                'success': False,
+                'message': f'Error actualizando id_tiendanube: {str(e)}'
+            }

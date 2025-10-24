@@ -1,0 +1,343 @@
+{% extends "support_ai/portal_base.html" %}
+
+{% block title %}Inicio - Portal de Soporte{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Hero Section -->
+    <div class="portal-card mb-4">
+        <div class="portal-card-body text-center py-5">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold mb-3">
+                        ¿Necesitas ayuda?
+                    </h1>
+                    <p class="lead text-muted mb-4">
+                        Nuestro equipo de soporte está aquí para ayudarte. 
+                        Crea un ticket y te responderemos lo antes posible.
+                    </p>
+                    <div class="d-flex gap-3 justify-content-center">
+                        <a href="{% url 'support_ai:portal_new_ticket' %}" class="btn-portal">
+                            <i class="fas fa-plus me-2"></i> Crear Ticket
+                        </a>
+                        <a href="{% url 'support_ai:portal_knowledge_base' %}" class="btn-portal btn-portal-secondary">
+                            <i class="fas fa-book me-2"></i> Base de Conocimientos
+                        </a>
+                        <a href="{% url 'support_ai:ai_dashboard' %}" class="btn-portal btn-portal-secondary">
+                            <i class="fas fa-robot me-2"></i> Dashboard IA
+                        </a>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="text-center">
+                        <i class="fas fa-headset" style="font-size: 8rem; color: var(--primary-color); opacity: 0.1;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estadísticas rápidas -->
+    {% if user.is_authenticated %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <div class="mb-2">
+                        <i class="fas fa-ticket-alt fa-2x text-primary"></i>
+                    </div>
+                    <h3 class="mb-1">{{ user_tickets_count|default:0 }}</h3>
+                    <p class="text-muted mb-0">Mis Tickets</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <div class="mb-2">
+                        <i class="fas fa-clock fa-2x text-warning"></i>
+                    </div>
+                    <h3 class="mb-1">{{ open_tickets_count|default:0 }}</h3>
+                    <p class="text-muted mb-0">Abiertos</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <div class="mb-2">
+                        <i class="fas fa-check-circle fa-2x text-success"></i>
+                    </div>
+                    <h3 class="mb-1">{{ resolved_tickets_count|default:0 }}</h3>
+                    <p class="text-muted mb-0">Resueltos</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <div class="mb-2">
+                        <i class="fas fa-star fa-2x text-info"></i>
+                    </div>
+                    <h3 class="mb-1">{{ avg_satisfaction|default:"4.5" }}/5</h3>
+                    <p class="text-muted mb-0">Satisfacción</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Accesos rápidos -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="portal-card">
+                <div class="portal-card-header">
+                    <h5 class="portal-card-title">
+                        <i class="fas fa-bolt me-2"></i> Accesos Rápidos
+                    </h5>
+                </div>
+                <div class="portal-card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <a href="{% url 'support_ai:portal_new_ticket' %}" class="text-decoration-none">
+                                <div class="portal-card h-100">
+                                    <div class="portal-card-body text-center">
+                                        <i class="fas fa-plus-circle fa-3x text-primary mb-3"></i>
+                                        <h5>Crear Nuevo Ticket</h5>
+                                        <p class="text-muted mb-0">Reporta un problema o solicita ayuda</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{% url 'support_ai:portal_my_tickets' %}" class="text-decoration-none">
+                                <div class="portal-card h-100">
+                                    <div class="portal-card-body text-center">
+                                        <i class="fas fa-list fa-3x text-success mb-3"></i>
+                                        <h5>Ver Mis Tickets</h5>
+                                        <p class="text-muted mb-0">Revisa el estado de tus solicitudes</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{% url 'support_ai:portal_knowledge_base' %}" class="text-decoration-none">
+                                <div class="portal-card h-100">
+                                    <div class="portal-card-body text-center">
+                                        <i class="fas fa-book fa-3x text-info mb-3"></i>
+                                        <h5>Base de Conocimientos</h5>
+                                        <p class="text-muted mb-0">Encuentra respuestas rápidas</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{% url 'support_ai:portal_profile' %}" class="text-decoration-none">
+                                <div class="portal-card h-100">
+                                    <div class="portal-card-body text-center">
+                                        <i class="fas fa-user fa-3x text-warning mb-3"></i>
+                                        <h5>Mi Perfil</h5>
+                                        <p class="text-muted mb-0">Gestiona tu información personal</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Información de contacto -->
+            <div class="portal-card mb-4">
+                <div class="portal-card-header">
+                    <h5 class="portal-card-title">
+                        <i class="fas fa-phone me-2"></i> Contacto
+                    </h5>
+                </div>
+                <div class="portal-card-body">
+                    <div class="mb-3">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-envelope text-primary me-2"></i>
+                            <span>soporte@empresa.com</span>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-phone text-primary me-2"></i>
+                            <span>+1 (555) 123-4567</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-clock text-primary me-2"></i>
+                            <span>Lun-Vie 9:00-18:00</span>
+                        </div>
+                    </div>
+                    <div class="alert alert-portal-info">
+                        <small>
+                            <i class="fas fa-info-circle me-1"></i>
+                            Tiempo de respuesta promedio: <strong>2 horas</strong>
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tickets recientes -->
+            {% if user.is_authenticated and recent_tickets %}
+            <div class="portal-card">
+                <div class="portal-card-header">
+                    <h5 class="portal-card-title">
+                        <i class="fas fa-history me-2"></i> Tickets Recientes
+                    </h5>
+                </div>
+                <div class="portal-card-body">
+                    {% for ticket in recent_tickets %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <div class="fw-medium">{{ ticket.title|truncatechars:30 }}</div>
+                            <small class="text-muted">{{ ticket.created_at|date:"d/m/Y" }}</small>
+                        </div>
+                        <span class="badge-portal badge-portal-{{ ticket.status }}">
+                            {{ ticket.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <div class="text-center mt-3">
+                        <a href="{% url 'support_ai:portal_my_tickets' %}" class="btn-portal btn-portal-secondary btn-sm">
+                            Ver Todos
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- FAQ Rápido -->
+    <div class="portal-card">
+        <div class="portal-card-header">
+            <h5 class="portal-card-title">
+                <i class="fas fa-question-circle me-2"></i> Preguntas Frecuentes
+            </h5>
+        </div>
+        <div class="portal-card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="accordion" id="faqAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                    ¿Cómo creo un ticket de soporte?
+                                </button>
+                            </h2>
+                            <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Haz clic en "Nuevo Ticket" en el menú superior y completa el formulario con los detalles de tu problema.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                    ¿Cuánto tiempo tarda la respuesta?
+                                </button>
+                            </h2>
+                            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                <div class="accordion-body">
+                                    Nuestro tiempo de respuesta promedio es de 2 horas durante el horario laboral.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="accordion" id="faqAccordion2">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                    ¿Puedo adjuntar archivos?
+                                </button>
+                            </h2>
+                            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion2">
+                                <div class="accordion-body">
+                                    Sí, puedes adjuntar imágenes, documentos y otros archivos relevantes al crear tu ticket.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                    ¿Cómo puedo seguir el estado de mi ticket?
+                                </button>
+                            </h2>
+                            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion2">
+                                <div class="accordion-body">
+                                    Ve a "Mis Tickets" para ver el estado actual y el historial de actualizaciones de todos tus tickets.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Información adicional -->
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <i class="fas fa-shield-alt fa-2x text-success mb-3"></i>
+                    <h5>Seguro y Confidencial</h5>
+                    <p class="text-muted">Toda la información que compartas está protegida y es confidencial.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <i class="fas fa-clock fa-2x text-primary mb-3"></i>
+                    <h5>24/7 Disponible</h5>
+                    <p class="text-muted">Puedes crear tickets en cualquier momento, aunque la respuesta es durante horario laboral.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="portal-card text-center">
+                <div class="portal-card-body">
+                    <i class="fas fa-users fa-2x text-info mb-3"></i>
+                    <h5>Equipo Experto</h5>
+                    <p class="text-muted">Nuestro equipo de soporte está capacitado para resolver cualquier problema.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animación de contadores
+    const counters = document.querySelectorAll('h3');
+    counters.forEach(counter => {
+        const target = parseInt(counter.textContent);
+        if (!isNaN(target)) {
+            animateCounter(counter, 0, target, 2000);
+        }
+    });
+});
+
+function animateCounter(element, start, end, duration) {
+    const range = end - start;
+    const increment = range / (duration / 16);
+    let current = start;
+    
+    const timer = setInterval(() => {
+        current += increment;
+        if (current >= end) {
+            current = end;
+            clearInterval(timer);
+        }
+        element.textContent = Math.floor(current);
+    }, 16);
+}
+</script>
+{% endblock %} 
