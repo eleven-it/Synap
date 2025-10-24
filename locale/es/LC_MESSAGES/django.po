@@ -1627,7 +1627,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_sync_log_list.html:19
 #: tiendanube/templates/tiendanube/tiendanube_sync_products.html:25
 msgid "Back to Dashboard"
-msgstr ""
+msgstr "Volver al Panel de Control"
 
 #: accounting/templates/accounting/account_type_list.html:91
 msgid "Normal Balance:"
@@ -1894,7 +1894,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_restock_rule_list.html:53
 #: tiendanube/templates/tiendanube/tiendanube_sync_log_list.html:41
 msgid "Status"
-msgstr ""
+msgstr "Estado"
 
 #: accounting/templates/accounting/chart_of_accounts/account_balance_sheet.html:131
 #: accounting/templates/accounting/chart_of_accounts/account_list.html:252
@@ -1931,7 +1931,7 @@ msgstr ""
 #: purchases/templates/purchases/suppliers/supplier_list.html:119
 #: tiendanube/templates/tiendanube/tiendanube_product_restock_policy_list.html:102
 msgid "Actions"
-msgstr ""
+msgstr "Acciones"
 
 #: accounting/templates/accounting/chart_of_accounts/account_balance_sheet.html:177
 #: accounting/templates/accounting/chart_of_accounts/account_confirm_delete.html:92
@@ -2930,7 +2930,7 @@ msgstr ""
 #: theme/templates/dashboard_apps.html:205
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:281
 msgid "Quick Actions"
-msgstr ""
+msgstr "Acciones Rápidas"
 
 #: accounting/templates/accounting/entries/entry_detail.html:395
 #: accounting/templates/accounting/entries/entry_form.html:7
@@ -3243,7 +3243,7 @@ msgstr ""
 #: purchases/templates/purchases/receipts/receipt_confirm_delete.html:46
 #: purchases/templates/purchases/suppliers/supplier_confirm_delete.html:112
 msgid "This action cannot be undone"
-msgstr ""
+msgstr "Esta acción no se puede deshacer"
 
 #: accounting/templates/accounting/fiscal_years/fiscal_year_confirm_delete.html:40
 msgid "Are you sure?"
@@ -3380,7 +3380,7 @@ msgstr "Duración"
 #: purchases/templates/purchases/reports/supplier_performance.html:119
 #: purchases/templates/purchases/reports/supplier_performance.html:214
 msgid "days"
-msgstr ""
+msgstr "días"
 
 #: accounting/templates/accounting/fiscal_years/fiscal_year_detail.html:299
 msgid "Period Length"
@@ -3554,7 +3554,7 @@ msgstr ""
 #: purchases/templates/purchases/settings.html:12
 #: theme/templates/partials/navbar.html:110
 msgid "Dashboard"
-msgstr "Panel Principal"
+msgstr "Panel de Control"
 
 #: accounting/templates/accounting/fiscal_years/fiscal_year_list.html:34
 #: accounting/templates/accounting/fiscal_years/fiscal_year_list.html:354
@@ -5709,7 +5709,7 @@ msgstr ""
 #: sales/templates/sales/clients/client_form.html:344
 #: sales/templates/sales/contacts/contact_form.html:528
 msgid "Saving..."
-msgstr ""
+msgstr "Guardando..."
 
 #: accounting/templates/accounting/tax_groups/tax_group_form.html:257
 #: purchases/templates/purchases/quotations/quotation_confirm_delete.html:301
@@ -6335,7 +6335,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:67
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:103
 msgid "Customers"
-msgstr ""
+msgstr "Clientes"
 
 #: clientes/templates/clientes/dashboard.html:6
 #, python-format
@@ -7788,7 +7788,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_restock_log_list.html:131
 #: tiendanube/templates/tiendanube/tiendanube_sync_log_list.html:127
 msgid "Details"
-msgstr ""
+msgstr "Detalles"
 
 #: core/templates/core/module_validation.html:4
 #: core/templates/core/module_validation.html:141
@@ -8450,14 +8450,14 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:5
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:14
 msgid "Manual Sync"
-msgstr ""
+msgstr "Sincronización Manual"
 
 #: core/utils/utils.py:208 tiendanube/models.py:22
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:287
 #: tiendanube/templates/tiendanube/tiendanube_sync_products.html:4
 #: tiendanube/templates/tiendanube/tiendanube_sync_products.html:117
 msgid "Sync Products"
-msgstr ""
+msgstr "Sincronizar Productos"
 
 #: core/utils/utils.py:214
 #, fuzzy
@@ -8475,7 +8475,7 @@ msgstr "Stock Disponible"
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:293
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:539
 msgid "Sync Customers"
-msgstr ""
+msgstr "Sincronizar Clientes"
 
 #: core/utils/utils.py:234
 msgid "Mappings"
@@ -9024,7 +9024,7 @@ msgstr ""
 #: sales/templates/sales/clients/client_list.html:200 tiendanube/models.py:84
 #: tiendanube/templates/tiendanube/tiendanube_order_mapping_list.html:96
 msgid "Customer"
-msgstr ""
+msgstr "Cliente"
 
 #: inventory/models.py:39
 msgid "In Transit"
@@ -9116,7 +9116,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_restock_rule_confirm_delete.html:67
 #: tiendanube/templates/tiendanube/tiendanube_restock_rule_list.html:110
 msgid "Product"
-msgstr ""
+msgstr "Producto"
 
 #: inventory/models.py:116 inventory/templates/inventory/product_list.html:50
 msgid "Image"
@@ -9129,7 +9129,7 @@ msgstr ""
 #: purchases/templates/purchases/reports/purchase_summary.html:222
 #: tiendanube/models.py:83
 msgid "Order"
-msgstr ""
+msgstr "Pedido"
 
 #: inventory/models.py:121
 msgid "Product Image"
@@ -9655,7 +9655,7 @@ msgstr ""
 #: inventory/templates/inventory/product_form.html:428
 #: theme/templates/partials/navbar.html:184
 msgid "Loading..."
-msgstr ""
+msgstr "Cargando..."
 
 #: inventory/templates/inventory/product_form.html:500
 #: inventory/templates/inventory/product_form.html:712
@@ -10261,7 +10261,7 @@ msgstr ""
 #: login/templates/login/login_mobile.html:391
 #: login/templates/login/register_mobile.html:508
 msgid "Password"
-msgstr ""
+msgstr "Contraseña"
 
 #: login/templates/login/login_mobile.html:401
 msgid "Enter your password"
@@ -10338,7 +10338,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:384
 #: tiendanube/templates/tiendanube/tiendanube_sync_products.html:100
 msgid "Never"
-msgstr ""
+msgstr "Nunca"
 
 #: login/templates/login/perfil.html:137
 msgid "Change Password"
@@ -11562,7 +11562,7 @@ msgstr ""
 
 #: purchases/models/purchase_receipt.py:28
 msgid "Received At"
-msgstr ""
+msgstr "Recibido el"
 
 #: purchases/models/purchase_receipt.py:31
 msgid "Lot Number"
@@ -12407,7 +12407,7 @@ msgstr ""
 #: purchases/templates/purchases/approval/level_list.html:112
 #: purchases/templates/purchases/approval/workflow_detail.html:109
 msgid "hours"
-msgstr ""
+msgstr "horas"
 
 #: purchases/templates/purchases/approval/level_detail.html:76
 msgid "Individual Approvers"
@@ -12850,7 +12850,7 @@ msgstr ""
 
 #: purchases/templates/purchases/config/integration_settings.html:84
 msgid "Sync stock levels"
-msgstr ""
+msgstr "Sincronizar niveles de stock"
 
 #: purchases/templates/purchases/config/integration_settings.html:88
 msgid "Sync goods receipts"
@@ -12890,12 +12890,12 @@ msgstr ""
 
 #: purchases/templates/purchases/config/integration_settings.html:180
 msgid "Webhook Configuration"
-msgstr ""
+msgstr "Configuración de Webhook"
 
 #: purchases/templates/purchases/config/integration_settings.html:187
 #: purchases/templates/purchases/config/purchases_settings.html:212
 msgid "Webhook URL"
-msgstr ""
+msgstr "URL del Webhook"
 
 #: purchases/templates/purchases/config/integration_settings.html:190
 #: purchases/templates/purchases/config/purchases_settings.html:215
@@ -12908,7 +12908,7 @@ msgstr ""
 
 #: purchases/templates/purchases/config/integration_settings.html:209
 msgid "Webhook Events"
-msgstr ""
+msgstr "Eventos de Webhook"
 
 #: purchases/templates/purchases/config/integration_settings.html:213
 msgid "Order created"
@@ -12955,7 +12955,7 @@ msgstr ""
 
 #: purchases/templates/purchases/config/integration_settings.html:298
 msgid "Testing..."
-msgstr ""
+msgstr "Probando..."
 
 #: purchases/templates/purchases/config/integration_settings.html:310
 msgid "Connection successful!"
@@ -13973,7 +13973,7 @@ msgstr ""
 #, fuzzy
 #| msgid "Total Products"
 msgid "Total Items"
-msgstr "Total de Productos"
+msgstr "Total de Elementos"
 
 #: purchases/templates/purchases/quotations/quotation_form.html:123
 #, fuzzy
@@ -14026,7 +14026,7 @@ msgstr ""
 #: purchases/templates/purchases/quotations/quotation_form.html:415
 #: purchases/templates/purchases/ratings/rating_review.html:376
 msgid "Processing..."
-msgstr ""
+msgstr "Procesando..."
 
 #: purchases/templates/purchases/quotations/quotation_list.html:14
 #, fuzzy
@@ -14045,7 +14045,7 @@ msgstr ""
 #: purchases/templates/purchases/quotations/quotation_list.html:177
 #: purchases/templates/purchases/quotations/quotation_select.html:18
 msgid "Select"
-msgstr ""
+msgstr "Seleccionar"
 
 #: purchases/templates/purchases/quotations/quotation_list.html:218
 msgid "No quotations found"
@@ -17461,7 +17461,7 @@ msgstr ""
 
 #: tiendanube/models.py:23 tiendanube/models.py:134
 msgid "Sync Stock"
-msgstr ""
+msgstr "Sincronizar Stock"
 
 #: tiendanube/models.py:24
 msgid "Sync Variants"
@@ -17471,7 +17471,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:299
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:542
 msgid "Sync Orders"
-msgstr ""
+msgstr "Sincronizar Pedidos"
 
 #: tiendanube/models.py:28
 msgid "Webhook Active"
@@ -17518,7 +17518,7 @@ msgstr ""
 
 #: tiendanube/models.py:81
 msgid "Stock"
-msgstr ""
+msgstr "Stock"
 
 #: tiendanube/models.py:82
 msgid "Variant"
@@ -17534,7 +17534,7 @@ msgstr ""
 
 #: tiendanube/models.py:87
 msgid "Full Sync"
-msgstr ""
+msgstr "Sincronización Completa"
 
 #: tiendanube/models.py:90
 msgid "Success"
@@ -17572,7 +17572,7 @@ msgstr ""
 
 #: tiendanube/models.py:121 tiendanube/models.py:465 tiendanube/models.py:489
 msgid "Synced"
-msgstr ""
+msgstr "Sincronizado"
 
 #: tiendanube/models.py:124 tiendanube/models.py:468 tiendanube/models.py:492
 msgid "Conflict"
@@ -17582,7 +17582,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:32
 #: tiendanube/templates/tiendanube/tiendanube_order_mapping_list.html:32
 msgid "Sync Status"
-msgstr ""
+msgstr "Estado de Sincronización"
 
 #: tiendanube/models.py:132 tiendanube/models.py:476
 msgid "Sync Enabled"
@@ -17785,7 +17785,7 @@ msgstr ""
 
 #: tiendanube/models.py:574
 msgid "Failed"
-msgstr ""
+msgstr "Fallido"
 
 #: tiendanube/models.py:582
 msgid "Quantity Requested"
@@ -17807,7 +17807,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:14
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:444
 msgid "Customer Mappings"
-msgstr ""
+msgstr "Mapeos de Clientes"
 
 #: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:15
 msgid "Manage customer synchronization with Tiendanube"
@@ -17826,7 +17826,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:97
 #: tiendanube/templates/tiendanube/tiendanube_order_mapping_list.html:112
 msgid "Last Synced"
-msgstr ""
+msgstr "Última Sincronización"
 
 #: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:121
 msgid "No customer mappings"
@@ -17889,7 +17889,7 @@ msgstr ""
 
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:426
 msgid "Product Mappings"
-msgstr ""
+msgstr "Mapeos de Productos"
 
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:427
 msgid "Manage product synchronization"
@@ -17903,7 +17903,7 @@ msgstr ""
 #: tiendanube/templates/tiendanube/tiendanube_order_mapping_list.html:5
 #: tiendanube/templates/tiendanube/tiendanube_order_mapping_list.html:14
 msgid "Order Mappings"
-msgstr ""
+msgstr "Mapeos de Pedidos"
 
 #: tiendanube/templates/tiendanube/tiendanube_dashboard.html:463
 msgid "Manage order synchronization"
@@ -17983,7 +17983,7 @@ msgstr ""
 
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:103
 msgid "Sync customer data"
-msgstr ""
+msgstr "Sincronizar datos de clientes"
 
 #: tiendanube/templates/tiendanube/tiendanube_manual_sync.html:111
 msgid "Sync Direction"
@@ -18149,11 +18149,11 @@ msgstr "Reservado"
 #, fuzzy
 #| msgid "Total Products"
 msgid "Total Syncs"
-msgstr "Total de Productos"
+msgstr "Total de Sincronizaciones"
 
 #: tiendanube/templates/tiendanube/tiendanube_reports.html:93
 msgid "Successful"
-msgstr ""
+msgstr "Exitosas"
 
 #: tiendanube/templates/tiendanube/tiendanube_reports.html:111
 msgid "Errors"
@@ -18332,7 +18332,7 @@ msgstr ""
 
 #: tiendanube/templates/tiendanube/tiendanube_sync_customers.html:28
 msgid "Store ID"
-msgstr ""
+msgstr "ID de Tienda"
 
 #: tiendanube/templates/tiendanube/tiendanube_sync_customers.html:34
 msgid "API URL"
@@ -18563,11 +18563,11 @@ msgstr "empresa"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Active"
-msgstr "Activa"
+msgstr "Activo"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Inactive"
-msgstr "Inactiva"
+msgstr "Inactivo"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Edit company"
@@ -18591,7 +18591,7 @@ msgstr "Ver ficha de la empresa"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Details"
-msgstr "Ficha"
+msgstr "Detalles"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Activate/deactivate company"
