@@ -323,10 +323,9 @@ class Command(BaseCommand):
                     uid=uid,
                     email=email,
                     nombre=nombre,
-                    idioma=idioma,
-                    username=email,
-                    password=""  # No se guarda localmente
+                    idioma=idioma
                 )
+                usuario.set_unusable_password()  # No se guarda contraseña localmente (usa Firebase)
                 usuario.roles.set(roles_seleccionados)
                 usuario.save()
 
