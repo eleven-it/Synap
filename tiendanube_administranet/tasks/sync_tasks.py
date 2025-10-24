@@ -8,7 +8,7 @@ from django.utils import timezone
 from typing import Dict, Any
 
 from ..services.sync_service import TiendanubeAdministraNETSyncService
-from ..models import CustomerMapping, SyncLog
+from ..models import CustomerMapping, SyncLog, TiendanubeConfig, AdministraNETConfig
 
 logger = logging.getLogger(__name__)
 
@@ -340,3 +340,107 @@ def full_sync_task(self) -> Dict[str, Any]:
             'error': error_msg,
             'timestamp': timezone.now().isoformat()
         } 
+
+@shared_task(bind=True, name='tiendanube_administranet.tasks.sync_tasks.auto_sync_task')
+def auto_sync_task(self) -> Dict[str, Any]:
+    """
+    Tarea de sincronización automática basada en configuración.
+    Lee TiendanubeConfig.auto_sync y sync_interval para determinar
+    qué y cuándo sincronizar.
+    
+    Returns:
+        Dict con el resultado de la sincronización automática
+    """
+    try:
+        logger.info("🤖 Iniciando sincronización automática programada")
+        
+        # Obtener configuración activa
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+        
+        if not tiendanube_config:
+            logger.warning("No hay configuración de Tiendanube activa. Saltando sincronización.")
+            return {
+                'success': False,
+                'message': 'No active Tiendanube configuration',
+                'skipped': True
+            }
+        
+        if not adminet_config:
+            logger.warning("No hay configuración de AdministraNET activa. Saltando sincronización.")
+            return {
+                'success': False,
+                'message': 'No active AdministraNET configuration',
+                'skipped': True
+            }
+        
+        # Verificar si auto_sync está habilitado
+        if not tiendanube_config.auto_sync:
+            logger.info("Auto sync deshabilitado en configuración. Saltando sincronización.")
+            return {
+                'success': False,
+                'message': 'Auto sync is disabled',
+                'skipped': True
+            }
+        
+        # Crear servicio de sincronización
+        sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
+        
+        results = {}
+        total_success = 0
+        total_failed = 0
+        total_processed = 0
+        
+        # Sincronizar según configuración
+        if tiendanube_config.sync_customers:
+            logger.info("📊 Sincronizando clientes...")
+            customer_result = sync_service.sync_customers_from_tiendanube()
+            results['customers'] = customer_result
+            total_success += customer_result.get('successful', 0)
+            total_failed += customer_result.get('failed', 0)
+            total_processed += customer_result.get('total_processed', 0)
+        
+        if tiendanube_config.sync_products:
+            logger.info("📦 Sincronizando productos...")
+            product_result = sync_service.sync_products_from_tiendanube()
+            results['products'] = product_result
+            total_success += product_result.get('successful', 0)
+            total_failed += product_result.get('failed', 0)
+            total_processed += product_result.get('total_processed', 0)
+        
+        if tiendanube_config.sync_orders:
+            logger.info("🛒 Sincronizando pedidos...")
+            order_result = sync_service.sync_orders_from_tiendanube()
+            results['orders'] = order_result
+            total_success += order_result.get('successful', 0)
+            total_failed += order_result.get('failed', 0)
+            total_processed += order_result.get('total_processed', 0)
+        
+        # Actualizar last_sync en configuración
+        tiendanube_config.last_sync = timezone.now()
+        tiendanube_config.save(update_fields=['last_sync'])
+        
+        result = {
+            'success': True,
+            'message': f'Auto sync completed: {total_success} successful, {total_failed} failed',
+            'total_processed': total_processed,
+            'total_success': total_success,
+            'total_failed': total_failed,
+            'results': results,
+            'timestamp': timezone.now().isoformat()
+        }
+        
+        logger.info(f"✅ Sincronización automática completada: {total_success} exitosos, {total_failed} fallidos")
+        
+        return result
+        
+    except Exception as e:
+        error_msg = f"Error en tarea de sincronización automática: {str(e)}"
+        logger.error(error_msg)
+        logger.exception(e)
+        
+        return {
+            'success': False,
+            'error': error_msg,
+            'timestamp': timezone.now().isoformat()
+        }

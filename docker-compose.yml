@@ -47,6 +47,42 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  celery_worker:
+    build: .
+    container_name: Synap_celery_worker
+    command: celery -A django_project worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  celery_beat:
+    build: .
+    container_name: Synap_celery_beat
+    command: celery -A django_project beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
   qdrant:
     build: ./qdrant
     container_name: Synap_qdrant

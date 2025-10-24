@@ -305,6 +305,27 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
+# Configuración de Celery Beat para tareas periódicas
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    # Sincronización automática de Tiendanube-AdministraNET
+    # La frecuencia se ajusta dinámicamente según TiendanubeConfig.sync_interval
+    'tiendanube-auto-sync': {
+        'task': 'tiendanube_administranet.tasks.sync_tasks.auto_sync_task',
+        'schedule': crontab(minute='*/30'),  # Cada 30 minutos por defecto
+        'options': {
+            'expires': 1800,  # 30 minutos de expiración
+        }
+    },
+    # Limpieza de logs antiguos (semanal)
+    'cleanup-old-sync-logs': {
+        'task': 'tiendanube_administranet.tasks.sync_tasks.cleanup_old_logs_task',
+        'schedule': crontab(hour=3, minute=0, day_of_week=0),  # Domingos a las 3:00 AM
+        'kwargs': {'days': 90},  # Eliminar logs mayores a 90 días
+    },
+}
+
 # URL base pública del sitio (para imágenes, enlaces externos, etc.)
 SITE_URL = config('SITE_URL', default='https://synap.administranet.com.ar')
 
