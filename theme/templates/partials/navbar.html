@@ -240,9 +240,75 @@
     </div>
     
     <!-- Usuario -->
-    <button class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center" aria-label="{% trans 'User Menu' %}">
-      <span class="material-icons">person</span>
-    </button>
+    <div class="relative" x-data="{ userMenuOpen: false }">
+      <button @click="userMenuOpen = !userMenuOpen" 
+              class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200" 
+              aria-label="{% trans 'User Menu' %}">
+        <span class="material-icons text-sm">person</span>
+      </button>
+      
+      <!-- Dropdown Menu -->
+      <div x-show="userMenuOpen" 
+           @click.away="userMenuOpen = false"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+        
+        <!-- User Info -->
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <p class="text-sm font-medium text-gray-900 dark:text-white">
+            {{ request.user.get_full_name|default:request.user.username }}
+          </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {{ request.user.email }}
+          </p>
+        </div>
+        
+        <!-- Menu Items -->
+        <div class="py-1">
+          <a href="{% url 'core:perfil' %}" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">account_circle</span>
+            {% trans "My Profile" %}
+          </a>
+          
+          <a href="{% url 'core:historial' %}" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">history</span>
+            {% trans "Activity History" %}
+          </a>
+          
+          {% if request.user.is_staff %}
+          <a href="/admin/" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">admin_panel_settings</span>
+            {% trans "Admin Panel" %}
+          </a>
+          {% endif %}
+          
+          {% if request.user.is_superuser %}
+          <a href="/rosetta/" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">translate</span>
+            {% trans "Translations" %}
+          </a>
+          {% endif %}
+        </div>
+        
+        <!-- Logout -->
+        <div class="border-t border-gray-200 dark:border-gray-700 py-1">
+          <a href="{% url 'login:logout' %}" 
+             class="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">logout</span>
+            {% trans "Logout" %}
+          </a>
+        </div>
+      </div>
+    </div>
     
     <!-- Dark mode -->
     <label class="ml-2 flex items-center cursor-pointer">
