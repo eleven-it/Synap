@@ -1398,10 +1398,21 @@ def trigger_sync_ajax(request):
         tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
         adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
         
-        if not tiendanube_config or not adminet_config:
+        # Validar configuraciones
+        if not tiendanube_config and not adminet_config:
             return JsonResponse({
                 'success': False,
-                'message': _('Active configurations not found. Please configure Tiendanube and AdministraNET first.')
+                'message': _('No active configurations found. Please configure Tiendanube and AdministraNET first.')
+            })
+        elif not tiendanube_config:
+            return JsonResponse({
+                'success': False,
+                'message': _('Tiendanube configuration not found. Please configure Tiendanube first.')
+            })
+        elif not adminet_config:
+            return JsonResponse({
+                'success': False,
+                'message': _('AdministraNET configuration not found. Please configure AdministraNET first.')
             })
         
         # Crear servicio de sincronización
