@@ -31,61 +31,6 @@
     </div>
 </div>
 
-<!-- Statistics Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-    <!-- Active Webhooks -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Active Webhooks" %}</p>
-                <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ active_webhooks|default:0 }}</p>
-            </div>
-            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-green-600 dark:text-green-400">check_circle</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Total Events -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Total Events" %}</p>
-                <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ total_events|default:0 }}</p>
-            </div>
-            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-blue-600 dark:text-blue-400">webhook</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Success Rate -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Success Rate" %}</p>
-                <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">{{ success_rate|default:"0%" }}</p>
-            </div>
-            <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-orange-600 dark:text-orange-400">trending_up</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Last Activity -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Last Activity" %}</p>
-                <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ last_activity|default:"Never" }}</p>
-            </div>
-            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
-                <span class="material-icons text-purple-600 dark:text-purple-400">schedule</span>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Filters Section -->
 <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 mb-8">
     <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
