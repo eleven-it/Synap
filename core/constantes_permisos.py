@@ -174,6 +174,49 @@ PERMISOS_POR_MODULO = {
     "TiendaNube": [
         ("tiendanube.access", "Access TiendaNube integration")
     ],
+    "Tiendanube-AdministraNET": [
+        # Dashboard y vistas generales
+        ("tiendanube_administranet.view_customermapping", "Ver dashboard y mapeos de clientes"),
+        ("tiendanube_administranet.view_tiendanubeconfig", "Ver estado del sistema"),
+        
+        # Customer Mappings
+        ("tiendanube_administranet.add_customermapping", "Crear mapeos de clientes"),
+        ("tiendanube_administranet.change_customermapping", "Editar mapeos de clientes"),
+        ("tiendanube_administranet.delete_customermapping", "Eliminar mapeos de clientes"),
+        
+        # Product Mappings
+        ("tiendanube_administranet.view_productmapping", "Ver mapeos de productos"),
+        ("tiendanube_administranet.add_productmapping", "Crear mapeos de productos"),
+        ("tiendanube_administranet.change_productmapping", "Editar mapeos de productos"),
+        ("tiendanube_administranet.delete_productmapping", "Eliminar mapeos de productos"),
+        
+        # Order Mappings
+        ("tiendanube_administranet.view_ordermapping", "Ver mapeos de pedidos"),
+        ("tiendanube_administranet.add_ordermapping", "Crear mapeos de pedidos"),
+        ("tiendanube_administranet.change_ordermapping", "Editar mapeos de pedidos"),
+        ("tiendanube_administranet.delete_ordermapping", "Eliminar mapeos de pedidos"),
+        
+        # Sincronización
+        ("tiendanube_administranet.run_sync", "Ejecutar sincronizaciones"),
+        ("tiendanube_administranet.view_synclog", "Ver historial de sincronización"),
+        
+        # Configuración Tiendanube
+        ("tiendanube_administranet.add_tiendanubeconfig", "Crear configuración de Tiendanube"),
+        ("tiendanube_administranet.change_tiendanubeconfig", "Editar configuración de Tiendanube"),
+        ("tiendanube_administranet.delete_tiendanubeconfig", "Eliminar configuración de Tiendanube"),
+        
+        # Configuración AdministraNET
+        ("tiendanube_administranet.view_administraNETconfig", "Ver configuración de AdministraNET"),
+        ("tiendanube_administranet.change_administraNETconfig", "Editar configuración de AdministraNET"),
+        
+        # Webhooks
+        ("tiendanube_administranet.view_webhookconfig", "Ver configuraciones de webhook"),
+        ("tiendanube_administranet.add_webhookconfig", "Crear webhooks"),
+        ("tiendanube_administranet.change_webhookconfig", "Editar webhooks"),
+        ("tiendanube_administranet.delete_webhookconfig", "Eliminar webhooks"),
+        ("tiendanube_administranet.view_webhookevent", "Ver eventos de webhook"),
+        ("tiendanube_administranet.change_webhookevent", "Procesar eventos de webhook"),
+    ],
     "Integraciones": [
         ("core.can_manage_integrations", "Gestionar integraciones"),
         ("core.can_edit_mappings", "Editar mapeos de integración"),
