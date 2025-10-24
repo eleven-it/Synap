@@ -8,211 +8,6 @@ from core.module_events import ModuleEvents, EventDataBuilder
 
 
 # ============================================================================
-# PLUGIN DE REPORTES AVANZADOS
-# ============================================================================
-
-class AdvancedReportsPlugin(PluginBase):
-    """Plugin para reportes avanzados del sistema"""
-    
-    name = 'advanced_reports'
-    version = '1.0.0'
-    description = 'Plugin que agrega reportes avanzados y análisis de datos'
-    author = 'Synap Team'
-    website = 'https://synap.com'
-    license = 'MIT'
-    
-    requires_modules = ['sales', 'purchases', 'inventory', 'accounting']
-    optional_modules = ['tiendanube']
-    conflicts_with = []
-    
-    # Hooks que registra
-    hooks = {
-        'event_sale.completed': 'on_sale_completed',
-        'event_purchase.completed': 'on_purchase_completed',
-        'event_stock.movement': 'on_stock_movement',
-        'event_journal_entry.posted': 'on_journal_entry_posted'
-    }
-    
-    # Eventos que escucha
-    events = {
-        'report.generated': 'on_report_generated',
-        'report.exported': 'on_report_exported'
-    }
-    
-    # URLs que agrega
-    urls = [
-        {'path': 'reports/advanced/', 'view': 'AdvancedReportsView'},
-        {'path': 'reports/analytics/', 'view': 'AnalyticsView'},
-        {'path': 'reports/export/', 'view': 'ExportReportsView'}
-    ]
-    
-    # Templates que proporciona
-    templates = [
-        'reports/advanced_dashboard.html',
-        'reports/analytics_charts.html',
-        'reports/export_formats.html'
-    ]
-    
-    # Configuración por defecto
-    default_config = {
-        'auto_generate_reports': True,
-        'report_retention_days': 365,
-        'export_formats': ['pdf', 'excel', 'csv'],
-        'chart_types': ['line', 'bar', 'pie', 'area']
-    }
-    
-    def on_sale_completed(self, event_data):
-        """Hook que se ejecuta cuando se completa una venta"""
-        sale_id = event_data.get('sale_id')
-        details = event_data.get('details', {})
-        
-        # Actualizar reportes de ventas
-        self.update_sales_reports(sale_id, details)
-        
-        # Generar reporte automático si está habilitado
-        if self.config.get('auto_generate_reports'):
-            self.generate_sales_report(sale_id)
-        
-        return f"Sales report updated for sale {sale_id}"
-    
-    def on_purchase_completed(self, event_data):
-        """Hook que se ejecuta cuando se completa una compra"""
-        purchase_id = event_data.get('purchase_id')
-        details = event_data.get('details', {})
-        
-        # Actualizar reportes de compras
-        self.update_purchase_reports(purchase_id, details)
-        
-        return f"Purchase report updated for purchase {purchase_id}"
-    
-    def on_stock_movement(self, event_data):
-        """Hook que se ejecuta cuando hay movimiento de inventario"""
-        product_id = event_data.get('product_id')
-        quantity = event_data.get('quantity', 0)
-        action = event_data.get('action', '')
-        
-        # Actualizar reportes de inventario
-        self.update_inventory_reports(product_id, quantity, action)
-        
-        return f"Inventory report updated for product {product_id}"
-    
-    def on_journal_entry_posted(self, event_data):
-        """Hook que se ejecuta cuando se publica una entrada contable"""
-        entry_id = event_data.get('journal_entry_id')
-        
-        # Actualizar reportes financieros
-        self.update_financial_reports(entry_id)
-        
-        return f"Financial report updated for entry {entry_id}"
-    
-    def on_report_generated(self, event_data):
-        """Evento que se ejecuta cuando se genera un reporte"""
-        report_id = event_data.get('report_id')
-        report_type = event_data.get('report_type')
-        
-        # Registrar generación de reporte
-        self.log_report_generation(report_id, report_type)
-        
-        return f"Report generation logged: {report_type}"
-    
-    def on_report_exported(self, event_data):
-        """Evento que se ejecuta cuando se exporta un reporte"""
-        report_id = event_data.get('report_id')
-        export_format = event_data.get('export_format')
-        
-        # Registrar exportación de reporte
-        self.log_report_export(report_id, export_format)
-        
-        return f"Report export logged: {export_format}"
-    
-    def on_install(self):
-        """Código que se ejecuta al instalar el plugin"""
-        # Crear tablas para reportes
-        self.create_reports_tables()
-        
-        # Crear directorios para reportes
-        self.create_reports_directories()
-        
-        # Configurar tareas programadas
-        self.setup_scheduled_tasks()
-    
-    def on_uninstall(self):
-        """Código que se ejecuta al desinstalar el plugin"""
-        # Limpiar tablas de reportes
-        self.cleanup_reports_tables()
-        
-        # Limpiar archivos de reportes
-        self.cleanup_reports_files()
-    
-    def on_activate(self):
-        """Código que se ejecuta al activar el plugin"""
-        # Iniciar servicios de reportes
-        self.start_report_services()
-    
-    def on_deactivate(self):
-        """Código que se ejecuta al desactivar el plugin"""
-        # Detener servicios de reportes
-        self.stop_report_services()
-    
-    # Funciones auxiliares (simuladas)
-    def update_sales_reports(self, sale_id, details):
-        """Actualiza reportes de ventas"""
-        print(f"Updating sales reports for sale {sale_id}")
-    
-    def generate_sales_report(self, sale_id):
-        """Genera reporte de ventas"""
-        print(f"Generating sales report for sale {sale_id}")
-    
-    def update_purchase_reports(self, purchase_id, details):
-        """Actualiza reportes de compras"""
-        print(f"Updating purchase reports for purchase {purchase_id}")
-    
-    def update_inventory_reports(self, product_id, quantity, action):
-        """Actualiza reportes de inventario"""
-        print(f"Updating inventory reports for product {product_id}")
-    
-    def update_financial_reports(self, entry_id):
-        """Actualiza reportes financieros"""
-        print(f"Updating financial reports for entry {entry_id}")
-    
-    def log_report_generation(self, report_id, report_type):
-        """Registra generación de reporte"""
-        print(f"Logging report generation: {report_type} - {report_id}")
-    
-    def log_report_export(self, report_id, export_format):
-        """Registra exportación de reporte"""
-        print(f"Logging report export: {export_format} - {report_id}")
-    
-    def create_reports_tables(self):
-        """Crea tablas para reportes"""
-        print("Creating reports tables")
-    
-    def create_reports_directories(self):
-        """Crea directorios para reportes"""
-        print("Creating reports directories")
-    
-    def setup_scheduled_tasks(self):
-        """Configura tareas programadas"""
-        print("Setting up scheduled tasks")
-    
-    def cleanup_reports_tables(self):
-        """Limpia tablas de reportes"""
-        print("Cleaning up reports tables")
-    
-    def cleanup_reports_files(self):
-        """Limpia archivos de reportes"""
-        print("Cleaning up reports files")
-    
-    def start_report_services(self):
-        """Inicia servicios de reportes"""
-        print("Starting report services")
-    
-    def stop_report_services(self):
-        """Detiene servicios de reportes"""
-        print("Stopping report services")
-
-
-# ============================================================================
 # PLUGIN DE INTEGRACIÓN CON EMAIL
 # ============================================================================
 
@@ -651,12 +446,10 @@ def register_plugin_examples():
     from core.plugin_manager import plugin_manager
     
     # Crear instancias de plugins
-    advanced_reports = AdvancedReportsPlugin()
     email_integration = EmailIntegrationPlugin()
     data_analytics = DataAnalyticsPlugin()
     
     # Registrar plugins
-    plugin_manager.register_plugin(advanced_reports)
     plugin_manager.register_plugin(email_integration)
     plugin_manager.register_plugin(data_analytics)
     
@@ -668,7 +461,7 @@ def unregister_plugin_examples():
     from core.plugin_manager import plugin_manager
     
     # Lista de plugins a desregistrar
-    plugins_to_remove = ['advanced_reports', 'email_integration', 'data_analytics']
+    plugins_to_remove = ['email_integration', 'data_analytics']
     
     for plugin_name in plugins_to_remove:
         plugin_manager.cleanup_plugin(plugin_name)
@@ -688,20 +481,20 @@ def test_plugin_system():
     print(f"Total plugins: {plugins_summary['total_plugins']}")
     
     # Probar instalación de un plugin
-    if plugin_manager.install_plugin('advanced_reports'):
-        print("Advanced Reports plugin installed successfully")
+    if plugin_manager.install_plugin('email_integration'):
+        print("Email Integration plugin installed successfully")
         
         # Probar activación
-        if plugin_manager.activate_plugin('advanced_reports'):
-            print("Advanced Reports plugin activated successfully")
+        if plugin_manager.activate_plugin('email_integration'):
+            print("Email Integration plugin activated successfully")
             
             # Probar desactivación
-            if plugin_manager.deactivate_plugin('advanced_reports'):
-                print("Advanced Reports plugin deactivated successfully")
+            if plugin_manager.deactivate_plugin('email_integration'):
+                print("Email Integration plugin deactivated successfully")
             
             # Probar desinstalación
-            if plugin_manager.uninstall_plugin('advanced_reports'):
-                print("Advanced Reports plugin uninstalled successfully")
+            if plugin_manager.uninstall_plugin('email_integration'):
+                print("Email Integration plugin uninstalled successfully")
     
     print("Plugin system test completed")
 
