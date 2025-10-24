@@ -1,0 +1,187 @@
+=================================================================
+  GUÍA DE DEPLOY OPTIMIZADO PARA PRODUCCIÓN - SYNAP
+=================================================================
+
+OBJETIVO:
+---------
+Mantener el servidor de producción con solo los archivos necesarios
+para la operación del sistema, eliminando archivos de desarrollo,
+documentación, tests y fuentes innecesarias.
+
+ARCHIVOS QUE SE EXCLUYEN EN PRODUCCIÓN:
+----------------------------------------
+1. administraNET_Limpio/ (264 MB) - Fuentes de AdministraNET
+2. administraNET_Limpio.zip (52.71 MB)
+3. media_bak/ - Backups antiguos de media
+4. misc/documentacion/ - Documentación solo para desarrollo
+5. misc/fix/ - Scripts de corrección
+6. misc/test/ - Scripts de prueba
+7. misc/scripts/ (la mayoría) - Solo se mantienen los de deploy
+8. test_*.py - Archivos de prueba
+9. debug_*.py - Archivos de debug
+10. investigate_*.py - Archivos de investigación
+11. *.md - Archivos Markdown de documentación
+12. .DS_Store - Archivos de MacOS
+
+ESPACIO ESTIMADO A LIBERAR:
+----------------------------
+- administraNET_Limpio/: ~264 MB
+- administraNET_Limpio.zip: ~53 MB
+- media_bak/: Variable
+- misc/documentacion/: ~5 MB
+- misc/fix/: ~2 MB
+- misc/test/: ~5 MB
+- misc/scripts/: ~10 MB
+- Archivos *.md, test_*, debug_*: ~5 MB
+- __pycache__ y *.pyc: Variable
+- Docker cache: ~1-2 GB
+
+TOTAL ESTIMADO: ~350 MB + 1-2 GB de Docker cache
+
+=================================================================
+MÉTODO 1: LIMPIAR SERVIDOR EXISTENTE
+=================================================================
+
+1. Conectarse al servidor:
+   ssh -p 38001 sparedes@198.27.68.214
+
+2. Ir al directorio de Synap:
+   cd /home/sparedes/Synap
+
+3. Ejecutar script de limpieza:
+   bash misc/scripts/clean_production_server.sh
+
+4. Verificar espacio liberado:
+   df -h /
+
+=================================================================
+MÉTODO 2: DEPLOY COMPLETO CON LIMPIEZA AUTOMÁTICA
+=================================================================
+
+1. Conectarse al servidor:
+   ssh -p 38001 sparedes@198.27.68.214
+
+2. Ejecutar deploy optimizado:
+   cd /home/sparedes/Synap
+   bash misc/scripts/deploy_production.sh
+
+Este script:
+- Actualiza el código desde GitHub
+- Elimina archivos innecesarios automáticamente
+- Aplica migraciones
+- Reinicia servicios Docker
+
+=================================================================
+MÉTODO 3: CLONAR SOLO LO NECESARIO (FRESH INSTALL)
+=================================================================
+
+1. Conectarse al servidor:
+   ssh -p 38001 sparedes@198.27.68.214
+
+2. Hacer backup de .env y media:
+   cp /home/sparedes/Synap/.env /tmp/synap.env.backup
+   tar -czf /tmp/synap_media_backup.tar.gz /home/sparedes/Synap/media/
+
+3. Eliminar instalación anterior:
+   rm -rf /home/sparedes/Synap
+
+4. Clonar repositorio con sparse-checkout:
+   git clone -b 1.0 --depth 1 --filter=blob:none \
+     git@github.com:eleven-it/Synap.git /home/sparedes/Synap
+   
+   cd /home/sparedes/Synap
+   
+   # Configurar sparse-checkout para excluir archivos innecesarios
+   git sparse-checkout init --cone
+   git sparse-checkout set \
+     core \
+     django_project \
+     theme \
+     finance \
+     inventory \
+     sales \
+     purchases \
+     logistics \
+     tiendanube \
+     tiendanube_administranet \
+     support_ai \
+     static \
+     templates \
+     locale
+
+5. Restaurar .env y media:
+   cp /tmp/synap.env.backup .env
+   tar -xzf /tmp/synap_media_backup.tar.gz -C .
+
+6. Iniciar servicios:
+   docker-compose up -d --build
+   docker exec Synap_app python manage.py migrate
+
+=================================================================
+CONFIGURACIÓN DE .gitignore PARA PRODUCCIÓN
+=================================================================
+
+El archivo .gitignore ya está configurado para excluir:
+- administraNET_Limpio/
+- administraNET_Limpio.zip
+- misc/documentacion/
+- misc/fix/
+- misc/test/
+- misc/scripts/ (excepto los de deploy)
+- *.md
+- test_*.py
+- debug_*.py
+- investigate_*.py
+
+Esto significa que estos archivos NO se subirán a GitHub desde
+el servidor de producción, pero sí estarán en desarrollo.
+
+=================================================================
+MANTENIMIENTO PERIÓDICO
+=================================================================
+
+Ejecutar cada mes:
+
+1. Limpiar Docker:
+   sudo docker system prune -af
+
+2. Limpiar logs antiguos:
+   find /home/sparedes/Synap/logs -name "*.log" -mtime +30 -delete
+
+3. Verificar espacio:
+   df -h /
+
+4. Limpiar cache de Git:
+   cd /home/sparedes/Synap
+   git gc --aggressive --prune=now
+
+=================================================================
+TROUBLESHOOTING
+=================================================================
+
+Problema: "No space left on device"
+Solución:
+  1. sudo docker system prune -af
+  2. sudo apt clean && sudo apt autoremove
+  3. bash misc/scripts/clean_production_server.sh
+
+Problema: "Git GC fails"
+Solución:
+  - Requiere espacio temporal. Limpiar Docker primero.
+  - O desactivar: git config gc.auto 0
+
+Problema: "Permission denied"
+Solución:
+  - Verificar permisos: ls -la /home/sparedes/Synap
+  - Ajustar: sudo chown -R sparedes:sparedes /home/sparedes/Synap
+
+=================================================================
+CONTACTO Y SOPORTE
+=================================================================
+
+Para problemas o dudas:
+- GitHub: https://github.com/eleven-it/Synap
+- Documentación completa: Solo en entorno de desarrollo
+
+=================================================================
+

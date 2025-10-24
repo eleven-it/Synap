@@ -1,7 +1,52 @@
+# Archivos de entorno y credenciales
 .env
 firebase_credentials.json
+
+# Python
 *.pyc
 __pycache__/
+
+# AdministraNET (fuentes y archivos innecesarios para producción)
 administraNET_Limpio/
 administraNET_Limpio.zip
+
+# Documentación (solo para desarrollo)
 *.md
+misc/documentacion/
+
+# Scripts de fix y test (solo para desarrollo)
+misc/fix/
+misc/test/
+misc/scripts/*
+!misc/scripts/deploy_production.sh
+!misc/scripts/clean_production_server.sh
+!misc/scripts/PRODUCTION_DEPLOY.txt
+
+# Archivos de backup
+media_bak/
+*.backup
+*.bak
+*_backup.py
+
+# Logs antiguos
+logs/*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos de desarrollo
+debug_*.py
+test_*.py
+investigate_*.py
+build_*.sh
+
+# Reports AI (si no se usa en producción)
+# reports_ai/
