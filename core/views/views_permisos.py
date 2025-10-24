@@ -23,10 +23,12 @@ logger = logging.getLogger(__name__)
 def listar_permisos_view(request):
     """
     Muestra una lista plana y filtrable de todos los permisos del sistema.
+    Ordenados por código (codename) alfabéticamente para agrupar por módulos.
     """
     consulta = request.GET.get("q", "").strip()
     
-    permisos_qs = Permiso.objects.all().order_by("nombre")
+    # Ordenar por código (codename) para agrupar por módulos alfabéticamente
+    permisos_qs = Permiso.objects.all().order_by("codigo")
 
     if consulta:
         permisos_qs = permisos_qs.filter(
