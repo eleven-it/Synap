@@ -167,6 +167,38 @@
                 {{ form.webhook_secret|as_crispy_field }}
             </div>
 
+            <!-- Retry Configuration Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-yellow-600 dark:text-yellow-400 mr-2">refresh</span>
+                    {% trans "Retry Configuration" %}
+                </h3>
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                        <span class="material-icons text-yellow-600 dark:text-yellow-400 mr-2 mt-0.5">info</span>
+                        <div>
+                            <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                                {% trans "Configure how many times to retry failed webhook deliveries and the delay between retries." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.max_retries|as_crispy_field }}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "Number of retry attempts (0-10)" %}
+                        </p>
+                    </div>
+                    <div>
+                        {{ form.retry_delay|as_crispy_field }}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "Delay in seconds between retries (60-3600)" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Status Configuration Section -->
             <div class="mb-8">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">

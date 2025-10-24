@@ -1239,6 +1239,13 @@ class WebhookConfigForm(forms.ModelForm):
         # Filtrar configuraciones activas de Tiendanube
         self.fields['tiendanube_config'].queryset = TiendanubeConfig.objects.filter(is_active=True)
         
+        # Establecer valores por defecto para campos de retry si no están definidos
+        if not self.instance.pk:  # Solo para nuevos objetos
+            if 'max_retries' not in self.initial:
+                self.initial['max_retries'] = 3
+            if 'retry_delay' not in self.initial:
+                self.initial['retry_delay'] = 300  # 5 minutos
+        
         # Agrupar eventos por categoría
         event_choices = []
         event_groups = {
