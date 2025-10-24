@@ -93,7 +93,7 @@ class Empresa(models.Model):
 
 
 class Permiso(models.Model):
-    codigo = models.CharField(max_length=50, unique=True, db_index=True)
+    codigo = models.CharField(max_length=100, unique=True, db_index=True)  # Aumentado de 50 a 100 para soportar nombres largos de módulos
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True, help_text=_("Detailed description of the permission"))
     modulo = models.CharField(max_length=50, blank=True, help_text=_("Module to which it belongs"))
