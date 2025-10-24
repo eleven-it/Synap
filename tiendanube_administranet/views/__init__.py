@@ -1100,6 +1100,104 @@ class StatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
         return context
 
 
+class AutoSyncConfigView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
+    """
+    Vista para configuración de sincronización automática.
+    """
+    template_name = 'tiendanube_administranet/auto_sync_config.html'
+    permission_required = 'tiendanube_administranet.change_tiendanubeconfig'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Obtener configuración activa
+        config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if not config:
+            # Crear configuración por defecto si no existe
+            config = TiendanubeConfig.objects.create(
+                name="Default Configuration",
+                store_id="default",
+                access_token="",
+                auto_sync=False,
+                sync_interval=30
+            )
+        
+        context['config'] = config
+        
+        # Opciones de intervalo
+        context['interval_choices'] = [
+            (5, _('5 min')),
+            (15, _('15 min')),
+            (30, _('30 min')),
+            (60, _('1 hour')),
+            (180, _('3 hours')),
+            (360, _('6 hours')),
+            (720, _('12 hours')),
+            (1440, _('24 hours')),
+        ]
+        
+        # Estadísticas de sincronización
+        from ..models import SyncLog
+        total_syncs = SyncLog.objects.count()
+        successful_syncs = SyncLog.objects.filter(status=SyncLog.Status.COMPLETED).count()
+        failed_syncs = SyncLog.objects.filter(status=SyncLog.Status.FAILED).count()
+        
+        # Duración promedio
+        avg_duration = SyncLog.objects.filter(
+            status=SyncLog.Status.COMPLETED,
+            duration_seconds__isnull=False
+        ).aggregate(avg=models.Avg('duration_seconds'))
+        
+        context['stats'] = {
+            'total_syncs': total_syncs,
+            'successful_syncs': successful_syncs,
+            'failed_syncs': failed_syncs,
+            'avg_duration': round(avg_duration['avg'] or 0, 1)
+        }
+        
+        return context
+    
+    def post(self, request, *args, **kwargs):
+        """Guardar configuración de sincronización automática."""
+        try:
+            # Obtener configuración activa
+            config = TiendanubeConfig.objects.filter(is_active=True).first()
+            if not config:
+                return JsonResponse({
+                    'success': False,
+                    'message': _('No active configuration found')
+                })
+            
+            # Actualizar configuración
+            config.auto_sync = request.POST.get('auto_sync') == 'on'
+            
+            # Intervalo personalizado o predefinido
+            if request.POST.get('custom_sync_interval'):
+                config.sync_interval = int(request.POST.get('custom_sync_interval'))
+            else:
+                config.sync_interval = int(request.POST.get('sync_interval', 30))
+            
+            # Qué sincronizar
+            config.sync_products = request.POST.get('sync_products') == 'on'
+            config.sync_customers = request.POST.get('sync_customers') == 'on'
+            config.sync_orders = request.POST.get('sync_orders') == 'on'
+            config.sync_stock = request.POST.get('sync_stock') == 'on'
+            
+            config.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': _('Configuration saved successfully')
+            })
+            
+        except Exception as e:
+            logger.error(f"Error saving auto sync configuration: {e}")
+            return JsonResponse({
+                'success': False,
+                'message': str(e)
+            })
+
+
 @login_required
 @permission_required('tiendanube_administranet.change_administraNETconfig')
 def migrate_adminet_schema_ajax(request):

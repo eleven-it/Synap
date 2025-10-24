@@ -1096,6 +1096,7 @@ APPS_MENU = [
             {
                 "seccion": _("Synchronization"),
                 "items": [
+                    {"label": _("Auto Sync Config"), "url": "tiendanube_administranet:auto_sync_config", "icon": "settings_suggest", "permission": "tiendanube_administranet.change_tiendanubeconfig"},
                     {"label": _("Manual Sync"), "url": "tiendanube_administranet:manual_sync", "icon": "sync", "permission": "tiendanube_administranet.run_sync"},
                     {"label": _("Sync History"), "url": "tiendanube_administranet:sync_history", "icon": "history", "permission": "tiendanube_administranet.view_synclog"},
                     {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "webhook", "permission": "tiendanube_administranet.view_webhookconfig"},

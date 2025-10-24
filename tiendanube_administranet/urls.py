@@ -22,6 +22,7 @@ urlpatterns = [
     path('config/tiendanube/wizard/', views.TiendanubeConfigWizardView.as_view(), name='tiendanube_config_wizard'),
     path('config/tiendanube/wizard/callback/', views.TiendanubeConfigWizardCallbackView.as_view(), name='tiendanube_config_wizard_callback'),
     path('config/adminet/', views.AdministraNETConfigView.as_view(), name='adminet_config'),
+    path('config/auto-sync/', views.AutoSyncConfigView.as_view(), name='auto_sync_config'),
     
     # Configuración dinámica de mapeos
     path('mappings/<str:mapping_type>/', mapping_configuration.DynamicMappingConfigurationView.as_view(), name='dynamic_mapping_config'),
