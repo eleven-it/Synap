@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'crispy_forms',
     'crispy_tailwind',
+    'rosetta',  # Herramienta de traducción web
 
     # Apps propias
     'core',

@@ -17,6 +17,7 @@ uvicorn
 django-redis
 django-crispy-forms==2.4
 crispy-tailwind==1.0.3
+django-rosetta==0.10.2
 Pillow==10.1.0
 six==1.16.0
 django-widget-tweaks==1.5.0

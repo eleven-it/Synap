@@ -27,6 +27,7 @@ urlpatterns = [
     path('', lambda request: redirect('/core/dashboard/')),  # Redirección raíz
     path("__/auth/handler", TemplateView.as_view(template_name="login/auth_handler.html")),
     path("admin/", admin.site.urls),
+    path("rosetta/", include("rosetta.urls")),  # Herramienta de traducción
     path("login/", include("login.urls")),  
     path("core/", include("core.urls", namespace="core")),
     path("mercadopago/", include("mercadopago.urls")),
