@@ -12,7 +12,6 @@ from .views.sync_log_detail import AdminetSyncLogDetailView
 from .views.mapping_delete import AdminetMappingDeleteView
 from .views.validation_settings import validation_settings
 from .views.validation_history import validation_history
-from .views.test_connection import TestConnectionView as ConnectionTestView, ConnectionDiagnosticView
 from .views.toggle_integration import ToggleIntegrationView, IntegrationStatusView, ForceToggleView
 # Importar solo vistas existentes para evitar errores de linter
 
@@ -22,10 +21,9 @@ urlpatterns = [
     path('', AdminetPanelView.as_view(), name='adminet_panel'),
     path('status/', AdminetStatusView.as_view(), name='adminet_status'),
     path('connection/', AdminetConnectionView.as_view(), name='adminet_connection'),
-    path('connection/test-connection/', AdminetConnectionView.as_view(), name='adminet_test_connection'),
+    path('connection/test-connection/', TestConnectionView.as_view(), name='adminet_test_connection'),
     path('connection/connection-info/', AdminetConnectionView.as_view(), name='adminet_connection_info'),
-    path('test-connection/', ConnectionTestView.as_view(), name='test_connection'),
-    path('test-connection/diagnostic/', ConnectionDiagnosticView.as_view(), name='connection_diagnostic'),
+    path('test-connection/', TestConnectionView.as_view(), name='test_connection'),
     path('toggle-integration/', ToggleIntegrationView.as_view(), name='toggle_integration'),
     path('toggle-integration/status/', IntegrationStatusView.as_view(), name='integration_status'),
     path('toggle-integration/force/', ForceToggleView.as_view(), name='force_toggle'),
