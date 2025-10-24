@@ -12,7 +12,8 @@ administraNET_Limpio.zip
 
 # Documentación (solo para desarrollo)
 *.md
-misc/documentacion/
+misc/documentacion/*
+!misc/documentacion/deploy_wsl2_docker_desktop.md
 
 # Scripts de fix y test (solo para desarrollo)
 misc/fix/
@@ -21,6 +22,9 @@ misc/scripts/*
 !misc/scripts/deploy_production.sh
 !misc/scripts/clean_production_server.sh
 !misc/scripts/PRODUCTION_DEPLOY.txt
+!misc/scripts/setup_wsl2.sh
+!misc/scripts/setup_windows_for_wsl2.ps1
+!misc/scripts/README_WSL2.md
 
 # Archivos de backup
 media_bak/
