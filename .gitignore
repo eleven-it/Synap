@@ -25,6 +25,8 @@ misc/scripts/*
 !misc/scripts/setup_wsl2.sh
 !misc/scripts/setup_windows_for_wsl2.ps1
 !misc/scripts/README_WSL2.md
+!misc/scripts/init_synap_instance.sh
+!misc/scripts/reset_auth_wsl2.sh
 
 # Archivos de backup
 media_bak/

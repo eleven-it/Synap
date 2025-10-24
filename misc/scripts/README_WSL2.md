@@ -5,6 +5,8 @@
 1. **`deploy_wsl2_docker_desktop.md`** - Guía completa paso a paso
 2. **`setup_windows_for_wsl2.ps1`** - Script PowerShell para preparar Windows
 3. **`setup_wsl2.sh`** - Script Bash para instalar Synap en WSL2
+4. **`init_synap_instance.sh`** - Script de inicialización completa de Synap
+5. **`reset_auth_wsl2.sh`** - Script para solucionar problemas de autenticación
 
 ---
 
@@ -104,9 +106,7 @@ Set-ExecutionPolicy Bypass -Scope Process
 - ✅ Configura archivo .env
 - ✅ Construye imágenes Docker
 - ✅ Inicia servicios
-- ✅ Aplica migraciones
-- ✅ Crea superusuario
-- ✅ Recolecta archivos estáticos
+- ✅ Ejecuta `init_synap_instance.sh` (inicialización completa)
 
 **Uso:**
 
@@ -117,6 +117,51 @@ chmod +x setup_wsl2.sh
 
 # 3. Ejecutar
 ./setup_wsl2.sh
+```
+
+---
+
+### `init_synap_instance.sh`
+
+**Propósito:** Inicializar una instancia nueva de Synap
+
+**Qué hace:**
+- ✅ Aplica migraciones de base de datos
+- ✅ Ejecuta setup inicial del sistema
+- ✅ Carga datos iniciales (países, monedas, etc.)
+- ✅ Recolecta archivos estáticos
+- ✅ Compila traducciones i18n
+- ✅ Verifica servicios
+- ✅ Muestra credenciales de administrador
+
+**Uso:**
+
+```bash
+# Para instancia nueva o reset
+chmod +x misc/scripts/init_synap_instance.sh
+./misc/scripts/init_synap_instance.sh
+```
+
+---
+
+### `reset_auth_wsl2.sh`
+
+**Propósito:** Solucionar problemas de autenticación (ERR_TOO_MANY_REDIRECTS)
+
+**Qué hace:**
+- ✅ Limpia Redis (sesiones)
+- ✅ Limpia sesiones en DB
+- ✅ Crea usuario UsuarioExtendido
+- ✅ Asigna rol Administrador
+- ✅ Reinicia servicios
+- ✅ Muestra credenciales
+
+**Uso:**
+
+```bash
+# Cuando hay problemas de redirect loop
+chmod +x misc/scripts/reset_auth_wsl2.sh
+./misc/scripts/reset_auth_wsl2.sh
 ```
 
 ---

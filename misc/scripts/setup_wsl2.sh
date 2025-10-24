@@ -390,10 +390,16 @@ main() {
     configure_env
     build_docker
     start_services
-    run_migrations
-    create_superuser
-    collect_static
-    verify_installation
+    
+    # Ejecutar script de inicialización completa
+    PROJECT_DIR=$(cat /tmp/synap_project_dir)
+    cd "$PROJECT_DIR"
+    
+    print_header "Ejecutando Inicialización Completa de Synap"
+    print_info "Usando script: misc/scripts/init_synap_instance.sh"
+    
+    chmod +x misc/scripts/init_synap_instance.sh
+    ./misc/scripts/init_synap_instance.sh
     
     print_success "¡Todo listo! Disfruta de Synap 🚀"
 }

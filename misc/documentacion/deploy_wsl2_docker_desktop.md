@@ -282,23 +282,37 @@ Synap_db            "docker-entrypoint.s…"   db                  running      
 Synap_redis         "docker-entrypoint.s…"   redis               running             6379/tcp
 ```
 
-### 4️⃣ Aplicar migraciones
+### 4️⃣ Inicialización Completa (Recomendado)
+
+**Opción A: Script Automatizado (Recomendado)**
 
 ```bash
+# Dar permisos de ejecución
+chmod +x misc/scripts/init_synap_instance.sh
+
+# Ejecutar inicialización completa
+./misc/scripts/init_synap_instance.sh
+```
+
+Este script ejecuta automáticamente:
+- ✅ Migraciones de base de datos
+- ✅ Setup inicial del sistema
+- ✅ Carga de datos iniciales
+- ✅ Recolección de archivos estáticos
+- ✅ Compilación de traducciones
+- ✅ Verificación de servicios
+- ✅ Muestra credenciales de administrador
+
+**Opción B: Paso a Paso (Manual)**
+
+```bash
+# Aplicar migraciones
 docker exec Synap_app python manage.py migrate
-```
 
-### 5️⃣ Crear superusuario
-
-```bash
+# Crear superusuario
 docker exec -it Synap_app python manage.py createsuperuser
-```
 
-Sigue las instrucciones en pantalla para crear tu usuario administrador.
-
-### 6️⃣ Recolectar archivos estáticos
-
-```bash
+# Recolectar archivos estáticos
 docker exec Synap_app python manage.py collectstatic --noinput
 ```
 
