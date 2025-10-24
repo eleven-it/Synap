@@ -160,12 +160,68 @@
                         <span class="material-icons text-sm mr-2">wifi_tethering</span>
                         {% trans "Test Connection" %}
                     </button>
+                    <button type="button" class="inline-flex items-center px-4 py-2 text-sm font-medium text-green-700 bg-green-100 border border-green-300 rounded-lg hover:bg-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-600 dark:hover:bg-green-900/40" id="migrate-schema-btn">
+                        <span class="material-icons text-sm mr-2">build</span>
+                        {% trans "Migrate Schema" %}
+                    </button>
                     <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500" id="save-config-btn">
                         <span class="material-icons text-sm mr-2">save</span>
                         {% trans "Save Configuration" %}
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Migration Progress Modal -->
+<div id="migration-progress-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800">
+        <div class="mt-3">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-green-600 dark:text-green-400 mr-2">build</span>
+                    {% trans "Schema Migration" %}
+                </h3>
+                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" onclick="hideMigrationProgress()">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="mb-4">
+                <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <span>{% trans "Progress" %}</span>
+                    <span id="migration-progress-text">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div id="migration-progress-bar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- Status -->
+            <div class="mb-4">
+                <div class="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                    <span class="material-icons text-sm mr-2 animate-spin" id="migration-spinner">refresh</span>
+                    <span id="migration-status">{% trans "Initializing migration..." %}</span>
+                </div>
+            </div>
+            
+            <!-- Migration Details -->
+            <div id="migration-details" class="hidden">
+                <div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 mb-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">{% trans "Migration Results" %}</h4>
+                    <div id="migration-results" class="text-sm text-gray-600 dark:text-gray-400"></div>
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="flex justify-end space-x-3">
+                <button type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-600 dark:text-gray-300 dark:border-gray-500 dark:hover:bg-gray-500" onclick="hideMigrationProgress()" id="migration-close-btn">
+                    {% trans "Close" %}
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -295,5 +351,99 @@
             testBtn.innerHTML = '<span class="material-icons text-sm mr-2">wifi_tethering</span>{% trans "Test Connection" %}';
         });
     });
+
+    // Migration schema functionality
+    document.getElementById('migrate-schema-btn').addEventListener('click', function() {
+        showMigrationProgress();
+        triggerSchemaMigration();
+    });
+
+    // Migration progress modal functions
+    function showMigrationProgress() {
+        const modal = document.getElementById('migration-progress-modal');
+        modal.classList.remove('hidden');
+        
+        // Reset progress
+        updateMigrationProgress(0, '{% trans "Initializing migration..." %}');
+        document.getElementById('migration-details').classList.add('hidden');
+    }
+
+    function hideMigrationProgress() {
+        const modal = document.getElementById('migration-progress-modal');
+        modal.classList.add('hidden');
+    }
+
+    function updateMigrationProgress(percent, status) {
+        document.getElementById('migration-progress-bar').style.width = percent + '%';
+        document.getElementById('migration-progress-text').textContent = percent + '%';
+        document.getElementById('migration-status').textContent = status;
+    }
+
+    function triggerSchemaMigration() {
+        // Update progress
+        updateMigrationProgress(25, '{% trans "Testing connection..." %}');
+        
+        fetch('{% url "tiendanube_administranet:migrate_adminet_schema_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateMigrationProgress(100, '{% trans "Migration completed successfully!" %}');
+                
+                // Show results
+                showMigrationResults(data);
+                
+                // Show success toast
+                showToast(data.message, 'success', 8000);
+            } else {
+                updateMigrationProgress(100, '{% trans "Migration failed" %}');
+                showToast(data.message, 'error', 8000);
+            }
+        })
+        .catch(error => {
+            updateMigrationProgress(100, '{% trans "Migration error" %}');
+            showToast('{% trans "An error occurred during migration." %}', 'error', 8000);
+        })
+        .finally(() => {
+            // Hide spinner
+            document.getElementById('migration-spinner').classList.remove('animate-spin');
+            document.getElementById('migration-spinner').textContent = 'check_circle';
+        });
+    }
+
+    function showMigrationResults(data) {
+        const detailsDiv = document.getElementById('migration-details');
+        const resultsDiv = document.getElementById('migration-results');
+        
+        let resultsHtml = '';
+        
+        if (data.migrations_applied && data.migrations_applied.length > 0) {
+            resultsHtml += '<div class="mb-2"><strong class="text-green-600 dark:text-green-400">✅ {% trans "Applied Migrations:" %}</strong></div>';
+            data.migrations_applied.forEach(migration => {
+                resultsHtml += `<div class="ml-4 text-green-600 dark:text-green-400">• ${migration}</div>`;
+            });
+        }
+        
+        if (data.migrations_failed && data.migrations_failed.length > 0) {
+            resultsHtml += '<div class="mb-2 mt-3"><strong class="text-red-600 dark:text-red-400">❌ {% trans "Failed Migrations:" %}</strong></div>';
+            data.migrations_failed.forEach(migration => {
+                resultsHtml += `<div class="ml-4 text-red-600 dark:text-red-400">• ${migration}</div>`;
+            });
+        }
+        
+        if (!data.migrations_applied || data.migrations_applied.length === 0) {
+            if (!data.migrations_failed || data.migrations_failed.length === 0) {
+                resultsHtml += '<div class="text-blue-600 dark:text-blue-400">ℹ️ {% trans "No migrations were needed. Database schema is up to date." %}</div>';
+            }
+        }
+        
+        resultsDiv.innerHTML = resultsHtml;
+        detailsDiv.classList.remove('hidden');
+    }
 </script>
 {% endblock %} 

@@ -43,22 +43,19 @@ def webhook_status(request):
         # Obtener webhooks configurados
         webhooks_result = webhook_service.get_webhooks()
         
-        # Obtener eventos recientes
-        recent_events = WebhookEvent.objects.filter(
-            received_at__gte=timezone.now() - timezone.timedelta(days=7)
-        ).order_by('-received_at')[:50]
+        # Obtener eventos recientes (WebhookEvent usa received_at)
+        recent_events = WebhookEvent.objects.order_by('-received_at')[:10]
         
-        # Obtener logs de entrega recientes
-        recent_deliveries = WebhookDeliveryLog.objects.filter(
-            received_at__gte=timezone.now() - timezone.timedelta(days=7)
-        ).order_by('-received_at')[:50]
+        # Obtener logs de entrega recientes (WebhookDeliveryLog usa received_at)
+        recent_deliveries = WebhookDeliveryLog.objects.order_by('-received_at')[:10]
         
         # Estadísticas adicionales
         total_events = WebhookEvent.objects.count()
         total_deliveries = WebhookDeliveryLog.objects.count()
-        events_today = WebhookEvent.objects.filter(
-            received_at__gte=timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        ).count()
+        
+        # Eventos de hoy (usar received_at)
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        events_today = WebhookEvent.objects.filter(received_at__gte=today_start).count()
         
         # Calcular métricas reales
         success_rate = 0
@@ -83,7 +80,27 @@ def webhook_status(request):
         # Obtener información de la tienda
         store_info = None
         try:
-            store_info = webhook_service.tiendanube_service.get_store_info()
+            from ..services.tiendanube_service import TiendanubeService
+            tiendanube_service = TiendanubeService(tiendanube_config)
+            store_response = tiendanube_service.get_store_info()
+            if store_response.get('success'):
+                store_data = store_response.get('store_info', {})
+                # Procesar nombre multilenguaje
+                name = store_data.get('name', {})
+                if isinstance(name, dict):
+                    # Obtener nombre en español o primer idioma disponible
+                    store_name = name.get('es') or name.get('en') or list(name.values())[0] if name else 'N/A'
+                else:
+                    store_name = name or 'N/A'
+                
+                store_info = {
+                    'name': store_name,
+                    'url': store_data.get('url_with_protocol', 'N/A'),
+                    'email': store_data.get('email', 'N/A'),
+                    'main_currency': store_data.get('main_currency', 'N/A'),
+                    'main_language': store_data.get('main_language', 'N/A'),
+                    'original_domain': store_data.get('original_domain', 'N/A')
+                }
         except Exception as e:
             logger.warning(f"No se pudo obtener información de la tienda: {e}")
         

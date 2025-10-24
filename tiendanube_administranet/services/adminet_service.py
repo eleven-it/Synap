@@ -74,7 +74,7 @@ class AdministraNETService:
             cursor = self.connection.cursor(dictionary=True)
             cursor.execute(query, params or ())
             
-            if query.strip().upper().startswith('SELECT'):
+            if query.strip().upper().startswith('SELECT') or query.strip().upper().startswith('SHOW'):
                 results = cursor.fetchall()
                 cursor.close()
                 return {
@@ -95,6 +95,132 @@ class AdministraNETService:
             return {
                 'success': False,
                 'message': f'Error ejecutando consulta: {str(e)}'
+            }
+    
+    def verify_and_migrate_schema(self) -> Dict[str, Any]:
+        """
+        Verificar estructura de base de datos y aplicar migraciones necesarias.
+        Verifica campos requeridos para la integración con Tiendanube.
+        """
+        try:
+            migrations_applied = []
+            migrations_failed = []
+            
+            # Verificar y agregar campos necesarios en tabla cliente
+            cliente_migrations = self._verify_cliente_schema()
+            if cliente_migrations['needed']:
+                for migration in cliente_migrations['migrations']:
+                    result = self._apply_migration(migration)
+                    if result['success']:
+                        migrations_applied.append(migration['description'])
+                    else:
+                        migrations_failed.append(f"{migration['description']}: {result['message']}")
+            
+            # Verificar y agregar campos necesarios en tabla articulo
+            articulo_migrations = self._verify_articulo_schema()
+            if articulo_migrations['needed']:
+                for migration in articulo_migrations['migrations']:
+                    result = self._apply_migration(migration)
+                    if result['success']:
+                        migrations_applied.append(migration['description'])
+                    else:
+                        migrations_failed.append(f"{migration['description']}: {result['message']}")
+            
+            # Preparar mensaje de resultado
+            if migrations_applied:
+                message = f"✅ Migraciones aplicadas: {', '.join(migrations_applied)}"
+                if migrations_failed:
+                    message += f"\n⚠️ Migraciones fallidas: {', '.join(migrations_failed)}"
+            elif migrations_failed:
+                message = f"❌ Migraciones fallidas: {', '.join(migrations_failed)}"
+            else:
+                message = "✅ La estructura de la base de datos está actualizada. No se requieren migraciones."
+            
+            return {
+                'success': len(migrations_failed) == 0,
+                'message': message,
+                'migrations_applied': migrations_applied,
+                'migrations_failed': migrations_failed
+            }
+            
+        except Exception as e:
+            logger.error(f"Error verificando schema: {e}")
+            return {
+                'success': False,
+                'message': f'Error verificando estructura: {str(e)}',
+                'migrations_applied': [],
+                'migrations_failed': []
+            }
+    
+    def _verify_cliente_schema(self) -> Dict[str, Any]:
+        """Verificar si la tabla cliente tiene todos los campos necesarios."""
+        try:
+            query = "SHOW COLUMNS FROM cliente LIKE 'id_tiendanube'"
+            result = self.execute_query(query)
+            
+            migrations = []
+            
+            if result['success'] and result['count'] == 0:
+                # El campo id_tiendanube no existe
+                migrations.append({
+                    'description': 'Agregar campo id_tiendanube a tabla cliente',
+                    'query': 'ALTER TABLE cliente ADD COLUMN id_tiendanube BIGINT NULL COMMENT "ID del cliente en Tiendanube"'
+                })
+            
+            return {
+                'needed': len(migrations) > 0,
+                'migrations': migrations
+            }
+        except Exception as e:
+            logger.error(f"Error verificando schema de cliente: {e}")
+            return {'needed': False, 'migrations': []}
+    
+    def _verify_articulo_schema(self) -> Dict[str, Any]:
+        """Verificar si la tabla articulo tiene todos los campos necesarios."""
+        try:
+            query = "SHOW COLUMNS FROM articulo LIKE 'id_tiendanube'"
+            result = self.execute_query(query)
+            
+            migrations = []
+            
+            if result['success'] and result['count'] == 0:
+                # El campo id_tiendanube no existe
+                migrations.append({
+                    'description': 'Agregar campo id_tiendanube a tabla articulo',
+                    'query': 'ALTER TABLE articulo ADD COLUMN id_tiendanube BIGINT NULL COMMENT "ID del producto en Tiendanube"'
+                })
+            
+            return {
+                'needed': len(migrations) > 0,
+                'migrations': migrations
+            }
+        except Exception as e:
+            logger.error(f"Error verificando schema de articulo: {e}")
+            return {'needed': False, 'migrations': []}
+    
+    def _apply_migration(self, migration: Dict[str, str]) -> Dict[str, Any]:
+        """Aplicar una migración SQL."""
+        try:
+            logger.info(f"Aplicando migración: {migration['description']}")
+            result = self.execute_query(migration['query'])
+            
+            if result['success']:
+                logger.info(f"✅ Migración aplicada: {migration['description']}")
+                return {
+                    'success': True,
+                    'message': f'Migración aplicada exitosamente'
+                }
+            else:
+                logger.error(f"❌ Error en migración: {result['message']}")
+                return {
+                    'success': False,
+                    'message': result['message']
+                }
+        except Exception as e:
+            logger.error(f"Error aplicando migración: {e}")
+            return {
+                'success': False,
+                'message': str(e)
             }
     
     def get_customers(self, limit: int = 50, offset: int = 0, **filters) -> Dict[str, Any]:
@@ -140,7 +266,8 @@ class AdministraNETService:
                 Estado,
                 NroIngBrutos,
                 NroAgenteRetencion,
-                saldo
+                saldo,
+                id_tiendanube
             FROM cliente
             WHERE 1=1
             """
@@ -161,8 +288,10 @@ class AdministraNETService:
                 params.extend([search_term, search_term, search_term, search_term])
             
             # Ordenamiento y límites
-            query += " ORDER BY nombre_cliente LIMIT %s OFFSET %s"
-            params.extend([limit, offset])
+            query += " ORDER BY nombre_cliente"
+            if limit is not None:
+                query += " LIMIT %s OFFSET %s"
+                params.extend([limit, offset])
             
             result = self.execute_query(query, tuple(params))
             

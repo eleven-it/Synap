@@ -43,7 +43,7 @@ class PeriodicSyncService:
             # Crear log de sincronización
             sync_log = SyncLog.objects.create(
                 sync_type=SyncLog.SyncType.CUSTOMER,
-                direction='tiendanube_to_admin',
+                direction=SyncLog.SyncDirection.TO_ADMINET,
                 status=SyncLog.Status.IN_PROGRESS,
                 tiendanube_config=self.tiendanube_config,
                 adminet_config=self.adminet_config

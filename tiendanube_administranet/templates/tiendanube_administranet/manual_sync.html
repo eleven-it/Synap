@@ -135,19 +135,19 @@
         </div>
         <div class="p-6">
             <div class="space-y-3">
-                <button id="sync-customers-tn" class="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'tiendanube')">
-                    <span class="material-icons">people</span>
+                <button id="sync-customers-tn" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'tiendanube')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">people</span>
                     <span>{% trans "Sync Customers" %}</span>
                 </button>
                 
                 <!-- Product sync from Tiendanube is not allowed -->
-                <div class="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium py-3 px-4 rounded-lg flex items-center justify-center space-x-2 cursor-not-allowed">
+                <div class="w-full bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center space-x-2 cursor-not-allowed">
                     <span class="material-icons">block</span>
                     <span>{% trans "Product Sync Not Available" %}</span>
                 </div>
                 
-                <button id="sync-orders-tn" class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('orders', 'tiendanube')">
-                    <span class="material-icons">receipt</span>
+                <button id="sync-orders-tn" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('orders', 'tiendanube')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">receipt</span>
                     <span>{% trans "Sync Orders" %}</span>
                 </button>
             </div>
@@ -169,20 +169,21 @@
         </div>
         <div class="p-6">
             <div class="space-y-3">
-                <button id="sync-customers-an" class="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'adminet')">
-                    <span class="material-icons">people</span>
+                <button id="sync-customers-an" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'adminet')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">people</span>
                     <span>{% trans "Sync Customers" %}</span>
                 </button>
                 
-                <button id="sync-products-an" class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('products', 'adminet')">
-                    <span class="material-icons">inventory</span>
+                <button id="sync-products-an" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('products', 'adminet')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">inventory</span>
                     <span>{% trans "Sync Products" %}</span>
                 </button>
                 
-                <button id="sync-orders-an" class="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('orders', 'adminet')">
-                    <span class="material-icons">receipt</span>
-                    <span>{% trans "Sync Orders" %}</span>
-                </button>
+                <!-- Order sync from AdministraNET to Tiendanube is not allowed - orders are created by customers in Tiendanube -->
+                <div class="w-full bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center space-x-2 cursor-not-allowed">
+                    <span class="material-icons">block</span>
+                    <span>{% trans "Order Sync Not Available" %}</span>
+                </div>
             </div>
         </div>
     </div>
@@ -195,13 +196,13 @@
         {% trans "Advanced Sync Options" %}
     </h3>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button id="full-sync" class="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerFullSync()">
-            <span class="material-icons">sync</span>
+        <button id="full-sync" class="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerFullSync()">
+            <span class="material-icons text-orange-600 dark:text-orange-400">sync</span>
             <span>{% trans "Full Sync" %}</span>
         </button>
         
-        <button id="test-connections" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="testConnections()">
-            <span class="material-icons">wifi</span>
+        <button id="test-connections" class="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="testConnections()">
+            <span class="material-icons text-gray-600 dark:text-gray-300">wifi</span>
             <span>{% trans "Test Connections" %}</span>
         </button>
     </div>
@@ -296,7 +297,7 @@
         
         if (!button) return;
         
-        // Show progress modal
+        // Show progress modal (sin animación simulada)
         showSyncProgress(type, direction);
         
         // Disable button and show loading
@@ -318,26 +319,44 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast(data.message || 'Sync completed successfully', 'success');
+                // Mostrar resultado real de la sincronización
+                const progressBar = document.getElementById('sync-progress-bar');
+                const progressText = document.getElementById('sync-progress-text');
+                const description = document.getElementById('sync-progress-description');
                 
-                // Simulate progress updates
-                simulateProgress();
+                // Usar estructura real del backend (no "details")
+                const total = data.total_processed || data.total_items || 1;
+                const successful = data.successful || data.successful_items || 0;
+                const failed = data.failed || data.failed_items || 0;
+                const processed = successful + failed;
+                const progressPercent = processed > 0 ? Math.round((processed / total) * 100) : 100;
                 
-                // Reload sync history after a delay
+                progressBar.style.width = `${progressPercent}%`;
+                progressText.textContent = `${progressPercent}%`;
+                description.textContent = `Processed ${processed}/${total} items (${successful} successful, ${failed} failed)`;
+                
+                // Wait a moment to show results, then hide modal
                 setTimeout(() => {
+                    hideSyncProgress();
+                    
+                    // Mostrar mensaje con detalles
+                    showToast(data.message || 'Sync completed successfully', failed > 0 ? 'warning' : 'success');
+                    
+                    // Reload sync history
                     loadSyncHistory();
-                }, 2000);
+                    
+                    // Re-enable button
+                    setLoading(button, false);
+                }, 1500);
             } else {
+                hideSyncProgress();
                 showToast(data.message || 'Sync failed', 'error');
+                setLoading(button, false);
             }
         } catch (error) {
             console.error('Error:', error);
-            showToast('An error occurred during sync', 'error');
-        } finally {
-            // Hide progress modal
             hideSyncProgress();
-            
-            // Re-enable button
+            showToast('An error occurred during sync', 'error');
             setLoading(button, false);
         }
     }
@@ -345,6 +364,9 @@
     // Trigger full sync
     async function triggerFullSync() {
         const button = document.getElementById('full-sync');
+        
+        // Show progress modal (sin confirmación)
+        showSyncProgress('all data', 'bidirectional');
         setLoading(button, true);
         
         try {
@@ -363,15 +385,37 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast('Full sync completed successfully', 'success');
-                setTimeout(() => loadSyncHistory(), 2000);
+                // Mostrar resultado real
+                const progressBar = document.getElementById('sync-progress-bar');
+                const progressText = document.getElementById('sync-progress-text');
+                const description = document.getElementById('sync-progress-description');
+                
+                // Usar estructura real del backend
+                const total = data.total_processed || data.total_items || 1;
+                const successful = data.successful || data.successful_items || 0;
+                const failed = data.failed || data.failed_items || 0;
+                const processed = successful + failed;
+                const progressPercent = processed > 0 ? Math.round((processed / total) * 100) : 100;
+                
+                progressBar.style.width = `${progressPercent}%`;
+                progressText.textContent = `${progressPercent}%`;
+                description.textContent = `Full sync: ${processed}/${total} items (${successful} successful, ${failed} failed)`;
+                
+                setTimeout(() => {
+                    hideSyncProgress();
+                    showToast(data.message || 'Full sync completed successfully', failed > 0 ? 'warning' : 'success');
+                    loadSyncHistory();
+                    setLoading(button, false);
+                }, 1500);
             } else {
+                hideSyncProgress();
                 showToast(data.message || 'Full sync failed', 'error');
+                setLoading(button, false);
             }
         } catch (error) {
             console.error('Error:', error);
+            hideSyncProgress();
             showToast('An error occurred during full sync', 'error');
-        } finally {
             setLoading(button, false);
         }
     }
@@ -394,9 +438,16 @@
             const data = await response.json();
             
             if (data.success) {
-                showToast('Connections tested successfully', 'success');
+                // Ambas conexiones exitosas
+                showToast('✅ Tiendanube & AdministraNET: Connections OK', 'success');
             } else {
-                showToast(data.message || 'Connection test failed', 'error');
+                // Mostrar detalles de cada conexión
+                const results = data.results || {};
+                const tnStatus = results.tiendanube?.success ? '✅' : '❌';
+                const anStatus = results.adminet?.success ? '✅' : '❌';
+                
+                const message = `${tnStatus} Tiendanube: ${results.tiendanube?.message || 'Error'}\n${anStatus} AdministraNET: ${results.adminet?.message || 'Error'}`;
+                showToast(message, 'warning');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -411,9 +462,15 @@
         const modal = document.getElementById('sync-progress-modal');
         const title = document.getElementById('sync-progress-title');
         const description = document.getElementById('sync-progress-description');
+        const progressBar = document.getElementById('sync-progress-bar');
+        const progressText = document.getElementById('sync-progress-text');
         
         title.textContent = `Syncing ${type} ${direction === 'tiendanube' ? 'from Tiendanube' : 'from AdministraNET'}`;
         description.textContent = 'Please wait while the synchronization is in progress...';
+        
+        // Reset progress to 0%
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
         
         modal.classList.remove('hidden');
     }
@@ -422,24 +479,14 @@
     function hideSyncProgress() {
         const modal = document.getElementById('sync-progress-modal');
         modal.classList.add('hidden');
-    }
-
-    // Simulate progress updates
-    function simulateProgress() {
+        
+        // Reset progress bar when hiding
         const progressBar = document.getElementById('sync-progress-bar');
         const progressText = document.getElementById('sync-progress-text');
-        let progress = 0;
-        
-        const interval = setInterval(() => {
-            progress += Math.random() * 15;
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(interval);
-            }
-            
-            progressBar.style.width = `${progress}%`;
-            progressText.textContent = `${Math.round(progress)}%`;
-        }, 200);
+        if (progressBar && progressText) {
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+        }
     }
 
     // Load sync history
@@ -490,8 +537,8 @@
                     </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.direction === 'TO_ADMINET' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
-                        ${item.direction === 'TO_ADMINET' ? '{% trans "To Adminet" %}' : '{% trans "To Tiendanube" %}'}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.get_direction_display.includes('AdministraNET') && !item.get_direction_display.includes('From') ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                        ${item.get_direction_display}
                     </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
@@ -506,7 +553,7 @@
                     ${item.duration_seconds ? formatDuration(item.duration_seconds) : 'N/A'}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                    ${formatTimestamp(item.created_at)}
+                    ${formatTimestamp(item.started_at)}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <a href="/tiendanube-adminet/logs/${item.id}/" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">

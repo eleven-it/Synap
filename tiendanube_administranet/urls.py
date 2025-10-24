@@ -94,6 +94,7 @@ urlpatterns = [
     path('api/statistics/', views.get_statistics_ajax, name='get_statistics_ajax'),
     path('api/test-connections/', views.test_connections_ajax, name='test_connections_ajax'),
     path('api/test-adminet-connection/', views.test_adminet_connection_ajax, name='test_adminet_connection_ajax'),
+    path('api/migrate-adminet-schema/', views.migrate_adminet_schema_ajax, name='migrate_adminet_schema_ajax'),
     path('api/test-tiendanube-connection/', views.test_tiendanube_connection_ajax, name='test_tiendanube_connection_ajax'),
     path('api/trigger-sync/', views.trigger_sync_ajax, name='trigger_sync_ajax'),
     path('api/sync-history/', views.get_sync_history_ajax, name='get_sync_history_ajax'),

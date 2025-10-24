@@ -873,7 +873,9 @@ class SyncLog(models.Model):
     def complete_sync(self, success=True, error_message=""):
         """Marcar sincronización como completada."""
         self.completed_at = timezone.now()
-        self.duration_seconds = int((self.completed_at - self.started_at).total_seconds())
+        # Calcular duración: mínimo 1 segundo para que se muestre en la UI
+        duration = (self.completed_at - self.started_at).total_seconds()
+        self.duration_seconds = max(1, round(duration))
         
         if success:
             self.status = self.Status.COMPLETED

@@ -453,14 +453,28 @@ class AdministraNETConfigView(LoginRequiredMixin, PermissionRequiredMixin, FormV
             messages.success(self.request, _('Configuración de AdministraNET guardada exitosamente.'))
             
             # Probar conexión
-            from .services.adminet_service import AdministraNETService
+            from ..services.adminet_service import AdministraNETService
             service = AdministraNETService(config)
             test_result = service.test_connection()
             
             if test_result['success']:
                 messages.success(self.request, _('Conexión con AdministraNET probada exitosamente.'))
+                
+                # Verificar y aplicar migraciones necesarias
+                migration_result = service.verify_and_migrate_schema()
+                
+                if migration_result['migrations_applied']:
+                    migrations_list = ', '.join(migration_result['migrations_applied'])
+                    messages.success(self.request, f"✅ Migraciones aplicadas: {migrations_list}")
+                
+                if migration_result['migrations_failed']:
+                    failures_list = ', '.join(migration_result['migrations_failed'])
+                    messages.warning(self.request, f"⚠️ Migraciones fallidas: {failures_list}")
+                
+                if not migration_result['migrations_applied'] and not migration_result['migrations_failed']:
+                    messages.info(self.request, _('La estructura de la base de datos está actualizada.'))
             else:
-                messages.warning(self.request, f"Configuración guardada pero error de conexión: {test_result['error']}")
+                messages.warning(self.request, f"Configuración guardada pero error de conexión: {test_result.get('message', 'Unknown error')}")
                 
         except Exception as e:
             print(f"Error saving config: {e}")
@@ -651,63 +665,67 @@ def get_statistics_ajax(request):
 @permission_required('tiendanube_administranet.view_customermapping')
 def test_connections_ajax(request):
     """
-    Vista AJAX para probar conexiones a Tiendanube y AdministraNET.
+    Vista AJAX para probar conexiones activas de Tiendanube y AdministraNET.
     """
     if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Método no permitido'})
+        return JsonResponse({'success': False, 'message': 'Método no permitido'})
     
     try:
-        config_type = request.POST.get('config_type')
-        config_data = request.POST.get('config_data', {})
+        results = {
+            'tiendanube': {'success': False, 'message': 'Not configured'},
+            'adminet': {'success': False, 'message': 'Not configured'}
+        }
         
-        if config_type == 'tiendanube':
-            # Probar conexión a Tiendanube
-            from .services.tiendanube_service import TiendanubeService
-            
-            service = TiendanubeService(
-                store_id=config_data.get('store_id'),
-                access_token=config_data.get('access_token'),
-                api_url=config_data.get('api_url', 'https://api.tiendanube.com/v1')
-            )
-            
-            success, message = service.test_connection()
-            
-            return JsonResponse({
-                'success': success,
-                'message': message,
-                'platform': 'tiendanube'
-            })
-            
-        elif config_type == 'adminet':
-            # Probar conexión a AdministraNET
-            from .services.adminet_service import AdministraNETService
-            
-            service = AdministraNETService(
-                host=config_data.get('host'),
-                port=config_data.get('port', 3306),
-                database=config_data.get('database'),
-                user=config_data.get('user'),
-                password=config_data.get('password')
-            )
-            
-            success, message = service.test_connection()
-            
-            return JsonResponse({
-                'success': success,
-                'message': message,
-                'platform': 'adminet'
-            })
-            
-        else:
-            return JsonResponse({
-                'success': False,
-                'error': 'Tipo de configuración no válido'
-            })
+        # Probar conexión a Tiendanube
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_config:
+            try:
+                from ..services.tiendanube_service import TiendanubeService
+                service = TiendanubeService(tiendanube_config)
+                test_result = service.test_connection()
+                
+                results['tiendanube'] = {
+                    'success': test_result.get('success', False),
+                    'message': test_result.get('message', 'Connection test completed')
+                }
+            except Exception as e:
+                results['tiendanube'] = {
+                    'success': False,
+                    'message': f'Error: {str(e)}'
+                }
+        
+        # Probar conexión a AdministraNET
+        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+        if adminet_config:
+            try:
+                from ..services.adminet_service import AdministraNETService
+                service = AdministraNETService(adminet_config)
+                test_result = service.test_connection()
+                
+                results['adminet'] = {
+                    'success': test_result.get('success', False),
+                    'message': test_result.get('message', 'Connection test completed')
+                }
+            except Exception as e:
+                results['adminet'] = {
+                    'success': False,
+                    'message': f'Error: {str(e)}'
+                }
+        
+        # Determinar éxito general
+        overall_success = results['tiendanube']['success'] and results['adminet']['success']
+        
+        return JsonResponse({
+            'success': overall_success,
+            'message': 'Connection tests completed',
+            'results': results
+        })
             
     except Exception as e:
+        logger.error(f"Error testing connections: {str(e)}")
         return JsonResponse({
             'success': False,
-            'error': f'Error al probar conexión: {str(e)}'
+            'message': f'Error al probar conexiones: {str(e)}'
         })
 
 
@@ -1008,7 +1026,7 @@ class StatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
             # Probar conexión a Tiendanube
             if tiendanube_config:
                 try:
-                    from .services.tiendanube_service import TiendanubeService
+                    from ..services.tiendanube_service import TiendanubeService
                     tiendanube_service = TiendanubeService(tiendanube_config)
                     connection_test = tiendanube_service.test_connection()
                     context['tiendanube_connection_status'] = connection_test.get('success', False)
@@ -1032,7 +1050,7 @@ class StatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
             # Probar conexión a AdministraNET
             if adminet_config:
                 try:
-                    from .services.adminet_service import AdministraNETService
+                    from ..services.adminet_service import AdministraNETService
                     adminet_service = AdministraNETService(adminet_config)
                     connection_test = adminet_service.test_connection()
                     context['adminet_connection_status'] = connection_test.get('success', False)
@@ -1061,25 +1079,76 @@ class StatusView(LoginRequiredMixin, PermissionRequiredMixin, TemplateView):
         # Últimos logs
         context['recent_logs'] = SyncLog.objects.all().order_by('-started_at')[:5]
         
-        # Estadísticas de sincronización
-        context['successful_syncs'] = SyncLog.objects.filter(status='success').count()
-        context['failed_syncs'] = SyncLog.objects.filter(status='error').count()
-        context['pending_syncs'] = SyncLog.objects.filter(status='pending').count()
+        # Estadísticas de sincronización (usar valores correctos de Status.choices)
+        context['successful_syncs'] = SyncLog.objects.filter(status=SyncLog.Status.COMPLETED).count()
+        context['failed_syncs'] = SyncLog.objects.filter(status=SyncLog.Status.FAILED).count()
+        context['pending_syncs'] = SyncLog.objects.filter(status=SyncLog.Status.PENDING).count()
         
-        # Última sincronización
-        last_sync = SyncLog.objects.filter(status='success').order_by('-started_at').first()
+        # Última sincronización exitosa
+        last_sync = SyncLog.objects.filter(status=SyncLog.Status.COMPLETED).order_by('-started_at').first()
         context['last_sync'] = last_sync
         
         # Webhooks
         try:
-            from .models import WebhookEvent
             context['total_webhook_events'] = WebhookEvent.objects.count()
             context['recent_webhook_events'] = WebhookEvent.objects.order_by('-received_at')[:5]
-        except:
+        except Exception as e:
+            logger.warning(f"Error obteniendo eventos de webhook: {e}")
             context['total_webhook_events'] = 0
             context['recent_webhook_events'] = []
         
         return context
+
+
+@login_required
+@permission_required('tiendanube_administranet.change_administraNETconfig')
+def migrate_adminet_schema_ajax(request):
+    """
+    Vista AJAX para aplicar migraciones de schema en AdministraNET.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': _('Invalid request method')})
+    
+    try:
+        # Obtener configuración activa
+        config = AdministraNETConfig.objects.filter(is_active=True).first()
+        if not config:
+            return JsonResponse({
+                'success': False,
+                'message': _('No active AdministraNET configuration found')
+            })
+        
+        # Crear servicio y aplicar migraciones
+        from ..services.adminet_service import AdministraNETService
+        service = AdministraNETService(config)
+        
+        # Verificar conexión primero
+        test_result = service.test_connection()
+        if not test_result['success']:
+            return JsonResponse({
+                'success': False,
+                'message': f"Conexión fallida: {test_result['message']}"
+            })
+        
+        # Aplicar migraciones
+        migration_result = service.verify_and_migrate_schema()
+        
+        # Preparar respuesta
+        response_data = {
+            'success': migration_result['success'],
+            'message': migration_result['message'],
+            'migrations_applied': migration_result.get('migrations_applied', []),
+            'migrations_failed': migration_result.get('migrations_failed', [])
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error applying schema migrations: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error aplicando migraciones: {str(e)}'
+        })
 
 
 @login_required
@@ -1118,7 +1187,7 @@ def test_adminet_connection_ajax(request):
         )
         
         # Probar conexión
-        from .services.adminet_service import AdministraNETService
+        from ..services.adminet_service import AdministraNETService
         service = AdministraNETService(temp_config)
         test_result = service.test_connection()
         
@@ -1174,7 +1243,7 @@ def test_tiendanube_connection_ajax(request):
         )
         
         # Probar conexión
-        from .services.tiendanube_service import TiendanubeService
+        from ..services.tiendanube_service import TiendanubeService
         service = TiendanubeService(temp_config)
         store_info = service.get_store_info()
         
@@ -1207,16 +1276,16 @@ def trigger_sync_ajax(request):
         direction = data.get('direction', 'tiendanube')
         
         # Validar parámetros
-        if sync_type not in ['customers', 'products', 'orders']:
+        if sync_type not in ['customers', 'products', 'orders', 'full']:
             return JsonResponse({
                 'success': False,
-                'message': _('Invalid sync type. Must be customers, products, or orders')
+                'message': _('Invalid sync type. Must be customers, products, orders, or full')
             })
         
-        if direction not in ['tiendanube', 'adminet']:
+        if direction not in ['tiendanube', 'adminet', 'both']:
             return JsonResponse({
                 'success': False,
-                'message': _('Invalid direction. Must be tiendanube or adminet')
+                'message': _('Invalid direction. Must be tiendanube, adminet, or both')
             })
         
         # Validar restricciones de sincronización
@@ -1240,7 +1309,28 @@ def trigger_sync_ajax(request):
         sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         
         # Ejecutar sincronización según el tipo y dirección
-        if sync_type == 'customers':
+        if sync_type == 'full':
+            # Full sync: sincronizar customers, products y orders desde Tiendanube
+            results = {
+                'customers': sync_service.sync_customers_from_tiendanube(),
+                'products': sync_service.sync_products_from_tiendanube(),
+                'orders': sync_service.sync_orders_from_tiendanube()
+            }
+            
+            # Calcular totales
+            total_processed = sum(r.get('total_processed', 0) for r in results.values())
+            total_successful = sum(r.get('successful', 0) for r in results.values())
+            total_failed = sum(r.get('failed', 0) for r in results.values())
+            
+            result = {
+                'success': True,
+                'message': f'Full sync completed: {total_successful} successful, {total_failed} failed',
+                'total_processed': total_processed,
+                'successful': total_successful,
+                'failed': total_failed,
+                'details': results
+            }
+        elif sync_type == 'customers':
             if direction == 'tiendanube':
                 result = sync_service.sync_customers_from_tiendanube()
             else:
@@ -1254,18 +1344,25 @@ def trigger_sync_ajax(request):
             if direction == 'tiendanube':
                 result = sync_service.sync_orders_from_tiendanube()
             else:
-                result = sync_service.sync_orders_from_adminet()
+                # Orders desde AdministraNET no está implementado
+                return JsonResponse({
+                    'success': False,
+                    'message': _('Order synchronization from AdministraNET to Tiendanube is not available. Orders are created by customers in Tiendanube.')
+                })
         
         if result.get('success'):
             return JsonResponse({
                 'success': True,
-                'message': _('Synchronization completed successfully'),
+                'message': result.get('message', _('Synchronization completed successfully')),
+                'total_processed': result.get('total_processed', 0),
+                'successful': result.get('successful', 0),
+                'failed': result.get('failed', 0),
                 'details': result.get('details', {})
             })
         else:
             return JsonResponse({
                 'success': False,
-                'message': result.get('error', _('Synchronization failed'))
+                'message': result.get('message', result.get('error', _('Synchronization failed')))
             })
             
     except json.JSONDecodeError:
@@ -2308,7 +2405,7 @@ def product_sync(request, product_id):
             })
         
         # Crear servicio de sincronización
-        from .services.sync_service import TiendanubeAdministraNETSyncService
+        from ..services.sync_service import TiendanubeAdministraNETSyncService
         sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         
         # Determinar dirección de sincronización
@@ -2363,7 +2460,7 @@ def product_sync_all(request):
             })
         
         # Crear servicio de sincronización
-        from .services.sync_service import TiendanubeAdministraNETSyncService
+        from ..services.sync_service import TiendanubeAdministraNETSyncService
         sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         
         # Determinar dirección de sincronización
@@ -2406,7 +2503,7 @@ def product_import_from_tiendanube(request):
             })
         
         # Crear servicio de productos
-        from .services.product_service import TiendanubeProductService
+        from ..services.product_service import TiendanubeProductService
         product_service = TiendanubeProductService(tiendanube_config)
         
         # Obtener productos de Tiendanube
@@ -2590,7 +2687,7 @@ def variant_sync(request, variant_id):
             })
         
         # Crear servicio de sincronización
-        from .services.sync_service import TiendanubeAdministraNETSyncService
+        from ..services.sync_service import TiendanubeAdministraNETSyncService
         sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         
         # Sincronizar variantes del producto
@@ -2650,7 +2747,7 @@ def category_import_from_tiendanube(request):
             })
         
         # Crear servicio de productos
-        from .services.product_service import TiendanubeProductService
+        from ..services.product_service import TiendanubeProductService
         product_service = TiendanubeProductService(tiendanube_config)
         
         # Obtener categorías de Tiendanube
@@ -2842,7 +2939,7 @@ def api_product_sync(request, product_id):
             })
         
         # Crear servicio de sincronización
-        from .services.sync_service import TiendanubeAdministraNETSyncService
+        from ..services.sync_service import TiendanubeAdministraNETSyncService
         sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         
         # Sincronizar
