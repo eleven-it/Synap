@@ -7,6 +7,7 @@ from .api_views import (
     KPIAPIView,
     ReportExportAPIView,
     SavedDashboardViewSet,
+    WorkspaceSelectionAPIView,
 )
 
 app_name = "reports-api"
@@ -19,7 +20,8 @@ urlpatterns = [
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),
     path("kpi/", KPIAPIView.as_view(), name="reports-kpi"),
     path("export/", ReportExportAPIView.as_view(), name="reports-export"),
-    path("", include(router.urls)),
+    path("workspace/", WorkspaceSelectionAPIView.as_view(), name="reports-workspace"),
 ]
+urlpatterns += router.urls
 
 

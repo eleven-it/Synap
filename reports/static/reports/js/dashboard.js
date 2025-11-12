@@ -5,6 +5,64 @@ const dashboardRoot = document.querySelector("#dashboard-root");
 const widgetDataCache = new Map();
 let resizeObserver = null;
 
+const workspaceState = {
+  groups: [],
+  current: 0,
+  total: 0,
+  initialized: false,
+};
+
+const workspaceControls = {
+  prev: null,
+  next: null,
+  indicator: null,
+  fullscreen: null,
+};
+
+const isWorkspaceMode = Boolean(dashboardRoot?.dataset.workspaceMode === "true");
+const workspaceApiUrl = dashboardRoot?.dataset.workspaceUrl || null;
+
+const resetWorkspaceState = () => {
+  workspaceState.groups = [];
+  workspaceState.current = 0;
+  workspaceState.total = 0;
+  workspaceState.initialized = false;
+};
+
+const setWorkspaceCount = (value) => {
+  const node = document.querySelector("[data-workspace-count]");
+  if (node) {
+    node.textContent = value;
+  }
+};
+
+const getCsrfToken = () => {
+  const name = "csrftoken";
+  const cookies = document.cookie ? document.cookie.split(";") : [];
+  for (let i = 0; i < cookies.length; i += 1) {
+    const cookie = cookies[i].trim();
+    if (cookie.startsWith(`${name}=`)) {
+      return decodeURIComponent(cookie.substring(name.length + 1));
+    }
+  }
+  return "";
+};
+
+const toast = (message, type = "success") => {
+  const container = document.createElement("div");
+  container.className = `fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold tracking-wide ${
+    type === "success"
+      ? "bg-emerald-500 text-white"
+      : "bg-rose-500 text-white"
+  } animate-[fade-in_0.4s_ease-out]`;
+  container.innerText = message;
+  document.body.appendChild(container);
+  setTimeout(() => {
+    container.classList.add("animate-[fade-out_0.3s_ease-in_forwards]");
+    container.addEventListener("animationend", () => container.remove());
+  }, 2800);
+};
+
 const COLORS = [
   "#38bdf8",
   "#818cf8",
@@ -73,6 +131,120 @@ const getWidgetConfig = (widget) => {
     console.warn("No se pudo parsear configuración del widget", error);
     return {};
   }
+};
+
+const updateWorkspaceIndicator = () => {
+  if (!workspaceControls.indicator) {
+    return;
+  }
+  const total = workspaceState.total || workspaceState.groups.length;
+  const current = total ? workspaceState.current + 1 : 0;
+  workspaceControls.indicator.textContent = `Workspace ${current}/${total}`;
+  const disableNav = total <= 1;
+  if (workspaceControls.prev) {
+    workspaceControls.prev.disabled = disableNav;
+  }
+  if (workspaceControls.next) {
+    workspaceControls.next.disabled = disableNav;
+  }
+};
+
+const showWorkspace = (index, options = { rerender: true }) => {
+  const total = workspaceState.total || workspaceState.groups.length;
+  if (!total || !workspaceState.groups.length) {
+    workspaceState.current = 0;
+    updateWorkspaceIndicator();
+    return;
+  }
+  const normalizedIndex = ((index % total) + total) % total;
+  workspaceState.groups.forEach((group, idx) => {
+    const isActive = idx === normalizedIndex;
+    group.classList.toggle("hidden", !isActive);
+    if (isActive && options.rerender) {
+      const widgets = group.querySelectorAll("[data-widget-id]");
+      widgets.forEach((widget) => {
+        const cacheKey = widget.dataset.widgetId;
+        const cached = widgetDataCache.get(cacheKey);
+        if (cached) {
+          renderChart(widget, cached.data, cached.config);
+        }
+      });
+    }
+  });
+  workspaceState.current = normalizedIndex;
+  workspaceState.total = total;
+  updateWorkspaceIndicator();
+};
+
+const setupWorkspaces = (force = false) => {
+  if (!dashboardRoot) {
+    return;
+  }
+  if (force) {
+    resetWorkspaceState();
+  } else if (workspaceState.initialized) {
+    return;
+  }
+
+  const wrappers = Array.from(dashboardRoot.querySelectorAll("[data-widget-wrapper]"));
+  if (!wrappers.length) {
+    resetWorkspaceState();
+    updateWorkspaceIndicator();
+    return;
+  }
+
+  const chunkSize = 4;
+  const fragment = document.createDocumentFragment();
+  const groups = [];
+
+  for (let i = 0; i < wrappers.length; i += chunkSize) {
+    const slice = wrappers.slice(i, i + chunkSize);
+    const group = document.createElement("div");
+    group.dataset.workspaceIndex = String(groups.length);
+    group.className = "reports-workspace-grid grid gap-6 sm:grid-cols-1 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)] hidden";
+    if (slice.length === 1) {
+      group.classList.add("xl:grid-cols-1");
+    }
+    slice.forEach((wrapper) => group.appendChild(wrapper));
+    fragment.appendChild(group);
+    groups.push(group);
+  }
+
+  dashboardRoot.innerHTML = "";
+  dashboardRoot.classList.remove("space-y-8");
+  dashboardRoot.classList.add("flex", "flex-col", "gap-10");
+  dashboardRoot.appendChild(fragment);
+
+  workspaceState.groups = groups;
+  workspaceState.total = groups.length;
+  workspaceState.current = 0;
+  workspaceState.initialized = true;
+  showWorkspace(0, { rerender: false });
+};
+
+const toggleFullScreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement
+      .requestFullscreen()
+      .catch((error) => console.warn("No se pudo activar pantalla completa", error));
+  } else {
+    document.exitFullscreen().catch((error) => console.warn("No se pudo salir de pantalla completa", error));
+  }
+};
+
+const setFullscreenButtonState = (isActive) => {
+  if (!workspaceControls.fullscreen) {
+    return;
+  }
+  workspaceControls.fullscreen.innerHTML = isActive
+    ? `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 9H5V5M5 19l4-4m6 0h4v4m0-14l-4 4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Salir de pantalla completa`
+    : `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Pantalla completa`;
+};
+
+const syncFullscreenState = () => {
+  const isActive = Boolean(document.fullscreenElement);
+  document.body.classList.toggle("reports-fullscreen", isActive);
+  setFullscreenButtonState(isActive);
 };
 
 const ensureVisible = (element) => {
@@ -1077,6 +1249,12 @@ const renderSummary = (meta, totals) => {
 };
 
 const renderWidgets = (payload) => {
+  if (isWorkspaceMode) {
+    return;
+  }
+  if (!workspaceState.initialized) {
+    setupWorkspaces();
+  }
   const widgets = dashboardRoot.querySelectorAll("[data-widget-id]");
   widgets.forEach((widget) => {
     const config = getWidgetConfig(widget);
@@ -1119,40 +1297,248 @@ const renderWidgets = (payload) => {
   if (resizeObserver) {
     widgets.forEach((widget) => resizeObserver.observe(widget));
   }
+
+  showWorkspace(workspaceState.current, { rerender: true });
+};
+
+const buildWorkspaceDOM = (slots) => {
+  resetWorkspaceState();
+  dashboardRoot.innerHTML = "";
+  dashboardRoot.classList.remove("flex", "flex-col", "gap-10", "space-y-8");
+
+  if (!slots.length) {
+    dashboardRoot.innerHTML = `
+      <div class="flex flex-col items-center justify-center text-center gap-4 py-24 text-slate-400">
+        <svg class="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M4 4h16v16H4z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 9h16M9 4v16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <h2 class="text-lg font-semibold text-slate-600 dark:text-slate-200">Aún no hay informes en el workspace</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Visita el catálogo y utiliza la opción “Guardar en workspace” para construir tu tablero para Smart TV.</p>
+        </div>
+      </div>
+    `;
+    updateWorkspaceIndicator();
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  slots.forEach((slot, index) => {
+    const wrapper = document.createElement("div");
+    wrapper.dataset.widgetWrapper = "true";
+    wrapper.className = "flex flex-col gap-0";
+
+    const section = document.createElement("section");
+    section.className = "rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duration-500 hover:-translate-y-1";
+    const widgetId = `workspace-${index}`;
+    const configId = `workspace-config-${index}`;
+
+    section.dataset.widgetId = widgetId;
+    section.dataset.widgetType = slot.widget.widget_type;
+    section.dataset.widgetConfigId = configId;
+    section.dataset.noteLabel = "Notas";
+    section.dataset.emptyLabel = "No hay datos disponibles.";
+    section.dataset.reportSlug = slot.slug;
+
+    section.innerHTML = `
+      <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-900 dark:text-white">${slot.name}</h2>
+          <p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">${slot.widget.widget_type}</p>
+        </div>
+        <div class="flex items-center gap-2 text-[11px]">
+          <a href="/reports/dashboard/${slot.slug}/" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M7 7h10v10M17 7l-8 8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Abrir
+          </a>
+          <button type="button" data-remove-from-workspace data-report-slug="${slot.slug}"
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-rose-500 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-rose-400 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M6 6l12 12M6 18L18 6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Quitar
+          </button>
+        </div>
+      </header>
+      <div class="relative">
+        <div class="aspect-[16/7] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6" data-widget-content>
+          <div class="h-full w-full grid place-content-center text-xs text-slate-200 tracking-[0.2em] uppercase">
+            Cargando datos...
+          </div>
+        </div>
+      </div>
+    `;
+
+    const configScript = document.createElement("script");
+    configScript.type = "application/json";
+    configScript.id = configId;
+    configScript.textContent = JSON.stringify(slot.widget.configuration || {});
+
+    wrapper.appendChild(section);
+    wrapper.appendChild(configScript);
+    fragment.appendChild(wrapper);
+  });
+
+  dashboardRoot.appendChild(fragment);
+};
+
+const attachWorkspaceRemovalHandlers = () => {
+  if (!workspaceApiUrl) {
+    return;
+  }
+  const buttons = dashboardRoot.querySelectorAll("[data-remove-from-workspace]");
+  buttons.forEach((button) => {
+    const slug = button.dataset.reportSlug;
+    if (!slug) {
+      return;
+    }
+    button.addEventListener("click", async () => {
+      if (button.dataset.loading === "true") {
+        return;
+      }
+      button.dataset.loading = "true";
+      button.classList.add("opacity-60", "pointer-events-none");
+      try {
+        const response = await fetch(workspaceApiUrl, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCsrfToken(),
+          },
+          body: JSON.stringify({ slug }),
+        });
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail.detail || "No se pudo quitar el informe");
+        }
+        const payload = await response.json();
+        setWorkspaceCount(payload.count ?? "-");
+        toast("Informe eliminado del workspace");
+        fetchWorkspaceData();
+      } catch (error) {
+        console.error(error);
+        toast(error.message || "No se pudo quitar", "error");
+        button.classList.remove("opacity-60", "pointer-events-none");
+        button.dataset.loading = "false";
+      }
+    });
+  });
+};
+
+const loadWorkspaceSlot = async (slot, index) => {
+  const widgetId = `workspace-${index}`;
+  const widget = dashboardRoot.querySelector(`[data-widget-id="${widgetId}"]`);
+  if (!widget) {
+    return;
+  }
+  const config = getWidgetConfig(widget);
+  try {
+    const response = await fetch(dashboardRoot.dataset.dashboardUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRFToken": getCsrfToken(),
+      },
+      body: JSON.stringify({ slug: slot.slug, limit: 200 }),
+    });
+    if (!response.ok) {
+      throw new Error("No se pudieron cargar los datos del informe");
+    }
+    const payload = await response.json();
+    const data = payload.data || [];
+    widgetDataCache.set(widgetId, { data, config });
+    renderChart(widget, data, config);
+
+    const wrapper = widget.closest("[data-widget-wrapper]");
+    if (wrapper) {
+      wrapper.querySelectorAll("[data-widget-note]").forEach((note) => note.remove());
+      if (payload.notes && payload.notes.length) {
+        const info = document.createElement("div");
+        info.className = "px-6 py-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400";
+        info.dataset.widgetNote = "true";
+        info.innerHTML = `<strong>${widget.dataset.noteLabel || "Notas"}:</strong> ${payload.notes.join(" · ")}`;
+        wrapper.appendChild(info);
+      }
+    }
+  } catch (error) {
+    console.error(error);
+    widget.innerHTML = `<p class="text-xs text-rose-400">${error.message}</p>`;
+  }
+};
+
+const fetchWorkspaceData = async () => {
+  if (!workspaceApiUrl) {
+    return;
+  }
+  try {
+    const response = await fetch(workspaceApiUrl, {
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    if (!response.ok) {
+      throw new Error("No se pudo cargar el workspace");
+    }
+    const payload = await response.json();
+    const slots = payload.slots || [];
+    setWorkspaceCount(payload.count ?? slots.length ?? 0);
+    widgetDataCache.clear();
+    buildWorkspaceDOM(slots);
+    attachWorkspaceRemovalHandlers();
+    setupWorkspaces(true);
+    showWorkspace(0, { rerender: false });
+    updateWorkspaceIndicator();
+
+    await Promise.all(slots.map((slot, index) => loadWorkspaceSlot(slot, index)));
+    showWorkspace(workspaceState.current, { rerender: true });
+  } catch (error) {
+    console.error(error);
+    toast(error.message || "No se pudo cargar el workspace", "error");
+  }
 };
 
 if (dashboardRoot) {
+  if (!isWorkspaceMode) {
+    setupWorkspaces();
+  }
+
   const apiUrl = dashboardRoot.dataset.dashboardUrl;
   const reportSlug = dashboardRoot.dataset.reportSlug;
 
-  const getCsrfToken = () => {
-    const name = "csrftoken";
-    const cookies = document.cookie ? document.cookie.split(";") : [];
-    for (let i = 0; i < cookies.length; i += 1) {
-      const cookie = cookies[i].trim();
-      if (cookie.startsWith(`${name}=`)) {
-        return decodeURIComponent(cookie.substring(name.length + 1));
-      }
-    }
-    return "";
-  };
+  workspaceControls.prev = document.querySelector("[data-workspace-prev]");
+  workspaceControls.next = document.querySelector("[data-workspace-next]");
+  workspaceControls.indicator = document.querySelector("[data-workspace-indicator]");
+  workspaceControls.fullscreen = document.querySelector("[data-fullscreen-toggle]");
 
-  const toast = (message, type = "success") => {
-    const container = document.createElement("div");
-    container.className = `fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold tracking-wide ${
-      type === "success"
-        ? "bg-emerald-500 text-white"
-        : "bg-rose-500 text-white"
-    } animate-[fade-in_0.4s_ease-out]`;
-    container.innerText = message;
-    document.body.appendChild(container);
-    setTimeout(() => {
-      container.classList.add("animate-[fade-out_0.3s_ease-in_forwards]");
-      container.addEventListener("animationend", () => container.remove());
-    }, 2800);
-  };
+  updateWorkspaceIndicator();
+
+  if (workspaceControls.prev) {
+    workspaceControls.prev.addEventListener("click", () => {
+      showWorkspace(workspaceState.current - 1);
+    });
+  }
+  if (workspaceControls.next) {
+    workspaceControls.next.addEventListener("click", () => {
+      showWorkspace(workspaceState.current + 1);
+    });
+  }
+  if (workspaceControls.fullscreen) {
+    workspaceControls.fullscreen.addEventListener("click", toggleFullScreen);
+    setFullscreenButtonState(false);
+  }
+  document.addEventListener("fullscreenchange", syncFullscreenState);
 
   const fetchDashboardData = async () => {
+    if (!reportSlug) {
+      return;
+    }
     try {
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -1182,15 +1568,14 @@ if (dashboardRoot) {
   };
 
   window.addEventListener("orientationchange", () => {
-    widgetDataCache.forEach((value, key) => {
-      const widget = dashboardRoot.querySelector(`[data-widget-id="${key}"]`);
-      if (widget) {
-        renderChart(widget, value.data, value.config);
-      }
-    });
+    showWorkspace(workspaceState.current);
   });
 
-  fetchDashboardData();
+  if (isWorkspaceMode) {
+    fetchWorkspaceData();
+  } else {
+    fetchDashboardData();
+  }
 }
 
 

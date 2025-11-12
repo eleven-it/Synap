@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -47,6 +48,99 @@ class ReportQueryAPIView(APIView):
         result = QueryRunnerService(request.user).run(report, payload)
         response_serializer = ReportQueryResponseSerializer(result.__dict__)
         return Response(response_serializer.data)
+
+
+class WorkspaceSelectionAPIView(APIView):
+    """Gestiona el workspace de dashboards seleccionados por el usuario."""
+
+    permission_classes = [IsAuthenticated]
+
+    SESSION_KEY = "reports_workspace"
+    MAX_ITEMS = 16
+
+    def _get_session_list(self, request):
+        if request and hasattr(request, "session") and request.session:
+            return list(request.session.get(self.SESSION_KEY, []))
+        return []
+
+    def _store_session_list(self, request, items):
+        if request and hasattr(request, "session") and request.session is not None:
+            request.session[self.SESSION_KEY] = items
+            request.session.modified = True
+
+    def get(self, request, *args, **kwargs):
+        slugs = self._get_session_list(request)
+        if not slugs:
+            return Response({"slots": [], "count": 0})
+
+        reports = (
+            ReportDefinition.objects.filter(slug__in=slugs, is_active=True)
+            .prefetch_related("widgets")
+        )
+        report_map = {report.slug: report for report in reports}
+
+        slots = []
+        for slug in slugs:
+            report = report_map.get(slug)
+            if not report:
+                continue
+            widget = report.widgets.order_by("order", "id").first()
+            if not widget:
+                continue
+            slots.append(
+                {
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "widget": {
+                        "id": widget.id,
+                        "name": widget.name,
+                        "widget_type": widget.widget_type,
+                        "configuration": widget.configuration or {},
+                    },
+                }
+            )
+
+        return Response({"slots": slots, "count": len(slots)})
+
+    def post(self, request, *args, **kwargs):
+        slug = request.data.get("slug")
+        if not slug:
+            return Response({"detail": "Slug requerido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        report = ReportDefinition.objects.filter(slug=slug, is_active=True).first()
+        if not report:
+            return Response({"detail": "Reporte no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+
+        current = self._get_session_list(request)
+        if slug in current:
+            return Response({"status": "exists", "count": len(current)})
+
+        if len(current) >= self.MAX_ITEMS:
+            return Response(
+                {
+                    "detail": "Se alcanzó el máximo de elementos en el workspace.",
+                    "count": len(current),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        current.append(slug)
+        self._store_session_list(request, current)
+        return Response({"status": "added", "count": len(current)})
+
+    def delete(self, request, *args, **kwargs):
+        slug = request.data.get("slug")
+        if not slug:
+            return Response({"detail": "Slug requerido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        current = self._get_session_list(request)
+        if slug not in current:
+            return Response({"status": "missing", "count": len(current)})
+
+        current = [item for item in current if item != slug]
+        self._store_session_list(request, current)
+        return Response({"status": "removed", "count": len(current)})
 
 
 class KPIAPIView(APIView):

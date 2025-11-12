@@ -17,6 +17,12 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
 
     template_name = "reports/catalog.html"
 
+    def get_workspace_slugs(self):
+        request = getattr(self, "request", None)
+        if not request or not hasattr(request, "session") or not request.session:
+            return []
+        return list(request.session.get("reports_workspace", []))
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         empresa = getattr(self.request.user, "empresa_activa", None)
@@ -29,6 +35,9 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
                 "catalog": catalog,
                 "can_operational": OperationalReportsPermission().has_permission(self.request, self),
                 "can_managerial": ManagerialReportsPermission().has_permission(self.request, self),
+                "workspace_api_url": reverse("reports-api:reports-workspace"),
+                "workspace_view_url": reverse("reports:workspace"),
+                "workspace_count": len(self.get_workspace_slugs()),
             }
         )
         return context
@@ -65,6 +74,31 @@ class DashboardDetailView(LoginRequiredMixin, TemplateView):
                 "report": report,
                 "widgets": report.widgets.all(),
                 "dashboard_api_url": reverse("reports-api:reports-query"),
+                "workspace_api_url": reverse("reports-api:reports-workspace"),
+            }
+        )
+        return context
+
+
+class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
+    """Dashboard en formato workspace con múltiples reportes guardados."""
+
+    template_name = "reports/workspace.html"
+
+    def get_workspace_slugs(self):
+        request = getattr(self, "request", None)
+        if not request or not hasattr(request, "session") or not request.session:
+            return []
+        return list(request.session.get("reports_workspace", []))
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "page_title": _("Workspace de reportes"),
+                "dashboard_api_url": reverse("reports-api:reports-query"),
+                "workspace_api_url": reverse("reports-api:reports-workspace"),
+                "workspace_count": len(self.get_workspace_slugs()),
             }
         )
         return context
