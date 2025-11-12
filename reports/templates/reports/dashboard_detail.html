@@ -31,30 +31,18 @@
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
     <div class="relative overflow-hidden">
         <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-90"></div>
-        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-10">
-            <div class="flex flex-col gap-3 items-start">
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+            <div class="flex flex-col gap-4 items-start">
                 <div>
-                    <p class="text-xs uppercase tracking-[0.3em] text-slate-300 font-semibold mb-3">
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
                         {% if report.is_operational %}Foco operativo{% else %}Foco gerencial{% endif %}
                     </p>
-                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight mb-3">
+                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">
                         {{ report.name }}
                     </h1>
-                    <p class="text-sm md:text-base text-slate-300 max-w-2xl leading-relaxed">
+                    <p class="mt-3 text-sm md:text-base text-slate-300 max-w-2xl leading-relaxed">
                         {{ report.description|default:"Tablero interactivo impulsado por la plataforma de datos Synap. Profundiza en métricas, anima segmentos y exporta en un solo flujo." }}
                     </p>
-                    <div class="mt-6 flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-wide">
-                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-400/10 text-emerald-300 border border-emerald-400/30">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            En vivo
-                        </span>
-                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-700 text-slate-200">
-                            Frecuencia: {{ report.get_refresh_interval_display }}
-                        </span>
-                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-700 text-slate-200">
-                            Versión {{ report.version }}
-                        </span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -62,7 +50,7 @@
 
     <br><br><br>
 
-    <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-14">
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-10">
         <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow">
             <div class="px-6 sm:px-10 py-8 border-b border-slate-100 dark:border-slate-800">
                 <form class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 hidden" id="report-filters" data-filters-container>
