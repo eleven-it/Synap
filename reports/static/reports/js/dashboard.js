@@ -19,10 +19,13 @@ const workspaceControls = {
   next: null,
   indicator: null,
   fullscreen: null,
+  prevDate: null,
+  nextDate: null,
 };
 
 const isWorkspaceMode = Boolean(dashboardRoot?.dataset.workspaceMode === "true");
 const isWorkspaceTemplate = dashboardRoot?.dataset.workspaceMode === "true";
+const isWorkspaceTv = dashboardRoot?.dataset.workspaceTv === "true";
 const workspaceApiUrl = dashboardRoot?.dataset.workspaceUrl || null;
 
 const resetWorkspaceState = () => {
@@ -167,6 +170,14 @@ const updateWorkspaceIndicator = () => {
   const total = workspaceState.total || workspaceState.groups.length;
   const current = total ? workspaceState.current + 1 : 0;
   workspaceControls.indicator.textContent = `Workspace ${current}/${total}`;
+  if (workspaceControls.prevDate) {
+    const prevValue = total > 1 ? ((workspaceState.current - 1 + total) % total) + 1 : null;
+    workspaceControls.prevDate.textContent = prevValue && prevValue !== current ? `${prevValue}` : "—";
+  }
+  if (workspaceControls.nextDate) {
+    const nextValue = total > 1 ? ((workspaceState.current + 1) % total) + 1 : null;
+    workspaceControls.nextDate.textContent = nextValue && nextValue !== current ? `${nextValue}` : "—";
+  }
   const disableNav = total <= 1;
   if (workspaceControls.prev) {
     workspaceControls.prev.disabled = disableNav;
@@ -237,9 +248,13 @@ const setupWorkspaces = (force = false) => {
     const slice = wrappers.slice(i, i + chunkSize);
     const group = document.createElement("div");
     group.dataset.workspaceIndex = String(groups.length);
-    group.className = "reports-workspace-grid grid gap-6 sm:grid-cols-1 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)] hidden";
+    const tvClassName =
+      "reports-workspace-grid workspace-tv-grid grid gap-8 md:grid-cols-2 auto-rows-[minmax(420px,_1fr)] hidden";
+    const defaultClassName =
+      "reports-workspace-grid grid gap-6 sm:grid-cols-1 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)] hidden";
+    group.className = isWorkspaceTv ? tvClassName : defaultClassName;
     if (slice.length === 1) {
-      group.classList.add("xl:grid-cols-1");
+      group.classList.add(isWorkspaceTv ? "md:grid-cols-1" : "xl:grid-cols-1");
     }
     slice.forEach((wrapper) => group.appendChild(wrapper));
     fragment.appendChild(group);
@@ -249,7 +264,7 @@ const setupWorkspaces = (force = false) => {
   if (!dashboardRoot.querySelector(".reports-workspace-grid") || isWorkspaceTemplate) {
     dashboardRoot.innerHTML = "";
     dashboardRoot.classList.remove("space-y-8");
-    dashboardRoot.classList.add("flex", "flex-col", "gap-10");
+    dashboardRoot.classList.add("flex", "flex-col", isWorkspaceTv ? "gap-12" : "gap-10");
     dashboardRoot.appendChild(fragment);
   }
 
@@ -1556,6 +1571,8 @@ if (dashboardRoot) {
   workspaceControls.next = document.querySelector("[data-workspace-next]");
   workspaceControls.indicator = document.querySelector("[data-workspace-indicator]");
   workspaceControls.fullscreen = document.querySelector("[data-fullscreen-toggle]");
+  workspaceControls.prevDate = document.querySelector("[data-workspace-prev-date]");
+  workspaceControls.nextDate = document.querySelector("[data-workspace-next-date]");
 
   updateWorkspaceIndicator();
 

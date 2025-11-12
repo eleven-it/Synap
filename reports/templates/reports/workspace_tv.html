@@ -1,0 +1,299 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Workspace ejecutivo - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    body.reports-fullscreen {
+        background-color: #020617;
+    }
+    body.reports-fullscreen > header.w-full {
+        display: none !important;
+    }
+    body.reports-fullscreen .pt-16 {
+        padding-top: 0 !important;
+    }
+    body.reports-fullscreen .app-content .p-8 {
+        padding: 1.5rem !important;
+    }
+    .executive-gradient {
+        background: radial-gradient(circle at top left, rgba(59,130,246,0.35), transparent 45%),
+                    radial-gradient(circle at bottom right, rgba(16,185,129,0.25), transparent 40%);
+    }
+    .executive-panel {
+        backdrop-filter: blur(18px);
+        background: linear-gradient(145deg, rgba(15,23,42,0.92), rgba(15,23,42,0.75));
+    }
+    .executive-widget-placeholder {
+        min-height: 420px;
+    }
+    @media (min-width: 1600px) {
+        .executive-widget-placeholder {
+            min-height: 520px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-900 text-white pb-16">
+    <div class="relative px-6 sm:px-10 lg:px-16 xl:px-24 pt-16 executive-gradient">
+        <div class="flex flex-col gap-10">
+            <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-8">
+                <div class="flex flex-col gap-4">
+                    <span class="text-[12px] uppercase tracking-[0.45em] text-sky-300/80">
+                        {{ request.user.empresa_activa.nombre|default:"Workspace Ejecutivo" }}
+                    </span>
+                    <h1 class="text-4xl xl:text-5xl font-semibold tracking-tight text-white">
+                        Tablero ejecutivo
+                    </h1>
+                    <p class="text-lg text-slate-300/90 max-w-3xl">
+                        Visualización optimizada para pantallas grandes. Controla la operación en tiempo real, sin distracciones y con los indicadores clave siempre visibles.
+                    </p>
+                </div>
+                <div class="flex flex-col gap-5 items-end text-right">
+                    <div class="flex items-center gap-4 text-sm font-semibold uppercase tracking-[0.35em] text-slate-400">
+                        <span data-workspace-prev-date class="inline-flex items-center gap-2 rounded-full bg-slate-800/80 px-4 py-2">
+                            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                <path d="M12 5l-5 5 5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            —
+                        </span>
+                        <span data-workspace-indicator class="px-5 py-3 rounded-full bg-slate-50/10 text-white text-[12px] tracking-[0.4em]">
+                            Workspace 0/0
+                        </span>
+                        <span data-workspace-next-date class="inline-flex items-center gap-2 rounded-full bg-slate-800/80 px-4 py-2">
+                            —
+                            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                <path d="M8 5l5 5-5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-semibold tracking-wide text-slate-300">
+                        <button type="button"
+                                data-workspace-prev
+                                class="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-slate-800/80 text-slate-200 hover:bg-slate-700 transition disabled:opacity-30 disabled:pointer-events-none">
+                            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                <path d="M12 5l-5 5 5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Anterior
+                        </button>
+                        <button type="button"
+                                data-workspace-next
+                                class="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-slate-800/80 text-slate-200 hover:bg-slate-700 transition disabled:opacity-30 disabled:pointer-events-none">
+                            Siguiente
+                            <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                                <path d="M8 5l5 5-5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button type="button"
+                                data-fullscreen-toggle
+                                class="inline-flex items-center gap-3 rounded-full px-5 py-2 text-xs font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/30 hover:shadow-xl transition">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Pantalla completa
+                        </button>
+                        <a href="{{ workspace_url }}"
+                           class="inline-flex items-center gap-3 rounded-full px-5 py-2 text-xs font-semibold text-slate-200 bg-slate-800/80 hover:bg-slate-700 transition">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M15 19l-7-7 7-7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Volver a workspace
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="executive-panel rounded-3xl border border-slate-700/40 shadow-[0_40px_80px_-40px_rgba(15,23,42,0.65)] p-10">
+                <div class="flex flex-wrap items-center justify-between gap-6 text-sm tracking-[0.3em] uppercase text-slate-400">
+                    <span class="inline-flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        Sesión activa
+                    </span>
+                    <span data-executive-clock class="font-semibold text-slate-200 text-lg tracking-[0.35em]">
+                        --
+                    </span>
+                    <span class="inline-flex items-center gap-2">
+                        Guardados: <span data-workspace-count>{{ workspace_count }}</span>
+                    </span>
+                </div>
+
+                <div class="mt-10" id="dashboard-root"
+                     data-dashboard-url="{{ dashboard_api_url }}"
+                     data-workspace-mode="true"
+                     data-workspace-url="{{ workspace_api_url }}">
+                    <div class="executive-widget-placeholder rounded-2xl border border-dashed border-slate-700/50 text-center grid place-content-center gap-4 text-slate-400">
+                        <svg class="w-14 h-14 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <div>
+                            <p class="text-base font-semibold text-slate-200">Agrega informes desde el catálogo</p>
+                            <p class="text-sm text-slate-400/80 mt-2">Los dashboards seleccionados aparecerán automáticamente en este tablero ejecutivo.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script src="{% static 'reports/vendor/d3.min.js' %}?v=20250310" defer></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20250310"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        document.body.classList.add("reports-fullscreen");
+
+        const clockNode = document.querySelector("[data-executive-clock]");
+        const format = new Intl.DateTimeFormat(document.documentElement.lang || "es-AR", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            day: "2-digit",
+            month: "short",
+            hour12: false,
+        });
+
+        const tick = () => {
+            if (clockNode) {
+                clockNode.textContent = format.format(new Date()).replace(".", "");
+            }
+        };
+        tick();
+        setInterval(tick, 1000);
+    });
+
+    window.addEventListener("beforeunload", () => {
+        document.body.classList.remove("reports-fullscreen");
+    });
+</script>
+{% endblock %}
+
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Workspace ejecutivo - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    body.reports-fullscreen {
+        background-color: #020617;
+    }
+    body.reports-fullscreen > header.w-full {
+        display: none !important;
+    }
+    body.reports-fullscreen .pt-16 {
+        padding-top: 0 !important;
+    }
+    body.reports-fullscreen .app-content .p-8 {
+        padding: 1.5rem !important;
+    }
+    body.reports-fullscreen .reports-fullscreen-shadow {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    @media (min-width: 1536px) {
+        .workspace-tv-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-950">
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 opacity-95"></div>
+        <div class="relative w-full px-10 lg:px-16 py-12 lg:py-16">
+            <div class="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-10">
+                <div class="space-y-6">
+                    <p class="text-sm lg:text-base uppercase tracking-[0.35em] text-slate-300/80 font-semibold">
+                        Workspace ejecutivo
+                    </p>
+                    <h1 class="text-4xl lg:text-5xl 2xl:text-6xl font-semibold text-white tracking-tight leading-tight">
+                        Visualización estratégica en tiempo real
+                    </h1>
+                    <p class="text-lg lg:text-xl 2xl:text-2xl text-slate-300/90 max-w-3xl leading-relaxed">
+                        Una vista pensada para directorio y C-level. Tus indicadores clave se muestran en matrices de alto contraste, optimizadas para televisores de 50\" o más y listas para modo pantalla completa.
+                    </p>
+                </div>
+                <div class="w-full xl:w-auto flex flex-col gap-6 items-end justify-end">
+                    <div class="flex items-center gap-4 2xl:gap-6 text-base lg:text-lg 2xl:text-2xl font-semibold text-slate-200">
+                        <button type="button"
+                                data-workspace-prev
+                                class="inline-flex items-center gap-3 rounded-full px-4 py-3 bg-white/10 text-slate-200 hover:bg-white/20 transition-all duration-300 disabled:opacity-30 disabled:pointer-events-none">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M15 19l-7-7 7-7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span data-workspace-prev-date class="min-w-[140px] text-left tracking-wide uppercase text-slate-300/80"></span>
+                        </button>
+                        <span data-workspace-indicator class="px-5 lg:px-6 py-3 lg:py-4 rounded-full bg-white text-slate-900 text-xs lg:text-sm 2xl:text-base tracking-[0.5em] uppercase">
+                            Workspace 0/0
+                        </span>
+                        <button type="button"
+                                data-workspace-next
+                                class="inline-flex items-center gap-3 rounded-full px-4 py-3 bg-white/10 text-slate-200 hover:bg-white/20 transition-all duration-300 disabled:opacity-30 disabled:pointer-events-none">
+                            <span data-workspace-next-date class="min-w-[140px] text-right tracking-wide uppercase text-slate-300/80"></span>
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M9 5l7 7-7 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-4 lg:gap-6 text-sm lg:text-base 2xl:text-lg font-semibold">
+                        <a href="{% url 'reports:catalog' %}"
+                           class="inline-flex items-center gap-3 rounded-full px-5 lg:px-6 py-3 lg:py-4 bg-white/10 text-slate-200 hover:bg-white/20 transition-all duration-300">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M15 19l-7-7 7-7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Volver al catálogo
+                        </a>
+                        <button type="button"
+                                data-fullscreen-toggle
+                                class="inline-flex items-center gap-3 rounded-full px-5 lg:px-6 py-3 lg:py-4 text-white text-sm lg:text-base 2xl:text-lg font-semibold bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/40 hover:shadow-2xl transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Pantalla completa
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 text-sm lg:text-base text-slate-300/80 font-semibold">
+                <span class="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/10 text-slate-100">
+                    <svg class="w-4 h-4" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="6"/></svg>
+                    Guardados: <span data-workspace-count>{{ workspace_count }}</span>
+                </span>
+                <span class="hidden lg:inline text-slate-500">Selecciona informes en el catálogo para componer hasta 16 tarjetas estratégicas.</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="relative w-full px-6 lg:px-16 pb-20">
+        <div class="rounded-[40px] bg-slate-900/70 border border-white/10 backdrop-blur-xl shadow-[0_40px_120px_-40px_rgba(15,23,42,0.8)] overflow-hidden reports-fullscreen-shadow">
+            <div class="p-6 lg:p-12 xl:p-14" id="dashboard-root"
+                 data-dashboard-url="{{ dashboard_api_url }}"
+                 data-workspace-mode="true"
+                 data-workspace-tv="true"
+                 data-workspace-url="{{ workspace_api_url }}">
+                <div class="workspace-tv-grid grid gap-8 grid-cols-1 md:grid-cols-2 auto-rows-[minmax(360px,_1fr)] text-slate-200">
+                    <div class="flex flex-col items-center justify-center gap-6 py-24 text-center text-slate-400" data-workspace-empty>
+                        <svg class="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M4 4h16v16H4z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M4 9h16M9 4v16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <div class="space-y-2">
+                            <h2 class="text-2xl font-semibold text-slate-200">Tu workspace aún está vacío</h2>
+                            <p class="text-lg text-slate-400">Agrega informes desde el catálogo para visualizar hasta cuatro gráficas por pantalla.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script src="{% static 'reports/vendor/d3.min.js' %}?v=20250310" defer></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20250310"></script>
+{% endblock %}
+
+

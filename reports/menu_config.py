@@ -15,6 +15,11 @@ MENU_CONFIG = {
             "icon": "dashboard_customize",
             "url_name": "reports:workspace",
         },
+        {
+            "label": "Workspace ejecutivo",
+            "icon": "connected_tv",
+            "url_name": "reports:workspace_tv",
+        },
     ],
 }
 

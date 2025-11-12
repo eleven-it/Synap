@@ -688,6 +688,12 @@ APPS_MENU = [
                         "url": "reports:workspace",
                         "icon": "dashboard_customize",
                         "permission": "reports.ver"
+                    },
+                    {
+                        "label": _("Workspace ejecutivo"),
+                        "url": "reports:workspace_tv",
+                        "icon": "connected_tv",
+                        "permission": "reports.ver"
                     }
                 ]
             }
