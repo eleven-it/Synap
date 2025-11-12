@@ -684,32 +684,16 @@ APPS_MENU = [
                         "permission": "reports.ver"
                     },
                     {
+                        "label": _("Workspace Smart TV"),
+                        "url": "reports:workspace",
+                        "icon": "dashboard_customize",
+                        "permission": "reports.ver"
+                    },
+                    {
                         "label": _("Saved dashboards"),
                         "url": "reports:saved_dashboards",
                         "icon": "bookmark",
                         "permission": "reports.ver"
-                    }
-                ]
-            },
-            {
-                "seccion": _("Operational analytics"),
-                "items": [
-                    {
-                        "label": _("Operational dashboards"),
-                        "url": "reports:catalog",
-                        "icon": "insights",
-                        "permission": "reports.view_operational"
-                    }
-                ]
-            },
-            {
-                "seccion": _("Managerial analytics"),
-                "items": [
-                    {
-                        "label": _("Managerial dashboards"),
-                        "url": "reports:catalog",
-                        "icon": "analytics",
-                        "permission": "reports.view_managerial"
                     }
                 ]
             }
