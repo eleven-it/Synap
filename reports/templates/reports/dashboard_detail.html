@@ -166,7 +166,7 @@
                  data-report-slug="{{ report.slug }}"
                  data-workspace-url="{{ workspace_api_url }}">
                 {% if widgets|length > 1 %}
-                <div class="reports-workspace-grid grid gap-6 md:grid-cols-2 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)]">
+                <div class="reports-workspace-grid grid gap-6 md:grid-cols-1 xl:grid-cols-1 auto-rows-[minmax(320px,_1fr)]">
                     {% for widget in widgets %}
                         {% with widget_id=widget.id|stringformat:"s" %}
                             {% with config_id="widget-config-"|add:widget_id %}
