@@ -33,10 +33,53 @@ const updateWorkspaceCount = (count) => {
   }
 };
 
+const markButtonSaved = (button) => {
+  button.dataset.loading = "true";
+  button.classList.add("opacity-60", "pointer-events-none");
+  button.innerHTML = `
+    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <path d="M5 5v14l7-4 7 4V5a2 2 0 00-2-2H7a2 2 0 00-2 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Guardado
+  `;
+};
+
+const syncWorkspaceState = async () => {
+  if (!workspaceApiUrl) {
+    return;
+  }
+  try {
+    const response = await fetch(workspaceApiUrl, {
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    if (!response.ok) {
+      throw new Error("No se pudo cargar el estado del workspace");
+    }
+    const payload = await response.json();
+    const slugs = (payload.slots || []).map((slot) => slot.slug);
+    updateWorkspaceCount(payload.count ?? slugs.length);
+
+    const buttons = document.querySelectorAll("[data-add-to-workspace]");
+    buttons.forEach((button) => {
+      const slug = button.dataset.reportSlug;
+      if (slug && slugs.includes(slug)) {
+        markButtonSaved(button);
+      }
+    });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 const attachWorkspaceHandlers = () => {
   if (!workspaceApiUrl) {
     return;
   }
+
+  syncWorkspaceState();
+
   const buttons = document.querySelectorAll("[data-add-to-workspace]");
   buttons.forEach((button) => {
     const slug = button.dataset.reportSlug;
@@ -70,12 +113,7 @@ const attachWorkspaceHandlers = () => {
         } else {
           showToast("Informe guardado en tu workspace");
         }
-        button.innerHTML = `
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M5 5v14l7-4 7 4V5a2 2 0 00-2-2H7a2 2 0 00-2 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Guardado
-        `;
+        markButtonSaved(button);
       } catch (error) {
         showToast(error.message || "No se pudo guardar", "error");
         button.classList.remove("opacity-60", "pointer-events-none");
