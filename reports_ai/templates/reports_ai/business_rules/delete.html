@@ -1,0 +1,128 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Delete Business Rule" %} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-header {
+        background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
+    }
+
+    .delete-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .warning-box {
+        background: #FEE2E2;
+        border-left: 4px solid #DC2626;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .rule-preview {
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+    }
+
+    .btn-danger {
+        background: linear-gradient(135deg, #EF4444, #DC2626);
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-cancel {
+        background: white;
+        color: #374151;
+        border: 1px solid #D1D5DB;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <div class="hero-header">
+        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">
+            <i class="fas fa-exclamation-triangle"></i>
+            {% trans "Delete Business Rule" %}
+        </div>
+        <div style="opacity: 0.9;">
+            {% trans "This action cannot be undone" %}
+        </div>
+    </div>
+
+    <div class="delete-card">
+        <div class="warning-box">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <i class="fas fa-exclamation-circle" style="font-size: 2rem; color: #DC2626;"></i>
+                <div>
+                    <div style="font-weight: 600; color: #991B1B; margin-bottom: 0.25rem;">
+                        {% trans "Warning: Permanent Deletion" %}
+                    </div>
+                    <div style="color: #7F1D1D; font-size: 0.875rem;">
+                        {% trans "This business rule will be permanently deleted and cannot be recovered." %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 style="font-weight: 600; color: #374151; margin-bottom: 1rem;">
+            {% trans "Rule to be deleted:" %}
+        </h6>
+
+        <div class="rule-preview">
+            <div style="font-weight: 700; color: #1F2937; margin-bottom: 0.5rem;">
+                {{ rule.name }}
+            </div>
+            <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 0.75rem;">
+                {{ rule.description }}
+            </div>
+            <div style="font-size: 0.75rem; color: #9CA3AF;">
+                <span style="margin-right: 1rem;">
+                    <i class="fas fa-cube"></i> {{ rule.module }}
+                </span>
+                <span>
+                    <i class="fas fa-tag"></i> {{ rule.get_category_display }}
+                </span>
+            </div>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <a href="{% url 'reports_ai:business_rule_detail' rule.id %}" class="btn-cancel">
+                    <i class="fas fa-times"></i>
+                    {% trans "Cancel" %}
+                </a>
+                <button type="submit" class="btn-danger">
+                    <i class="fas fa-trash"></i>
+                    {% trans "Confirm Deletion" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

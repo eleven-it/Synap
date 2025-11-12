@@ -1,0 +1,14 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Reports AI" %} - Synap{% endblock %}
+
+{% block content %}
+    {% block reports_ai_content %}{% endblock reports_ai_content %}
+{% endblock %}
+
+{% block extra_js %}
+    {% block reports_ai_extra_js %}{% endblock reports_ai_extra_js %}
+{% endblock %}
+

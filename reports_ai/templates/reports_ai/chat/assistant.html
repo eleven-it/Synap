@@ -1,0 +1,845 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "AI Assistant" %} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<style>
+:root {
+    --chat-bg: var(--bg-primary);
+    --chat-card-bg: var(--bg-card);
+    --user-bubble-bg: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    --assistant-bubble-bg: var(--bg-card);
+    --border-color: var(--border-color);
+}
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 160px);
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--chat-card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.chat-header {
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    padding: 1.5rem 2rem;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.chat-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.chat-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.chat-actions button {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.chat-actions button:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--chat-bg);
+}
+
+.message {
+    display: flex;
+    gap: 0.75rem;
+    max-width: 75%;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+
+.message.assistant {
+    align-self: flex-start;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+}
+
+.message.user .message-avatar {
+    background: linear-gradient(135deg, #3B82F6, #2563EB);
+}
+
+.message-bubble {
+    background: var(--assistant-bubble-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    line-height: 1.6;
+    font-size: 0.875rem;
+}
+
+.message.user .message-bubble {
+    background: var(--user-bubble-bg);
+    color: white;
+    border-color: transparent;
+}
+
+.input-area {
+    padding: 1.5rem 2rem;
+    background: var(--chat-card-bg);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 1rem;
+    align-items: end;
+}
+
+#user-input {
+    flex: 1;
+    min-height: 48px;
+    max-height: 120px;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.2s;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+#user-input:focus {
+    outline: none;
+    border-color: #3B82F6;
+}
+
+#send-message {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+#send-message:hover {
+    transform: translateY(-2px);
+}
+
+#send-message:active {
+    transform: translateY(0);
+}
+
+#send-message:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Typing indicator */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 1rem;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { opacity: 0.3; }
+    30% { opacity: 1; }
+}
+
+/* Report table */
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.75rem;
+    background: var(--bg-primary);
+}
+
+.report-table th {
+    background: #F3F4F6;
+    padding: 0.5rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.report-table td {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.report-table tr:hover {
+    background: var(--bg-secondary);
+}
+
+/* Procedure steps */
+.procedure-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+
+.step {
+    display: flex;
+    gap: 1rem;
+    align-items: start;
+}
+
+.step-number {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #8B5CF6, #6366F1);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex-shrink: 0;
+    font-size: 0.875rem;
+}
+
+.step-content strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.step-content p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+
+/* Download buttons */
+.download-offer {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+    border-radius: 8px;
+    border-left: 4px solid #10B981;
+}
+
+.btn-export {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 0.5rem;
+    font-size: 0.75rem;
+    transition: transform 0.2s;
+}
+
+.btn-export:hover {
+    transform: translateY(-2px);
+}
+
+/* Scroll to bottom hint */
+.scroll-hint {
+    position: sticky;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(59, 130, 246, 0.9);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+</style>
+
+<div class="chat-container">
+    <!-- Header -->
+    <div class="chat-header">
+        <h1>
+            <span>🤖</span>
+            <span>{% trans "AI Assistant" %}</span>
+        </h1>
+        <div class="chat-actions">
+            <button id="btn-new-conversation">
+                ➕ {% trans "New Conversation" %}
+            </button>
+            <button id="btn-history">
+                📋 {% trans "History" %}
+            </button>
+        </div>
+    </div>
+    
+    <!-- Messages Area -->
+    <div id="messages-container" class="messages-container">
+        <!-- Welcome message -->
+        <div class="message assistant">
+            <div class="message-avatar">🤖</div>
+            <div class="message-bubble">
+                <p style="margin: 0 0 1rem 0; font-weight: 600; font-size: 1rem;">¡Hola! Soy tu Asistente AI de administraNET</p>
+                <p style="margin: 0 0 0.75rem 0;">Puedo ayudarte con:</p>
+                <ul style="margin: 0; padding-left: 1.5rem;">
+                    <li>📊 Generar reportes de datos</li>
+                    <li>📚 Explicar procedimientos del sistema</li>
+                    <li>💡 Responder consultas del negocio</li>
+                    <li>📥 Exportar resultados a Excel o PDF</li>
+                </ul>
+                <p style="margin: 1rem 0 0 0; font-size: 0.8125rem; color: var(--text-secondary);">
+                    <strong>Ejemplos:</strong><br>
+                    • "Ventas de septiembre"<br>
+                    • "Cómo crear un pedido"<br>
+                    • "Qué es un artículo discontinuado"
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Input Area -->
+    <div class="input-area">
+        <textarea 
+            id="user-input" 
+            placeholder="Escribe tu consulta...&#10;Ejemplos: 'Ventas de septiembre', 'Cómo crear un pedido'"
+            rows="2"
+        ></textarea>
+        <button id="send-message">
+            Enviar →
+        </button>
+    </div>
+</div>
+
+<script>
+// Estado global
+let currentConversationId = null;
+let isProcessing = false;
+
+// Referencias
+const messagesContainer = document.getElementById('messages-container');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-message');
+
+// Enter para enviar (Shift+Enter para nueva línea)
+userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// Click en botón enviar
+sendButton.addEventListener('click', sendMessage);
+
+async function sendMessage() {
+    const message = userInput.value.trim();
+    
+    if (!message || isProcessing) return;
+    
+    // Deshabilitar input
+    isProcessing = true;
+    sendButton.disabled = true;
+    userInput.disabled = true;
+    
+    // Mostrar mensaje del usuario
+    appendUserMessage(message);
+    
+    // Limpiar input
+    userInput.value = '';
+    
+    // Mostrar indicador de "escribiendo"
+    const typingId = showTypingIndicator();
+    
+    try {
+        // Enviar a la API
+        const response = await fetch('/reports-ai/api/chat/send/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                message: message,
+                conversation_id: currentConversationId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Actualizar conversation_id
+            currentConversationId = data.conversation_id;
+            
+            // Mostrar respuesta del asistente
+            appendAssistantMessage(data.assistant_message);
+        } else {
+            appendErrorMessage(data.error || 'Error procesando mensaje');
+        }
+    } catch (error) {
+        appendErrorMessage('Error de conexión: ' + error.message);
+    } finally {
+        // Remover indicador de escribiendo
+        removeTypingIndicator(typingId);
+        
+        // Rehabilitar input
+        isProcessing = false;
+        sendButton.disabled = false;
+        userInput.disabled = false;
+        userInput.focus();
+    }
+}
+
+function appendUserMessage(text) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message user';
+    messageDiv.innerHTML = `
+        <div class="message-avatar">👤</div>
+        <div class="message-bubble">${escapeHtml(text)}</div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+function appendAssistantMessage(messageData) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    
+    let bubbleContent = '';
+    
+    switch (messageData.message_type) {
+        case 'procedure':
+            bubbleContent = renderProcedure(messageData);
+            break;
+        
+        case 'report_data':
+            bubbleContent = renderReport(messageData);
+            break;
+        
+        case 'download_offer':
+            bubbleContent = renderDownloadOffer(messageData);
+            break;
+        
+        case 'help':
+            bubbleContent = renderHelp(messageData);
+            break;
+        
+        case 'clarification':
+            bubbleContent = renderClarification(messageData);
+            break;
+        
+        default:
+            bubbleContent = escapeHtml(messageData.content);
+    }
+    
+    messageDiv.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble">${bubbleContent}</div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+// Función auxiliar para formatear texto con negritas
+function formatText(text) {
+    // Convertir **texto** a <strong>texto</strong>
+    const escaped = escapeHtml(text);
+    return escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+}
+
+function renderProcedure(data) {
+    const metadata = data.metadata || {};
+    const procedure = data.content || '';
+    
+    if (!procedure) {
+        return '<p style="color: #ef4444;">No se pudo cargar el procedimiento.</p>';
+    }
+    
+    // Contenedor principal
+    let html = `<div class="procedure-container" style="line-height: 1.7; font-size: 0.95rem;">`;
+    
+    // Header del procedimiento
+    html += `<div class="procedure-header" style="font-weight: 600; margin-bottom: 1.5rem; font-size: 1.1rem; color: #8B5CF6; display: flex; align-items: center; gap: 0.5rem;">
+        📚 ${escapeHtml(metadata.rule_name || 'Procedimiento')}
+    </div>`;
+    
+    // Convertir markdown a HTML
+    const lines = procedure.split('\n');
+    let stepNumber = 0;
+    let currentSection = null;
+    
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        
+        // Líneas vacías: cerrar sección si está abierta
+        if (!trimmed) {
+            if (currentSection) {
+                html += '</div></div>'; // Cerrar content y section
+                currentSection = null;
+            }
+            return;
+        }
+        
+        // Headers H2 (##) - Nueva sección con número
+        if (trimmed.startsWith('## ')) {
+            // Cerrar sección anterior si existe
+            if (currentSection) {
+                html += '</div></div>';
+            }
+            
+            const title = trimmed.replace(/^##\s*/, '');
+            stepNumber++;
+            
+            html += `
+                <div class="procedure-section" style="margin: 1.5rem 0 1rem 0;">
+                    <div style="display: flex; align-items: start; gap: 1rem; margin-bottom: 0.75rem;">
+                        <div style="flex-shrink: 0; width: 36px; height: 36px; background: linear-gradient(135deg, #8B5CF6, #7C3AED); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem; box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);">${stepNumber}</div>
+                        <h3 style="margin: 0; padding-top: 0.25rem; font-size: 1.05rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(title)}</h3>
+                    </div>
+                    <div style="margin-left: 3.25rem;">
+            `;
+            currentSection = stepNumber;
+        }
+        // Listas con bullet (-)
+        else if (trimmed.startsWith('- ')) {
+            const text = trimmed.replace(/^-\s*/, '');
+            html += `<div style="margin: 0.4rem 0; padding-left: 1.25rem; position: relative; color: var(--text-primary);">
+                <span style="position: absolute; left: 0; color: #8B5CF6; font-weight: 700;">•</span>
+                ${formatText(text)}
+            </div>`;
+        }
+        // Listas con checkmark (✓)
+        else if (trimmed.startsWith('✓ ') || trimmed.startsWith('• ')) {
+            const text = trimmed.replace(/^[✓•]\s*/, '');
+            const icon = trimmed.startsWith('✓') ? '✓' : '•';
+            const color = trimmed.startsWith('✓') ? '#10B981' : '#8B5CF6';
+            html += `<div style="margin: 0.4rem 0; padding-left: 1.5rem; position: relative; color: var(--text-primary);">
+                <span style="position: absolute; left: 0; color: ${color}; font-weight: 700;">${icon}</span>
+                ${formatText(text)}
+            </div>`;
+        }
+        // Párrafos normales
+        else if (!trimmed.startsWith('#') && !trimmed.startsWith('---')) {
+            html += `<p style="margin: 0.6rem 0; color: var(--text-primary);">${formatText(trimmed)}</p>`;
+        }
+    });
+    
+    // Cerrar última sección si quedó abierta
+    if (currentSection) {
+        html += '</div></div>';
+    }
+    
+    html += '</div>'; // Cerrar procedure-container
+    
+    // Footer con fuente
+    if (metadata.source) {
+        html += `<div style="margin-top: 2rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #8B5CF6;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.4rem;">📁 FUENTE DEL ANÁLISIS</div>
+            <div style="font-size: 0.85rem; color: var(--text-primary); font-family: 'Courier New', monospace;">
+                ${escapeHtml(metadata.source)}
+            </div>
+        </div>`;
+    }
+    
+    return html;
+}
+
+function renderReport(data) {
+    const metadata = data.metadata || {};
+    const reportData = metadata.report_data || [];
+    
+    if (!reportData || reportData.length === 0) {
+        return escapeHtml(data.content);
+    }
+    
+    let html = `<div style="font-weight: 600; margin-bottom: 0.75rem;">
+        📊 ${metadata.report_title || 'Resultados'}
+    </div>`;
+    
+    // Crear tabla
+    const headers = Object.keys(reportData[0]);
+    html += '<table class="report-table"><thead><tr>';
+    headers.forEach(h => {
+        html += `<th>${escapeHtml(h)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    
+    reportData.forEach(row => {
+        html += '<tr>';
+        headers.forEach(h => {
+            html += `<td>${escapeHtml(String(row[h] || ''))}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    
+    // Resumen
+    html += `<div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--text-secondary);">
+        Total de registros: ${reportData.length}
+    </div>`;
+    
+    // Oferta de descarga
+    if (data.report_id) {
+        html += `<div class="download-offer">
+            <p style="margin: 0 0 0.75rem 0; font-weight: 600;">¿Quieres descargar este reporte?</p>
+            <button class="btn-export" onclick="exportReport('${data.report_id}', 'excel')">📥 Excel</button>
+            <button class="btn-export" onclick="exportReport('${data.report_id}', 'pdf')">📄 PDF</button>
+        </div>`;
+    }
+    
+    return html;
+}
+
+function renderDownloadOffer(data) {
+    const message = data.content || '¿En qué formato quieres el reporte?';
+    const reportId = data.metadata?.report_id || data.report_id;
+    
+    return `
+        <p style="margin: 0 0 0.75rem 0;">${escapeHtml(message)}</p>
+        <div class="download-offer">
+            <button class="btn-export" onclick="exportReport('${reportId}', 'excel')">📥 Excel</button>
+            <button class="btn-export" onclick="exportReport('${reportId}', 'pdf')">📄 PDF</button>
+        </div>
+    `;
+}
+
+function renderHelp(data) {
+    const metadata = data.metadata || {};
+    
+    let html = `<div style="font-weight: 600; margin-bottom: 0.75rem; font-size: 1rem; color: #3B82F6;">
+        💡 ${metadata.term || 'Ayuda'}
+    </div>`;
+    
+    html += `<p>${escapeHtml(data.content)}</p>`;
+    
+    if (metadata.examples) {
+        html += `<div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px;">
+            <strong style="font-size: 0.75rem;">Ejemplos:</strong>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem; color: var(--text-secondary);">${escapeHtml(metadata.examples)}</p>
+        </div>`;
+    }
+    
+    return html;
+}
+
+function renderClarification(data) {
+    const message = data.content || data.message || '';
+    const suggestions = data.suggestions || data.metadata?.suggestions || [];
+    
+    let html = `<p>${escapeHtml(message)}</p>`;
+    
+    if (suggestions.length > 0) {
+        html += '<div style="margin-top: 0.75rem;"><strong style="font-size: 0.75rem;">Sugerencias:</strong><br>';
+        suggestions.forEach(sug => {
+            html += `<span style="display: inline-block; margin: 0.25rem; padding: 0.25rem 0.75rem; background: var(--bg-secondary); border-radius: 12px; font-size: 0.75rem; cursor: pointer;" onclick="fillInput('${escapeHtml(sug)}')">${escapeHtml(sug)}</span>`;
+        });
+        html += '</div>';
+    }
+    
+    return html;
+}
+
+function showTypingIndicator() {
+    const id = 'typing-' + Date.now();
+    const typingDiv = document.createElement('div');
+    typingDiv.id = id;
+    typingDiv.className = 'message assistant';
+    typingDiv.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    messagesContainer.appendChild(typingDiv);
+    scrollToBottom();
+    return id;
+}
+
+function removeTypingIndicator(id) {
+    const elem = document.getElementById(id);
+    if (elem) elem.remove();
+}
+
+function appendErrorMessage(errorText) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    messageDiv.innerHTML = `
+        <div class="message-avatar">⚠️</div>
+        <div class="message-bubble" style="border-color: #EF4444; background: #FEE2E2;">
+            <p style="margin: 0; color: #991B1B;"><strong>Error:</strong> ${escapeHtml(errorText)}</p>
+        </div>
+    `;
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+function fillInput(text) {
+    userInput.value = text;
+    userInput.focus();
+}
+
+async function exportReport(reportId, format) {
+    try {
+        const response = await fetch(`/reports-ai/api/export/${reportId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ format: format })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Crear enlace de descarga
+            const downloadUrl = data.download_url;
+            const filename = data.filename;
+            
+            // Trigger descarga
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            // Notificar en chat
+            appendAssistantMessage({
+                message_type: 'text',
+                content: `✅ Reporte exportado exitosamente a ${format.toUpperCase()}. La descarga debería iniciarse automáticamente.`
+            });
+        } else {
+            appendErrorMessage(data.error || 'Error al exportar');
+        }
+    } catch (error) {
+        appendErrorMessage('Error de conexión: ' + error.message);
+    }
+}
+
+// Botones del header
+document.getElementById('btn-new-conversation').addEventListener('click', async () => {
+    if (!confirm('¿Iniciar una nueva conversación?')) return;
+    
+    try {
+        const response = await fetch('/reports-ai/api/chat/new/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentConversationId = data.conversation_id;
+            // Limpiar mensajes excepto el welcome
+            while (messagesContainer.children.length > 1) {
+                messagesContainer.removeChild(messagesContainer.lastChild);
+            }
+        }
+    } catch (error) {
+        alert('Error creando conversación: ' + error.message);
+    }
+});
+
+document.getElementById('btn-history').addEventListener('click', () => {
+    // TODO: Mostrar modal con historial de conversaciones
+    alert('Historial de conversaciones - próximamente');
+});
+
+// Auto-focus en el input
+userInput.focus();
+</script>
+
+{% endblock %}
+

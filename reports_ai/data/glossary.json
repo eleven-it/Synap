@@ -1,0 +1,26 @@
+{
+  "terms": [
+    {
+      "term": "Venta Neta",
+      "definition": "Ventas registradas en el periodo menos notas de crédito y ajustes comerciales aplicables al mismo periodo de corte.",
+      "synonyms": ["ventas netas", "venta total ajustada"],
+      "category": "Ventas",
+      "examples": ["Ventas netas de septiembre", "Venta neta por sucursal"]
+    },
+    {
+      "term": "Cliente Activo",
+      "definition": "Cliente con al menos una operación de compra registrada en los últimos 90 días.",
+      "synonyms": ["cliente vigente", "cliente con actividad"],
+      "category": "Clientes",
+      "examples": ["Clientes activos del trimestre"]
+    },
+    {
+      "term": "Margen Bruto",
+      "definition": "Diferencia entre el precio de venta y el costo de adquisición o producción, expresada en porcentaje.",
+      "synonyms": ["margen de ganancia", "rentabilidad bruta"],
+      "category": "Finanzas",
+      "examples": ["Margen bruto por línea de producto"]
+    }
+  ]
+}
+

@@ -1,0 +1,23 @@
+{
+  "rules": [
+    {
+      "code": "VENTA_NETA_001",
+      "name": "Cálculo de Venta Neta",
+      "type": "calculation",
+      "description": "La venta neta se calcula como las ventas totales menos las notas de crédito y ajustes comerciales del mismo periodo.",
+      "module": "Ventas",
+      "conditions": ["El periodo de las notas de crédito debe coincidir con el de las ventas"],
+      "exceptions": ["No se incluyen notas de crédito de periodos anteriores"]
+    },
+    {
+      "code": "CLIENTE_ACTIVO_001",
+      "name": "Definición de Cliente Activo",
+      "type": "state",
+      "description": "Un cliente se considera activo si ha realizado al menos una compra en los últimos 90 días.",
+      "module": "Clientes",
+      "conditions": ["Debe existir al menos una transacción de compra registrada"],
+      "exceptions": []
+    }
+  ]
+}
+

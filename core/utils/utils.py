@@ -669,71 +669,47 @@ APPS_MENU = [
         "id": "reports",
         "nombre": _("Reports"),
         "permiso": "reports.ver",
-        "url": "reports:dashboard",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 10h18M3 6h18M3 14h18M3 18h18'/></svg>""",
+        "url": "reports:catalog",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M4 4h6l2 3h8v13H4z'/></svg>""",
         "orden": 6,
         "color": "teal",
         "submenus": [
             {
-                "seccion": _("Main"),
+                "seccion": _("Catalog"),
                 "items": [
                     {
-                        "label": _("Dashboard"),
-                        "url": "reports:dashboard",
+                        "label": _("Interactive catalog"),
+                        "url": "reports:catalog",
                         "icon": "dashboard",
                         "permission": "reports.ver"
                     },
                     {
-                        "label": _("Reports"),
-                        "url": "reports:report_list",
-                        "icon": "file_alt",
-                        "permission": "reports.ver"
-                    },
-                    {
-                        "label": _("Create Report"),
-                        "url": "reports:report_create",
-                        "icon": "add",
-                        "permission": "reports.crear"
-                    }
-                ]
-            },
-            {
-                "seccion": _("Builder & Templates"),
-                "items": [
-                    {
-                        "label": _("Templates"),
-                        "url": "reports:template_list",
-                        "icon": "layer_group",
-                        "permission": "reports.ver_template"
-                    },
-                    {
-                        "label": _("Create Template"),
-                        "url": "reports:template_create",
-                        "icon": "add_box",
-                        "permission": "reports.crear_template"
-                    },
-                    {
-                        "label": _("Components"),
-                        "url": "reports:component_library",
-                        "icon": "puzzle_piece",
+                        "label": _("Saved dashboards"),
+                        "url": "reports:saved_dashboards",
+                        "icon": "bookmark",
                         "permission": "reports.ver"
                     }
                 ]
             },
             {
-                "seccion": _("Schedules & Export"),
+                "seccion": _("Operational analytics"),
                 "items": [
                     {
-                        "label": _("Schedules"),
-                        "url": "reports:schedule_list",
-                        "icon": "clock",
-                        "permission": "reports.ver_schedule"
-                    },
+                        "label": _("Operational dashboards"),
+                        "url": "reports:catalog",
+                        "icon": "insights",
+                        "permission": "reports.view_operational"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Managerial analytics"),
+                "items": [
                     {
-                        "label": _("Create Schedule"),
-                        "url": "reports:schedule_create",
-                        "icon": "add_alarm",
-                        "permission": "reports.crear_schedule"
+                        "label": _("Managerial dashboards"),
+                        "url": "reports:catalog",
+                        "icon": "analytics",
+                        "permission": "reports.view_managerial"
                     }
                 ]
             }
@@ -1101,6 +1077,68 @@ APPS_MENU = [
                     {"label": _("Sync History"), "url": "tiendanube_administranet:sync_history", "icon": "history", "permission": "tiendanube_administranet.view_synclog"},
                     {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "webhook", "permission": "tiendanube_administranet.view_webhookconfig"},
                     {"label": _("Webhook Events"), "url": "tiendanube_administranet:webhook_event_list", "icon": "notifications", "permission": "tiendanube_administranet.view_webhookevent"},
+                ]
+            }
+        ]
+    },
+    {
+        "id": "reports_ai",
+        "nombre": _("Reports AI"),
+        "permiso": "reports_ai.view_reports",
+        "url": "reports_ai:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+            <path stroke-linecap='round' stroke-linejoin='round' d='M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z'/>
+        </svg>""",
+        "orden": 90,
+        "color": "purple",
+        "submenus": [
+            {
+                "seccion": _("Main"),
+                "items": [
+                    {"label": _("Dashboard"), "url": "reports_ai:dashboard", "icon": "dashboard", "permission": "reports_ai.view_reports"},
+                    {"label": _("AI Assistant (Chat)"), "url": "reports_ai:ai_assistant", "icon": "chat_bubble", "permission": "reports_ai.generate_reports"},
+                    {"label": _("Generate Report (Old)"), "url": "reports_ai:generate_report", "icon": "description", "permission": "reports_ai.generate_reports"},
+                    {"label": _("Report History"), "url": "reports_ai:report_history", "icon": "history", "permission": "reports_ai.view_reports"},
+                ]
+            },
+            {
+                "seccion": _("AI Agents"),
+                "items": [
+                    {"label": _("Agent Metrics"), "url": "reports_ai:agent_metrics", "icon": "smart_toy", "permission": "reports_ai.view_agent_metrics"},
+                ]
+            },
+                    {
+                        "seccion": _("Data Management"),
+                        "items": [
+                            {"label": _("Functional Catalog"), "url": "reports_ai:catalog_list", "icon": "menu_book", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("New Catalog Entry"), "url": "reports_ai:catalog_create", "icon": "playlist_add", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Business Rules"), "url": "reports_ai:business_rules_list", "icon": "rule", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Create Rule"), "url": "reports_ai:business_rule_create", "icon": "add", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Import from VB6"), "url": "reports_ai:business_rule_import", "icon": "upload", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Glossary"), "url": "reports_ai:glossary_list", "icon": "spellcheck", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Create Term"), "url": "reports_ai:glossary_term_create", "icon": "add_circle", "permission": "reports_ai.manage_business_rules"},
+                        ]
+                    },
+                    {
+                        "seccion": _("AI Training"),
+                        "items": [
+                            {"label": _("Train Logic Interpreter"), "url": "reports_ai:logic_interpreter_training", "icon": "psychology", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Train Data Analyst"), "url": "reports_ai:data_analyst_training", "icon": "smart_toy", "permission": "reports_ai.manage_business_rules"},
+                            {"label": _("Quality Dashboard"), "url": "reports_ai:quality_dashboard", "icon": "insights", "permission": "reports_ai.view_agent_metrics"},
+                            {"label": _("Query Corrections"), "url": "reports_ai:corrections_list", "icon": "build", "permission": "reports_ai.manage_business_rules"},
+                        ]
+                    },
+            {
+                "seccion": _("API & Webhooks"),
+                "items": [
+                    {"label": _("API Documentation"), "url": "reports_ai:dashboard", "icon": "code", "permission": "reports_ai.access_webhooks"},
+                    {"label": _("Health Check"), "url": "reports_ai:webhook_health", "icon": "monitor_heart", "permission": "reports_ai.access_webhooks"},
+                ]
+            },
+            {
+                "seccion": _("Configuration"),
+                "items": [
+                    {"label": _("Settings"), "url": "reports_ai:config", "icon": "settings", "permission": "reports_ai.configure_reports_ai"},
                 ]
             }
         ]

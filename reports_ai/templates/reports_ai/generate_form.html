@@ -1,0 +1,449 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Generate Report" %} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ai-primary: #8B5CF6;
+        --ai-secondary: #6366F1;
+        --ai-accent: #EC4899;
+        --ai-success: #10B981;
+    }
+
+    .hero-generate {
+        background: linear-gradient(135deg, #EC4899 0%, #8B5CF6 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 3rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-generate::before {
+        content: '🤖';
+        position: absolute;
+        top: -20px;
+        right: 30px;
+        font-size: 10rem;
+        opacity: 0.1;
+    }
+
+    .generate-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1.5rem;
+    }
+
+    .query-textarea {
+        width: 100%;
+        padding: 1.25rem;
+        border: 2px solid #E5E7EB;
+        border-radius: 12px;
+        font-size: 1rem;
+        min-height: 150px;
+        resize: vertical;
+        transition: all 0.2s ease;
+        font-family: inherit;
+    }
+
+    .query-textarea:focus {
+        outline: none;
+        border-color: var(--ai-primary);
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+    }
+
+    .examples-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    .example-card {
+        background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
+        border: 1px solid #E5E7EB;
+        border-radius: 10px;
+        padding: 1.25rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .example-card:hover {
+        border-color: var(--ai-primary);
+        background: white;
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(139, 92, 246, 0.15);
+    }
+
+    .example-icon {
+        font-size: 1.5rem;
+        color: var(--ai-primary);
+        margin-bottom: 0.75rem;
+    }
+
+    .example-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #1F2937;
+        margin-bottom: 0.5rem;
+    }
+
+    .example-text {
+        font-size: 0.75rem;
+        color: #6B7280;
+        font-style: italic;
+    }
+
+    .info-box {
+        background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
+        border-left: 4px solid var(--ai-primary);
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .info-box h6 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1F2937;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .info-list li {
+        padding: 0.5rem 0;
+        color: #374151;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: start;
+        gap: 0.5rem;
+    }
+
+    .info-list li i {
+        color: var(--ai-success);
+        margin-top: 0.125rem;
+    }
+
+    .btn-generate {
+        background: linear-gradient(135deg, #EC4899, #8B5CF6);
+        color: white;
+        padding: 1.25rem 3rem;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 1.125rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 6px 20px rgba(236, 72, 153, 0.4);
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .btn-generate:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 30px rgba(236, 72, 153, 0.5);
+    }
+
+    .btn-generate:active {
+        transform: translateY(-1px);
+    }
+
+    .btn-generate:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    @media (max-width: 768px) {
+        .examples-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Hero Header -->
+    <div class="hero-generate">
+        <div style="position: relative; z-index: 1;">
+            <div style="font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;">
+                <i class="fas fa-magic"></i>
+                {% trans "Generate AI Report" %}
+            </div>
+            <div style="font-size: 1.125rem; opacity: 0.9;">
+                {% trans "Ask anything about your Administranet data in natural language" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Form -->
+        <div class="col-lg-8">
+            <div class="generate-card">
+                <h5 style="font-weight: 600; color: #1F2937; margin-bottom: 1.5rem;">
+                    <i class="fas fa-comment-dots" style="color: var(--ai-primary);"></i>
+                    {% trans "What would you like to know?" %}
+                </h5>
+
+                <form method="post" id="generate-form">
+                    {% csrf_token %}
+                    
+                    <textarea 
+                        name="intent" 
+                        id="query-input"
+                        class="query-textarea" 
+                        placeholder="{% trans 'Example: Show me all anchovy products...' %}"
+                        required
+                    ></textarea>
+
+                    <div style="margin-top: 1.5rem;">
+                        <button type="submit" class="btn-generate" id="generate-btn">
+                            <i class="fas fa-sparkles"></i>
+                            {% trans "Generate Report with AI" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Examples -->
+            <div class="generate-card">
+                <h5 style="font-weight: 600; color: #1F2937; margin-bottom: 0.5rem;">
+                    <i class="fas fa-lightbulb" style="color: #F59E0B;"></i>
+                    {% trans "Example Queries" %}
+                </h5>
+                <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
+                    {% trans "Click any example to try it" %}
+                </p>
+
+                <div class="examples-grid">
+                    <div class="example-card" onclick="fillExample('{% trans "Show me all anchovy products" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-box"></i>
+                        </div>
+                        <div class="example-title">{% trans "Inventory" %}</div>
+                        <div class="example-text">"{% trans "Show me all anchovy products" %}"</div>
+                    </div>
+
+                    <div class="example-card" onclick="fillExample('{% trans "September sales by branch" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="example-title">{% trans "Sales" %}</div>
+                        <div class="example-text">"{% trans "September sales by branch" %}"</div>
+                    </div>
+
+                    <div class="example-card" onclick="fillExample('{% trans "Top 10 best-selling products" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-trophy"></i>
+                        </div>
+                        <div class="example-title">{% trans "Performance" %}</div>
+                        <div class="example-text">"{% trans "Top 10 best-selling products" %}"</div>
+                    </div>
+
+                    <div class="example-card" onclick="fillExample('{% trans "Active customers from last quarter" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="example-title">{% trans "Customers" %}</div>
+                        <div class="example-text">"{% trans "Active customers from last quarter" %}"</div>
+                    </div>
+
+                    <div class="example-card" onclick="fillExample('{% trans "Products with low stock (less than 10)" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="example-title">{% trans "Alerts" %}</div>
+                        <div class="example-text">"{% trans "Products with low stock (less than 10)" %}"</div>
+                    </div>
+
+                    <div class="example-card" onclick="fillExample('{% trans "Pending collections by age" %}')">
+                        <div class="example-icon">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div class="example-title">{% trans "Collections" %}</div>
+                        <div class="example-text">"{% trans "Pending collections by age" %}"</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="col-lg-4">
+            <div class="info-box">
+                <h6>
+                    <i class="fas fa-info-circle" style="color: var(--ai-primary);"></i>
+                    {% trans "How It Works" %}
+                </h6>
+                <ul class="info-list">
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span>{% trans "Write your question in plain language" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span>{% trans "AI analyzes and extracts data from Administranet" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span>{% trans "Get a business-friendly report in seconds" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <span>{% trans "100% accurate data from your database" %}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="generate-card">
+                <h6 style="font-weight: 600; color: #1F2937; margin-bottom: 1rem;">
+                    <i class="fas fa-shield-alt" style="color: var(--ai-success);"></i>
+                    {% trans "Guaranteed Quality" %}
+                </h6>
+                <ul class="info-list" style="font-size: 0.875rem;">
+                    <li>
+                        <i class="fas fa-check" style="color: var(--ai-success);"></i>
+                        <span>{% trans "No technical jargon" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check" style="color: var(--ai-success);"></i>
+                        <span>{% trans "Verifiable data only" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check" style="color: var(--ai-success);"></i>
+                        <span>{% trans "Privacy protected" %}</span>
+                    </li>
+                    <li>
+                        <i class="fas fa-check" style="color: var(--ai-success);"></i>
+                        <span>{% trans "Business language only" %}</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="generate-card" style="background: linear-gradient(135deg, #FEF3C7, #FDE68A); border: none;">
+                <h6 style="font-weight: 600; color: #92400E; margin-bottom: 1rem;">
+                    <i class="fas fa-stopwatch"></i>
+                    {% trans "Processing Time" %}
+                </h6>
+                <p style="font-size: 0.875rem; color: #78350F; margin: 0;">
+                    {% trans "Reports typically take 10-30 seconds to generate, depending on complexity." %}
+                </p>
+            </div>
+
+            <div class="generate-card" style="text-align: center;">
+                <div style="font-size: 3rem; color: var(--ai-primary); margin-bottom: 1rem;">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <h6 style="font-weight: 600; color: #1F2937; margin-bottom: 0.5rem;">
+                    {% trans "Powered by OpenAI GPT-4" %}
+                </h6>
+                <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">
+                    {% trans "7 specialized AI agents working together" %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block reports_ai_extra_js %}
+<script>
+function fillExample(text) {
+    const queryInput = document.getElementById('query-input');
+    queryInput.value = text;
+    queryInput.focus();
+    
+    // Animate
+    queryInput.style.transform = 'scale(1.02)';
+    queryInput.style.borderColor = 'var(--ai-primary)';
+    setTimeout(() => {
+        queryInput.style.transform = 'scale(1)';
+    }, 200);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('generate-form');
+    const generateBtn = document.getElementById('generate-btn');
+    const queryInput = document.getElementById('query-input');
+
+    // Auto-resize textarea
+    queryInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
+
+    // Form submission with loading state
+    form.addEventListener('submit', function(e) {
+        const query = queryInput.value.trim();
+        
+        if (!query) {
+            e.preventDefault();
+            queryInput.style.borderColor = '#EF4444';
+            alert('{% trans "Please enter your query" %}');
+            return;
+        }
+
+        // Show loading state
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> {% trans "Generating report..." %}';
+        
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10B981, #059669);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+        `;
+        toast.innerHTML = '<i class="fas fa-robot"></i> {% trans "AI is processing your request..." %}';
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(-20px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 2000);
+    });
+
+    // Animate cards on load
+    document.querySelectorAll('.example-card').forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = `all 0.3s ease ${index * 0.1}s`;
+
+        setTimeout(() => {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, 100);
+    });
+});
+</script>
+{% endblock %}

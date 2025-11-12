@@ -26,7 +26,7 @@ docker exec Synap_app python manage.py initial_setup
 echo "✅ Puesta en marcha completada!"
 echo ""
 echo "📝 Próximos pasos:"
-echo "1. Verificar que el sistema esté funcionando: http://localhost:8000"
+echo "1. Verificar que el sistema esté funcionando: http://localhost:8002"
 echo "2. Crear un usuario administrador si no existe"
 echo "3. Configurar la empresa principal"
 echo "4. Revisar la configuración de impuestos y formas de pago"

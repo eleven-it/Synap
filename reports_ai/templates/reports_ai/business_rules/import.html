@@ -1,0 +1,421 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Import Business Rules" %} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ai-primary: #8B5CF6;
+        --ai-secondary: #6366F1;
+        --ai-accent: #EC4899;
+        --ai-success: #10B981;
+    }
+
+    .hero-header {
+        background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+    }
+
+    .import-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+    }
+
+    .progress-card {
+        background: linear-gradient(135deg, #F3E8FF, #EEF2FF);
+        border: 2px dashed var(--ai-primary);
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        display: none;
+    }
+
+    .progress-bar-container {
+        background: white;
+        border-radius: 20px;
+        height: 40px;
+        overflow: hidden;
+        margin: 1.5rem 0;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--ai-primary), var(--ai-secondary));
+        width: 0%;
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+
+    .help-card {
+        background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .pattern-badge {
+        display: inline-block;
+        background: white;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        color: var(--ai-primary);
+        font-weight: 600;
+        margin: 0.25rem;
+    }
+
+    .module-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin: 0.25rem;
+    }
+
+    .badge-ventas { background: #EEF2FF; color: #6366F1; }
+    .badge-inventario { background: #D1FAE5; color: #059669; }
+    .badge-clientes { background: #FEF3C7; color: #D97706; }
+    .badge-cobranzas { background: #FCE7F3; color: #EC4899; }
+    .badge-finanzas { background: #F3E8FF; color: #8B5CF6; }
+
+    .form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #D1D5DB;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--ai-primary);
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    }
+
+    .form-check {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: #F9FAFB;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .form-check:hover {
+        background: #F3F4F6;
+    }
+
+    .btn-ai {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .btn-ai-primary {
+        background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+        color: white;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .btn-ai-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
+        color: white;
+    }
+
+    .btn-ai-secondary {
+        background: white;
+        color: #374151;
+        border: 1px solid #D1D5DB;
+    }
+
+    .status-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .spinning {
+        animation: spin 2s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Hero Header -->
+    <div class="hero-header">
+        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">
+            <i class="fas fa-upload"></i>
+            {% trans "Import Business Rules from VB6" %}
+        </div>
+        <div style="opacity: 0.9; font-size: 1rem;">
+            {% trans "Automatically extract and import business rules from Administranet VB6/PHP source code" %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Form -->
+        <div class="col-lg-8">
+            <div class="import-card">
+                <h5 style="font-weight: 600; color: #1F2937; margin-bottom: 1.5rem;">
+                    <i class="fas fa-cogs" style="color: var(--ai-primary);"></i>
+                    {% trans "Import Configuration" %}
+                </h5>
+
+                <form method="post" id="import-form">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.source_directory.id_for_label }}">
+                            {% trans "Source Directory" %} <span style="color: var(--ai-accent);">*</span>
+                        </label>
+                        {{ form.source_directory }}
+                        <small style="color: #6B7280; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                            {% trans "Path to the directory containing VB6/PHP source code" %}
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.module_filter.id_for_label }}">
+                            {% trans "Module Filter" %}
+                        </label>
+                        {{ form.module_filter }}
+                        <small style="color: #6B7280; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                            {% trans "Optional: Filter by specific module (e.g., ventas, inventario)" %}
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.file_patterns.id_for_label }}">
+                            {% trans "File Patterns" %} <span style="color: var(--ai-accent);">*</span>
+                        </label>
+                        {{ form.file_patterns }}
+                        <small style="color: #6B7280; font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                            {% trans "Comma-separated file patterns to analyze" %}
+                        </small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-check">
+                            {{ form.auto_activate }}
+                            <span style="font-size: 0.875rem; color: #374151; font-weight: 500;">
+                                {% trans "Auto-activate imported rules" %}
+                            </span>
+                        </label>
+                        <small style="color: #6B7280; font-size: 0.75rem; display: block; margin-left: 2rem; margin-top: 0.25rem;">
+                            {% trans "Imported rules will be active by default and used by AI agents" %}
+                        </small>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; padding-top: 2rem; border-top: 2px solid #E5E7EB;">
+                        <a href="{% url 'reports_ai:business_rules_list' %}" class="btn-ai btn-ai-secondary">
+                            <i class="fas fa-arrow-left"></i>
+                            {% trans "Cancel" %}
+                        </a>
+                        <button type="submit" class="btn-ai btn-ai-primary" id="import-btn">
+                            <i class="fas fa-upload"></i>
+                            {% trans "Start Import" %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Progress Card -->
+            <div class="progress-card" id="progress-card">
+                <div class="status-icon spinning" style="color: var(--ai-primary);">
+                    <i class="fas fa-sync-alt"></i>
+                </div>
+                <h5 style="font-weight: 600; color: #1F2937; margin-bottom: 1rem;">
+                    {% trans "Importing Business Rules..." %}
+                </h5>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progress-bar">0%</div>
+                </div>
+                <p id="progress-text" style="color: #6B7280; font-size: 0.875rem;">
+                    {% trans "Preparing import..." %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Help Panel -->
+        <div class="col-lg-4">
+            <div class="help-card">
+                <h6 style="font-weight: 600; color: #1F2937; margin-bottom: 1rem;">
+                    <i class="fas fa-lightbulb"></i>
+                    {% trans "How Import Works" %}
+                </h6>
+                
+                <div style="background: white; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+                    <strong style="color: var(--ai-primary); font-size: 0.875rem; display: block; margin-bottom: 0.5rem;">
+                        {% trans "1. Source Analysis" %}
+                    </strong>
+                    <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">
+                        {% trans "Scans VB6/PHP files to identify business logic patterns" %}
+                    </p>
+                </div>
+
+                <div style="background: white; border-radius: 8px; padding: 1rem; margin-bottom: 0.75rem;">
+                    <strong style="color: var(--ai-primary); font-size: 0.875rem; display: block; margin-bottom: 0.5rem;">
+                        {% trans "2. Rule Extraction" %}
+                    </strong>
+                    <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">
+                        {% trans "Extracts rules from code comments, variable names, and logic structures" %}
+                    </p>
+                </div>
+
+                <div style="background: white; border-radius: 8px; padding: 1rem;">
+                    <strong style="color: var(--ai-primary); font-size: 0.875rem; display: block; margin-bottom: 0.5rem;">
+                        {% trans "3. Categorization" %}
+                    </strong>
+                    <p style="font-size: 0.75rem; color: #6B7280; margin: 0;">
+                        {% trans "Automatically categorizes rules based on context and keywords" %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="import-card">
+                <h6 style="font-weight: 600; color: #1F2937; margin-bottom: 1rem;">
+                    <i class="fas fa-file-code"></i>
+                    {% trans "File Patterns" %}
+                </h6>
+                
+                <div style="margin-bottom: 1rem;">
+                    <strong style="font-size: 0.875rem; color: #374151;">VB6 Files:</strong>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="pattern-badge">*.frm</span>
+                        <span class="pattern-badge">*.bas</span>
+                        <span class="pattern-badge">*.cls</span>
+                    </div>
+                </div>
+
+                <div>
+                    <strong style="font-size: 0.875rem; color: #374151;">PHP Files:</strong>
+                    <div style="margin-top: 0.5rem;">
+                        <span class="pattern-badge">*.php</span>
+                        <span class="pattern-badge">*.inc</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="import-card">
+                <h6 style="font-weight: 600; color: #1F2937; margin-bottom: 1rem;">
+                    <i class="fas fa-cube"></i>
+                    {% trans "Module Examples" %}
+                </h6>
+                
+                <span class="module-badge badge-ventas">
+                    <i class="fas fa-shopping-cart"></i> ventas
+                </span>
+                <span class="module-badge badge-inventario">
+                    <i class="fas fa-boxes"></i> inventario
+                </span>
+                <span class="module-badge badge-clientes">
+                    <i class="fas fa-users"></i> clientes
+                </span>
+                <span class="module-badge badge-cobranzas">
+                    <i class="fas fa-money-bill-wave"></i> cobranzas
+                </span>
+                <span class="module-badge badge-finanzas">
+                    <i class="fas fa-chart-line"></i> finanzas
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block reports_ai_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const importForm = document.getElementById('import-form');
+    const importBtn = document.getElementById('import-btn');
+    const progressCard = document.getElementById('progress-card');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+
+    importForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Show progress
+        progressCard.style.display = 'block';
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> {% trans "Importing..." %}';
+        
+        // Simulate progress
+        let progress = 0;
+        const messages = [
+            '{% trans "Scanning source files..." %}',
+            '{% trans "Analyzing code structure..." %}',
+            '{% trans "Extracting business rules..." %}',
+            '{% trans "Categorizing rules..." %}',
+            '{% trans "Creating database entries..." %}',
+            '{% trans "Finalizing import..." %}'
+        ];
+        
+        const interval = setInterval(() => {
+            progress += Math.random() * 15;
+            if (progress > 100) progress = 100;
+            
+            const messageIndex = Math.floor((progress / 100) * messages.length);
+            if (messageIndex < messages.length) {
+                progressText.textContent = messages[messageIndex];
+            }
+            
+            progressBar.style.width = progress + '%';
+            progressBar.textContent = Math.round(progress) + '%';
+            
+            if (progress >= 100) {
+                clearInterval(interval);
+                // Submit form
+                setTimeout(() => {
+                    importForm.submit();
+                }, 500);
+            }
+        }, 400);
+    });
+});
+</script>
+{% endblock %}

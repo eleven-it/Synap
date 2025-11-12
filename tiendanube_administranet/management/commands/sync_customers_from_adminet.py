@@ -92,3 +92,4 @@ class Command(BaseCommand):
             self.stdout.write(f'⚠️ Error obteniendo estadísticas: {str(e)}')
 
 
+

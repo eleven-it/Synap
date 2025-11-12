@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans 'Correction Detail' %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6 max-w-5xl">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans 'Correction Detail' %}
+            </h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+                {% trans 'Review and manage this query correction' %}
+            </p>
+        </div>
+        
+        <div class="space-x-2">
+            {% if not correction.applied_to_catalog %}
+            <a
+                href="{% url 'reports_ai:edit_correction' correction.id %}"
+                class="inline-block px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
+            >
+                {% trans 'Edit' %}
+            </a>
+            {% endif %}
+            <a
+                href="{% url 'reports_ai:corrections_list' %}"
+                class="inline-block px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300"
+            >
+                {% trans 'Back' %}
+            </a>
+        </div>
+    </div>
+
+    <!-- Metadata -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans 'Metadata' %}
+        </h2>
+        
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <span class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Type' %}:</span>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                    {{ correction.get_correction_type_display }}
+                </span>
+            </div>
+            
+            <div>
+                <span class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Applied to Catalog' %}:</span>
+                {% if correction.applied_to_catalog %}
+                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        ✓ {% trans 'Yes' %}
+                    </span>
+                {% else %}
+                    <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                        {% trans 'No' %}
+                    </span>
+                {% endif %}
+            </div>
+            
+            <div>
+                <span class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Corrected By' %}:</span>
+                <span class="ml-2 text-sm text-gray-900 dark:text-white">
+                    {{ correction.corrected_by.email|default:"-" }}
+                </span>
+            </div>
+            
+            <div>
+                <span class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Corrected At' %}:</span>
+                <span class="ml-2 text-sm text-gray-900 dark:text-white">
+                    {{ correction.corrected_at|date:"d M Y H:i" }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Original Query -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans 'Original Query' %}
+        </h2>
+        <p class="text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-4 rounded border border-gray-200 dark:border-gray-600">
+            {{ correction.original_query }}
+        </p>
+    </div>
+
+    <!-- Incorrect SQL -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-red-600 dark:text-red-400 mb-4">
+            ❌ {% trans 'Incorrect SQL' %}
+        </h2>
+        <pre class="text-sm font-mono bg-red-50 dark:bg-red-900 text-red-800 dark:text-red-200 p-4 rounded border border-red-300 dark:border-red-600 overflow-x-auto">{{ correction.original_sql }}</pre>
+    </div>
+
+    <!-- Correct SQL -->
+    {% if correction.corrected_sql %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-green-600 dark:text-green-400 mb-4">
+            ✓ {% trans 'Corrected SQL' %}
+        </h2>
+        <pre class="text-sm font-mono bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200 p-4 rounded border border-green-300 dark:border-green-600 overflow-x-auto">{{ correction.corrected_sql }}</pre>
+    </div>
+    {% endif %}
+
+    <!-- Correction Notes -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            📝 {% trans 'Correction Notes' %}
+        </h2>
+        <p class="text-sm text-gray-900 dark:text-white bg-blue-50 dark:bg-blue-900 p-4 rounded border border-blue-200 dark:border-blue-600 whitespace-pre-line">
+            {{ correction.correction_notes }}
+        </p>
+    </div>
+
+    <!-- Actions -->
+    {% if not correction.applied_to_catalog %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            {% trans 'Actions' %}
+        </h2>
+        
+        <form method="post" action="{% url 'reports_ai:mark_applied' correction.id %}" class="inline">
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-md hover:from-green-600 hover:to-green-700"
+            >
+                ✓ {% trans 'Mark as Applied to Catalog' %}
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+

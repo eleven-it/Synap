@@ -1,0 +1,207 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<!-- Header -->
+<div style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;">
+    <div style="display: flex; justify-content: space-between; align-items: start;">
+        <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem;">
+                <a href="{% url 'reports_ai:catalog_list' %}" style="color: white; opacity: 0.8; font-size: 1.5rem; text-decoration: none; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                    ←
+                </a>
+                <span style="font-size: 2.5rem;">
+                    {% if entry.module == "Ventas" %}💰{% elif entry.module == "Stock" %}📦{% elif entry.module == "Clientes" %}👥{% elif entry.module == "Compras" %}🛒{% else %}⚙️{% endif %}
+                </span>
+                <div>
+                    <h1 style="margin: 0; font-size: 1.75rem; font-weight: 700;">{{ entry.procedure }}</h1>
+                    <p style="margin: 0.25rem 0 0 0; opacity: 0.9; font-size: 0.875rem;">
+                        {{ entry.module }}
+                    </p>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                <span style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.2); border-radius: 6px; font-size: 0.8125rem; font-weight: 600;">
+                    ⭐ Prioridad: {{ entry.priority }}/10
+                </span>
+                <span style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.2); border-radius: 6px; font-size: 0.8125rem; font-weight: 600;">
+                    📈 Confianza: {{ entry.confidence|floatformat:2 }}
+                </span>
+                <span style="padding: 0.5rem 1rem; background: {% if entry.is_active %}rgba(16, 185, 129, 0.3){% else %}rgba(239, 68, 68, 0.3){% endif %}; border-radius: 6px; font-size: 0.8125rem; font-weight: 600;">
+                    {% if entry.is_active %}✅ Activo{% else %}❌ Inactivo{% endif %}
+                </span>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 0.75rem;">
+            <a href="{% url 'reports_ai:catalog_edit' entry.id %}" style="padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none;">
+                ✏️ Editar
+            </a>
+            <button onclick="if(confirm('¿Eliminar esta entrada?')) document.getElementById('delete-form').submit()" style="padding: 0.75rem 1.5rem; background: rgba(239, 68, 68, 0.8); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer;">
+                🗑️ Eliminar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Content -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+    <!-- Left Column -->
+    <div>
+        <!-- Description -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                📝 {% trans "Descripción" %}
+            </h3>
+            <p style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.6;">
+                {{ entry.description|default:"Sin descripción" }}
+            </p>
+        </div>
+        
+        <!-- Archivos Fuente -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                📂 {% trans "Archivos Fuente" %}
+            </h3>
+            
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">FORMULARIOS VB6:</div>
+                <div style="font-size: 0.875rem; color: var(--text-primary); font-family: 'Courier New', monospace; background: var(--bg-secondary); padding: 0.5rem; border-radius: 4px;">
+                    {{ entry.vb6_forms }}
+                </div>
+            </div>
+            
+            {% if entry.vb6_modules %}
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">MÓDULOS VB6:</div>
+                <div style="font-size: 0.875rem; color: var(--text-primary); font-family: 'Courier New', monospace; background: var(--bg-secondary); padding: 0.5rem; border-radius: 4px;">
+                    {{ entry.vb6_modules }}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Entidades y Tablas -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                🗄️ {% trans "Modelo de Datos" %}
+            </h3>
+            
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">ENTIDADES ({{ entry.get_entities_list|length }}):</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for entity in entry.get_entities_list %}
+                    <span style="padding: 0.25rem 0.75rem; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">
+                        {{ entity }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">TABLAS ({{ entry.get_tables_list|length }}):</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    {% for table in entry.get_tables_list %}
+                    <span style="padding: 0.25rem 0.75rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem; font-family: 'Courier New', monospace;">
+                        {{ table }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            {% if entry.master_table %}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">TABLA MAESTRA:</div>
+                    <div style="font-size: 0.875rem; color: #3B82F6; font-family: 'Courier New', monospace; font-weight: 600;">
+                        {{ entry.master_table }}
+                    </div>
+                </div>
+                
+                {% if entry.detail_table %}
+                <div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">TABLA DETALLE:</div>
+                    <div style="font-size: 0.875rem; color: #EC4899; font-family: 'Courier New', monospace; font-weight: 600;">
+                        {{ entry.detail_table }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Right Column -->
+    <div>
+        <!-- Business Rules -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                📜 {% trans "Reglas de Negocio" %}
+            </h3>
+            <div style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.7; white-space: pre-line;">
+                {{ entry.business_rules }}
+            </div>
+        </div>
+        
+        <!-- Validations -->
+        {% if entry.validations %}
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                ✓ {% trans "Validaciones" %}
+            </h3>
+            <div style="font-size: 0.875rem; color: var(--text-primary); line-height: 1.7; white-space: pre-line;">
+                {{ entry.validations }}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Actions -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+            <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+                🚀 {% trans "Acciones Rápidas" %}
+            </h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <button onclick="trainThis()" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); color: white; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; width: 100%;">
+                    🎯 Entrenar Solo Este Procedimiento
+                </button>
+                
+                <a href="{% url 'reports_ai:catalog_edit' entry.id %}" style="padding: 0.75rem 1.5rem; background: #3B82F6; color: white; border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none; text-align: center;">
+                    ✏️ Editar Entrada
+                </a>
+                
+                <form method="post" action="{% url 'reports_ai:catalog_toggle_active' entry.id %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" style="padding: 0.75rem 1.5rem; background: {% if entry.is_active %}#EF4444{% else %}#10B981{% endif %}; color: white; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; width: 100%;">
+                        {% if entry.is_active %}
+                            ⏸️ Desactivar
+                        {% else %}
+                            ▶️ Activar
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form (hidden) -->
+<form id="delete-form" method="post" action="{% url 'reports_ai:catalog_delete' entry.id %}" style="display: none;">
+    {% csrf_token %}
+</form>
+
+<script>
+function trainThis() {
+    if (confirm('¿Entrenar el procedimiento "{{ entry.module }} - {{ entry.procedure }}"?')) {
+        window.location.href = '/reports-ai/train/logic-interpreter/?entry={{ entry.id }}';
+    }
+}
+</script>
+
+{% endblock %}
+

@@ -113,6 +113,15 @@ msgstr "Código"
 msgid "Description"
 msgstr "Descrição"
 
+msgid "Summary"
+msgstr "Resumo"
+
+msgid "Data loading..."
+msgstr "Carregando dados..."
+
+msgid "No data available."
+msgstr "Sem dados disponíveis."
+
 #: accounting/forms.py:142 accounting/models.py:242
 #: accounting/templates/accounting/reports/tax_summary_report.html:103
 #: accounting/templates/accounting/reports/tax_summary_report.html:226
@@ -1458,30 +1467,13 @@ msgstr ""
 msgid "Tax Lines"
 msgstr ""
 
-#: accounting/models.py:404
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_confirm_delete.html:80
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_detail.html:71
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_list.html:141
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_list.html:177
-#: core/forms.py:141 core/models/models.py:269 core/models/models.py:298
-#: core/models/models.py:400 core/models/models.py:617
-#: core/models/models.py:657 core/models/models.py:716
-#: core/templates/core/contacts/contact_detail.html:217
-#: core/templates/core/system_config/branch_form.html:50 purchases/forms.py:141
-#: purchases/templates/purchases/suppliers/supplier_detail.html:303
-#: sales/forms.py:292 sales/templates/sales/clients/client_detail.html:290
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Country"
-msgstr ""
+msgstr "País"
 
-#: accounting/models.py:405 core/forms.py:140 core/models/models.py:268
-#: core/models/models.py:297 core/models/models.py:399
-#: core/models/models.py:667 core/models/models.py:714
-#: core/templates/core/contacts/contact_detail.html:203
-#: core/templates/core/system_config/branch_form.html:41 purchases/forms.py:139
-#: purchases/templates/purchases/suppliers/supplier_detail.html:291
-#: sales/forms.py:300 sales/templates/sales/clients/client_detail.html:297
+#: core/templates/core/system_config/empresa_detail.html
 msgid "State/Province"
-msgstr ""
+msgstr "Estado/Província"
 
 #: accounting/models.py:406
 #, fuzzy
@@ -3663,8 +3655,8 @@ msgstr ""
 #: accounting/templates/accounting/fiscal_years/fiscal_year_detail.html:384
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to close this fiscal year? This action cannot be "
 "undone."
@@ -5986,8 +5978,8 @@ msgstr "Excluir Armazém"
 #: accounting/templates/accounting/tax_groups/tax_group_confirm_delete.html:130
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this tax group? This action "
 "cannot be undone."
@@ -6127,14 +6119,9 @@ msgstr ""
 msgid "Are you sure you want to change the status of this tax group?"
 msgstr "Tem certeza de que deseja excluir este armazém?"
 
-#: accounting/templates/accounting/tax_groups/tax_group_list.html:360
-#: accounting/templates/accounting/tax_groups/tax_group_list.html:365
-#: accounting/templates/accounting/taxes/tax_list.html:430
-#: accounting/templates/accounting/taxes/tax_list.html:435
-#, fuzzy
-#| msgid "Error updating password: %(error)s"
+#: core/templates/core/system_config/empresa_list.html
 msgid "Error updating status"
-msgstr "Erro ao atualizar a senha: %(error)s"
+msgstr "Erro ao atualizar status"
 
 #: accounting/templates/accounting/taxes/tax_delete.html:5
 #: accounting/templates/accounting/taxes/tax_delete.html:50
@@ -6167,8 +6154,8 @@ msgstr ""
 #: accounting/templates/accounting/taxes/tax_delete.html:156
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this tax? This action cannot be "
 "undone."
@@ -6902,33 +6889,17 @@ msgstr ""
 msgid "Website URL"
 msgstr ""
 
-#: core/forms.py:137 core/models/models.py:266 core/models/models.py:396
-#: core/models/models.py:712
-#: core/templates/core/contacts/contact_detail.html:189
-#: core/templates/core/system_config/branch_form.html:26 inventory/models.py:16
-#: inventory/templates/inventory/warehouse_form.html:16
-#: inventory/templates/inventory/warehouse_list.html:21 purchases/forms.py:137
-#: purchases/templates/purchases/suppliers/supplier_detail.html:279
-#: sales/templates/sales/clients/client_detail.html:311
-#: sales/templates/sales/clients/client_form.html:168
-#: sales/templates/sales/contacts/contact_detail.html:513
-#: sales/templates/sales/contacts/contact_form.html:319
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Address"
-msgstr ""
+msgstr "Endereço"
 
 #: core/forms.py:138
 msgid "Postal code"
 msgstr ""
 
-#: core/forms.py:139 core/models/models.py:267 core/models/models.py:296
-#: core/models/models.py:398 core/models/models.py:713
-#: core/templates/core/contacts/contact_detail.html:196
-#: core/templates/core/system_config/branch_form.html:34
-#: core/templates/core/system_config/branch_list.html:18 purchases/forms.py:138
-#: purchases/templates/purchases/suppliers/supplier_detail.html:285
-#: sales/templates/sales/clients/client_detail.html:304
+#: core/templates/core/system_config/empresa_detail.html
 msgid "City"
-msgstr ""
+msgstr "Cidade"
 
 #: core/forms.py:156 core/models/models.py:445
 msgid "Contact must have a name or first/last name."
@@ -7123,20 +7094,9 @@ msgstr "Nome do Produto"
 msgid "Internal Code"
 msgstr ""
 
-#: core/models/models.py:270 core/models/models.py:390
-#: core/models/models.py:721
-#: core/templates/core/contacts/contact_detail.html:138
-#: core/templates/core/contacts/contact_list.html:138
-#: core/templates/core/system_config/branch_form.html:57
-#: purchases/templates/purchases/suppliers/supplier_detail.html:127
-#: purchases/templates/purchases/suppliers/supplier_form.html:122
-#: sales/templates/sales/clients/client_confirm_delete.html:94
-#: sales/templates/sales/clients/client_detail.html:248
-#: sales/templates/sales/contacts/contact_confirm_delete.html:121
-#: sales/templates/sales/contacts/contact_detail.html:387
-#: sales/templates/sales/contacts/contact_form.html:231
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Phone"
-msgstr ""
+msgstr "Telefone"
 
 #: core/models/models.py:271 core/models/models.py:389
 #: core/models/models.py:720
@@ -7187,9 +7147,9 @@ msgstr ""
 msgid "Branch"
 msgstr ""
 
-#: core/models/models.py:278
+#: core/templates/core/system_config/empresa_list.html
 msgid "Branches"
-msgstr ""
+msgstr "Filiais"
 
 #: core/models/models.py:294
 #: inventory/templates/inventory/location_list.html:20
@@ -7281,9 +7241,9 @@ msgstr "Nome do Produto"
 msgid "Last Name"
 msgstr "Nome"
 
-#: core/models/models.py:384
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Company Name"
-msgstr ""
+msgstr "Nome da Empresa"
 
 #: core/models/models.py:385
 msgid "Position/Job Title"
@@ -7306,11 +7266,9 @@ msgstr ""
 msgid "Fax"
 msgstr ""
 
-#: core/models/models.py:393 core/models/models.py:725
-#: core/templates/core/contacts/contact_detail.html:163 purchases/forms.py:152
-#: sales/templates/sales/clients/client_detail.html:270
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Website"
-msgstr ""
+msgstr "Site"
 
 #: core/models/models.py:403
 msgid "Latitude"
@@ -7538,11 +7496,9 @@ msgstr ""
 msgid "Internal business entity code"
 msgstr ""
 
-#: core/models/models.py:709 purchases/forms.py:132
-#: purchases/templates/purchases/suppliers/supplier_detail.html:60
-#: sales/templates/sales/clients/client_detail.html:230
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Tax ID"
-msgstr ""
+msgstr "CNPJ/CPF"
 
 #: core/models/models.py:709
 msgid "VAT number or tax identification"
@@ -14832,8 +14788,8 @@ msgstr ""
 #: purchases/templates/purchases/quotations/quotation_confirm_delete.html:266
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this quotation? This action "
 "cannot be undone."
@@ -14938,8 +14894,8 @@ msgstr ""
 #: purchases/templates/purchases/quotations/quotation_detail.html:408
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to delete this quotation? This action cannot be undone."
 msgstr ""
@@ -15402,8 +15358,8 @@ msgstr ""
 #: purchases/templates/purchases/ratings/rating_confirm_delete.html:239
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this rating? This action cannot "
 "be undone."
@@ -15482,8 +15438,8 @@ msgstr ""
 #: purchases/templates/purchases/ratings/rating_list.html:383
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to delete this rating? This action cannot be undone."
 msgstr ""
@@ -15964,8 +15920,8 @@ msgstr ""
 #: purchases/templates/purchases/receipts/receipt_confirm_delete.html:266
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this receipt? This action cannot "
 "be undone."
@@ -16906,8 +16862,8 @@ msgstr ""
 #: purchases/templates/purchases/suppliers/supplier_confirm_delete.html:174
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you absolutely sure you want to delete this supplier? This action cannot "
 "be undone."
@@ -17000,8 +16956,8 @@ msgstr "Status de Sincronização"
 #: purchases/templates/purchases/suppliers/supplier_detail.html:440
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to delete this supplier? This action cannot be undone."
 msgstr ""
@@ -17875,8 +17831,8 @@ msgstr "Excluir Localização"
 #: sales/templates/sales/clients/client_confirm_delete.html:80
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to delete this client? This action cannot be undone."
 msgstr ""
@@ -18030,8 +17986,8 @@ msgstr ""
 #: sales/templates/sales/contacts/contact_confirm_delete.html:85
 #, fuzzy
 #| msgid ""
-#| "Are you sure you want to delete the configuration \"<strong>%(object."
-#| "key)s</strong>\"? This action cannot be undone."
+#| "Are you sure you want to delete the configuration \"<strong>%"
+#| "(object.key)s</strong>\"? This action cannot be undone."
 msgid ""
 "Are you sure you want to delete this contact? This action cannot be undone."
 msgstr ""
@@ -20185,25 +20141,6 @@ msgstr ""
 msgid "Customer synchronization to Tiendanube failed."
 msgstr ""
 
-#~ msgid "STOCK"
-#~ msgstr "ESTOQUE"
-
-#~ msgid "New initial stock"
-#~ msgstr "Novo estoque inicial"
-
-#~ msgid ""
-#~ "URL amigable sugerida automáticamente a partir del nombre, puedes "
-#~ "modificarla si lo deseas."
-#~ msgstr ""
-#~ "URL amigável sugerida automaticamente a partir do nome, você pode "
-#~ "modificá-la se desejar."
-
-#~ msgid "If active, this product will be visible in sales channels."
-#~ msgstr "Se ativo, este produto será visível nos canais de venda."
-
-#~ msgid "My profile"
-#~ msgstr "Meu perfil"
-
 #: core/templates/core/system_config/empresa_list.html
 #: core/templates/core/system_config/empresa_detail.html
 #: core/templates/core/system_config/empresa_confirm_delete.html
@@ -20224,36 +20161,16 @@ msgid "company"
 msgstr "empresa"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Active"
-msgstr "Ativo"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Inactive"
-msgstr "Inativo"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "Edit company"
 msgstr "Editar empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Edit"
-msgstr "Editar"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "View branches"
 msgstr "Ver filiais"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Branches"
-msgstr "Filiais"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "View company details"
 msgstr "Ver detalhes da empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Details"
-msgstr "Detalhes"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Activate/deactivate company"
@@ -20264,8 +20181,11 @@ msgid "No companies registered"
 msgstr "Nenhuma empresa registrada"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Start by creating your first company to manage your business efficiently."
-msgstr "Comece criando sua primeira empresa para gerenciar seu negócio de forma eficiente."
+msgid ""
+"Start by creating your first company to manage your business efficiently."
+msgstr ""
+"Comece criando sua primeira empresa para gerenciar seu negócio de forma "
+"eficiente."
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Company activated"
@@ -20276,74 +20196,16 @@ msgid "Company deactivated"
 msgstr "Empresa desativada"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Error updating status"
-msgstr "Erro ao atualizar status"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "Are you sure you want to delete the company"
 msgstr "Tem certeza de que deseja excluir a empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "This action cannot be undone."
-msgstr "Esta ação não pode ser desfeita."
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Company Name"
-msgstr "Nome da Empresa"
 
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Business Name"
 msgstr "Razão Social"
 
 #: core/templates/core/system_config/empresa_detail.html
-msgid "Country"
-msgstr "País"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "State/Province"
-msgstr "Estado/Província"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "City"
-msgstr "Cidade"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Address"
-msgstr "Endereço"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Phone"
-msgstr "Telefone"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Email"
-msgstr "Email"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Website"
-msgstr "Site"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Tax ID"
-msgstr "CNPJ/CPF"
-
-#: core/templates/core/system_config/empresa_detail.html
 msgid "Tax Responsibility Type"
 msgstr "Tipo de Responsabilidade"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Currency"
-msgstr "Moeda"
-
-#: core/templates/core/system_config/empresa_detail.html
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "Cancel"
-msgstr "Cancelar"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Save Changes"
-msgstr "Salvar Alterações"
 
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Create Company"
@@ -20360,14 +20222,6 @@ msgstr "Apenas arquivos de imagem são permitidos (JPG, PNG, SVG, etc)."
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Searching..."
 msgstr "Buscando..."
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "No results"
-msgstr "Nenhum resultado"
-
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "Confirm Deletion"
-msgstr "Confirmar Exclusão"
 
 #: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "Delete company?"
@@ -20396,3 +20250,22 @@ msgstr "Esta ação é permanente"
 #: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "Yes, delete company"
 msgstr "Sim, excluir empresa"
+
+#~ msgid "STOCK"
+#~ msgstr "ESTOQUE"
+
+#~ msgid "New initial stock"
+#~ msgstr "Novo estoque inicial"
+
+#~ msgid ""
+#~ "URL amigable sugerida automáticamente a partir del nombre, puedes "
+#~ "modificarla si lo deseas."
+#~ msgstr ""
+#~ "URL amigável sugerida automaticamente a partir do nome, você pode "
+#~ "modificá-la se desejar."
+
+#~ msgid "If active, this product will be visible in sales channels."
+#~ msgstr "Se ativo, este produto será visível nos canais de venda."
+
+#~ msgid "My profile"
+#~ msgstr "Meu perfil"

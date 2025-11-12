@@ -1,0 +1,898 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Train Logic Interpreter" %} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<!-- Hero Header -->
+<div style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+        <span style="font-size: 3rem;">🧠</span>
+        <div style="flex: 1;">
+            <h1 style="margin: 0; font-size: 1.75rem; font-weight: 700;">{% trans "Entrenamiento del Intérprete de Lógica" %}</h1>
+            <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.875rem;">
+                {% trans "Genera automáticamente Manuales de Usuario y Procedimientos Técnicos desde el código fuente VB6" %}
+            </p>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <span style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.15); border-radius: 6px; font-size: 0.75rem; font-weight: 600;">
+                🎯 Análisis Real
+            </span>
+            <span style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.15); border-radius: 6px; font-size: 0.75rem; font-weight: 600;">
+                📚 2 Tipos de Reglas
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Training Mode Selector -->
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+    <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+        🎯 {% trans "Modo de Entrenamiento" %}
+    </h2>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <!-- Modo Guiado -->
+        <div id="mode-guided" onclick="selectMode('guided')" style="padding: 1.5rem; border: 2px solid #8B5CF6; background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%); border-radius: 12px; cursor: pointer; transition: all 0.3s; position: relative;">
+            <div style="position: absolute; top: 1rem; right: 1rem; width: 24px; height: 24px; border: 2px solid #8B5CF6; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                <div id="radio-guided" style="width: 12px; height: 12px; background: #8B5CF6; border-radius: 50%;"></div>
+            </div>
+            
+            <div style="font-size: 2rem; margin-bottom: 0.75rem;">🎯</div>
+            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; color: #8B5CF6;">
+                {% trans "Entrenamiento Guiado" %}
+            </h3>
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                Entrena procedimientos específicos desde el <strong>Catálogo Funcional</strong>. Rápido, preciso y con información verificada.
+            </p>
+            
+            <div style="padding: 0.75rem; background: rgba(139, 92, 246, 0.1); border-radius: 6px; margin-bottom: 0.75rem;">
+                <div style="font-size: 0.75rem; font-weight: 600; color: #8B5CF6; margin-bottom: 0.5rem;">✅ VENTAJAS:</div>
+                <div style="font-size: 0.75rem; color: var(--text-primary); line-height: 1.5;">
+                    • ⚡ Rápido (2-3 minutos por procedimiento)<br>
+                    • 🎯 Preciso (analiza formularios específicos)<br>
+                    • 📚 Genera Manual de Usuario + Técnico<br>
+                    • 🗺️ Extrae ruta REAL del menú (F3, etc.)<br>
+                    • 🔗 Mapea flujo de navegación completo
+                </div>
+            </div>
+            
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                ⏱️ Duración: <strong>2-3 min</strong> por procedimiento
+            </div>
+        </div>
+        
+        <!-- Modo Automático -->
+        <div id="mode-automatic" onclick="selectMode('automatic')" style="padding: 1.5rem; border: 2px solid var(--border-color); background: var(--bg-secondary); border-radius: 12px; cursor: pointer; transition: all 0.3s; position: relative; opacity: 0.7;">
+            <div style="position: absolute; top: 1rem; right: 1rem; width: 24px; height: 24px; border: 2px solid var(--border-color); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                <div id="radio-automatic" style="width: 12px; height: 12px; background: transparent; border-radius: 50%;"></div>
+            </div>
+            
+            <div style="font-size: 2rem; margin-bottom: 0.75rem;">🔄</div>
+            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Escaneo Automático" %}
+            </h3>
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem;">
+                Escanea TODOS los formularios VB6 por categoría. Útil para descubrimiento masivo.
+            </p>
+            
+            <div style="padding: 0.75rem; background: rgba(0,0,0,0.05); border-radius: 6px; margin-bottom: 0.75rem;">
+                <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.5rem;">⚠️ CONSIDERACIONES:</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                    • 🐌 Más lento (12-15 min todas las categorías)<br>
+                    • 📊 Genera solo reglas técnicas<br>
+                    • 🔍 Requiere revisión manual posterior<br>
+                    • 💡 Útil para descubrimiento inicial
+                </div>
+            </div>
+            
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                ⏱️ Duración: <strong>12-15 min</strong> (todas las categorías)
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Guided Mode Configuration (hidden by default) -->
+<div id="guided-config" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+        📚 {% trans "Catálogo Funcional" %}
+    </h3>
+    
+    <div style="margin-bottom: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 6px;">
+        <div style="font-size: 0.875rem; color: #92400E; line-height: 1.6;">
+            <strong>💡 Recomendado:</strong> Selecciona procedimientos clave del catálogo para obtener resultados de alta calidad en minutos.
+        </div>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% if catalog_entries %}
+            {% for entry in catalog_entries %}
+            <label style="display: flex; align-items: start; gap: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;" class="catalog-entry" onmouseover="this.style.borderColor='#8B5CF6'" onmouseout="this.style.borderColor='transparent'">
+                <input type="checkbox" name="catalog_entry" value="{{ entry.id }}" style="width: 18px; height: 18px; margin-top: 0.25rem;">
+                
+                <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <span style="font-size: 1rem; font-weight: 600; color: var(--text-primary);">
+                            {{ entry.module }} → {{ entry.procedure }}
+                        </span>
+                        <span style="padding: 0.25rem 0.5rem; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border-radius: 4px; font-size: 0.625rem; font-weight: 600;">
+                            Prioridad {{ entry.priority }}/10
+                        </span>
+                    </div>
+                    
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        📂 {{ entry.vb6_forms }}
+                    </div>
+                    
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.7rem;">
+                        <span style="padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 4px; color: var(--text-secondary);">
+                            🏷️ {{ entry.get_entities_list|length }} entidades
+                        </span>
+                        <span style="padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 4px; color: var(--text-secondary);">
+                            🗄️ {{ entry.get_tables_list|length }} tablas
+                        </span>
+                        <span style="padding: 0.25rem 0.5rem; background: var(--bg-primary); border-radius: 4px; color: var(--text-secondary);">
+                            📈 {{ entry.confidence|floatformat:2 }} confianza
+                        </span>
+                    </div>
+                </div>
+            </label>
+            {% endfor %}
+            
+            <button type="button" id="btn-start-guided" onclick="startGuidedTraining()" style="background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); color: white; padding: 1rem 2rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); margin-top: 0.5rem;">
+                <span style="margin-right: 0.5rem;">🚀</span>
+                {% trans "Entrenar Procedimientos Seleccionados" %}
+            </button>
+        {% else %}
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                <div style="font-size: 0.875rem; margin-bottom: 1rem;">
+                    No hay entradas en el catálogo funcional
+                </div>
+                <div style="font-size: 0.75rem;">
+                    Ejecuta: <code style="padding: 0.25rem 0.5rem; background: rgba(0,0,0,0.1); border-radius: 4px;">python manage.py load_catalog_pedido</code>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Automatic Mode Configuration (hidden by default) -->
+<div id="automatic-config" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem; display: none;">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+        🔄 {% trans "Escaneo Automático Completo" %}
+    </h3>
+    
+    <div style="margin-bottom: 1.5rem;">
+        <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">
+            {% trans "Selecciona Categorías:" %}
+        </label>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+            {% for cat in categories %}
+            <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 8px; cursor: pointer; transition: all 0.2s;" class="category-checkbox">
+                <input type="checkbox" name="category-auto" value="{{ cat.id }}" style="width: 16px; height: 16px;">
+                <span style="font-size: 1.25rem;">{{ cat.icon }}</span>
+                <span style="font-size: 0.875rem; font-weight: 500;">{{ cat.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <button type="button" id="btn-start-automatic" onclick="startAutomaticTraining()" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; padding: 1rem 2rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+        <span style="margin-right: 0.5rem;">🔄</span>
+        {% trans "Iniciar Escaneo Automático" %}
+    </button>
+</div>
+
+<!-- Info Panel: What gets generated -->
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+        🔬 {% trans "Herramientas de Análisis Integradas" %}
+    </h3>
+    
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+        <div style="padding: 1rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%); border-left: 3px solid #8B5CF6; border-radius: 6px;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #8B5CF6; margin-bottom: 0.5rem;">
+                🗺️ MenuAnalyzer
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                Extrae rutas reales del menú, atajos (F3, Ctrl+P) y jerarquías desde <code>Principal.frm</code>
+            </div>
+        </div>
+        
+        <div style="padding: 1rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%); border-left: 3px solid #3B82F6; border-radius: 6px;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #3B82F6; margin-bottom: 0.5rem;">
+                🔗 NavigationFlow
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                Traza el flujo completo entre formularios (Menu → Lista → Form principal)
+            </div>
+        </div>
+        
+        <div style="padding: 1rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%); border-left: 3px solid #10B981; border-radius: 6px;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; margin-bottom: 0.5rem;">
+                👤 UIFlowAnalyzer
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                Genera procedimientos en lenguaje natural para usuario final (sin tecnicismos)
+            </div>
+        </div>
+        
+        <div style="padding: 1rem; background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.02) 100%); border-left: 3px solid #F59E0B; border-radius: 6px;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; margin-bottom: 0.5rem;">
+                🔧 VB6DeepAnalyzer
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                Extrae tablas, campos, relaciones y validaciones para procedimientos técnicos
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- What Gets Generated -->
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+        📝 {% trans "Business Rules Generadas" %}
+    </h3>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <!-- Manual de Usuario -->
+        <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(139, 92, 246, 0.03) 100%); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.2);">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="font-size: 2rem;">👤</div>
+                <div>
+                    <div style="font-weight: 600; font-size: 1rem; color: #8B5CF6;">Manual de Usuario</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Para responder al usuario final</div>
+                </div>
+            </div>
+            
+            <div style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.6; margin-bottom: 1rem;">
+                Procedimiento paso a paso en <strong>lenguaje natural</strong>, sin tecnicismos:
+            </div>
+            
+            <div style="padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 1rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                • Ruta exacta del menú (Ventas → Pedido)<br>
+                • Atajos de teclado (F3, F2, F10)<br>
+                • Flujo de navegación real<br>
+                • Formularios auxiliares (Artículos, Datos Adicionales)<br>
+                • Lenguaje conversacional ("dirígete", "simplemente")<br>
+                • SIN tablas SQL ni campos técnicos
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; font-size: 0.7rem;">
+                <span style="padding: 0.25rem 0.5rem; background: rgba(139, 92, 246, 0.15); color: #7C3AED; border-radius: 4px; font-weight: 600;">
+                    Priority: 10
+                </span>
+                <span style="padding: 0.25rem 0.5rem; background: rgba(139, 92, 246, 0.15); color: #7C3AED; border-radius: 4px;">
+                    Tags: manual, usuario
+                </span>
+            </div>
+        </div>
+        
+        <!-- Procedimiento Técnico -->
+        <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(59, 130, 246, 0.03) 100%); border-radius: 10px; border: 1px solid rgba(59, 130, 246, 0.2);">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="font-size: 2rem;">🔧</div>
+                <div>
+                    <div style="font-weight: 600; font-size: 1rem; color: #3B82F6;">Procedimiento Técnico</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Para el Data Analyst Agent</div>
+                </div>
+            </div>
+            
+            <div style="font-size: 0.8125rem; color: var(--text-primary); line-height: 1.6; margin-bottom: 1rem;">
+                Información técnica para generar <strong>SQL correcto</strong>:
+            </div>
+            
+            <div style="padding: 0.75rem; background: white; border-radius: 6px; margin-bottom: 1rem; font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                • Tablas involucradas (INSERT/UPDATE)<br>
+                • Campos por tabla con propósito funcional<br>
+                • Relaciones entre tablas<br>
+                • Validaciones de negocio<br>
+                • Transacciones y secuencia de guardado<br>
+                • Field Usage Map ([BUSCAR AQUÍ], [DETALLE])
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; font-size: 0.7rem;">
+                <span style="padding: 0.25rem 0.5rem; background: rgba(59, 130, 246, 0.15); color: #2563EB; border-radius: 4px; font-weight: 600;">
+                    Priority: 10
+                </span>
+                <span style="padding: 0.25rem 0.5rem; background: rgba(59, 130, 246, 0.15); color: #2563EB; border-radius: 4px;">
+                    Tags: procedimiento, técnico
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Panel (hidden by default) -->
+<div id="progress-panel" style="display: none;">
+    <!-- Training Progress -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h2 style="font-size: 1.25rem; font-weight: 600; margin: 0; color: var(--text-primary);">
+                ⚙️ {% trans "Entrenamiento en Progreso" %}
+            </h2>
+            <div style="display: flex; gap: 1rem; align-items: center;">
+                <div id="training-timer" style="font-size: 0.875rem; font-weight: 600; color: var(--text-secondary); font-family: 'Courier New', monospace;">
+                    00:00
+                </div>
+                <button type="button" id="btn-cancel" onclick="cancelTraining()" style="background: #EF4444; color: white; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; font-size: 0.75rem; border: none; cursor: pointer;">
+                    ⏹️ {% trans "Cancelar" %}
+                </button>
+            </div>
+        </div>
+        
+        <!-- Real-time Metrics -->
+        <div id="metrics-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+            <!-- Metrics will be populated by JS -->
+        </div>
+        
+        <!-- Progress Bar -->
+        <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                <span id="phase-label" style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">Iniciando...</span>
+                <span id="progress-pct" style="font-size: 0.875rem; font-weight: 600; color: #8B5CF6;">0%</span>
+            </div>
+            <div style="height: 12px; background: var(--bg-secondary); border-radius: 6px; overflow: hidden;">
+                <div id="progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #8B5CF6 0%, #6366F1 100%); transition: width 0.5s ease, background 0.3s ease; border-radius: 6px;"></div>
+            </div>
+        </div>
+        
+        <!-- Phase Indicators -->
+        <div id="phases" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin-bottom: 2rem;">
+            <!-- Phases will be populated by JS -->
+        </div>
+        
+        <!-- Live Log Stream -->
+        <div style="background: var(--bg-secondary); border-radius: 8px; padding: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <h3 style="font-size: 0.875rem; font-weight: 600; margin: 0; color: var(--text-primary);">
+                    📋 {% trans "Log en Tiempo Real" %}
+                </h3>
+                <button onclick="clearLog()" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                    🗑️ Limpiar
+                </button>
+            </div>
+            <div id="log-stream" style="height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.75rem; line-height: 1.6; color: var(--text-primary); padding: 0.75rem; background: var(--bg-primary); border-radius: 6px;">
+                <div style="color: var(--text-secondary);">{% trans "Esperando inicio del entrenamiento..." %}</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Results Summary (visible after completion) -->
+    <div id="results-panel" style="display: none; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
+        <!-- Results content will be populated by JS -->
+    </div>
+</div>
+
+<!-- Recent Sessions -->
+{% if recent_sessions %}
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+        📋 {% trans "Sesiones Recientes" %}
+    </h3>
+    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        {% for sess in recent_sessions %}
+        <a href="{% url 'reports_ai:training_session_detail' sess.session_id %}" 
+           style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; text-decoration: none; transition: transform 0.2s;"
+           onmouseover="this.style.transform='translateX(4px)'"
+           onmouseout="this.style.transform='translateX(0)'">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.25rem;">
+                    {% if sess.status == 'completed' %}✅{% elif sess.status == 'error' %}❌{% elif sess.status == 'cancelled' %}⚠️{% else %}🔄{% endif %}
+                </span>
+                <div>
+                    <div style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary);">
+                        {{ sess.created_at|date:"d/m/Y H:i" }}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                        {{ sess.forms_analyzed }} formularios | {{ sess.business_rules_created }} reglas
+                    </div>
+                </div>
+            </div>
+            <span style="color: var(--text-secondary); font-size: 1.25rem;">→</span>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<style>
+.category-checkbox:hover {
+    background: var(--bg-primary) !important;
+    transform: translateX(2px);
+}
+
+.catalog-entry input:checked ~ div {
+    opacity: 1;
+}
+
+#mode-guided.selected {
+    border-color: #8B5CF6;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+    opacity: 1;
+}
+
+#mode-automatic.selected {
+    border-color: #3B82F6;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
+    opacity: 1;
+}
+</style>
+
+<script>
+let currentMode = 'guided';
+let eventSource = null;
+let trainingTimer = null;
+let startTime = null;
+let currentSessionId = null;
+
+function selectMode(mode) {
+    currentMode = mode;
+    
+    // Update UI
+    const guidedDiv = document.getElementById('mode-guided');
+    const automaticDiv = document.getElementById('mode-automatic');
+    const guidedRadio = document.getElementById('radio-guided');
+    const automaticRadio = document.getElementById('radio-automatic');
+    const guidedConfig = document.getElementById('guided-config');
+    const automaticConfig = document.getElementById('automatic-config');
+    
+    if (mode === 'guided') {
+        guidedDiv.classList.add('selected');
+        automaticDiv.classList.remove('selected');
+        automaticDiv.style.opacity = '0.7';
+        guidedDiv.style.opacity = '1';
+        guidedRadio.style.background = '#8B5CF6';
+        automaticRadio.style.background = 'transparent';
+        guidedConfig.style.display = 'block';
+        automaticConfig.style.display = 'none';
+    } else {
+        automaticDiv.classList.add('selected');
+        guidedDiv.classList.remove('selected');
+        guidedDiv.style.opacity = '0.7';
+        automaticDiv.style.opacity = '1';
+        automaticRadio.style.background = '#3B82F6';
+        guidedRadio.style.background = 'transparent';
+        automaticConfig.style.display = 'block';
+        guidedConfig.style.display = 'none';
+    }
+}
+
+function startGuidedTraining() {
+    console.log('[GuidedTraining] 🚀 Iniciando entrenamiento guiado...');
+    
+    const selectedEntries = Array.from(document.querySelectorAll('input[name="catalog_entry"]:checked'))
+        .map(cb => parseInt(cb.value));
+    
+    console.log('[GuidedTraining] 📋 Entradas seleccionadas:', selectedEntries);
+    
+    if (selectedEntries.length === 0) {
+        console.warn('[GuidedTraining] ⚠️ No hay entradas seleccionadas');
+        alert('Selecciona al menos un procedimiento del catálogo');
+        return;
+    }
+    
+    console.log('[GuidedTraining] 👁️ Mostrando panel de progreso...');
+    showProgressPanel();
+    
+    const url = '/reports-ai/api/train/logic-interpreter/start-guided/';
+    const payload = {
+        catalog_entries: selectedEntries,
+        mode: 'guided'
+    };
+    
+    console.log('[GuidedTraining] 📤 Enviando request a:', url);
+    console.log('[GuidedTraining] 📦 Payload:', payload);
+    
+    // Iniciar entrenamiento guiado
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(res => {
+        console.log('[GuidedTraining] 📥 Response recibida:', res.status, res.statusText);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status} ${res.statusText}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log('[GuidedTraining] 📊 Data recibida:', data);
+        
+        if (data.success) {
+            currentSessionId = data.session_id;
+            console.log('[GuidedTraining] ✅ Session ID:', currentSessionId);
+            
+            // Iniciar timer
+            startTime = Date.now();
+            trainingTimer = setInterval(updateTimer, 1000);
+            
+            // Poll status cada 2 segundos
+            pollTrainingStatus(data.session_id);
+            
+            addLogEntry(`🎯 Entrenamiento guiado iniciado: ${selectedEntries.length} procedimiento(s)`);
+        } else {
+            console.error('[GuidedTraining] ❌ Error en respuesta:', data.error);
+            alert('Error: ' + (data.error || 'Error desconocido'));
+            location.reload();
+        }
+    })
+    .catch(err => {
+        console.error('[GuidedTraining] ❌ Error fatal:', err);
+        console.error('[GuidedTraining] Stack trace:', err.stack);
+        alert('Error de conexión: ' + err.message + '\n\nRevisa la consola del navegador (F12) para más detalles.');
+        location.reload();
+    });
+}
+
+// Verificar que getCookie existe
+if (typeof getCookie === 'undefined') {
+    console.error('[GuidedTraining] ❌ CRÍTICO: Función getCookie() no está definida!');
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    console.log('[GuidedTraining] ✅ Función getCookie() creada como fallback');
+}
+
+function startAutomaticTraining() {
+    const selectedCategories = Array.from(document.querySelectorAll('input[name="category-auto"]:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedCategories.length === 0) {
+        alert('Selecciona al menos una categoría');
+        return;
+    }
+    
+    showProgressPanel();
+    startTrainingSSE(selectedCategories);
+}
+
+function showProgressPanel() {
+    console.log('[showProgressPanel] 👁️ Mostrando panel de progreso...');
+    
+    // Ocultar panels de configuración si existen
+    const configPanel = document.getElementById('config-panel');
+    const guidedConfig = document.getElementById('guided-config');
+    const automaticConfig = document.getElementById('automatic-config');
+    const progressPanel = document.getElementById('progress-panel');
+    
+    if (configPanel) {
+        console.log('[showProgressPanel] ✅ Ocultando config-panel');
+        configPanel.style.display = 'none';
+    } else {
+        console.warn('[showProgressPanel] ⚠️ Elemento config-panel no encontrado');
+    }
+    
+    if (guidedConfig) {
+        console.log('[showProgressPanel] ✅ Ocultando guided-config');
+        guidedConfig.style.display = 'none';
+    } else {
+        console.warn('[showProgressPanel] ⚠️ Elemento guided-config no encontrado');
+    }
+    
+    if (automaticConfig) {
+        console.log('[showProgressPanel] ✅ Ocultando automatic-config');
+        automaticConfig.style.display = 'none';
+    } else {
+        console.warn('[showProgressPanel] ⚠️ Elemento automatic-config no encontrado');
+    }
+    
+    if (progressPanel) {
+        console.log('[showProgressPanel] ✅ Mostrando progress-panel');
+        progressPanel.style.display = 'block';
+    } else {
+        console.error('[showProgressPanel] ❌ CRÍTICO: Elemento progress-panel no encontrado!');
+        alert('Error: No se puede mostrar el panel de progreso. Recarga la página.');
+    }
+}
+
+function startTrainingSSE(categories) {
+    // Start timer
+    startTime = Date.now();
+    trainingTimer = setInterval(updateTimer, 1000);
+    
+    // Initialize metrics
+    updateMetrics({
+        forms_analyzed: 0,
+        tables_discovered: 0,
+        fields_validated: 0,
+        business_rules: 0,
+        user_manuals: 0
+    });
+    
+    // Connect to SSE
+    const url = `/reports-ai/api/train/logic-interpreter/start/`;
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ categories })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            currentSessionId = data.session_id;
+            connectToProgressStream(data.session_id);
+        } else {
+            showError(data.error);
+        }
+    })
+    .catch(err => showError(err.message));
+}
+
+function connectToProgressStream(sessionId) {
+    const streamUrl = `/reports-ai/api/train/logic-interpreter/progress/${sessionId}/`;
+    eventSource = new EventSource(streamUrl);
+    
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleProgressUpdate(data);
+    };
+    
+    eventSource.onerror = function(error) {
+        console.error('SSE Error:', error);
+        eventSource.close();
+        stopTimer();
+    };
+}
+
+function handleProgressUpdate(data) {
+    if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
+        stopTimer();
+        showResults(data);
+        if (eventSource) {
+            eventSource.close();
+        }
+        return;
+    }
+    
+    // Update progress
+    updateProgress(data.progress || 0, data.phase || 'Procesando...');
+    
+    // Update metrics
+    if (data.metrics) {
+        updateMetrics(data.metrics);
+    }
+    
+    // Add log entry
+    if (data.log) {
+        addLogEntry(data.log);
+    }
+}
+
+function updateTimer() {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('training-timer').textContent = 
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function stopTimer() {
+    if (trainingTimer) {
+        clearInterval(trainingTimer);
+    }
+}
+
+function updateProgress(pct, phase) {
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('progress-pct').textContent = Math.round(pct) + '%';
+    document.getElementById('phase-label').textContent = phase;
+}
+
+function updateMetrics(metrics) {
+    const container = document.getElementById('metrics-container');
+    container.innerHTML = `
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #8B5CF6;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: #8B5CF6;">${metrics.forms_analyzed || 0}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Formularios Analizados</div>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #10B981;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;">${metrics.user_manuals || 0}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Manuales de Usuario</div>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #3B82F6;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: #3B82F6;">${metrics.business_rules || 0}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Business Rules Técnicas</div>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #F59E0B;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: #F59E0B;">${metrics.tables_discovered || 0}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Tablas Descubiertas</div>
+        </div>
+        <div style="padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid #EC4899;">
+            <div style="font-size: 1.5rem; font-weight: 700; color: #EC4899;">${metrics.fields_validated || 0}</div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Campos Validados</div>
+        </div>
+    `;
+}
+
+function addLogEntry(logText) {
+    const logContainer = document.getElementById('log-stream');
+    const entry = document.createElement('div');
+    entry.style.marginBottom = '0.25rem';
+    entry.style.paddingLeft = '0.5rem';
+    entry.style.borderLeft = '2px solid #8B5CF6';
+    entry.textContent = logText;
+    logContainer.appendChild(entry);
+    logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+function clearLog() {
+    document.getElementById('log-stream').innerHTML = '';
+}
+
+function showResults(data) {
+    document.getElementById('progress-panel').style.display = 'none';
+    const resultsPanel = document.getElementById('results-panel');
+    resultsPanel.style.display = 'block';
+    
+    if (data.status === 'completed') {
+        // Show confetti
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+        });
+    }
+    
+    resultsPanel.innerHTML = generateResultsHTML(data);
+}
+
+function generateResultsHTML(data) {
+    // Implementation similar to existing results panel
+    return `<h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem;">✅ Entrenamiento Completado</h2>`;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function pollTrainingStatus(sessionId) {
+    console.log('[pollTrainingStatus] 🔄 Iniciando polling para session:', sessionId);
+    
+    const poll = setInterval(() => {
+        const url = `/reports-ai/api/train/logic-interpreter/status/${sessionId}/`;
+        console.log('[pollTrainingStatus] 📡 Haciendo polling a:', url);
+        
+        fetch(url)
+            .then(res => {
+                console.log('[pollTrainingStatus] 📥 Response status:', res.status);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                console.log('[pollTrainingStatus] 📊 Data recibida:', data);
+                
+                if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
+                    console.log('[pollTrainingStatus] ✅ Entrenamiento finalizado. Status:', data.status);
+                    clearInterval(poll);
+                    stopTimer();
+                    showCompletionResults(data);
+                } else {
+                    console.log('[pollTrainingStatus] ⏳ Entrenamiento en progreso...');
+                    // Actualizar progreso
+                    const progress = (data.business_rules_created || 0) * 5;  // Estimate
+                    updateProgress(Math.min(progress, 95), data.phase || 'Entrenando...');
+                    
+                    updateMetrics({
+                        forms_analyzed: data.forms_analyzed || 0,
+                        tables_discovered: data.tables_discovered || 0,
+                        fields_validated: data.fields_validated || 0,
+                        business_rules: data.business_rules_created || 0,
+                        user_manuals: Math.floor((data.business_rules_created || 0) / 22)  // Estimate: 1 manual + 21 reglas
+                    });
+                    
+                    if (data.current_log) {
+                        addLogEntry(data.current_log);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('[pollTrainingStatus] ❌ Error en polling:', err);
+                console.error('[pollTrainingStatus] Stack:', err.stack);
+                clearInterval(poll);
+                
+                // Mostrar error al usuario
+                alert('Error al obtener el estado del entrenamiento: ' + err.message + '\n\nRecarga la página para ver el resultado.');
+            });
+    }, 2000);  // Poll cada 2 segundos
+}
+
+function showCompletionResults(data) {
+    updateProgress(100, '✅ Completado');
+    
+    const resultsPanel = document.getElementById('results-panel');
+    resultsPanel.style.display = 'block';
+    
+    resultsPanel.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+            <h2 style="font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">
+                ¡Entrenamiento Completado!
+            </h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem;">
+                ${data.business_rules_created || 0} Business Rules creadas
+            </p>
+            
+            <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                <a href="/reports-ai/chat/" style="padding: 0.75rem 1.5rem; background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%); color: white; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 0.875rem;">
+                    💬 Probar en el Chat
+                </a>
+                <button onclick="location.reload()" style="padding: 0.75rem 1.5rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer;">
+                    🔄 Nuevo Entrenamiento
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Show confetti
+    if (typeof confetti !== 'undefined') {
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+        });
+    }
+}
+
+function cancelTraining() {
+    if (currentSessionId && confirm('¿Estás seguro de cancelar el entrenamiento?')) {
+        fetch(`/reports-ai/api/train/logic-interpreter/cancel/${currentSessionId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        
+        if (eventSource) {
+            eventSource.close();
+        }
+        stopTimer();
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    selectMode('guided');  // Default to guided mode
+});
+</script>
+
+<!-- Confetti Library -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+
+{% endblock %}

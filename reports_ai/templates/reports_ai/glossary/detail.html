@@ -1,0 +1,72 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{{ term.term }} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ai-success: #10B981;
+    }
+
+    .hero-header {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+    }
+
+    .term-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+    }
+
+    .definition-box {
+        background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
+        border-left: 4px solid var(--ai-success);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <div class="hero-header">
+        <div style="font-size: 2rem; font-weight: 700;">
+            <i class="fas fa-book"></i>
+            {{ term.term }}
+        </div>
+    </div>
+
+    <div class="term-card">
+        <h6 style="font-weight: 600; color: #374151; margin-bottom: 1rem;">{% trans "Definition" %}</h6>
+        <div class="definition-box">
+            <p style="color: #065F46; margin: 0; line-height: 1.8;">{{ term.definition }}</p>
+        </div>
+
+        {% if term.examples %}
+        <div style="margin-top: 2rem;">
+            <h6 style="font-weight: 600; color: #374151; margin-bottom: 1rem;">{% trans "Examples" %}</h6>
+            <p style="color: #6B7280; font-size: 0.875rem;">{{ term.examples }}</p>
+        </div>
+        {% endif %}
+
+        <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+            <a href="{% url 'reports_ai:glossary_term_edit' term.id %}" class="btn" style="background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none;">
+                <i class="fas fa-edit"></i> {% trans "Edit" %}
+            </a>
+            <a href="{% url 'reports_ai:glossary_list' %}" class="btn" style="background: white; border: 1px solid #D1D5DB; color: #374151; padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none;">
+                <i class="fas fa-arrow-left"></i> {% trans "Back" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

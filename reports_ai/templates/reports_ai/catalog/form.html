@@ -1,0 +1,570 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<!-- Header -->
+<div style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); padding: 1.5rem; border-radius: 12px; margin-bottom: 2rem; color: white;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <a href="{% url 'reports_ai:catalog_list' %}" style="color: white; opacity: 0.8; font-size: 1.5rem; text-decoration: none; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+            ←
+        </a>
+        <div>
+            <h1 style="margin: 0; font-size: 1.5rem; font-weight: 700;">
+                {% if is_edit %}
+                    ✏️ {% trans "Editar Entrada" %}
+                {% else %}
+                    ➕ {% trans "Nueva Entrada" %}
+                {% endif %}
+            </h1>
+            <p style="margin: 0.25rem 0 0 0; opacity: 0.9; font-size: 0.8125rem;">
+                {% trans "Catálogo Funcional para Entrenamiento Guiado" %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Form -->
+<form method="post" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem;">
+    {% csrf_token %}
+    
+    <!-- Sección 1: Identificación -->
+    <fieldset style="border: none; padding: 0; margin-bottom: 2rem;">
+        <legend style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">🏷️</span>
+            {% trans "Identificación del Procedimiento" %}
+        </legend>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Módulo Funcional" %} <span style="color: #EF4444;">*</span>
+                </label>
+                {{ form.module }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Ej: Ventas, Stock, Clientes, Facturación
+                </div>
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Procedimiento" %} <span style="color: #EF4444;">*</span>
+                </label>
+                {{ form.procedure }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Ej: Crear pedido, Guardar factura, Movimiento de stock
+                </div>
+            </div>
+        </div>
+        
+        <div>
+            <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Descripción" %}
+            </label>
+            {{ form.description }}
+        </div>
+    </fieldset>
+    
+    <!-- Sección 2: Archivos Fuente -->
+    <fieldset style="border: none; padding: 0; margin-bottom: 2rem;">
+        <legend style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">📂</span>
+            {% trans "Archivos Fuente a Analizar" %}
+        </legend>
+        
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Formularios VB6" %} <span style="color: #EF4444;">*</span>
+            </label>
+            
+            <!-- Campo que guarda los valores -->
+            {{ form.vb6_forms }}
+            
+            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Separados por coma. Ej: Pedido.frm, Pedido_Avanzado.frm
+            </div>
+            
+            <!-- Ayuda para seleccionar -->
+            <div style="margin-top: 0.75rem;">
+                <button type="button" onclick="showFormSelector()" style="padding: 0.5rem 1rem; background: #8B5CF6; color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">
+                    📂 Seleccionar de la Lista ({{ total_vb6_forms|default:"557" }} disponibles)
+                </button>
+            </div>
+        </div>
+        
+        <!-- Modal de selección (se mostrará con JavaScript) -->
+        <div id="form-selector-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: #ffffff; border-radius: 12px; padding: 2rem; max-width: 800px; max-height: 80vh; overflow-y: auto; margin: 2rem; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1f2937;">
+                        📂 Seleccionar Formularios VB6
+                    </h3>
+                    <button type="button" onclick="closeFormSelector()" style="background: transparent; border: none; font-size: 1.5rem; color: #6b7280; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
+                        ✕
+                    </button>
+                </div>
+                
+                <!-- Búsqueda -->
+                <input type="text" id="modal_search" placeholder="Buscar formularios..." 
+                       style="width: 100%; padding: 0.75rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.875rem; margin-bottom: 1rem; background: #f9fafb; transition: all 0.2s;"
+                       onfocus="this.style.borderColor='#8B5CF6'; this.style.background='#ffffff'"
+                       onblur="this.style.borderColor='#e5e7eb'; this.style.background='#f9fafb'">
+                
+                <!-- Lista de formularios -->
+                <div id="modal_forms_list" style="max-height: 400px; overflow-y: auto; padding: 0.5rem; background: #f9fafb; border-radius: 8px;">
+                    <div style="text-align: center; padding: 2rem; color: #6b7280;">
+                        Cargando formularios...
+                    </div>
+                </div>
+                
+                <!-- Botones -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid #e5e7eb;">
+                    <div style="font-size: 0.875rem; color: #6b7280; font-weight: 500;">
+                        <span id="selected_count" style="color: #8B5CF6; font-weight: 700; font-size: 1rem;">0</span> formulario(s) seleccionado(s)
+                    </div>
+                    <button type="button" onclick="applyFormSelection()" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.875rem; cursor: pointer; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(139, 92, 246, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(139, 92, 246, 0.3)'">
+                        ✓ Aplicar Selección
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Módulos VB6" %}
+                </label>
+                {{ form.vb6_modules }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Ej: Funciones.bas, MStart.bas
+                </div>
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Scripts PHP" %}
+                </label>
+                {{ form.php_scripts }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Ej: pedido_controller.php (opcional)
+                </div>
+            </div>
+        </div>
+    </fieldset>
+    
+    <!-- Sección 3: Modelo de Negocio -->
+    <fieldset style="border: none; padding: 0; margin-bottom: 2rem;">
+        <legend style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">🗄️</span>
+            {% trans "Modelo de Negocio" %}
+        </legend>
+        
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Entidades Involucradas" %} <span style="color: #EF4444;">*</span>
+            </label>
+            {{ form.entities }}
+            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Separadas por coma. Ej: Pedido, Cliente, Articulo, Sucursal
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Tablas Candidatas" %} <span style="color: #EF4444;">*</span>
+            </label>
+            {{ form.candidate_tables }}
+            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Separadas por coma. Ej: comp_ped, cuerpostockpe, cliente, articulo
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Tabla Maestra" %}
+                </label>
+                {{ form.master_table }}
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Tabla Detalle" %}
+                </label>
+                {{ form.detail_table }}
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Campos Clave" %} <span style="color: #EF4444;">*</span>
+                </label>
+                {{ form.key_fields }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Ej: CodigoMovimiento, Codigo, IDArt, Total
+                </div>
+            </div>
+        </div>
+    </fieldset>
+    
+    <!-- Sección 4: Lógica del Procedimiento -->
+    <fieldset style="border: none; padding: 0; margin-bottom: 2rem;">
+        <legend style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">📜</span>
+            {% trans "Lógica del Procedimiento" %}
+        </legend>
+        
+        <!-- Nota informativa -->
+        <div style="background: linear-gradient(135deg, #E0E7FF 0%, #DDD6FE 100%); border-left: 4px solid #8B5CF6; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: start; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">🤖</span>
+                <div>
+                    <div style="font-size: 0.8125rem; font-weight: 600; color: #5B21B6; margin-bottom: 0.25rem;">
+                        {% trans "Autocompletado Inteligente" %}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #6D28D9; line-height: 1.5;">
+                        Los campos de esta sección <strong>se descubren automáticamente</strong> durante el entrenamiento mediante análisis del código VB6. 
+                        Puedes dejarlos vacíos o agregar información preliminar que será refinada.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                {% trans "Reglas Funcionales" %}
+            </label>
+            {{ form.business_rules }}
+            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Se autocompletará con las reglas descubiertas en el código
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Validaciones" %}
+                </label>
+                {{ form.validations }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Se autocompletará con validaciones encontradas (MsgBox, If...Then, etc.)
+                </div>
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Eventos Relevantes" %}
+                </label>
+                {{ form.relevant_events }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Se autocompletará con eventos clave (Guardar, BeginTrans, etc.)
+                </div>
+            </div>
+        </div>
+    </fieldset>
+    
+    <!-- Sección 5: Metadata -->
+    <fieldset style="border: none; padding: 0; margin-bottom: 2rem;">
+        <legend style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.25rem;">⚙️</span>
+            {% trans "Configuración" %}
+        </legend>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Confianza Inicial" %}
+                </label>
+                {{ form.confidence }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    0.0 a 1.0 (recomendado: 0.9)
+                </div>
+            </div>
+            
+            <div>
+                <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+                    {% trans "Prioridad" %}
+                </label>
+                {{ form.priority }}
+                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    1-10, donde 10 es máxima
+                </div>
+            </div>
+            
+            <div>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary); padding-top: 1.75rem;">
+                    {{ form.is_active }}
+                    {% trans "Entrada Activa" %}
+                </label>
+            </div>
+        </div>
+    </fieldset>
+    
+    <!-- Notas -->
+    <div style="margin-bottom: 2rem;">
+        <label style="display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-primary);">
+            📝 {% trans "Notas" %}
+        </label>
+        {{ form.notes }}
+    </div>
+    
+    <!-- Actions -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+        <a href="{% url 'reports_ai:catalog_list' %}" style="padding: 0.75rem 1.5rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none;">
+            ← {% trans "Cancelar" %}
+        </a>
+        
+        <button type="submit" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+            {% if is_edit %}
+                💾 {% trans "Guardar Cambios" %}
+            {% else %}
+                ➕ {% trans "Crear Entrada" %}
+            {% endif %}
+        </button>
+    </div>
+</form>
+
+<!-- Help Panel -->
+<div style="background: #DBEAFE; border-left: 4px solid #3B82F6; border-radius: 8px; padding: 1.5rem; margin-top: 2rem;">
+    <div style="font-size: 0.875rem; font-weight: 600; color: #1E40AF; margin-bottom: 0.75rem;">
+        💡 {% trans "Consejos para completar el catálogo:" %}
+    </div>
+    <div style="font-size: 0.8125rem; color: #1E3A8A; line-height: 1.7;">
+        • <strong>Formularios VB6:</strong> Indica los archivos .frm que contienen el procedimiento<br>
+        • <strong>Entidades:</strong> Conceptos de negocio (Pedido, Cliente, no tablas SQL)<br>
+        • <strong>Tablas Candidatas:</strong> Ayuda al análisis automático a enfocarse<br>
+        • <strong>Prioridad alta (9-10):</strong> Se entrenarán primero<br>
+        • <strong>Confianza alta (0.9+):</strong> Información verificada del código
+    </div>
+</div>
+
+<script>
+let allVB6Forms = [];
+let tempSelectedForms = [];
+
+function showFormSelector() {
+    const modal = document.getElementById('form-selector-modal');
+    modal.style.display = 'flex';
+    
+    // Cargar formularios si aún no están cargados
+    if (allVB6Forms.length === 0) {
+        loadVB6FormsForModal();
+    } else {
+        // Cargar selección actual del campo de texto
+        loadCurrentSelection();
+        renderModalFormsList();
+    }
+    
+    // Setup búsqueda en modal
+    const searchInput = document.getElementById('modal_search');
+    searchInput.value = '';
+    searchInput.addEventListener('input', debounce(filterModalForms, 300));
+}
+
+function closeFormSelector() {
+    document.getElementById('form-selector-modal').style.display = 'none';
+}
+
+function loadVB6FormsForModal() {
+    const listContainer = document.getElementById('modal_forms_list');
+    listContainer.innerHTML = '<div style="text-align: center; padding: 3rem; color: #6b7280;"><div style="font-size: 2rem; margin-bottom: 1rem;">⏳</div><div style="font-weight: 500;">Cargando formularios...</div></div>';
+    
+    fetch('/reports-ai/api/catalog/vb6-forms-grouped/')
+        .then(res => res.json())
+        .then(data => {
+            console.log('API Response:', data);
+            
+            if (data.success) {
+                // Convertir objeto a array plano
+                allVB6Forms = [];
+                for (const [category, forms] of Object.entries(data.categories)) {
+                    forms.forEach(form => {
+                        allVB6Forms.push({ name: form, category: category });
+                    });
+                }
+                
+                console.log('Total formularios cargados:', allVB6Forms.length);
+                
+                // Cargar selección actual
+                loadCurrentSelection();
+                renderModalFormsList();
+            } else {
+                listContainer.innerHTML = '<div style="text-align: center; padding: 3rem; color: #EF4444;"><div style="font-size: 2rem; margin-bottom: 1rem;">❌</div><div style="font-weight: 600; margin-bottom: 0.5rem;">Error</div><div style="font-size: 0.875rem;">' + (data.error || 'No se pudieron cargar los formularios') + '</div></div>';
+            }
+        })
+        .catch(err => {
+            console.error('Error cargando formularios:', err);
+            listContainer.innerHTML = '<div style="text-align: center; padding: 3rem; color: #EF4444;"><div style="font-size: 2rem; margin-bottom: 1rem;">⚠️</div><div style="font-weight: 600; margin-bottom: 0.5rem;">Error de conexión</div><div style="font-size: 0.875rem; color: #6b7280;">' + err.message + '</div><div style="margin-top: 1rem;"><button onclick="loadVB6FormsForModal()" style="padding: 0.5rem 1rem; background: #8B5CF6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.875rem;">🔄 Reintentar</button></div></div>';
+        });
+}
+
+function loadCurrentSelection() {
+    const textField = document.getElementById('id_vb6_forms');
+    if (!textField) return;
+    
+    const value = textField.value.trim();
+    tempSelectedForms = value ? value.split(',').map(f => f.trim()).filter(f => f) : [];
+    
+    updateSelectedCount();
+}
+
+function renderModalFormsList() {
+    const listContainer = document.getElementById('modal_forms_list');
+    
+    if (allVB6Forms.length === 0) {
+        listContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">No hay formularios disponibles</div>';
+        return;
+    }
+    
+    // Agrupar por categoría
+    const grouped = {};
+    allVB6Forms.forEach(form => {
+        if (!grouped[form.category]) {
+            grouped[form.category] = [];
+        }
+        grouped[form.category].push(form.name);
+    });
+    
+    let html = '';
+    
+    for (const [category, formNames] of Object.entries(grouped)) {
+        html += `
+            <div style="margin-bottom: 1.5rem;">
+                <div style="font-size: 0.875rem; font-weight: 700; color: #1f2937; padding: 0.75rem; background: #ffffff; border-radius: 6px; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; border-left: 4px solid #8B5CF6;">
+                    ${getCategoryIcon(category)} ${category} <span style="font-size: 0.75rem; font-weight: 400; color: #6b7280;">(${formNames.length})</span>
+                </div>
+        `;
+        
+        formNames.forEach(formName => {
+            const isSelected = tempSelectedForms.includes(formName);
+            html += `
+                <div onclick="toggleModalFormSelection('${escapeHtml(formName)}')" 
+                     data-form="${escapeHtml(formName)}"
+                     style="padding: 0.75rem; margin: 0.25rem 0; cursor: pointer; border-radius: 6px; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s; ${isSelected ? 'background: #E9D5FF; color: #7C3AED; font-weight: 600; border: 2px solid #8B5CF6;' : 'background: #ffffff; border: 2px solid transparent; color: #374151;'}"
+                     onmouseover="if(!this.querySelector('.check-icon').innerText.includes('✓')) this.style.background='#f3f4f6'"
+                     onmouseout="if(!this.querySelector('.check-icon').innerText.includes('✓')) this.style.background='#ffffff'">
+                    <span class="check-icon" style="font-size: 1rem; min-width: 20px;">${isSelected ? '✓' : '○'}</span>
+                    <span style="font-family: 'Courier New', monospace; flex: 1;">${formName}</span>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
+    
+    listContainer.innerHTML = html;
+}
+
+function getCategoryIcon(category) {
+    const icons = {
+        'Ventas': '💰',
+        'Compras': '🛒',
+        'Stock': '📦',
+        'Clientes': '👥',
+        'Cobranzas': '💵',
+        'Configuración': '⚙️',
+        'General': '📋'
+    };
+    return icons[category] || '📄';
+}
+
+function toggleModalFormSelection(formName) {
+    const index = tempSelectedForms.indexOf(formName);
+    
+    if (index > -1) {
+        tempSelectedForms.splice(index, 1);
+    } else {
+        tempSelectedForms.push(formName);
+    }
+    
+    updateSelectedCount();
+    renderModalFormsList();
+}
+
+function updateSelectedCount() {
+    const countElement = document.getElementById('selected_count');
+    if (countElement) {
+        countElement.textContent = tempSelectedForms.length;
+    }
+}
+
+function applyFormSelection() {
+    const textField = document.getElementById('id_vb6_forms');
+    if (textField) {
+        textField.value = tempSelectedForms.join(', ');
+    }
+    
+    closeFormSelector();
+}
+
+function filterModalForms() {
+    const searchValue = document.getElementById('modal_search').value.toLowerCase();
+    
+    if (!searchValue) {
+        renderModalFormsList();
+        return;
+    }
+    
+    const listContainer = document.getElementById('modal_forms_list');
+    const filtered = allVB6Forms.filter(f => f.name.toLowerCase().includes(searchValue));
+    
+    if (filtered.length === 0) {
+        listContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: #6b7280;">No se encontraron formularios con "' + searchValue + '"</div>';
+        return;
+    }
+    
+    let html = '<div style="margin-bottom: 1rem; padding: 0.75rem; font-size: 0.875rem; color: #6b7280; background: #ffffff; border-radius: 6px; border-left: 4px solid #F59E0B;">🔍 Mostrando ' + filtered.length + ' resultado(s) para "<strong style="color: #1f2937;">' + searchValue + '</strong>"</div>';
+    
+    filtered.forEach(form => {
+        const isSelected = tempSelectedForms.includes(form.name);
+        html += `
+            <div onclick="toggleModalFormSelection('${escapeHtml(form.name)}')" 
+                 style="padding: 0.75rem; margin: 0.25rem 0; cursor: pointer; border-radius: 6px; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s; ${isSelected ? 'background: #E9D5FF; color: #7C3AED; font-weight: 600; border: 2px solid #8B5CF6;' : 'background: #ffffff; border: 2px solid transparent; color: #374151;'}"
+                 onmouseover="if(!this.querySelector('.check-icon').innerText.includes('✓')) this.style.background='#f3f4f6'"
+                 onmouseout="if(!this.querySelector('.check-icon').innerText.includes('✓')) this.style.background='#ffffff'">
+                <span class="check-icon" style="font-size: 1rem; min-width: 20px;">${isSelected ? '✓' : '○'}</span>
+                <span style="font-family: 'Courier New', monospace; flex: 1;">${form.name}</span>
+                <span style="font-size: 0.75rem; color: #6b7280; background: #f3f4f6; padding: 0.25rem 0.5rem; border-radius: 4px;">${getCategoryIcon(form.category)} ${form.category}</span>
+            </div>
+        `;
+    });
+    
+    listContainer.innerHTML = html;
+}
+
+function escapeHtml(text) {
+    return text.replace(/'/g, "\\'");
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeFormSelector();
+    }
+});
+
+// Cerrar modal al hacer click en el fondo
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('form-selector-modal');
+    if (e.target === modal) {
+        closeFormSelector();
+    }
+});
+</script>
+
+{% endblock %}
+

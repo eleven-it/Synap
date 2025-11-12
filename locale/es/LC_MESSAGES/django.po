@@ -99,6 +99,15 @@ msgstr ""
 msgid "Description"
 msgstr "Descripción"
 
+msgid "Summary"
+msgstr "Resumen"
+
+msgid "Data loading..."
+msgstr "Cargando datos..."
+
+msgid "No data available."
+msgstr "No hay datos disponibles."
+
 #: accounting/forms.py:142 accounting/models.py:242
 #: accounting/templates/accounting/reports/tax_summary_report.html:103
 #: accounting/templates/accounting/reports/tax_summary_report.html:226
@@ -1392,30 +1401,13 @@ msgstr ""
 msgid "Tax Lines"
 msgstr ""
 
-#: accounting/models.py:404
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_confirm_delete.html:80
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_detail.html:71
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_list.html:141
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_list.html:177
-#: core/forms.py:141 core/models/models.py:269 core/models/models.py:298
-#: core/models/models.py:400 core/models/models.py:617
-#: core/models/models.py:657 core/models/models.py:716
-#: core/templates/core/contacts/contact_detail.html:217
-#: core/templates/core/system_config/branch_form.html:50 purchases/forms.py:141
-#: purchases/templates/purchases/suppliers/supplier_detail.html:303
-#: sales/forms.py:292 sales/templates/sales/clients/client_detail.html:290
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Country"
-msgstr ""
+msgstr "País"
 
-#: accounting/models.py:405 core/forms.py:140 core/models/models.py:268
-#: core/models/models.py:297 core/models/models.py:399
-#: core/models/models.py:667 core/models/models.py:714
-#: core/templates/core/contacts/contact_detail.html:203
-#: core/templates/core/system_config/branch_form.html:41 purchases/forms.py:139
-#: purchases/templates/purchases/suppliers/supplier_detail.html:291
-#: sales/forms.py:300 sales/templates/sales/clients/client_detail.html:297
+#: core/templates/core/system_config/empresa_detail.html
 msgid "State/Province"
-msgstr ""
+msgstr "Provincia/Estado"
 
 #: accounting/models.py:406
 msgid "Zip From"
@@ -2087,16 +2079,10 @@ msgstr ""
 msgid "Are you sure you want to delete this account?"
 msgstr ""
 
-#: accounting/templates/accounting/chart_of_accounts/account_confirm_delete.html:55
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_confirm_delete.html:55
-#: accounting/templates/accounting/fiscal_positions/fiscal_position_tax_confirm_delete.html:55
-#: inventory/templates/inventory/brand_confirm_delete.html:8
-#: inventory/templates/inventory/subcategory_confirm_delete.html:9
-#: purchases/templates/purchases/approval/level_confirm_delete.html:41
-#: purchases/templates/purchases/approval/workflow_confirm_delete.html:41
-#: tiendanube/templates/tiendanube/tiendanube_restock_rule_confirm_delete.html:41
+#: core/templates/core/system_config/empresa_list.html
+#: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "This action cannot be undone."
-msgstr ""
+msgstr "Esta acción no se puede deshacer."
 
 #: accounting/templates/accounting/chart_of_accounts/account_confirm_delete.html:62
 msgid "Account Details"
@@ -2697,15 +2683,9 @@ msgstr ""
 msgid "Manage fiscal positions and jurisdictions"
 msgstr ""
 
-#: accounting/templates/accounting/entries/entry_confirm_delete.html:5
-#: accounting/templates/accounting/entries/entry_confirm_delete.html:67
-#: core/templates/core/currency/currency_confirm_delete.html:17
-#: core/templates/core/currency/exchange_rate_confirm_delete.html:17
-#: core/templates/core/system_config/system_config_confirm_delete.html:17
-#: core/templates/core/uom/uom_confirm_delete.html:17
-#: core/views/views_uom.py:47
+#: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "Confirm Deletion"
-msgstr ""
+msgstr "Confirmar Eliminación"
 
 #: accounting/templates/accounting/entries/entry_confirm_delete.html:39
 #: accounting/templates/accounting/entries/entry_detail.html:65
@@ -5783,12 +5763,9 @@ msgstr ""
 msgid "Are you sure you want to change the status of this tax group?"
 msgstr ""
 
-#: accounting/templates/accounting/tax_groups/tax_group_list.html:360
-#: accounting/templates/accounting/tax_groups/tax_group_list.html:365
-#: accounting/templates/accounting/taxes/tax_list.html:430
-#: accounting/templates/accounting/taxes/tax_list.html:435
+#: core/templates/core/system_config/empresa_list.html
 msgid "Error updating status"
-msgstr ""
+msgstr "Error al actualizar el estado"
 
 #: accounting/templates/accounting/taxes/tax_delete.html:5
 #: accounting/templates/accounting/taxes/tax_delete.html:50
@@ -6403,33 +6380,17 @@ msgstr ""
 msgid "Website URL"
 msgstr ""
 
-#: core/forms.py:137 core/models/models.py:266 core/models/models.py:396
-#: core/models/models.py:712
-#: core/templates/core/contacts/contact_detail.html:189
-#: core/templates/core/system_config/branch_form.html:26 inventory/models.py:16
-#: inventory/templates/inventory/warehouse_form.html:16
-#: inventory/templates/inventory/warehouse_list.html:21 purchases/forms.py:137
-#: purchases/templates/purchases/suppliers/supplier_detail.html:279
-#: sales/templates/sales/clients/client_detail.html:311
-#: sales/templates/sales/clients/client_form.html:168
-#: sales/templates/sales/contacts/contact_detail.html:513
-#: sales/templates/sales/contacts/contact_form.html:319
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Address"
-msgstr ""
+msgstr "Dirección"
 
 #: core/forms.py:138
 msgid "Postal code"
 msgstr ""
 
-#: core/forms.py:139 core/models/models.py:267 core/models/models.py:296
-#: core/models/models.py:398 core/models/models.py:713
-#: core/templates/core/contacts/contact_detail.html:196
-#: core/templates/core/system_config/branch_form.html:34
-#: core/templates/core/system_config/branch_list.html:18 purchases/forms.py:138
-#: purchases/templates/purchases/suppliers/supplier_detail.html:285
-#: sales/templates/sales/clients/client_detail.html:304
+#: core/templates/core/system_config/empresa_detail.html
 msgid "City"
-msgstr ""
+msgstr "Ciudad"
 
 #: core/forms.py:156 core/models/models.py:445
 msgid "Contact must have a name or first/last name."
@@ -6618,40 +6579,13 @@ msgstr ""
 msgid "Internal Code"
 msgstr ""
 
-#: core/models/models.py:270 core/models/models.py:390
-#: core/models/models.py:721
-#: core/templates/core/contacts/contact_detail.html:138
-#: core/templates/core/contacts/contact_list.html:138
-#: core/templates/core/system_config/branch_form.html:57
-#: purchases/templates/purchases/suppliers/supplier_detail.html:127
-#: purchases/templates/purchases/suppliers/supplier_form.html:122
-#: sales/templates/sales/clients/client_confirm_delete.html:94
-#: sales/templates/sales/clients/client_detail.html:248
-#: sales/templates/sales/contacts/contact_confirm_delete.html:121
-#: sales/templates/sales/contacts/contact_detail.html:387
-#: sales/templates/sales/contacts/contact_form.html:231
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Phone"
-msgstr ""
+msgstr "Teléfono"
 
-#: core/models/models.py:271 core/models/models.py:389
-#: core/models/models.py:720
-#: core/templates/core/contacts/contact_detail.html:129
-#: core/templates/core/contacts/contact_list.html:135
-#: core/templates/core/dashboard.html:25
-#: core/templates/core/system_config/branch_form.html:65
-#: purchases/templates/purchases/suppliers/supplier_detail.html:113
-#: purchases/templates/purchases/suppliers/supplier_form.html:115
-#: sales/models.py:200
-#: sales/templates/sales/clients/client_confirm_delete.html:91
-#: sales/templates/sales/clients/client_confirm_delete.html:102
-#: sales/templates/sales/clients/client_detail.html:237
-#: sales/templates/sales/contacts/contact_confirm_delete.html:118
-#: sales/templates/sales/contacts/contact_detail.html:371
-#: sales/templates/sales/contacts/contact_form.html:225
-#: theme/templates/dashboard_apps.html:170
-#: tiendanube/templates/tiendanube/tiendanube_customer_mapping_list.html:84
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Email"
-msgstr ""
+msgstr "Email"
 
 #: core/models/models.py:273 core/models/models.py:312
 #: core/models/models.py:418 core/models/models.py:538
@@ -6680,9 +6614,9 @@ msgstr ""
 msgid "Branch"
 msgstr ""
 
-#: core/models/models.py:278
+#: core/templates/core/system_config/empresa_list.html
 msgid "Branches"
-msgstr ""
+msgstr "Sucursales"
 
 #: core/models/models.py:294
 #: inventory/templates/inventory/location_list.html:20
@@ -6762,9 +6696,9 @@ msgstr ""
 msgid "Last Name"
 msgstr ""
 
-#: core/models/models.py:384
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Company Name"
-msgstr ""
+msgstr "Nombre de la empresa"
 
 #: core/models/models.py:385
 msgid "Position/Job Title"
@@ -6787,11 +6721,9 @@ msgstr ""
 msgid "Fax"
 msgstr ""
 
-#: core/models/models.py:393 core/models/models.py:725
-#: core/templates/core/contacts/contact_detail.html:163 purchases/forms.py:152
-#: sales/templates/sales/clients/client_detail.html:270
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Website"
-msgstr ""
+msgstr "Sitio web"
 
 #: core/models/models.py:403
 msgid "Latitude"
@@ -7005,11 +6937,9 @@ msgstr ""
 msgid "Internal business entity code"
 msgstr ""
 
-#: core/models/models.py:709 purchases/forms.py:132
-#: purchases/templates/purchases/suppliers/supplier_detail.html:60
-#: sales/templates/sales/clients/client_detail.html:230
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Tax ID"
-msgstr ""
+msgstr "CUIT/RFC/NIF"
 
 #: core/models/models.py:709
 msgid "VAT number or tax identification"
@@ -7865,9 +7795,9 @@ msgstr ""
 msgid "Search action or module..."
 msgstr ""
 
-#: core/templates/core/partials/command_palette.html:35
+#: core/templates/core/system_config/empresa_detail.html
 msgid "No results"
-msgstr ""
+msgstr "Sin resultados"
 
 #: core/templates/core/partials/contact_inline_formset.html:14
 #: purchases/templates/purchases/suppliers/supplier_form.html:85
@@ -10372,9 +10302,9 @@ msgstr ""
 msgid "Sign Out"
 msgstr ""
 
-#: login/templates/login/perfil.html:197
+#: core/templates/core/system_config/empresa_detail.html
 msgid "Save Changes"
-msgstr ""
+msgstr "Guardar cambios"
 
 #: login/templates/login/register_mobile.html:12
 msgid "Synap - Register"
@@ -18535,13 +18465,6 @@ msgstr ""
 msgid "Customer synchronization to Tiendanube failed."
 msgstr ""
 
-#~ msgid ""
-#~ "Welcome to the inventory dashboard. Here you can see the current stock "
-#~ "status by product and location."
-#~ msgstr ""
-#~ "Bienvenido al dashboard de inventario. Aquí puedes ver el estado actual "
-#~ "del stock por producto y ubicación."
-
 #: core/templates/core/system_config/empresa_list.html
 #: core/templates/core/system_config/empresa_detail.html
 #: core/templates/core/system_config/empresa_confirm_delete.html
@@ -18562,36 +18485,16 @@ msgid "company"
 msgstr "empresa"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Active"
-msgstr "Activo"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Inactive"
-msgstr "Inactivo"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "Edit company"
 msgstr "Editar empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Edit"
-msgstr "Editar"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "View branches"
 msgstr "Ver sucursales"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Branches"
-msgstr "Sucursales"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "View company details"
 msgstr "Ver ficha de la empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-msgid "Details"
-msgstr "Detalles"
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Activate/deactivate company"
@@ -18602,8 +18505,11 @@ msgid "No companies registered"
 msgstr "No hay empresas registradas"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Start by creating your first company to manage your business efficiently."
-msgstr "Comienza creando tu primera empresa para gestionar tu negocio de manera eficiente."
+msgid ""
+"Start by creating your first company to manage your business efficiently."
+msgstr ""
+"Comienza creando tu primera empresa para gestionar tu negocio de manera "
+"eficiente."
 
 #: core/templates/core/system_config/empresa_list.html
 msgid "Company activated"
@@ -18614,74 +18520,16 @@ msgid "Company deactivated"
 msgstr "Empresa desactivada"
 
 #: core/templates/core/system_config/empresa_list.html
-msgid "Error updating status"
-msgstr "Error al actualizar el estado"
-
-#: core/templates/core/system_config/empresa_list.html
 msgid "Are you sure you want to delete the company"
 msgstr "¿Estás seguro de que deseas eliminar la empresa"
-
-#: core/templates/core/system_config/empresa_list.html
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "This action cannot be undone."
-msgstr "Esta acción no se puede deshacer."
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Company Name"
-msgstr "Nombre de la empresa"
 
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Business Name"
 msgstr "Razón social"
 
 #: core/templates/core/system_config/empresa_detail.html
-msgid "Country"
-msgstr "País"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "State/Province"
-msgstr "Provincia/Estado"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "City"
-msgstr "Ciudad"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Address"
-msgstr "Dirección"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Phone"
-msgstr "Teléfono"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Email"
-msgstr "Email"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Website"
-msgstr "Sitio web"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Tax ID"
-msgstr "CUIT/RFC/NIF"
-
-#: core/templates/core/system_config/empresa_detail.html
 msgid "Tax Responsibility Type"
 msgstr "Tipo de responsabilidad"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Currency"
-msgstr "Moneda"
-
-#: core/templates/core/system_config/empresa_detail.html
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "Cancel"
-msgstr "Cancelar"
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "Save Changes"
-msgstr "Guardar cambios"
 
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Create Company"
@@ -18698,14 +18546,6 @@ msgstr "Solo se permiten archivos de imagen (JPG, PNG, SVG, etc)."
 #: core/templates/core/system_config/empresa_detail.html
 msgid "Searching..."
 msgstr "Buscando..."
-
-#: core/templates/core/system_config/empresa_detail.html
-msgid "No results"
-msgstr "Sin resultados"
-
-#: core/templates/core/system_config/empresa_confirm_delete.html
-msgid "Confirm Deletion"
-msgstr "Confirmar Eliminación"
 
 #: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "Delete company?"
@@ -18734,3 +18574,10 @@ msgstr "Esta acción es permanente"
 #: core/templates/core/system_config/empresa_confirm_delete.html
 msgid "Yes, delete company"
 msgstr "Sí, eliminar empresa"
+
+#~ msgid ""
+#~ "Welcome to the inventory dashboard. Here you can see the current stock "
+#~ "status by product and location."
+#~ msgstr ""
+#~ "Bienvenido al dashboard de inventario. Aquí puedes ver el estado actual "
+#~ "del stock por producto y ubicación."

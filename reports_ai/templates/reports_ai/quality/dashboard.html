@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans 'Quality Dashboard' %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            📊 {% trans 'Data Analyst Quality Dashboard' %}
+        </h1>
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+            {% trans 'Métricas de calidad, relaciones descubiertas y queries problemáticas' %}
+        </p>
+    </div>
+
+    <!-- Period Selector -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6">
+        <form method="get" class="flex items-center gap-4">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {% trans 'Período:' %}
+            </label>
+            <select name="period" onchange="this.form.submit()" 
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <option value="7" {% if period_days == 7 %}selected{% endif %}>{% trans 'Últimos 7 días' %}</option>
+                <option value="30" {% if period_days == 30 %}selected{% endif %}>{% trans 'Últimos 30 días' %}</option>
+                <option value="90" {% if period_days == 90 %}selected{% endif %}>{% trans 'Últimos 90 días' %}</option>
+                <option value="365" {% if period_days == 365 %}selected{% endif %}>{% trans 'Último año' %}</option>
+            </select>
+        </form>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <!-- Hit Rate -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans 'Hit Rate' %}</h3>
+                <span class="text-2xl">🎯</span>
+            </div>
+            <div class="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {{ metrics.hit_rate|floatformat:1 }}%
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {% trans 'Queries con join paths correctos' %}
+            </p>
+        </div>
+
+        <!-- Avg Execution Time -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans 'Tiempo Promedio' %}</h3>
+                <span class="text-2xl">⏱️</span>
+            </div>
+            <div class="text-3xl font-bold text-green-600 dark:text-green-400">
+                {{ metrics.avg_execution_time|floatformat:2 }}s
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {% trans 'Ejecución de queries' %}
+            </p>
+        </div>
+
+        <!-- Correction Rate -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans 'Tasa de Corrección' %}</h3>
+                <span class="text-2xl">✏️</span>
+            </div>
+            <div class="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                {{ metrics.correction_rate|floatformat:1 }}%
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {% trans 'Queries que necesitaron corrección' %}
+            </p>
+        </div>
+
+        <!-- Coverage -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans 'Cobertura' %}</h3>
+                <span class="text-2xl">📈</span>
+            </div>
+            <div class="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                {{ metrics.coverage|floatformat:1 }}%
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {% trans 'Tablas con relaciones mapeadas' %}
+            </p>
+        </div>
+    </div>
+
+    <!-- Relationship Quality -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            🔗 {% trans 'Calidad de Relaciones' %}
+        </h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {{ metrics.relationship_quality.total }}
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Total Relaciones' %}</div>
+            </div>
+            
+            <div class="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {{ metrics.relationship_quality.high_confidence }}
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Alta Confianza (≥0.8)' %}</div>
+            </div>
+            
+            <div class="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                    {{ metrics.relationship_quality.avg_confidence|floatformat:2 }}
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">{% trans 'Confianza Promedio' %}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Relationships -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                ⭐ {% trans 'Top 10 Relaciones Más Usadas' %}
+            </h2>
+            <a href="{% url 'reports_ai:relationships_list' %}" 
+               class="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs font-medium">
+                {% trans 'Ver Todas' %} →
+            </a>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            {% trans 'Relación' %}
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            {% trans 'Tipo' %}
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            {% trans 'Confianza' %}
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            {% trans 'Usos' %}
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">
+                            {% trans 'Estado' %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for rel in top_relationships %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <td class="px-4 py-3 text-sm">
+                            <div class="font-medium text-gray-900 dark:text-white">
+                                {{ rel.source_table }}.{{ rel.source_column }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                → {{ rel.target_table }}.{{ rel.target_column }}
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                                {% if rel.cardinality == '1:N' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200
+                                {% elif rel.cardinality == 'N:1' %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                {% elif rel.cardinality == '1:1' %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200
+                                {% else %}bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                                {{ rel.get_cardinality_display }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            <div class="flex items-center">
+                                <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mr-2">
+                                    <div class="bg-blue-600 h-2 rounded-full" style="width: {% widthratio rel.confidence_score 1 100 %}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-600 dark:text-gray-400">{{ rel.confidence_score|floatformat:2 }}</span>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                            {{ rel.times_used_successfully }}
+                        </td>
+                        <td class="px-4 py-3 text-sm">
+                            {% if rel.validated_by_human %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                    ✓ {% trans 'Validada' %}
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                    ⏳ {% trans 'Pendiente' %}
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                            {% trans 'No hay relaciones registradas aún' %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Problematic Queries -->
+    {% if problematic_queries %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            ⚠️ {% trans 'Queries Problemáticas' %}
+        </h2>
+        
+        <div class="space-y-3">
+            {% for query in problematic_queries %}
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                            {{ query.original_query|truncatewords:15 }}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {{ query.corrected_at|date:"d M Y H:i" }}
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                        {{ query.get_correction_type_display }}
+                    </span>
+                </div>
+                <p class="text-xs text-gray-600 dark:text-gray-400">
+                    {{ query.correction_notes|truncatewords:20 }}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="mt-6 flex gap-4">
+        <a href="{% url 'reports_ai:corrections_list' %}" 
+           class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+            📝 {% trans 'Ver Todas las Correcciones' %}
+        </a>
+        <a href="{% url 'reports_ai:data_analyst_training' %}" 
+           class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+            🤖 {% trans 'Entrenar Data Analyst' %}
+        </a>
+    </div>
+</div>
+{% endblock %}
+

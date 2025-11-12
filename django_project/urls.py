@@ -76,6 +76,7 @@ urlpatterns.extend([
 urlpatterns.extend([
     path('finance/', include('finance.urls', namespace='finance')),
     path('support/', include('support_ai.urls', namespace='support_ai')),
+    path('reports/', include('reports.urls', namespace='reports')),
 ])
 
 # Logistics API
@@ -86,4 +87,10 @@ urlpatterns.extend([
 # Finance API
 urlpatterns.extend([
     path('api/finance/', include('finance.api_urls')),
+    path('api/reports/', include('reports.api_urls', namespace='reports-api')),
+])
+
+# Reports AI (Sistema de Reportes Multiagente)
+urlpatterns.extend([
+    path('reports-ai/', include('reports_ai.urls', namespace='reports_ai')),
 ])

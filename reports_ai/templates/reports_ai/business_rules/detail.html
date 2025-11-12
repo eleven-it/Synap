@@ -1,0 +1,583 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+{% load training_filters %}
+
+{% block title %}{{ rule.name }} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ai-primary: #8B5CF6;
+        --ai-secondary: #6366F1;
+        --ai-accent: #EC4899;
+        --ai-success: #10B981;
+    }
+
+    .hero-header {
+        background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .content-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(139, 92, 246, 0.1);
+    }
+
+    .card-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #1F2937;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-title i {
+        color: var(--ai-primary);
+    }
+
+    .info-row {
+        display: flex;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #F3F4F6;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: #6B7280;
+        font-size: 0.875rem;
+        min-width: 120px;
+    }
+
+    .info-value {
+        color: #1F2937;
+        font-size: 0.875rem;
+        flex: 1;
+    }
+
+    .logic-box {
+        background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
+        border-left: 4px solid var(--ai-primary);
+        border-radius: 8px;
+        padding: 1.25rem;
+        margin-top: 1rem;
+    }
+
+    .logic-box h6 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--ai-primary);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .logic-box p {
+        color: #374151;
+        line-height: 1.6;
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .meta-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-right: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .tag-category { background: #EEF2FF; color: #6366F1; }
+    .tag-module { background: #F3E8FF; color: #8B5CF6; }
+    .tag-priority-low { background: #D1FAE5; color: #059669; }
+    .tag-priority-medium { background: #FEF3C7; color: #D97706; }
+    .tag-priority-high { background: #FEE2E2; color: #DC2626; }
+    .tag-priority-critical { background: #FEE2E2; color: #B91C1C; }
+
+    .action-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1.5rem;
+        border: 1px solid #E5E7EB;
+    }
+
+    .btn-ai {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 0.75rem;
+    }
+
+    .btn-ai-primary {
+        background: linear-gradient(135deg, var(--ai-primary), var(--ai-secondary));
+        color: white;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .btn-ai-secondary {
+        background: linear-gradient(135deg, #10B981, #059669);
+        color: white;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-ai-warning {
+        background: linear-gradient(135deg, #F59E0B, #D97706);
+        color: white;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+    }
+
+    .btn-ai-danger {
+        background: white;
+        color: #DC2626;
+        border: 1px solid #DC2626;
+    }
+
+    .btn-ai:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        color: white;
+    }
+
+    .btn-ai-danger:hover {
+        background: #DC2626;
+        color: white;
+    }
+
+    .related-rule {
+        background: #F9FAFB;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: 1px solid #E5E7EB;
+    }
+
+    .related-rule:hover {
+        border-color: var(--ai-primary);
+        background: white;
+        transform: translateX(4px);
+    }
+
+    .related-rule-title {
+        font-weight: 600;
+        color: var(--ai-primary);
+        font-size: 0.875rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .related-rule-desc {
+        color: #6B7280;
+        font-size: 0.75rem;
+    }
+
+    .stats-box {
+        background: linear-gradient(135deg, #F3E8FF, #EEF2FF);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+
+    .stat-item {
+        margin-bottom: 1rem;
+    }
+
+    .stat-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1F2937;
+    }
+
+    .source-info {
+        background: #F9FAFB;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.75rem;
+        color: #374151;
+    }
+
+    @media (max-width: 768px) {
+        .hero-header {
+            padding: 1.5rem;
+        }
+
+        .info-row {
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .info-label {
+            min-width: auto;
+        }
+
+        .btn-ai {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Hero Header -->
+    <div class="hero-header">
+        <div style="position: relative; z-index: 1;">
+            <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">
+                <i class="fas fa-book-open"></i>
+                {{ rule.name }}
+            </div>
+            <div style="opacity: 0.9; font-size: 1rem; margin-bottom: 1rem;">
+                {{ rule.description|truncatechars:150 }}
+            </div>
+            <div class="status-badge">
+                {% if rule.is_active %}
+                    <i class="fas fa-check-circle"></i>
+                    {% trans "Active" %}
+                {% else %}
+                    <i class="fas fa-pause-circle"></i>
+                    {% trans "Inactive" %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Rule Information -->
+            <div class="content-card">
+                <div class="card-title">
+                    <i class="fas fa-info-circle"></i>
+                    {% trans "Rule Information" %}
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Name:" %}</div>
+                    <div class="info-value">{{ rule.name }}</div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Category:" %}</div>
+                    <div class="info-value">
+                        <span class="meta-tag tag-category">
+                            <i class="fas fa-tag"></i>
+                            {{ rule.get_category_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Module:" %}</div>
+                    <div class="info-value">
+                        <span class="meta-tag tag-module">
+                            <i class="fas fa-cube"></i>
+                            {{ rule.module }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Priority:" %}</div>
+                    <div class="info-value">
+                        <span class="meta-tag tag-priority-{{ rule.priority }}">
+                            <i class="fas fa-flag"></i>
+                            {{ rule.get_priority_display }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Description:" %}</div>
+                    <div class="info-value">{{ rule.description }}</div>
+                </div>
+
+                {% if rule.business_procedure %}
+                <div class="info-row">
+                    <div class="info-label">{% trans "Business Procedure:" %}</div>
+                    <div class="info-value" style="white-space: pre-line; background: #F9FAFB; padding: 1rem; border-radius: 8px; border-left: 4px solid #8B5CF6;">
+                        {{ rule.business_procedure }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="info-row">
+                    <div class="info-label">{% trans "Status:" %}</div>
+                    <div class="info-value">
+                        {% if rule.is_active %}
+                            <span style="color: var(--ai-success);">
+                                <i class="fas fa-check-circle"></i>
+                                {% trans "Active and being used by AI agents" %}
+                            </span>
+                        {% else %}
+                            <span style="color: #6B7280;">
+                                <i class="fas fa-pause-circle"></i>
+                                {% trans "Inactive - not being used" %}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rule Logic -->
+            <div class="content-card">
+                <div class="card-title">
+                    <i class="fas fa-cogs"></i>
+                    {% trans "Rule Logic" %}
+                </div>
+
+                <div class="logic-box">
+                    <h6>
+                        <i class="fas fa-exclamation-triangle"></i>
+                        {% trans "Conditions" %}
+                    </h6>
+                    <p>{{ rule.conditions|linebreaks }}</p>
+                </div>
+
+                <div class="logic-box" style="margin-top: 1rem;">
+                    <h6>
+                        <i class="fas fa-bolt"></i>
+                        {% trans "Actions" %}
+                    </h6>
+                    <p>{{ rule.actions|linebreaks }}</p>
+                </div>
+            </div>
+
+            <!-- Source Information -->
+            {% if rule.source_file or rule.source_line %}
+            <div class="content-card">
+                <div class="card-title">
+                    <i class="fas fa-code"></i>
+                    {% trans "Source Information" %}
+                </div>
+
+            {% if rule.source_file %}
+            <div style="margin-bottom: 1rem;">
+                <div class="info-label" style="margin-bottom: 0.5rem;">{% trans "Source File:" %}</div>
+                <div class="source-info">{{ rule.source_file }}</div>
+            </div>
+            {% endif %}
+
+            {% if rule.source_function %}
+            <div style="margin-bottom: 1rem;">
+                <div class="info-label" style="margin-bottom: 0.5rem;">{% trans "Function/Procedure:" %}</div>
+                <div class="source-info" style="font-family: Monaco, monospace; color: #8B5CF6; font-weight: 600;">
+                    {{ rule.source_function }}()
+                </div>
+            </div>
+            {% endif %}
+
+            {% if rule.source_line %}
+            <div>
+                <div class="info-label" style="margin-bottom: 0.5rem;">{% trans "Line Number:" %}</div>
+                <div class="source-info">Line {{ rule.source_line }}</div>
+            </div>
+            {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Tags -->
+            {% if rule.tags %}
+            <div class="content-card">
+                <div class="card-title">
+                    <i class="fas fa-tags"></i>
+                    {% trans "Tags" %}
+                </div>
+                <div>
+                    {% with tags=rule.tags|split:"," %}
+                        {% for tag in tags %}
+                            {% if tag.strip %}
+                            <span class="meta-tag" style="background: #F3F4F6; color: #374151;">
+                                <i class="fas fa-tag"></i>
+                                {{ tag.strip }}
+                            </span>
+                            {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="action-card">
+                <div class="card-title">
+                    <i class="fas fa-bolt"></i>
+                    {% trans "Quick Actions" %}
+                </div>
+
+                <a href="{% url 'reports_ai:business_rule_edit' rule.id %}" class="btn-ai btn-ai-primary">
+                    <i class="fas fa-edit"></i>
+                    {% trans "Edit Rule" %}
+                </a>
+
+                <a href="{% url 'reports_ai:business_rule_duplicate' rule.id %}" class="btn-ai btn-ai-secondary">
+                    <i class="fas fa-copy"></i>
+                    {% trans "Duplicate Rule" %}
+                </a>
+
+                <a href="{% url 'reports_ai:business_rule_toggle_active' rule.id %}" class="btn-ai btn-ai-warning">
+                    <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
+                    {% if rule.is_active %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+                </a>
+
+                <a href="{% url 'reports_ai:business_rules_list' %}" class="btn-ai" style="background: white; color: #374151; border: 1px solid #D1D5DB;">
+                    <i class="fas fa-arrow-left"></i>
+                    {% trans "Back to List" %}
+                </a>
+
+                <hr style="margin: 1rem 0;">
+
+                <a href="{% url 'reports_ai:business_rule_delete' rule.id %}" class="btn-ai btn-ai-danger" onclick="return confirm('{% trans "Are you sure?" %}')">
+                    <i class="fas fa-trash"></i>
+                    {% trans "Delete Rule" %}
+                </a>
+            </div>
+
+            <!-- Statistics -->
+            <div class="stats-box">
+                <div class="stat-item">
+                    <div class="stat-label">{% trans "Created" %}</div>
+                    <div class="stat-value">{{ rule.created_at|date:"M d, Y" }}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">{% trans "Last Updated" %}</div>
+                    <div class="stat-value">{{ rule.updated_at|date:"M d, Y" }}</div>
+                </div>
+                {% if rule.created_by %}
+                <div class="stat-item">
+                    <div class="stat-label">{% trans "Created By" %}</div>
+                    <div class="stat-value">{{ rule.created_by.get_full_name|default:rule.created_by.email }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Related Rules -->
+            {% if related_rules %}
+            <div class="action-card">
+                <div class="card-title">
+                    <i class="fas fa-link"></i>
+                    {% trans "Related Rules" %}
+                </div>
+
+                {% for related in related_rules %}
+                <div class="related-rule" onclick="window.location.href='{% url 'reports_ai:business_rule_detail' related.id %}'">
+                    <div class="related-rule-title">
+                        {{ related.name }}
+                    </div>
+                    <div class="related-rule-desc">
+                        {{ related.description|truncatechars:60 }}
+                    </div>
+                    <div style="margin-top: 0.5rem;">
+                        <span style="font-size: 0.65rem; color: #6B7280; margin-right: 0.5rem;">
+                            <i class="fas fa-tag"></i> {{ related.get_category_display }}
+                        </span>
+                        <span style="font-size: 0.65rem; color: #6B7280;">
+                            <i class="fas fa-cube"></i> {{ related.module }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div class="text-center mt-3">
+                    <a href="{% url 'reports_ai:business_rules_list' %}?module={{ rule.module }}" class="btn-ai btn-ai-primary" style="width: auto; display: inline-flex;">
+                        <i class="fas fa-search"></i>
+                        {% trans "View All in Module" %}
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block reports_ai_extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth transitions
+    document.querySelectorAll('.content-card, .action-card').forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = `all 0.3s ease ${index * 0.1}s`;
+
+        setTimeout(() => {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, 100);
+    });
+});
+</script>
+{% endblock %}

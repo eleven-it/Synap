@@ -114,6 +114,8 @@ def menu_context(request):
             current_app_id = 'accounting'
         elif app_name == 'administraNET_integration':
             current_app_id = 'administraNET_integration'
+        elif app_name == 'reports':
+            current_app_id = 'reports'
     
     # Obtener submenús de la app actual con permisos procesados
     current_sidebar_items = []

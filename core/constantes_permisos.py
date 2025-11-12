@@ -119,6 +119,8 @@ PERMISOS_POR_MODULO = {
         ("finance.exportar", "Exportar datos financieros"),
     ],
     "Reportes": [
+        ("reports.view_operational", "Informes operativos"),
+        ("reports.view_managerial", "Informes gerenciales"),
         ("reports.ver", "Ver reportes"),
         ("reports.crear", "Crear reportes personalizados"),
         ("reports.editar", "Editar reportes"),

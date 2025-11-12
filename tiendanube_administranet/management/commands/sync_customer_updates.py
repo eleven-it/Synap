@@ -124,3 +124,4 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR(f"❌ Error inesperado durante la sincronización: {e}"))
 
 
+

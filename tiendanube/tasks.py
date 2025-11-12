@@ -1,16 +1,20 @@
 from celery import shared_task
 from .models import TiendaNubeConfig, TiendaNubeSyncLog
-from .services import TiendaNubeService
+# from .services import TiendaNubeService  # REMOVIDO: Este import causaba error en Celery
 from django.utils import timezone
 import logging
 from tiendanube.models import TiendaNubeProductMapping
 from inventory.models import Product
-from tiendanube.models_adminet import TiendaNubeCondVentaMap, TiendaNubeAdminetConfig
+# from tiendanube.models_adminet import TiendaNubeCondVentaMap, TiendaNubeAdminetConfig  # REMOVIDO: módulo no existe
 from tiendanube.services.connection_service import MySQLConnectionService
 
 logger = logging.getLogger(__name__)
 
 def get_tiendanube_service(config=None):
+    """
+    Obtiene una instancia de TiendaNubeService
+    Import dinámico para evitar errores de importación circular
+    """
     if config is None:
         config = TiendaNubeConfig.objects.first()
     from .services_main import TiendaNubeService

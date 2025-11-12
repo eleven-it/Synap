@@ -1,0 +1,4 @@
+"""
+Tests para Reports AI
+"""
+

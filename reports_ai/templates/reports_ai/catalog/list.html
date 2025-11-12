@@ -1,0 +1,155 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Functional Catalog" %} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<!-- Header -->
+<div style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 3rem;">📚</span>
+            <div>
+                <h1 style="margin: 0; font-size: 1.75rem; font-weight: 700;">{% trans "Catálogo Funcional" %}</h1>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.875rem;">
+                    {% trans "Gestiona procedimientos clave para entrenamiento guiado" %}
+                </p>
+            </div>
+        </div>
+        
+        <a href="{% url 'reports_ai:catalog_create' %}" style="padding: 0.75rem 1.5rem; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none; transition: all 0.2s;"
+           onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+           onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+            <span style="margin-right: 0.5rem;">➕</span>
+            {% trans "Nueva Entrada" %}
+        </a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid #8B5CF6;">
+        <div style="font-size: 2rem; font-weight: 700; color: #8B5CF6; margin-bottom: 0.5rem;">{{ total_entries }}</div>
+        <div style="font-size: 0.8125rem; color: var(--text-secondary);">Total de Procedimientos</div>
+    </div>
+    
+    <div style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; border-left: 4px solid #10B981;">
+        <div style="font-size: 2rem; font-weight: 700; color: #10B981; margin-bottom: 0.5rem;">{{ modules|length }}</div>
+        <div style="font-size: 0.8125rem; color: var(--text-secondary);">Módulos Documentados</div>
+    </div>
+</div>
+
+<!-- List by Module -->
+{% for module, module_entries in modules.items %}
+<div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+    <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 1.5rem;">
+            {% if module == "Ventas" %}💰{% elif module == "Stock" %}📦{% elif module == "Clientes" %}👥{% elif module == "Compras" %}🛒{% else %}⚙️{% endif %}
+        </span>
+        {{ module }}
+        <span style="padding: 0.25rem 0.75rem; background: var(--bg-secondary); border-radius: 20px; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">
+            {{ module_entries|length }} procedimiento{{ module_entries|length|pluralize }}
+        </span>
+    </h2>
+    
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        {% for entry in module_entries %}
+        <div style="padding: 1.5rem; background: var(--bg-secondary); border-radius: 10px; border-left: 4px solid #F59E0B; transition: all 0.2s; cursor: pointer;"
+             onclick="location.href='{% url 'reports_ai:catalog_detail' entry.id %}'"
+             onmouseover="this.style.transform='translateX(4px)'; this.style.borderLeftColor='#8B5CF6'"
+             onmouseout="this.style.transform='translateX(0)'; this.style.borderLeftColor='#F59E0B'">
+            
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                <div style="flex: 1;">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">
+                        {{ entry.procedure }}
+                    </h3>
+                    <p style="font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 0.75rem;">
+                        {{ entry.description|truncatewords:30 }}
+                    </p>
+                </div>
+                
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span style="padding: 0.375rem 0.75rem; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border-radius: 6px; font-size: 0.75rem; font-weight: 700;">
+                        ⭐ {{ entry.priority }}/10
+                    </span>
+                    <span style="padding: 0.375rem 0.75rem; background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; border-radius: 6px; font-size: 0.75rem; font-weight: 700;">
+                        {{ entry.confidence|floatformat:2 }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Metadata -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">FORMULARIOS VB6</div>
+                    <div style="font-size: 0.8125rem; color: var(--text-primary); font-family: 'Courier New', monospace;">
+                        {{ entry.vb6_forms }}
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">ENTIDADES</div>
+                    <div style="font-size: 0.8125rem; color: var(--text-primary);">
+                        {{ entry.get_entities_list|length }} entidades
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">TABLAS</div>
+                    <div style="font-size: 0.8125rem; color: var(--text-primary);">
+                        {{ entry.get_tables_list|length }} tablas
+                    </div>
+                </div>
+                
+                <div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.25rem;">ÚLTIMA REVISIÓN</div>
+                    <div style="font-size: 0.8125rem; color: var(--text-primary);">
+                        {{ entry.last_revision|date:"d/m/Y" }}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <a href="{% url 'reports_ai:catalog_edit' entry.id %}" onclick="event.stopPropagation()" style="padding: 0.5rem 1rem; background: #3B82F6; color: white; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-decoration: none;">
+                    ✏️ Editar
+                </a>
+                <button onclick="event.stopPropagation(); trainSingleEntry({{ entry.id }}, '{{ entry.module }}', '{{ entry.procedure }}')" style="padding: 0.5rem 1rem; background: #8B5CF6; color: white; border-radius: 6px; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer;">
+                    🚀 Entrenar Solo Este
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% if not entries %}
+<div style="text-align: center; padding: 4rem; color: var(--text-secondary);">
+    <div style="font-size: 4rem; margin-bottom: 1rem;">📭</div>
+    <div style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">
+        No hay entradas en el catálogo
+    </div>
+    <div style="font-size: 0.875rem; margin-bottom: 2rem;">
+        Crea tu primera entrada para empezar el entrenamiento guiado
+    </div>
+    <a href="{% url 'reports_ai:catalog_create' %}" style="padding: 0.75rem 2rem; background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%); color: white; border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none; display: inline-block;">
+        ➕ Nueva Entrada
+    </a>
+</div>
+{% endif %}
+
+<script>
+function trainSingleEntry(entryId, module, procedure) {
+    if (confirm(`¿Entrenar el procedimiento "${module} - ${procedure}"?`)) {
+        // Redirigir al entrenamiento con este entry pre-seleccionado
+        window.location.href = `/reports-ai/train/logic-interpreter/?entry=${entryId}`;
+    }
+}
+</script>
+
+{% endblock %}
+

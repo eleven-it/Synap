@@ -176,3 +176,4 @@ class SyncUpdatesAjaxView(LoginRequiredMixin, View):
             })
 
 
+

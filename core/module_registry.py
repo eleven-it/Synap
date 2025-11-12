@@ -547,6 +547,38 @@ MODULE_CONFIGS = {
             'finance.report_generated',
         ]
     },
+    'reports': {
+        'name': 'reports',
+        'display_name': 'Reports & Dashboards',
+        'description': 'Operational and managerial analytics with interactive dashboards, caching and exports.',
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['sales', 'inventory', 'finance', 'purchases', 'logistics'],
+        'settings': {
+            'catalog_refresh_minutes': 60,
+            'default_cache_ttl': 900,
+            'max_rows': 20000,
+            'schedule_daily_refresh': '05:30',
+            'schedule_weekly_refresh': 'mon-06:00',
+        },
+        'permissions': [
+            'reports.ver',
+            'reports.view_operational',
+            'reports.view_managerial',
+            'reports.exportar',
+            'reports.dashboard',
+            'reports.builder',
+            'reports.programar',
+        ],
+        'hooks': [
+            'reports.catalog_updated',
+            'reports.dashboard_shared',
+            'reports.export_created',
+        ]
+    },
     
     'tiendanube_administranet': {
         'name': 'tiendanube_administranet',
@@ -600,6 +632,57 @@ MODULE_CONFIGS = {
             'tiendanube_administranet.post_order_sync',
             'tiendanube_administranet.sync_error',
             'tiendanube_administranet.sync_completed',
+        ]
+    },
+    
+    'reports_ai': {
+        'name': 'reports_ai',
+        'display_name': 'Reports AI (CrewAI)',
+        'description': 'Sistema multiagente de reportes para Administranet Gestión basado en CrewAI y OpenAI GPT-4. Genera reportes verídicos sin exponer detalles técnicos.',
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core'],
+        'optional_dependencies': ['administraNET_integration'],
+        'settings': {
+            'enable_webhooks': True,
+            'enable_dashboard': True,
+            'default_temperature': 0.3,
+            'max_tokens_per_request': 10000,
+            'enable_vb6_analysis': True,
+            'enable_glossary_training': True,
+            'cache_reports': True,
+            'cache_timeout': 3600,
+        },
+        'permissions': [
+            'reports_ai.view_reports',
+            'reports_ai.generate_reports',
+            'reports_ai.configure_reports_ai',
+            'reports_ai.view_agent_metrics',
+            'reports_ai.manage_business_rules',
+            'reports_ai.access_webhooks',
+            'reports_ai.view_reportrequest',
+            'reports_ai.add_reportrequest',
+            'reports_ai.change_reportrequest',
+            'reports_ai.delete_reportrequest',
+            'reports_ai.view_businessrule',
+            'reports_ai.add_businessrule',
+            'reports_ai.change_businessrule',
+            'reports_ai.delete_businessrule',
+            'reports_ai.view_glossaryterm',
+            'reports_ai.add_glossaryterm',
+            'reports_ai.change_glossaryterm',
+            'reports_ai.delete_glossaryterm',
+            'reports_ai.view_agentmetrics',
+        ],
+        'hooks': [
+            'reports_ai.pre_report_generate',
+            'reports_ai.post_report_generate',
+            'reports_ai.report_error',
+            'reports_ai.agent_invoked',
+            'reports_ai.validation_failed',
+            'reports_ai.hallucination_detected',
         ]
     }
 } 

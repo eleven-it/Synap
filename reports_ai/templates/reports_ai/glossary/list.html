@@ -1,0 +1,106 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Glossary" %} - Reports AI{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ai-primary: #8B5CF6;
+        --ai-secondary: #6366F1;
+    }
+
+    .hero-header {
+        background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+    }
+
+    .glossary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .term-card {
+        background: white;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 1.5rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .term-card:hover {
+        border-color: #10B981;
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.15);
+    }
+
+    .term-title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #10B981;
+        margin-bottom: 0.75rem;
+    }
+
+    .term-definition {
+        font-size: 0.875rem;
+        color: #374151;
+        line-height: 1.6;
+        margin-bottom: 0.75rem;
+    }
+
+    .term-meta {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .meta-tag {
+        padding: 0.375rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #F3F4F6;
+        color: #6B7280;
+    }
+</style>
+{% endblock %}
+
+{% block reports_ai_content %}
+<div class="container-fluid px-4 py-3">
+    <div class="hero-header">
+        <div style="font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem;">
+            <i class="fas fa-book-open"></i>
+            {% trans "Glossary" %}
+        </div>
+        <div style="opacity: 0.9;">
+            {% trans "Technical terms dictionary for Administranet" %}
+        </div>
+    </div>
+
+    <div class="glossary-grid">
+        {% if page_obj %}
+            {% for term in page_obj %}
+            <div class="term-card" onclick="window.location.href='{% url 'reports_ai:glossary_term_detail' term.id %}'">
+                <div class="term-title">{{ term.term }}</div>
+                <div class="term-definition">{{ term.definition|truncatechars:120 }}</div>
+                <div class="term-meta">
+                    <span class="meta-tag">{{ term.category }}</span>
+                    {% if term.is_active %}
+                    <span class="meta-tag" style="background: #D1FAE5; color: #059669;">
+                        <i class="fas fa-check"></i> {% trans "Active" %}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

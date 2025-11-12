@@ -1,0 +1,468 @@
+{% extends "reports_ai/reports_ai_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Train Data Analyst Agent" %} - Synap{% endblock %}
+
+{% block reports_ai_content %}
+
+<!-- Hero Header -->
+<div style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; color: white;">
+    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
+        <span style="font-size: 3rem;">🤖</span>
+        <div>
+            <h1 style="margin: 0; font-size: 1.75rem; font-weight: 700;">{% trans "Train Data Analyst V2 with Active Learning" %}</h1>
+            <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.875rem;">
+                {% trans "Entrenar el agente con correcciones humanas para mejorar generación de SQL automáticamente" %}
+            </p>
+            <div style="margin-top: 0.75rem; padding: 0.5rem 1rem; background: rgba(255,255,255,0.1); border-radius: 6px; font-size: 0.75rem;">
+                <span style="font-weight: 600;">🎯 Active Learning:</span> El agente aprende de correcciones marcadas como "applied" (6 tipos de learnings)
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuration Panel (before start) -->
+<div id="config-panel" class="training-config">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+            ⚙️ {% trans "Configuración del Entrenamiento" %}
+        </h2>
+        
+        <form id="training-form">
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary);">
+                    {% trans "Selecciona Componentes a Entrenar:" %}
+                </label>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                    <!-- Entrenar con Correcciones -->
+                    <label style="display: flex; align-items: start; gap: 0.75rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;" class="component-checkbox">
+                        <input type="checkbox" name="apply_active_learning" value="true" checked style="width: 18px; height: 18px; margin-top: 2px;" disabled>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <span style="font-size: 1.5rem;">🧠</span>
+                                <span style="font-size: 0.875rem; font-weight: 600;">{% trans "Entrenar con Correcciones" %}</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                                Aplica learnings de correcciones humanas marcadas como "applied" (siempre activo)
+                            </div>
+                        </div>
+                    </label>
+                    
+                    <!-- Cargar Schema -->
+                    <label style="display: flex; align-items: start; gap: 0.75rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;" class="component-checkbox">
+                        <input type="checkbox" name="load_schema" value="true" checked style="width: 18px; height: 18px; margin-top: 2px;" disabled>
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                                <span style="font-size: 1.5rem;">📊</span>
+                                <span style="font-size: 0.875rem; font-weight: 600;">{% trans "Cargar Schema Completo" %}</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.4;">
+                                Analiza 463 tablas y 6,464 columnas del schema real de MySQL (siempre activo)
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                <button type="submit" id="btn-start" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: white; padding: 0.75rem 2rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: transform 0.2s; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                    <span style="margin-right: 0.5rem;">🚀</span>
+                    {% trans "Iniciar Entrenamiento Completo" %}
+                </button>
+                
+                <div style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.5;">
+                    <div>⏱️ {% trans "Duración estimada:" %}</div>
+                    <div style="margin-left: 1.5rem; margin-top: 0.25rem;">
+                        • Cargar schema: ~0.5s<br>
+                        • Procesar correcciones: ~1-5s<br>
+                        • Aplicar learnings: ~1-2s<br>
+                        • <strong>Total: ~3-8s</strong>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Info sobre el entrenamiento -->
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #DBEAFE; border-left: 4px solid #3B82F6; border-radius: 6px;">
+                <div style="font-size: 0.8125rem; color: #1E40AF; line-height: 1.6;">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem;">📋 El sistema aprenderá:</div>
+                    <div style="margin-left: 1rem;">
+                        ✅ Keywords → Tablas (mapeo de términos de negocio)<br>
+                        ✅ Relaciones entre tablas (cuándo usar JOINs)<br>
+                        ✅ Columnas a evitar (que NO existen)<br>
+                        ✅ Columnas preferidas (para búsquedas y filtros)<br>
+                        ✅ Patrones de JOIN (cómo conectar tablas)<br>
+                        ✅ Patrones de filtros (WHERE correctos)
+                    </div>
+                    <div style="margin-top: 0.75rem; font-size: 0.75rem; font-style: italic;">
+                        💡 Crea correcciones en <a href="{% url 'reports_ai:corrections_list' %}" style="color: #3B82F6; text-decoration: underline;">/reports-ai/corrections/</a> y márcalas como "applied" para que el agente aprenda
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Training Progress Panel (hidden initially) -->
+<div id="progress-panel" style="display: none;">
+    <!-- Header con estado -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="font-size: 1.25rem; font-weight: 700; margin: 0; color: var(--text-primary);">
+                🔄 {% trans "Entrenamiento en Progreso" %}
+            </h2>
+            <button id="btn-cancel" style="background: #EF4444; color: white; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; border: none; cursor: pointer;">
+                ⏹️ {% trans "Cancelar" %}
+            </button>
+        </div>
+        
+        <!-- Barra de progreso -->
+        <div style="background: var(--bg-secondary); border-radius: 8px; height: 24px; overflow: hidden; position: relative; margin-bottom: 0.5rem;">
+            <div id="progress-bar" style="background: linear-gradient(90deg, #3B82F6, #2563EB); height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: 600;">
+                <span id="progress-text">0%</span>
+            </div>
+        </div>
+        
+        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+            <span id="current-phase">Iniciando...</span> • <span id="elapsed-time">0s</span>
+        </div>
+    </div>
+    
+    <!-- Métricas en tiempo real -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">{% trans "Correcciones Cargadas" %}</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #3B82F6;">
+                <span id="metric-corrections">0</span>
+            </div>
+        </div>
+        
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">{% trans "Keywords Aprendidas" %}</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;">
+                <span id="metric-keywords">0</span>
+            </div>
+        </div>
+        
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">{% trans "Relaciones Aprendidas" %}</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #8B5CF6;">
+                <span id="metric-relationships">0</span>
+            </div>
+        </div>
+        
+        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem;">
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">{% trans "Tablas en Schema" %}</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #F59E0B;">
+                <span id="metric-tables">0</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Log en tiempo real -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+            📋 {% trans "Log de Progreso" %}
+        </h3>
+        <div id="training-log" style="background: #1F2937; color: #E5E7EB; padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.75rem; max-height: 300px; overflow-y: auto; line-height: 1.8;">
+            <div class="log-entry">Esperando inicio...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Panel (hidden initially, shown after completion) -->
+<div id="results-panel" style="display: none;">
+    <!-- Celebración Header -->
+    <div id="success-banner" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); padding: 2rem; border-radius: 12px; margin-bottom: 2rem; color: white; text-align: center;">
+        <div style="font-size: 4rem; margin-bottom: 0.5rem;">🎉</div>
+        <h2 style="font-size: 1.5rem; font-weight: 700; margin: 0 0 0.5rem 0;">{% trans "¡Entrenamiento Completado!" %}</h2>
+        <p style="font-size: 0.875rem; opacity: 0.9; margin: 0;">
+            {% trans "Duración total:" %} <span id="total-duration">0</span>s
+        </p>
+    </div>
+    
+    <!-- Resumen de Resultados -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 2rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-primary);">
+            📊 {% trans "Resumen de Resultados" %}
+        </h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #3B82F6; margin-bottom: 0.5rem;">
+                    <span id="final-corrections">0</span>
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--text-secondary);">{% trans "Correcciones Aplicadas" %}</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #10B981; margin-bottom: 0.5rem;">
+                    <span id="final-keywords">0</span>
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--text-secondary);">{% trans "Keywords Aprendidas" %}</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #8B5CF6; margin-bottom: 0.5rem;">
+                    <span id="final-relationships">0</span>
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--text-secondary);">{% trans "Relaciones Aprendidas" %}</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1.5rem; background: var(--bg-secondary); border-radius: 8px;">
+                <div style="font-size: 2.5rem; font-weight: 700; color: #F59E0B; margin-bottom: 0.5rem;">
+                    <span id="final-tables">0</span>
+                </div>
+                <div style="font-size: 0.8125rem; color: var(--text-secondary);">{% trans "Tablas en Schema" %}</div>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="{% url 'reports_ai:quality_dashboard' %}" style="background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: white; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; text-decoration: none; display: inline-block;">
+                📊 {% trans "Ver Dashboard de Calidad" %}
+            </a>
+            
+            <button onclick="location.reload()" style="background: var(--bg-secondary); color: var(--text-primary); padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 0.875rem; border: 1px solid var(--border-color); cursor: pointer;">
+                🔄 {% trans "Entrenar Nuevamente" %}
+            </button>
+        </div>
+    </div>
+    
+    <!-- Log Final -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
+            📋 {% trans "Log Completo" %}
+        </h3>
+        <div id="final-log" style="background: #1F2937; color: #E5E7EB; padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.75rem; max-height: 400px; overflow-y: auto; line-height: 1.8;">
+        </div>
+    </div>
+</div>
+
+<script>
+// Estado global
+let sessionId = null;
+let eventSource = null;
+let startTime = null;
+let timerInterval = null;
+
+// Referencias a elementos
+const configPanel = document.getElementById('config-panel');
+const progressPanel = document.getElementById('progress-panel');
+const resultsPanel = document.getElementById('results-panel');
+const trainingForm = document.getElementById('training-form');
+
+// Checkboxes de componentes - highlight on hover
+document.querySelectorAll('.component-checkbox').forEach(label => {
+    label.addEventListener('mouseover', function() {
+        this.style.borderColor = '#3B82F6';
+        this.style.transform = 'translateY(-2px)';
+    });
+    label.addEventListener('mouseout', function() {
+        this.style.borderColor = 'transparent';
+        this.style.transform = 'translateY(0)';
+    });
+});
+
+// Form submit
+trainingForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Para Data Analyst V2, las opciones son fijas:
+    const options = {
+        apply_active_learning: true,  // Siempre activo
+        load_schema: true,             // Siempre activo
+    };
+    
+    // Iniciar entrenamiento
+    try {
+        const response = await fetch('/reports-ai/api/train/data-analyst/start/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(options)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            sessionId = data.session_id;
+            startTrainingUI();
+            connectToProgressStream();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Error iniciando entrenamiento: ' + error);
+    }
+});
+
+function startTrainingUI() {
+    // Ocultar config, mostrar progress
+    configPanel.style.display = 'none';
+    progressPanel.style.display = 'block';
+    resultsPanel.style.display = 'none';
+    
+    // Resetear métricas
+    document.getElementById('metric-corrections').textContent = '0';
+    document.getElementById('metric-keywords').textContent = '0';
+    document.getElementById('metric-relationships').textContent = '0';
+    document.getElementById('metric-tables').textContent = '0';
+    
+    // Iniciar timer
+    startTime = new Date();
+    timerInterval = setInterval(updateElapsedTime, 1000);
+}
+
+function updateElapsedTime() {
+    if (!startTime) return;
+    const elapsed = Math.floor((new Date() - startTime) / 1000);
+    document.getElementById('elapsed-time').textContent = elapsed + 's';
+}
+
+function connectToProgressStream() {
+    const url = `/reports-ai/api/train/data-analyst/progress/${sessionId}/`;
+    eventSource = new EventSource(url);
+    
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        updateProgress(data);
+    };
+    
+    eventSource.addEventListener('close', () => {
+        eventSource.close();
+    });
+    
+    eventSource.onerror = (error) => {
+        console.error('SSE Error:', error);
+        eventSource.close();
+    };
+}
+
+function updateProgress(data) {
+    // Actualizar barra de progreso
+    const progress = data.progress || 0;
+    document.getElementById('progress-bar').style.width = progress + '%';
+    document.getElementById('progress-text').textContent = progress + '%';
+    
+    // Actualizar fase actual
+    const phases = {
+        'load_schema': '📊 Cargando Schema',
+        'load_corrections': '📚 Cargando Correcciones',
+        'extract_learnings': '🧠 Extrayendo Learnings',
+        'apply_learnings': '✅ Aplicando Learnings',
+        'finalize': '📋 Finalizando'
+    };
+    document.getElementById('current-phase').textContent = phases[data.current_phase] || 'Procesando...';
+    
+    // Actualizar métricas
+    document.getElementById('metric-corrections').textContent = data.corrections_loaded || 0;
+    document.getElementById('metric-keywords').textContent = data.keywords_learned || 0;
+    document.getElementById('metric-relationships').textContent = data.relationships_learned || 0;
+    document.getElementById('metric-tables').textContent = data.tables_analyzed || 0;
+    
+    // Actualizar log
+    if (data.log_entries && data.log_entries.length > 0) {
+        const logDiv = document.getElementById('training-log');
+        logDiv.innerHTML = data.log_entries.map(entry => 
+            `<div class="log-entry">${entry}</div>`
+        ).join('');
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    // Si terminó, mostrar resultados
+    if (data.status === 'completed') {
+        showResults(data);
+    } else if (data.status === 'error') {
+        showError(data);
+    }
+}
+
+function showResults(data) {
+    // Detener timer
+    clearInterval(timerInterval);
+    
+    // Cerrar SSE
+    if (eventSource) {
+        eventSource.close();
+    }
+    
+    // Calcular duración
+    const duration = Math.floor((new Date() - startTime) / 1000);
+    document.getElementById('total-duration').textContent = duration;
+    
+    // Llenar resultados finales
+    const results = data.results || {};
+    document.getElementById('final-corrections').textContent = results.corrections_loaded || 0;
+    document.getElementById('final-keywords').textContent = results.keywords_learned || 0;
+    document.getElementById('final-relationships').textContent = results.relationships_learned || 0;
+    document.getElementById('final-tables').textContent = results.tables_analyzed || 0;
+    
+    // Log final
+    const finalLog = document.getElementById('final-log');
+    finalLog.innerHTML = data.log_entries.map(entry => 
+        `<div class="log-entry">${entry}</div>`
+    ).join('');
+    
+    // Ocultar progress, mostrar results
+    progressPanel.style.display = 'none';
+    resultsPanel.style.display = 'block';
+    
+    // Confetti!
+    if (typeof confetti !== 'undefined') {
+        confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+        });
+    }
+}
+
+function showError(data) {
+    clearInterval(timerInterval);
+    
+    if (eventSource) {
+        eventSource.close();
+    }
+    
+    alert('Error durante el entrenamiento: ' + (data.error_message || 'Unknown error'));
+    
+    // Volver al config
+    progressPanel.style.display = 'none';
+    configPanel.style.display = 'block';
+}
+
+// Botón de cancelar
+document.getElementById('btn-cancel').addEventListener('click', async () => {
+    if (!sessionId || !confirm('¿Estás seguro de que quieres cancelar el entrenamiento?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/reports-ai/api/train/data-analyst/cancel/${sessionId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            clearInterval(timerInterval);
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            alert('Entrenamiento cancelado');
+            location.reload();
+        }
+    } catch (error) {
+        alert('Error cancelando: ' + error);
+    }
+});
+</script>
+
+{% endblock %}
+

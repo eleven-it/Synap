@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Seguridad
 SECRET_KEY = config('SECRET_KEY', default='insecure-placeholder')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar,n8n.estrategiasdenegocios.ar,beardlike-unsavingly-candra.ngrok-free.dev', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar,n8n.estrategiasdenegocios.ar,beardlike-unsavingly-candra.ngrok-free.dev,192.168.68.106', cast=Csv())
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
@@ -56,7 +56,9 @@ INSTALLED_APPS = [
     'administraNET_integration',
     'logistics',
     'finance',
+    'reports',
     "support_ai",
+    'reports_ai',  # Sistema de Reportes AI con CrewAI
 ]
 
 MIDDLEWARE = [
