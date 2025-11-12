@@ -12,12 +12,12 @@
                     Centro Interactivo de Analítica
                 </h1>
                 <p class="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-2">
-                    Explora tableros operativos y gerenciales con métricas reales, filtros inteligentes y exportaciones.
+                    Explora tableros operativos y gerenciales.
                 </p>
             </div>
             <div class="flex items-center gap-3">
                 <a href="{{ workspace_view_url }}"
-                   class="inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 transition-all duration-300">
+                   class="inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 transition-all duración-300">
                     <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path d="M4 4h16v16H4z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         <path d="M4 9h16M9 4v16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -25,17 +25,6 @@
                     Abrir workspace
                     <span class="ml-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/20 text-[11px] font-bold" data-workspace-count>{{ workspace_count|default:0 }}</span>
                 </a>
-                <div class="flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900/90 dark:bg-white/10 text-white text-xs uppercase tracking-wide shadow-lg">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Datos en vivo
-                </div>
-                <button type="button"
-                        class="hidden md:inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 hover:shadow-lg hover:shadow-orange-500/40 transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-orange-400">
-                    <svg class="w-4 h-4 mr-2" viewBox="0 0 20 20" fill="none" stroke="currentColor">
-                        <path d="M10 4v12m6-6H4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    Crear dashboard
-                </button>
             </div>
         </header>
 
