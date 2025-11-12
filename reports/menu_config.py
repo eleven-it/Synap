@@ -6,12 +6,12 @@ MENU_CONFIG = {
     "icon": "stacked_line_chart",
     "entries": [
         {
-            "label": "Catálogo interactivo",
+            "label": "Catálogo",
             "icon": "grid_view",
             "url_name": "reports:catalog",
         },
         {
-            "label": "Workspace Smart TV",
+            "label": "Workspace",
             "icon": "dashboard_customize",
             "url_name": "reports:workspace",
         },
