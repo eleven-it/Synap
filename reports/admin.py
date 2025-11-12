@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ReportDefinition, ReportWidget, ReportDashboard, ReportExecutionLog
+from .models import ReportDefinition, ReportWidget, ReportDashboard, ReportExecutionLog, ReportWorkspace
 
 
 @admin.register(ReportDefinition)
@@ -41,5 +41,15 @@ class ReportExecutionLogAdmin(admin.ModelAdmin):
     list_filter = ("status", "executed_at")
     search_fields = ("report__name", "report__slug", "executed_by__email")
     ordering = ("-executed_at",)
+
+
+@admin.register(ReportWorkspace)
+class ReportWorkspaceAdmin(admin.ModelAdmin):
+    """Admin para workspaces persistentes."""
+
+    list_display = ("owner", "empresa", "name", "updated_at")
+    list_filter = ("empresa",)
+    search_fields = ("owner__email", "owner__username")
+    ordering = ("owner", "empresa")
 
 

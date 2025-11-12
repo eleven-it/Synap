@@ -15,11 +15,6 @@ MENU_CONFIG = {
             "icon": "dashboard_customize",
             "url_name": "reports:workspace",
         },
-        {
-            "label": "Tableros guardados",
-            "icon": "bookmark",
-            "url_name": "reports:saved_dashboards",
-        },
     ],
 }
 

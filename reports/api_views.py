@@ -5,14 +5,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .domain import build_catalog_for_user
-from .models import ReportDefinition, ReportDashboard
+from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission
 from .serializers import (
     CatalogEntrySerializer,
     ReportQueryRequestSerializer,
     ReportQueryResponseSerializer,
     KPIResponseSerializer,
-    ReportDashboardSerializer,
 )
 from .services.query_runner import QueryRunnerService
 from .services.export_service import ExportService
@@ -55,21 +54,22 @@ class WorkspaceSelectionAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    SESSION_KEY = "reports_workspace"
     MAX_ITEMS = 16
 
-    def _get_session_list(self, request):
-        if request and hasattr(request, "session") and request.session:
-            return list(request.session.get(self.SESSION_KEY, []))
-        return []
-
-    def _store_session_list(self, request, items):
-        if request and hasattr(request, "session") and request.session is not None:
-            request.session[self.SESSION_KEY] = items
-            request.session.modified = True
+    def _get_workspace(self, request) -> ReportWorkspace:
+        user = request.user
+        empresa = getattr(user, "empresa_activa", None)
+        workspace, _ = ReportWorkspace.objects.get_or_create(
+            owner=user,
+            empresa=empresa,
+            defaults={"items": []},
+        )
+        return workspace
 
     def get(self, request, *args, **kwargs):
-        slugs = self._get_session_list(request)
+        workspace = self._get_workspace(request)
+        slugs = list(workspace.items or [])
+
         if not slugs:
             return Response({"slots": [], "count": 0})
 
@@ -80,6 +80,7 @@ class WorkspaceSelectionAPIView(APIView):
         report_map = {report.slug: report for report in reports}
 
         slots = []
+        valid_slugs = []
         for slug in slugs:
             report = report_map.get(slug)
             if not report:
@@ -87,6 +88,7 @@ class WorkspaceSelectionAPIView(APIView):
             widget = report.widgets.order_by("order", "id").first()
             if not widget:
                 continue
+            valid_slugs.append(slug)
             slots.append(
                 {
                     "slug": report.slug,
@@ -101,6 +103,10 @@ class WorkspaceSelectionAPIView(APIView):
                 }
             )
 
+        if valid_slugs != slugs:
+            workspace.items = valid_slugs
+            workspace.save(update_fields=["items", "updated_at"])
+
         return Response({"slots": slots, "count": len(slots)})
 
     def post(self, request, *args, **kwargs):
@@ -112,7 +118,8 @@ class WorkspaceSelectionAPIView(APIView):
         if not report:
             return Response({"detail": "Reporte no encontrado."}, status=status.HTTP_404_NOT_FOUND)
 
-        current = self._get_session_list(request)
+        workspace = self._get_workspace(request)
+        current = list(workspace.items or [])
         if slug in current:
             return Response({"status": "exists", "count": len(current)})
 
@@ -126,7 +133,8 @@ class WorkspaceSelectionAPIView(APIView):
             )
 
         current.append(slug)
-        self._store_session_list(request, current)
+        workspace.items = current
+        workspace.save(update_fields=["items", "updated_at"])
         return Response({"status": "added", "count": len(current)})
 
     def delete(self, request, *args, **kwargs):
@@ -134,12 +142,14 @@ class WorkspaceSelectionAPIView(APIView):
         if not slug:
             return Response({"detail": "Slug requerido."}, status=status.HTTP_400_BAD_REQUEST)
 
-        current = self._get_session_list(request)
+        workspace = self._get_workspace(request)
+        current = list(workspace.items or [])
         if slug not in current:
             return Response({"status": "missing", "count": len(current)})
 
         current = [item for item in current if item != slug]
-        self._store_session_list(request, current)
+        workspace.items = current
+        workspace.save(update_fields=["items", "updated_at"])
         return Response({"status": "removed", "count": len(current)})
 
 
@@ -192,24 +202,5 @@ class ReportExportAPIView(APIView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
-
-
-class SavedDashboardViewSet(viewsets.ModelViewSet):
-    """CRUD de dashboards guardados."""
-
-    serializer_class = ReportDashboardSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        empresa = getattr(user, "empresa_activa", None)
-        qs = ReportDashboard.objects.filter(owner=user)
-        if empresa:
-            qs = qs.filter(empresa=empresa)
-        return qs
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        empresa = getattr(user, "empresa_activa", None)
-        serializer.save(owner=user, empresa=empresa)
 
 

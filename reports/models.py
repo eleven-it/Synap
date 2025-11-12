@@ -276,3 +276,44 @@ class ReportExecutionLog(models.Model):
         return f"{self.report.slug} - {self.executed_at:%Y-%m-%d %H:%M:%S}"
 
 
+class ReportWorkspace(models.Model):
+    """Seleccion de reportes favoritos para el modo workspace."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="report_workspaces",
+        verbose_name=_("Owner"),
+    )
+    empresa = models.ForeignKey(
+        "core.Empresa",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="report_workspaces",
+        verbose_name=_("Company"),
+    )
+    name = models.CharField(
+        max_length=128,
+        default="Workspace",
+        verbose_name=_("Name"),
+    )
+    items = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Reports"),
+        help_text=_("List of report slugs included in the workspace."),
+    )
+    created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Created at"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated at"))
+
+    class Meta:
+        verbose_name = _("Report workspace")
+        verbose_name_plural = _("Report workspaces")
+        unique_together = ("owner", "empresa")
+
+    def __str__(self) -> str:
+        empresa = getattr(self.empresa, "nombre", None) or "Global"
+        return f"Workspace {self.owner} ({empresa})"
+
+

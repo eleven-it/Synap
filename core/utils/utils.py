@@ -688,12 +688,6 @@ APPS_MENU = [
                         "url": "reports:workspace",
                         "icon": "dashboard_customize",
                         "permission": "reports.ver"
-                    },
-                    {
-                        "label": _("Saved dashboards"),
-                        "url": "reports:saved_dashboards",
-                        "icon": "bookmark",
-                        "permission": "reports.ver"
                     }
                 ]
             }

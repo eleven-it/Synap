@@ -5,10 +5,10 @@ from django.db.models import Q
 from django.http import Http404
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import TemplateView, ListView
+from django.views.generic import TemplateView
 
 from .domain import build_catalog_for_user
-from .models import ReportDefinition, ReportDashboard, ReportCategory
+from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission
 
 
@@ -17,11 +17,13 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
 
     template_name = "reports/catalog.html"
 
-    def get_workspace_slugs(self):
-        request = getattr(self, "request", None)
-        if not request or not hasattr(request, "session") or not request.session:
+    def get_workspace_items(self):
+        user = self.request.user
+        empresa = getattr(user, "empresa_activa", None)
+        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+        if not workspace:
             return []
-        return list(request.session.get("reports_workspace", []))
+        return list(workspace.items or [])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -37,7 +39,7 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
                 "can_managerial": ManagerialReportsPermission().has_permission(self.request, self),
                 "workspace_api_url": reverse("reports-api:reports-workspace"),
                 "workspace_view_url": reverse("reports:workspace"),
-                "workspace_count": len(self.get_workspace_slugs()),
+                "workspace_count": len(self.get_workspace_items()),
             }
         )
         return context
@@ -85,11 +87,13 @@ class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
 
     template_name = "reports/workspace.html"
 
-    def get_workspace_slugs(self):
-        request = getattr(self, "request", None)
-        if not request or not hasattr(request, "session") or not request.session:
+    def get_workspace_items(self):
+        user = self.request.user
+        empresa = getattr(user, "empresa_activa", None)
+        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+        if not workspace:
             return []
-        return list(request.session.get("reports_workspace", []))
+        return list(workspace.items or [])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -98,30 +102,9 @@ class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
                 "page_title": _("Workspace de reportes"),
                 "dashboard_api_url": reverse("reports-api:reports-query"),
                 "workspace_api_url": reverse("reports-api:reports-workspace"),
-                "workspace_count": len(self.get_workspace_slugs()),
+                "workspace_count": len(self.get_workspace_items()),
             }
         )
-        return context
-
-
-class SavedDashboardsView(LoginRequiredMixin, ListView):
-    """Listado de dashboards guardados por el usuario."""
-
-    model = ReportDashboard
-    template_name = "reports/saved_dashboards.html"
-    context_object_name = "dashboards"
-
-    def get_queryset(self):
-        empresa = getattr(self.request.user, "empresa_activa", None)
-        qs = super().get_queryset().filter(owner=self.request.user)
-        if empresa:
-            qs = qs.filter(empresa=empresa)
-        return qs.order_by("name")
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["page_title"] = _("Saved dashboards")
-        context["categories"] = ReportCategory.choices
         return context
 
 
