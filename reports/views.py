@@ -136,29 +136,3 @@ class ReportsWorkspaceTVView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class ReportsWorkspaceTVView(LoginRequiredMixin, TemplateView):
-    """Workspace optimizado para pantallas Smart TV."""
-
-    template_name = "reports/workspace_tv.html"
-
-    def get_workspace_items(self):
-        user = self.request.user
-        empresa = getattr(user, "empresa_activa", None)
-        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
-        if not workspace:
-            return []
-        return list(workspace.items or [])
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "page_title": _("Workspace ejecutivo"),
-                "dashboard_api_url": reverse("reports-api:reports-query"),
-                "workspace_api_url": reverse("reports-api:reports-workspace"),
-                "workspace_count": len(self.get_workspace_items()),
-            }
-        )
-        return context
-
-
