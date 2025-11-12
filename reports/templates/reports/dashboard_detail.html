@@ -165,66 +165,121 @@
                  data-dashboard-url="{{ dashboard_api_url }}"
                  data-report-slug="{{ report.slug }}"
                  data-workspace-url="{{ workspace_api_url }}">
-                <div class="reports-workspace-grid grid gap-6 {% if widgets|length > 1 %}md:grid-cols-2 xl:grid-cols-2{% else %}md:grid-cols-1 xl:grid-cols-1{% endif %} auto-rows-[minmax(320px,_1fr)]">
+                {% if widgets|length > 1 %}
+                <div class="reports-workspace-grid grid gap-6 md:grid-cols-2 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)]">
                     {% for widget in widgets %}
                         {% with widget_id=widget.id|stringformat:"s" %}
                             {% with config_id="widget-config-"|add:widget_id %}
-                            <div data-widget-wrapper class="flex flex-col gap-0">
-                                <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duration-500 hover:-translate-y-1"
-                                         data-widget-id="{{ widget.id }}"
-                                         data-widget-type="{{ widget.widget_type }}"
-                                         data-widget-name="{{ widget.name }}"
-                                         data-widget-config-id="{{ config_id }}"
-                                         data-note-label="Notas"
-                                         data-empty-label="No hay datos disponibles.">
-                                    <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-                                        <div>
-                                            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">{{ widget.name }}</h2>
-                                            <p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">{{ widget.widget_type }}</p>
-                                        </div>
-                                        <div class="flex items-center gap-2 text-[11px]">
-                                            <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition">
-                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                    <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                                </svg>
-                                                Animar
-                                            </button>
-                                            <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition">
-                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                    <path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                                </svg>
-                                                Drill
-                                            </button>
-                                            <button type="button"
-                                                    class="inline-flex items-center gap-2 text-xs font-semibold text-sky-500 hover:text-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 rounded-full px-3 py-1 transition"
-                                                    data-toggle-table>
-                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                                                    <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                                </svg>
-                                                Ver tabla
-                                            </button>
-                                        </div>
-                                    </header>
-                                    <div class="relative">
-                                        <div class="aspect-[16/7] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6"
-                                             data-widget-content>
-                                            <div class="h-full w-full grid place-content-center text-xs text-slate-200 tracking-[0.2em] uppercase">
-                                                Cargando datos...
+                                <div data-widget-wrapper class="flex flex-col gap-0">
+                                    <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duración-500 hover:-translate-y-1"
+                                             data-widget-id="{{ widget.id }}"
+                                             data-widget-type="{{ widget.widget_type }}"
+                                             data-widget-name="{{ widget.name }}"
+                                             data-widget-config-id="{{ config_id }}"
+                                             data-note-label="Notas"
+                                             data-empty-label="No hay datos disponibles.">
+                                        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                                            <div>
+                                                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">{{ widget.name }}</h2>
+                                                <p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">{{ widget.widget_type }}</p>
                                             </div>
+                                            <div class="flex items-center gap-2 text-[11px]">
+                                                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transición">
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Animar
+                                                </button>
+                                                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transición">
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Drill
+                                                </button>
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-2 text-xs font-semibold text-sky-500 hover:text-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 rounded-full px-3 py-1 transición"
+                                                        data-toggle-table>
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Ver tabla
+                                                </button>
+                                            </div>
+                                        </header>
+                                        <div class="relative">
+                                            <div class="aspect-[16/7] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6"
+                                                 data-widget-content>
+                                                <div class="h-full w-full grid place-content-center text-xs text-slate-200 tracking-[0.2em] uppercase">
+                                                    Cargando datos...
+                                                </div>
+                                            </div>
+                                            <div class="p-6 hidden" data-widget-table-wrapper></div>
                                         </div>
-                                        <div class="p-6 hidden" data-widget-table-wrapper></div>
-                                    </div>
-                                </section>
-                                {{ widget.configuration|json_script:config_id }}
-                            </div>
+                                    </section>
+                                    {{ widget.configuration|json_script:config_id }}
+                                </div>
                             {% endwith %}
                         {% endwith %}
-                    {% empty %}
-                        <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-12 text-center">
-                            <p class="text-sm text-slate-500 dark:text-slate-400">Los widgets aparecerán aquí cuando estén configurados.</p>
-                        </div>
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="flex flex-col gap-6">
+                    {% for widget in widgets %}
+                        {% with widget_id=widget.id|stringformat:"s" %}
+                            {% with config_id="widget-config-"|add:widget_id %}
+                                <div data-widget-wrapper class="flex flex-col gap-0">
+                                    <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duración-500 hover:-translate-y-1"
+                                             data-widget-id="{{ widget.id }}"
+                                             data-widget-type="{{ widget.widget_type }}"
+                                             data-widget-name="{{ widget.name }}"
+                                             data-widget-config-id="{{ config_id }}"
+                                             data-note-label="Notas"
+                                             data-empty-label="No hay datos disponibles.">
+                                        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+                                            <div>
+                                                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">{{ widget.name }}</h2>
+                                                <p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">{{ widget.widget_type }}</p>
+                                            </div>
+                                            <div class="flex items-center gap-2 text-[11px]">
+                                                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transición">
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M12 6v6l4 2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Animar
+                                                </button>
+                                                <button type="button" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transición">
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Drill
+                                                </button>
+                                                <button type="button"
+                                                        class="inline-flex items-center gap-2 text-xs font-semibold text-sky-500 hover:text-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 rounded-full px-3 py-1 transición"
+                                                        data-toggle-table>
+                                                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                        <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                    </svg>
+                                                    Ver tabla
+                                                </button>
+                                            </div>
+                                        </header>
+                                        <div class="relative">
+                                            <div class="aspect-[16/7] w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6"
+                                                 data-widget-content>
+                                                <div class="h-full w-full grid place-content-center text-xs text-slate-200 tracking-[0.2em] uppercase">
+                                                    Cargando datos...
+                                                </div>
+                                            </div>
+                                            <div class="p-6 hidden" data-widget-table-wrapper></div>
+                                        </div>
+                                    </section>
+                                    {{ widget.configuration|json_script:config_id }}
+                                </div>
+                            {% endwith %}
+                        {% endwith %}
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
