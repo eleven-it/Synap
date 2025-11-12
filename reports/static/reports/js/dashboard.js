@@ -194,6 +194,15 @@ const setupWorkspaces = (force = false) => {
     return;
   }
 
+  if (!isWorkspaceTemplate && wrappers.length <= 1) {
+    workspaceState.initialized = true;
+    workspaceState.groups = [];
+    workspaceState.current = 0;
+    workspaceState.total = 1;
+    updateWorkspaceIndicator();
+    return;
+  }
+
   const chunkSize = isWorkspaceTemplate ? 4 : 2;
   const fragment = document.createDocumentFragment();
   const groups = [];
