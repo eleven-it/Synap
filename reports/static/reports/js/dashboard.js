@@ -1,6 +1,8 @@
 // Comentario: Controlador básico para dashboards interactivos con gráficos D3.
 
 const dashboardRoot = document.querySelector("#dashboard-root");
+const filtersContainer = document.querySelector("[data-filters-container]");
+const filtersToggleButton = document.querySelector("[data-filters-toggle]");
 
 const widgetDataCache = new Map();
 let resizeObserver = null;
@@ -62,6 +64,30 @@ const toast = (message, type = "success") => {
     container.classList.add("animate-[fade-out_0.3s_ease-in_forwards]");
     container.addEventListener("animationend", () => container.remove());
   }, 2800);
+};
+
+const initializeFiltersToggle = () => {
+  if (!filtersToggleButton || !filtersContainer) {
+    return;
+  }
+
+  const labelElement = filtersToggleButton.querySelector("[data-toggle-label]");
+  const showLabel = filtersToggleButton.dataset.labelShow || "Mostrar filtros";
+  const hideLabel = filtersToggleButton.dataset.labelHide || "Ocultar filtros";
+
+  const setState = (visible) => {
+    if (labelElement) {
+      labelElement.textContent = visible ? hideLabel : showLabel;
+    }
+    filtersToggleButton.setAttribute("aria-expanded", String(visible));
+  };
+
+  filtersToggleButton.addEventListener("click", () => {
+    const isHidden = filtersContainer.classList.toggle("hidden");
+    setState(!isHidden);
+  });
+
+  setState(!filtersContainer.classList.contains("hidden"));
 };
 
 const COLORS = [
@@ -1520,6 +1546,8 @@ if (dashboardRoot) {
   if (!isWorkspaceMode) {
     setupWorkspaces();
   }
+
+  initializeFiltersToggle();
 
   const apiUrl = dashboardRoot.dataset.dashboardUrl;
   const reportSlug = dashboardRoot.dataset.reportSlug;
