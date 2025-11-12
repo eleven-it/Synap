@@ -675,16 +675,16 @@ APPS_MENU = [
         "color": "teal",
         "submenus": [
             {
-                "seccion": _("Catalog"),
+                "seccion": _("Catálogo"),
                 "items": [
                     {
-                        "label": _("Interactive catalog"),
+                        "label": _("Catálogo"),
                         "url": "reports:catalog",
                         "icon": "dashboard",
                         "permission": "reports.ver"
                     },
                     {
-                        "label": _("Workspace Smart TV"),
+                        "label": _("Workspace"),
                         "url": "reports:workspace",
                         "icon": "dashboard_customize",
                         "permission": "reports.ver"
