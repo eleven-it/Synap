@@ -165,9 +165,10 @@
                  data-dashboard-url="{{ dashboard_api_url }}"
                  data-report-slug="{{ report.slug }}"
                  data-workspace-url="{{ workspace_api_url }}">
-                {% for widget in widgets %}
-                    {% with widget_id=widget.id|stringformat:"s" %}
-                        {% with config_id="widget-config-"|add:widget_id %}
+                <div class="reports-workspace-grid grid gap-6 md:grid-cols-2 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)]">
+                    {% for widget in widgets %}
+                        {% with widget_id=widget.id|stringformat:"s" %}
+                            {% with config_id="widget-config-"|add:widget_id %}
                             <div data-widget-wrapper class="flex flex-col gap-0">
                                 <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duration-500 hover:-translate-y-1"
                                          data-widget-id="{{ widget.id }}"
@@ -216,13 +217,14 @@
                                 </section>
                                 {{ widget.configuration|json_script:config_id }}
                             </div>
+                            {% endwith %}
                         {% endwith %}
-                    {% endwith %}
-                {% empty %}
-                    <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-12 text-center">
-                        <p class="text-sm text-slate-500 dark:text-slate-400">Los widgets aparecerán aquí cuando estén configurados.</p>
-                    </div>
-                {% endfor %}
+                    {% empty %}
+                        <div class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-12 text-center">
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Los widgets aparecerán aquí cuando estén configurados.</p>
+                        </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>

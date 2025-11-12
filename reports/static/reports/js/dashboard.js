@@ -20,6 +20,7 @@ const workspaceControls = {
 };
 
 const isWorkspaceMode = Boolean(dashboardRoot?.dataset.workspaceMode === "true");
+const isWorkspaceTemplate = dashboardRoot?.dataset.workspaceMode === "true";
 const workspaceApiUrl = dashboardRoot?.dataset.workspaceUrl || null;
 
 const resetWorkspaceState = () => {
@@ -193,7 +194,7 @@ const setupWorkspaces = (force = false) => {
     return;
   }
 
-  const chunkSize = 4;
+  const chunkSize = isWorkspaceTemplate ? 4 : 2;
   const fragment = document.createDocumentFragment();
   const groups = [];
 
@@ -210,10 +211,12 @@ const setupWorkspaces = (force = false) => {
     groups.push(group);
   }
 
-  dashboardRoot.innerHTML = "";
-  dashboardRoot.classList.remove("space-y-8");
-  dashboardRoot.classList.add("flex", "flex-col", "gap-10");
-  dashboardRoot.appendChild(fragment);
+  if (!dashboardRoot.querySelector(".reports-workspace-grid") || isWorkspaceTemplate) {
+    dashboardRoot.innerHTML = "";
+    dashboardRoot.classList.remove("space-y-8");
+    dashboardRoot.classList.add("flex", "flex-col", "gap-10");
+    dashboardRoot.appendChild(fragment);
+  }
 
   workspaceState.groups = groups;
   workspaceState.total = groups.length;
