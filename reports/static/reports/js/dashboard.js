@@ -171,12 +171,20 @@ const updateWorkspaceIndicator = () => {
   const current = total ? workspaceState.current + 1 : 0;
   workspaceControls.indicator.textContent = `Workspace ${current}/${total}`;
   if (workspaceControls.prevDate) {
-    const prevValue = total > 1 ? ((workspaceState.current - 1 + total) % total) + 1 : null;
-    workspaceControls.prevDate.textContent = prevValue && prevValue !== current ? `${prevValue}` : "—";
+    if (isWorkspaceTv) {
+      workspaceControls.prevDate.textContent = "—";
+    } else {
+      const prevValue = total > 1 ? ((workspaceState.current - 1 + total) % total) + 1 : null;
+      workspaceControls.prevDate.textContent = prevValue && prevValue !== current ? `${prevValue}` : "—";
+    }
   }
   if (workspaceControls.nextDate) {
-    const nextValue = total > 1 ? ((workspaceState.current + 1) % total) + 1 : null;
-    workspaceControls.nextDate.textContent = nextValue && nextValue !== current ? `${nextValue}` : "—";
+    if (isWorkspaceTv) {
+      workspaceControls.nextDate.textContent = "—";
+    } else {
+      const nextValue = total > 1 ? ((workspaceState.current + 1) % total) + 1 : null;
+      workspaceControls.nextDate.textContent = nextValue && nextValue !== current ? `${nextValue}` : "—";
+    }
   }
   const disableNav = total <= 1;
   if (workspaceControls.prev) {

@@ -33,6 +33,24 @@
             min-height: 520px;
         }
     }
+    .workspace-tv-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: minmax(calc((100vh - 320px) / 2), 1fr);
+    }
+    .workspace-tv-grid [data-widget-wrapper] {
+        height: 100%;
+    }
+    .workspace-tv-grid [data-widget-wrapper] > section {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .workspace-tv-grid [data-widget-content] {
+        height: 100%;
+        min-height: 0;
+        padding: 0;
+        position: relative;
+    }
 </style>
 {% endblock %}
 
@@ -57,7 +75,7 @@
                             <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
                                 <path d="M12 5l-5 5 5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
-                            <span data-workspace-prev-date>Anteriores</span>
+                            {% comment %} <span data-workspace-prev-date>Anteriores</span> {% endcomment %}
                         </button>
                         <span data-workspace-indicator class="px-5 py-3 rounded-full bg-slate-50/10 text-white text-[12px] tracking-[0.4em]">
                             Workspace 0/0
@@ -65,7 +83,7 @@
                         <button type="button"
                                 data-workspace-next
                                 class="inline-flex items-center gap-2 rounded-full px-4 py-2 bg-slate-800/80 text-slate-200 hover:bg-slate-700 transition disabled:opacity-30 disabled:pointer-events-none">
-                            <span data-workspace-next-date>Próximos</span>
+                            {% comment %} <span data-workspace-next-date>Próximos</span> {% endcomment %}
                             <svg class="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor">
                                 <path d="M8 5l5 5-5 5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
@@ -107,6 +125,7 @@
                 <div class="mt-10" id="dashboard-root"
                      data-dashboard-url="{{ dashboard_api_url }}"
                      data-workspace-mode="true"
+                     data-workspace-tv="true"
                      data-workspace-url="{{ workspace_api_url }}">
                     <div class="executive-widget-placeholder rounded-2xl border border-dashed border-slate-700/50 text-center grid place-content-center gap-4 text-slate-400">
                         <svg class="w-14 h-14 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor">
