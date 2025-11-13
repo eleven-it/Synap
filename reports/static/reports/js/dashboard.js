@@ -1416,7 +1416,6 @@ const buildWorkspaceDOM = (slots) => {
       <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h2 class="text-sm font-semibold text-slate-900 dark:text-white">${slot.name}</h2>
-          <p class="text-[11px] uppercase tracking-wide text-slate-400 mt-1">${slot.widget.widget_type}</p>
         </div>
         <div class="flex items-center gap-2 text-[11px]">
           <a href="/reports/dashboard/${slot.slug}/" target="_blank" rel="noopener"
