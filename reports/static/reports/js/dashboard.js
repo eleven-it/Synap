@@ -26,6 +26,7 @@ const workspaceControls = {
 const isWorkspaceMode = Boolean(dashboardRoot?.dataset.workspaceMode === "true");
 const isWorkspaceTemplate = dashboardRoot?.dataset.workspaceMode === "true";
 const isWorkspaceTv = dashboardRoot?.dataset.workspaceTv === "true";
+const isWorkspaceMobile = dashboardRoot?.dataset.workspaceMobile === "true";
 const workspaceApiUrl = dashboardRoot?.dataset.workspaceUrl || null;
 
 const resetWorkspaceState = () => {
@@ -171,7 +172,7 @@ const updateWorkspaceIndicator = () => {
   const current = total ? workspaceState.current + 1 : 0;
   workspaceControls.indicator.textContent = `Workspace ${current}/${total}`;
   if (workspaceControls.prevDate) {
-    if (isWorkspaceTv) {
+    if (isWorkspaceTv || isWorkspaceMobile) {
       workspaceControls.prevDate.textContent = "—";
     } else {
       const prevValue = total > 1 ? ((workspaceState.current - 1 + total) % total) + 1 : null;
@@ -179,7 +180,7 @@ const updateWorkspaceIndicator = () => {
     }
   }
   if (workspaceControls.nextDate) {
-    if (isWorkspaceTv) {
+    if (isWorkspaceTv || isWorkspaceMobile) {
       workspaceControls.nextDate.textContent = "—";
     } else {
       const nextValue = total > 1 ? ((workspaceState.current + 1) % total) + 1 : null;
@@ -248,7 +249,7 @@ const setupWorkspaces = (force = false) => {
     return;
   }
 
-  const chunkSize = isWorkspaceTemplate ? 4 : 2;
+  const chunkSize = isWorkspaceTemplate ? 4 : isWorkspaceMobile ? wrappers.length : 2;
   const fragment = document.createDocumentFragment();
   const groups = [];
 
@@ -258,21 +259,29 @@ const setupWorkspaces = (force = false) => {
     group.dataset.workspaceIndex = String(groups.length);
     const tvClassName =
       "reports-workspace-grid workspace-tv-grid grid gap-8 md:grid-cols-2 auto-rows-[minmax(420px,_1fr)] hidden";
+    const mobileClassName =
+      "reports-workspace-grid workspace-mobile-grid grid gap-4 sm:grid-cols-1 auto-rows-[minmax(280px,_1fr)] hidden";
     const defaultClassName =
       "reports-workspace-grid grid gap-6 sm:grid-cols-1 xl:grid-cols-2 auto-rows-[minmax(320px,_1fr)] hidden";
-    group.className = isWorkspaceTv ? tvClassName : defaultClassName;
+    group.className = isWorkspaceTv ? tvClassName : isWorkspaceMobile ? mobileClassName : defaultClassName;
     if (slice.length === 1) {
-      group.classList.add(isWorkspaceTv ? "md:grid-cols-1" : "xl:grid-cols-1");
+      if (isWorkspaceTv) {
+        group.classList.add("md:grid-cols-1");
+      } else if (!isWorkspaceMobile) {
+        group.classList.add("xl:grid-cols-1");
+      }
     }
     slice.forEach((wrapper) => group.appendChild(wrapper));
     fragment.appendChild(group);
     groups.push(group);
   }
 
-  if (!dashboardRoot.querySelector(".reports-workspace-grid") || isWorkspaceTemplate) {
+  if (!dashboardRoot.querySelector(".reports-workspace-grid") || isWorkspaceTemplate || isWorkspaceMobile) {
     dashboardRoot.innerHTML = "";
     dashboardRoot.classList.remove("space-y-8");
-    dashboardRoot.classList.add("flex", "flex-col", isWorkspaceTv ? "gap-12" : "gap-10");
+    if (!isWorkspaceMobile) {
+      dashboardRoot.classList.add("flex", "flex-col", isWorkspaceTv ? "gap-12" : "gap-10");
+    }
     dashboardRoot.appendChild(fragment);
   }
 
@@ -1584,12 +1593,12 @@ if (dashboardRoot) {
 
   updateWorkspaceIndicator();
 
-  if (workspaceControls.prev) {
+  if (workspaceControls.prev && !isWorkspaceMobile) {
     workspaceControls.prev.addEventListener("click", () => {
       showWorkspace(workspaceState.current - 1);
     });
   }
-  if (workspaceControls.next) {
+  if (workspaceControls.next && !isWorkspaceMobile) {
     workspaceControls.next.addEventListener("click", () => {
       showWorkspace(workspaceState.current + 1);
     });

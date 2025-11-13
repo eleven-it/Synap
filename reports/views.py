@@ -95,6 +95,11 @@ class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
             return []
         return list(workspace.items or [])
 
+    def _is_mobile(self) -> bool:
+        user_agent = (self.request.META.get("HTTP_USER_AGENT") or "").lower()
+        mobile_tokens = ("iphone", "android", "ipad", "mobile", "opera mini", "mobile safari")
+        return any(token in user_agent for token in mobile_tokens)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(
@@ -104,6 +109,7 @@ class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
                 "workspace_api_url": reverse("reports-api:reports-workspace"),
                 "workspace_count": len(self.get_workspace_items()),
                 "workspace_tv_url": reverse("reports:workspace_tv"),
+                "workspace_is_mobile": self._is_mobile(),
             }
         )
         return context
