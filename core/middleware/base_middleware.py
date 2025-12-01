@@ -130,35 +130,49 @@ def get_usuario_extendiendo_desde_sesion(request):
                 
                 if base_empresa and id_puesto:
                     try:
-                        from django.db import connections
-                        mysql_conn = connections['mysql']
+                        # Usar conexión MySQL directa (compatible con MySQL 5.7+)
+                        import MySQLdb
+                        from django.conf import settings
+                        mysql_config = settings.DATABASES['mysql']
                         
-                        with mysql_conn.cursor() as cursor:
-                            # Consultar permisos desde permiso_sistema_puesto
-                            # Obtener el valor_permiso más reciente para cada permiso del puesto
-                            cursor.execute("""
-                                SELECT ps.key_permiso, psp.valor_permiso
-                                FROM permiso_sistema ps
+                        conn = MySQLdb.connect(
+                            host=mysql_config['HOST'],
+                            port=int(mysql_config['PORT']),
+                            user=mysql_config['USER'],
+                            passwd=mysql_config['PASSWORD'],
+                            db=base_empresa,
+                            charset='latin1'
+                        )
+                        cursor = conn.cursor()
+                        
+                        # Consultar permisos desde permiso_sistema_puesto
+                        # Obtener el valor_permiso más reciente para cada permiso del puesto
+                        cursor.execute("""
+                            SELECT ps.key_permiso, psp.valor_permiso
+                            FROM permiso_sistema ps
+                            INNER JOIN (
+                                SELECT psp1.id_permiso_sistema, psp1.valor_permiso
+                                FROM permiso_sistema_puesto psp1
                                 INNER JOIN (
-                                    SELECT psp1.id_permiso_sistema, psp1.valor_permiso
-                                    FROM permiso_sistema_puesto psp1
-                                    INNER JOIN (
-                                        SELECT id_permiso_sistema, MAX(id_permiso_sistema_puesto) as max_id
-                                        FROM permiso_sistema_puesto
-                                        WHERE id_puesto = %s
-                                        GROUP BY id_permiso_sistema
-                                    ) psp2 ON psp1.id_permiso_sistema = psp2.id_permiso_sistema 
-                                           AND psp1.id_permiso_sistema_puesto = psp2.max_id
-                                    WHERE psp1.id_puesto = %s
-                                ) psp ON ps.id_permiso_sistema = psp.id_permiso_sistema
-                                WHERE psp.valor_permiso = 'Si'
-                            """, [id_puesto, id_puesto])
-                            
-                            results = cursor.fetchall()
-                            for row in results:
-                                key_permiso = row[0]
-                                if key_permiso:
-                                    permisos.add(key_permiso)
+                                    SELECT id_permiso_sistema, MAX(id_permiso_sistema_puesto) as max_id
+                                    FROM permiso_sistema_puesto
+                                    WHERE id_puesto = %s
+                                    GROUP BY id_permiso_sistema
+                                ) psp2 ON psp1.id_permiso_sistema = psp2.id_permiso_sistema 
+                                       AND psp1.id_permiso_sistema_puesto = psp2.max_id
+                                WHERE psp1.id_puesto = %s
+                            ) psp ON ps.id_permiso_sistema = psp.id_permiso_sistema
+                            WHERE psp.valor_permiso = 'Si'
+                        """, [id_puesto, id_puesto])
+                        
+                        results = cursor.fetchall()
+                        for row in results:
+                            key_permiso = row[0]
+                            if key_permiso:
+                                permisos.add(key_permiso)
+                        
+                        cursor.close()
+                        conn.close()
                     except Exception as e:
                         import logging
                         logger = logging.getLogger(__name__)
