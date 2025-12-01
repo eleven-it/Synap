@@ -33,9 +33,9 @@ class Command(BaseCommand):
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT u.id_usuario, u.cod_usuario, u.nombre_usuario, u.apellido_usuario,
-                       u.idpuesto, p.puesto
+                       u.id_puesto, p.puesto
                 FROM usuarios u
-                LEFT JOIN puestos p ON u.idpuesto = p.idpuesto
+                LEFT JOIN puestos p ON u.id_puesto = p.idpuesto
                 WHERE u.cod_usuario = %s
             """, [cod_usuario])
             
