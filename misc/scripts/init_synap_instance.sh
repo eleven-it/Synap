@@ -141,7 +141,6 @@ echo -e "   Local:      ${COLOR_OK}http://localhost:8002${COLOR_RESET}"
 echo -e "   Login:      ${COLOR_OK}http://localhost:8002/login/${COLOR_RESET}"
 echo -e "   Dashboard:  ${COLOR_OK}http://localhost:8002/core/dashboard/${COLOR_RESET}"
 echo -e "   Admin:      ${COLOR_OK}http://localhost:8002/admin/${COLOR_RESET}"
-echo -e "   Rosetta:    ${COLOR_OK}http://localhost:8002/rosetta/${COLOR_RESET} (traducciones)"
 echo ""
 
 echo -e "${COLOR_CYAN}📋 COMANDOS ÚTILES:${COLOR_RESET}"

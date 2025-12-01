@@ -31,7 +31,6 @@ mysql-connector-python
 defusedxml
 bleach
 geopy
-django-rosetta
 # Reports AI dependencies
 openai>=1.10.0
 crewai>=0.28.0

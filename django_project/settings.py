@@ -37,7 +37,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'crispy_forms',
     'crispy_tailwind',
-    'rosetta',  # Herramienta de traducción
 
     # Apps propias - administraNET Analytics
     'core',
@@ -154,7 +153,7 @@ DATABASES = {
 # Configuración regional
 LANGUAGE_CODE = 'es-ar'
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
-USE_I18N = True  # Habilitado para soporte de traducciones con rosetta
+USE_I18N = True  # Habilitado para soporte de traducciones i18n
 USE_L10N = True
 USE_TZ = True
 
