@@ -178,16 +178,17 @@ def get_usuario_extendiendo_desde_sesion(request):
                         logger = logging.getLogger(__name__)
                         logger.warning(f"Error al obtener permisos desde MySQL para puesto {id_puesto}: {e}")
                 
-                # Si no se encontraron permisos en la BD y el puesto es "Supervisor", otorgar acceso a Reports por defecto
-                if not permisos and hasattr(self, 'nombre_puesto') and self.nombre_puesto:
+                # Si el puesto es "Supervisor", agregar permisos de Synap (Reports) incluso si ya hay permisos de administraNET
+                if hasattr(self, 'nombre_puesto') and self.nombre_puesto:
                     if self.nombre_puesto.lower() == 'supervisor':
-                        permisos = {
+                        # Agregar permisos de Synap al set existente (no reemplazar)
+                        permisos.update({
                             "reports.ver",
                             "reports.*",
                             "reports.view_operational",
                             "reports.view_managerial",
                             "reports.dashboard",
-                        }
+                        })
                 
                 return permisos
                 
