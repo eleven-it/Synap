@@ -203,14 +203,32 @@ class Command(BaseCommand):
             if hasattr(user, 'get_permisos_totales'):
                 permisos = user.get_permisos_totales()
                 self.stdout.write(f"🔍 Verificación detallada:")
+                self.stdout.write(f"   Permisos obtenidos (repr): {repr(permisos)}")
+                self.stdout.write(f"   Tipo de permisos: {type(permisos)}")
+                self.stdout.write(f"   Cantidad de permisos: {len(permisos)}")
+                if permisos:
+                    self.stdout.write(f"   Primer permiso (repr): {repr(list(permisos)[0])}")
+                    self.stdout.write(f"   Tipo del primer permiso: {type(list(permisos)[0])}")
+                self.stdout.write("")
                 for perm in required_permissions:
                     has_perm = perm in permisos
+                    # Debug adicional
+                    if not has_perm:
+                        # Verificar si hay algún permiso similar
+                        similares = [p for p in permisos if perm in str(p) or str(p) in perm]
+                        if similares:
+                            self.stdout.write(f"   ⚠️  Permisos similares encontrados: {similares}")
                     status = self.style.SUCCESS('✅') if has_perm else self.style.ERROR('❌')
                     self.stdout.write(f"   {status} {perm}")
                 
                 # Verificar comodín del módulo
                 module_wildcard = "reports.*"
                 has_wildcard = module_wildcard in permisos
+                # Debug adicional para comodín
+                if not has_wildcard:
+                    similares = [p for p in permisos if 'reports' in str(p).lower()]
+                    if similares:
+                        self.stdout.write(f"   ⚠️  Permisos de reports encontrados: {similares}")
                 status = self.style.SUCCESS('✅') if has_wildcard else self.style.ERROR('❌')
                 self.stdout.write(f"   {status} {module_wildcard} (comodín)")
                 self.stdout.write("")
