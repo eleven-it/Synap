@@ -1,8 +1,9 @@
 from django.core.management.base import BaseCommand
-from django.db import connections
+from django.conf import settings
 from core.middleware.base_middleware import get_usuario_extendiendo_desde_sesion
 from core.module_registry import MODULE_CONFIGS
 from core.middleware.module_middleware import ModulePermissionMiddleware
+import MySQLdb
 
 
 class Command(BaseCommand):
@@ -16,10 +17,20 @@ class Command(BaseCommand):
         
         self.stdout.write(f"🔍 Diagnosticando permisos para usuario: {cod_usuario}\n")
         
-        # Obtener información del usuario desde MySQL
-        mysql_conn = connections['mysql']
+        # Obtener configuración de MySQL desde settings
+        mysql_config = settings.DATABASES['mysql']
         
-        with mysql_conn.cursor() as cursor:
+        # Conectar directamente a MySQL (evita validación de versión de Django)
+        try:
+            conn = MySQLdb.connect(
+                host=mysql_config['HOST'],
+                port=int(mysql_config['PORT']),
+                user=mysql_config['USER'],
+                passwd=mysql_config['PASSWORD'],
+                db=mysql_config['NAME'],
+                charset='latin1'
+            )
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT u.id_usuario, u.cod_usuario, u.nombre_usuario, u.apellido_usuario,
                        u.id_puesto, p.nombre_puesto
@@ -156,4 +167,13 @@ class Command(BaseCommand):
                     has_wildcard = user.tiene_permiso(module_wildcard)
                     status = self.style.SUCCESS('✅') if has_wildcard else self.style.ERROR('❌')
                     self.stdout.write(f"   {status} {module_wildcard} (comodín)")
+            
+            # Cerrar conexión
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f"❌ Error al conectar a MySQL: {e}"))
+            import traceback
+            self.stdout.write(traceback.format_exc())
 
