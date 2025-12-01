@@ -127,6 +127,11 @@ class ModulePermissionMiddleware:
         if "*" in user_permissions:
             return True
         
+        # Verificar si el usuario tiene permiso con comodín para el módulo (ej: "reports.*")
+        module_wildcard = f"{module_name}.*"
+        if module_wildcard in user_permissions:
+            return True
+        
         # Verificar si el usuario tiene al menos un permiso del módulo
         for permission in permissions:
             if permission in user_permissions:
