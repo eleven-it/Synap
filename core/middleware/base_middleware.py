@@ -121,12 +121,53 @@ def get_usuario_extendiendo_desde_sesion(request):
                 if self.is_admin():
                     return {"*"}
                 
-                # Si el puesto es "Supervisor" (pero NO es el usuario supervisor), otorgar acceso a Reports
-                if hasattr(self, 'nombre_puesto') and self.nombre_puesto:
+                # Consultar permisos desde la base de datos de administraNET
+                permisos = set()
+                
+                # Obtener base_empresa de la sesión o del usuario
+                base_empresa = getattr(self, 'base_empresa', None)
+                id_puesto = getattr(self, 'id_puesto', None)
+                
+                if base_empresa and id_puesto:
+                    try:
+                        from django.db import connections
+                        mysql_conn = connections['mysql']
+                        
+                        with mysql_conn.cursor() as cursor:
+                            # Consultar permisos desde permiso_sistema_puesto
+                            # Obtener el valor_permiso más reciente para cada permiso del puesto
+                            cursor.execute("""
+                                SELECT ps.key_permiso, psp.valor_permiso
+                                FROM permiso_sistema ps
+                                INNER JOIN (
+                                    SELECT psp1.id_permiso_sistema, psp1.valor_permiso
+                                    FROM permiso_sistema_puesto psp1
+                                    INNER JOIN (
+                                        SELECT id_permiso_sistema, MAX(id_permiso_sistema_puesto) as max_id
+                                        FROM permiso_sistema_puesto
+                                        WHERE id_puesto = %s
+                                        GROUP BY id_permiso_sistema
+                                    ) psp2 ON psp1.id_permiso_sistema = psp2.id_permiso_sistema 
+                                           AND psp1.id_permiso_sistema_puesto = psp2.max_id
+                                    WHERE psp1.id_puesto = %s
+                                ) psp ON ps.id_permiso_sistema = psp.id_permiso_sistema
+                                WHERE psp.valor_permiso = 'Si'
+                            """, [id_puesto, id_puesto])
+                            
+                            results = cursor.fetchall()
+                            for row in results:
+                                key_permiso = row[0]
+                                if key_permiso:
+                                    permisos.add(key_permiso)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Error al obtener permisos desde MySQL para puesto {id_puesto}: {e}")
+                
+                # Si no se encontraron permisos en la BD y el puesto es "Supervisor", otorgar acceso a Reports por defecto
+                if not permisos and hasattr(self, 'nombre_puesto') and self.nombre_puesto:
                     if self.nombre_puesto.lower() == 'supervisor':
-                        # Puesto Supervisor tiene acceso a Reports (Catalogo, Workspace, y reportes operacionales/gerenciales)
-                        # NO es superuser, solo tiene permisos específicos de Reports
-                        return {
+                        permisos = {
                             "reports.ver",
                             "reports.*",
                             "reports.view_operational",
@@ -134,9 +175,7 @@ def get_usuario_extendiendo_desde_sesion(request):
                             "reports.dashboard",
                         }
                 
-                # Otros usuarios no tienen permisos por defecto
-                # Se puede expandir con permisos desde MySQL basado en id_puesto y tabla puestos/permisos de administraNET
-                return set()
+                return permisos
                 
             def tiene_permiso_modulo(self, modulo):
                 """Verifica si el usuario tiene algún permiso de un módulo específico"""

@@ -90,7 +90,16 @@ class ModulePermissionMiddleware:
         for module_name in MODULE_CONFIGS.keys():
             if path.startswith(f'{module_name}/'):
                 # Verificar si el usuario tiene acceso al módulo
-                if not self.user_has_module_access(request.user, module_name):
+                has_access = self.user_has_module_access(request.user, module_name)
+                
+                # Logging para diagnóstico
+                import logging
+                logger = logging.getLogger(__name__)
+                if hasattr(request.user, 'get_permisos_totales'):
+                    permisos = request.user.get_permisos_totales()
+                    logger.debug(f"Usuario {getattr(request.user, 'cod_usuario', 'unknown')} intentando acceder a {module_name}. Permisos: {permisos}. Acceso: {has_access}")
+                
+                if not has_access:
                     messages.error(
                         request,
                         _('You do not have permission to access the "{module}" module.').format(
@@ -122,6 +131,16 @@ class ModulePermissionMiddleware:
         user_permissions = set()
         if hasattr(user, 'get_permisos_totales'):
             user_permissions = user.get_permisos_totales()
+        elif hasattr(user, 'tiene_permiso') and callable(user.tiene_permiso):
+            # Si no tiene get_permisos_totales pero tiene tiene_permiso, verificar directamente
+            for permission in permissions:
+                if user.tiene_permiso(permission):
+                    return True
+            # Verificar comodín del módulo
+            module_wildcard = f"{module_name}.*"
+            if user.tiene_permiso(module_wildcard):
+                return True
+            return False
         
         # Verificar si el usuario tiene acceso total
         if "*" in user_permissions:
