@@ -39,7 +39,8 @@ class Command(BaseCommand):
             if base_empresa:
                 cursor_empresas.execute("SELECT base_empresa FROM empresas WHERE base_empresa = %s", [base_empresa])
             else:
-                cursor_empresas.execute("SELECT base_empresa FROM empresas WHERE activa = 'Si'")
+                # Obtener todas las empresas (sin filtro de activa ya que puede no existir)
+                cursor_empresas.execute("SELECT base_empresa FROM empresas")
             
             empresas = [row[0] for row in cursor_empresas.fetchall()]
             cursor_empresas.close()
