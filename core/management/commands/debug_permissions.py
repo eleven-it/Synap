@@ -11,9 +11,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('cod_usuario', type=str, help='Código de usuario a diagnosticar')
+        parser.add_argument('--base-empresa', type=str, help='Base de datos de la empresa (ej: administranet89). Si no se especifica, busca en todas las empresas.')
 
     def handle(self, *args, **options):
         cod_usuario = options['cod_usuario']
+        base_empresa = options.get('base_empresa')
         
         self.stdout.write(f"🔍 Diagnosticando permisos para usuario: {cod_usuario}\n")
         
@@ -22,27 +24,82 @@ class Command(BaseCommand):
         
         # Conectar directamente a MySQL (evita validación de versión de Django)
         try:
+            # Conectar a la base de datos 'empresas' para obtener lista de empresas
+            conn_empresas = MySQLdb.connect(
+                host=mysql_config['HOST'],
+                port=int(mysql_config['PORT']),
+                user=mysql_config['USER'],
+                passwd=mysql_config['PASSWORD'],
+                db='empresas',
+                charset='latin1'
+            )
+            cursor_empresas = conn_empresas.cursor()
+            
+            # Obtener lista de bases de datos de empresas
+            if base_empresa:
+                cursor_empresas.execute("SELECT base_empresa FROM empresas WHERE base_empresa = %s", [base_empresa])
+            else:
+                cursor_empresas.execute("SELECT base_empresa FROM empresas WHERE activa = 'Si'")
+            
+            empresas = [row[0] for row in cursor_empresas.fetchall()]
+            cursor_empresas.close()
+            conn_empresas.close()
+            
+            if not empresas:
+                self.stdout.write(self.style.ERROR(f"❌ No se encontraron empresas activas"))
+                return
+            
+            self.stdout.write(f"🔍 Buscando usuario en {len(empresas)} empresa(s)...\n")
+            
+            # Buscar el usuario en cada base de datos de empresa
+            result = None
+            empresa_encontrada = None
+            
+            for empresa_db in empresas:
+                try:
+                    conn = MySQLdb.connect(
+                        host=mysql_config['HOST'],
+                        port=int(mysql_config['PORT']),
+                        user=mysql_config['USER'],
+                        passwd=mysql_config['PASSWORD'],
+                        db=empresa_db,
+                        charset='latin1'
+                    )
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        SELECT u.id_usuario, u.cod_usuario, u.nombre_usuario, u.apellido_usuario,
+                               u.id_puesto, p.puesto
+                        FROM usuarios u
+                        LEFT JOIN puestos p ON u.id_puesto = p.idpuesto
+                        WHERE u.cod_usuario = %s AND u.baja_usuario <> 'Si'
+                    """, [cod_usuario])
+                    
+                    result = cursor.fetchone()
+                    cursor.close()
+                    conn.close()
+                    
+                    if result:
+                        empresa_encontrada = empresa_db
+                        self.stdout.write(f"✅ Usuario encontrado en empresa: {empresa_db}\n")
+                        break
+                except Exception as e:
+                    # Continuar con la siguiente empresa si hay error
+                    continue
+            
+            if not result:
+                self.stdout.write(self.style.ERROR(f"❌ Usuario {cod_usuario} no encontrado en ninguna base de datos de empresa"))
+                return
+            
+            # Reconectar a la base de datos donde se encontró el usuario
             conn = MySQLdb.connect(
                 host=mysql_config['HOST'],
                 port=int(mysql_config['PORT']),
                 user=mysql_config['USER'],
                 passwd=mysql_config['PASSWORD'],
-                db=mysql_config['NAME'],
+                db=empresa_encontrada,
                 charset='latin1'
             )
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT u.id_usuario, u.cod_usuario, u.nombre_usuario, u.apellido_usuario,
-                       u.id_puesto, p.puesto
-                FROM usuarios u
-                LEFT JOIN puestos p ON u.id_puesto = p.idpuesto
-                WHERE u.cod_usuario = %s
-            """, [cod_usuario])
-            
-            result = cursor.fetchone()
-            if not result:
-                self.stdout.write(self.style.ERROR(f"❌ Usuario {cod_usuario} no encontrado en la base de datos"))
-                return
             
             id_usuario, cod_usuario, nombre_usuario, apellido_usuario, id_puesto, nombre_puesto = result
             
@@ -54,8 +111,8 @@ class Command(BaseCommand):
             self.stdout.write(f"   Nombre Puesto: {nombre_puesto or 'N/A'}")
             self.stdout.write("")
             
-            # Obtener permisos desde MySQL
-            # Nota: usuarios.idpuesto y puestos.idpuesto (sin guion), pero permiso_sistema_puesto.id_puesto (con guion)
+            # Obtener permisos desde MySQL usando la base de datos de la empresa
+            # Nota: usuarios.id_puesto (con guion), puestos.idpuesto (sin guion), permiso_sistema_puesto.id_puesto (con guion)
             if id_puesto:
                 cursor.execute("""
                     SELECT ps.key_permiso, psp.valor_permiso
@@ -96,7 +153,7 @@ class Command(BaseCommand):
                 'nombre_completo': f"{nombre_usuario} {apellido_usuario}",
                 'id_puesto': id_puesto,
                 'nombre_puesto': nombre_puesto,
-                'base_empresa': 'administranet89',  # Valor por defecto, ajustar si es necesario
+                'base_empresa': empresa_encontrada,
             }
             
             class MockRequest:
