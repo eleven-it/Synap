@@ -33,9 +33,9 @@ class Command(BaseCommand):
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT u.id_usuario, u.cod_usuario, u.nombre_usuario, u.apellido_usuario,
-                       u.id_puesto, p.nombre_puesto
+                       u.idpuesto, p.puesto
                 FROM usuarios u
-                LEFT JOIN puestos p ON u.id_puesto = p.id_puesto
+                LEFT JOIN puestos p ON u.idpuesto = p.idpuesto
                 WHERE u.cod_usuario = %s
             """, [cod_usuario])
             
@@ -51,10 +51,11 @@ class Command(BaseCommand):
             self.stdout.write(f"   Código: {cod_usuario}")
             self.stdout.write(f"   Nombre: {nombre_usuario} {apellido_usuario}")
             self.stdout.write(f"   Puesto ID: {id_puesto}")
-            self.stdout.write(f"   Nombre Puesto: {nombre_puesto}")
+            self.stdout.write(f"   Nombre Puesto: {nombre_puesto or 'N/A'}")
             self.stdout.write("")
             
             # Obtener permisos desde MySQL
+            # Nota: usuarios.idpuesto y puestos.idpuesto (sin guion), pero permiso_sistema_puesto.id_puesto (con guion)
             if id_puesto:
                 cursor.execute("""
                     SELECT ps.key_permiso, psp.valor_permiso
@@ -109,7 +110,7 @@ class Command(BaseCommand):
             self.stdout.write(f"👤 Usuario mock creado:")
             self.stdout.write(f"   Tipo: {type(user).__name__}")
             self.stdout.write(f"   cod_usuario: {getattr(user, 'cod_usuario', 'N/A')}")
-            self.stdout.write(f"   nombre_puesto: {getattr(user, 'nombre_puesto', 'N/A')}")
+            self.stdout.write(f"   nombre_puesto: {getattr(user, 'nombre_puesto', 'N/A') or 'N/A'}")
             self.stdout.write(f"   is_admin(): {user.is_admin() if hasattr(user, 'is_admin') else 'N/A'}")
             self.stdout.write("")
             
