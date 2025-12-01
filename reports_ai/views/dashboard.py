@@ -6,7 +6,8 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
-from django.utils.translation import gettext as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 from reports_ai.models import ReportRequest, AgentMetrics, BusinessRule, GlossaryTerm
 from reports_ai.services.crew_service import CrewService
 from datetime import date

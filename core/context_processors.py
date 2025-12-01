@@ -15,17 +15,32 @@ def usuario_y_permisos(request):
             "sucursales_disponibles": [],
         }
 
-    permisos_roles = set()
+    permisos_totales = set()
     es_admin = False
 
-    if hasattr(user, "roles"):
-        for rol in user.roles.all():
-            permisos_roles.update(rol.permisos.values_list("codigo", flat=True))
-            if rol.nombre.lower() == "administrador":
+    # Para usuarios de administraNET (AdministraNETUser), usar get_permisos_totales()
+    if hasattr(user, 'get_permisos_totales'):
+        permisos_totales = user.get_permisos_totales()
+        # Solo el usuario 'supervisor' (por cod_usuario) es admin/superuser
+        # NOTA: El puesto/rol "Supervisor" NO otorga permisos de admin
+        if hasattr(user, "is_admin") and user.is_admin():
+            es_admin = True
+        elif hasattr(user, "cod_usuario"):
+            cod_usuario_lower = (user.cod_usuario or '').lower()
+            if cod_usuario_lower == 'supervisor':
                 es_admin = True
-
-    permisos_directos = set(user.permisos_extra.values_list("codigo", flat=True))
-    permisos_totales = permisos_roles | permisos_directos
+    # Para usuarios de Synap (UsuarioExtendido), usar el sistema antiguo
+    elif isinstance(user, UsuarioExtendido):
+        permisos_roles = set()
+        if hasattr(user, "roles"):
+            for rol in user.roles.all():
+                permisos_roles.update(rol.permisos.values_list("codigo", flat=True))
+                if rol.nombre.lower() == "administrador":
+                    es_admin = True
+        permisos_directos = set(user.permisos_extra.values_list("codigo", flat=True))
+        permisos_totales = permisos_roles | permisos_directos
+        if user.is_admin():
+            es_admin = True
 
     if es_admin:
         permisos_totales = {"*"}
@@ -61,18 +76,74 @@ def usuario_y_permisos(request):
             debug=False
         )
 
-    # Empresa y sucursal activa
-    empresa_activa = getattr(user, 'empresa_activa', None)
-    branch_activa = getattr(user, 'branch_activa', None)
-
-    # Empresas y sucursales disponibles (por ahora, todas si es admin, si no solo la activa)
-    from core.models import Empresa, Branch
-    if user.is_admin():
-        empresas_disponibles = list(Empresa.objects.filter(activa=True))
-        sucursales_disponibles = list(Branch.objects.filter(active=True, empresa=empresa_activa)) if empresa_activa else []
-    else:
-        empresas_disponibles = [empresa_activa] if empresa_activa else []
-        sucursales_disponibles = [branch_activa] if branch_activa else []
+    # Empresa y sucursal activa desde administraNET
+    empresa_activa = None
+    branch_activa = None
+    empresas_disponibles = []
+    sucursales_disponibles = []
+    
+    # Obtener datos desde la sesión de administraNET
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_empresa = session_user.get("id_empresa")
+    id_sucursal = session_user.get("id_sucursal")
+    
+    if base_empresa:
+        try:
+            from core.services.administranet_empresas import AdministraNETEmpresaService
+            from core.services.administranet_sucursales import AdministraNETSucursalesService
+            
+            # Obtener empresa activa
+            empresa_service = AdministraNETEmpresaService()
+            empresa_data = empresa_service.obtener_empresa(base_empresa)
+            if empresa_data:
+                # Crear objeto mock para compatibilidad
+                class EmpresaMock:
+                    def __init__(self, data):
+                        self.nombre = data.get('Nombre', '')
+                        self.id_empresa = data.get('id_empresa', id_empresa)
+                        self.logo = None  # No hay logo en administraNET por ahora
+                        self.activa = True
+                empresa_activa = EmpresaMock(empresa_data)
+                empresas_disponibles = [empresa_activa]
+            
+            # Obtener sucursal activa
+            if id_sucursal and id_sucursal > 0:
+                sucursales_service = AdministraNETSucursalesService()
+                sucursal_data = sucursales_service.obtener_sucursal(base_empresa, id_sucursal)
+                if sucursal_data:
+                    # Crear objeto mock para compatibilidad
+                    class SucursalMock:
+                        def __init__(self, data):
+                            self.name = data.get('nombre_sucursal', '')
+                            self.id = data.get('id_sucursal')
+                            self.active = data.get('activa', True)
+                            self.city = data.get('domicilio_sucursal', '')
+                    branch_activa = SucursalMock(sucursal_data)
+                    sucursales_disponibles = [branch_activa]
+            
+            # Obtener todas las sucursales disponibles para el dropdown
+            if empresa_activa:
+                sucursales_service = AdministraNETSucursalesService()
+                todas_sucursales = sucursales_service.listar_sucursales(base_empresa)
+                # Crear lista de sucursales mock
+                sucursales_list = []
+                for s in todas_sucursales:
+                    if s.get('activa'):
+                        class SucursalMock:
+                            def __init__(self, data):
+                                self.id = data.get('id_sucursal')
+                                self.name = data.get('nombre_sucursal', '')
+                                self.active = data.get('activa', True)
+                                self.city = data.get('domicilio_sucursal', '')
+                        sucursales_list.append(SucursalMock(s))
+                sucursales_disponibles = sucursales_list
+                
+                # Si no hay sucursal activa pero hay sucursales disponibles, usar la primera
+                if not branch_activa and sucursales_disponibles:
+                    branch_activa = sucursales_disponibles[0]
+        except Exception as e:
+            logger.error(f"Error al obtener empresa/sucursal desde administraNET: {e}")
 
     return {
         "user": user,
@@ -84,6 +155,7 @@ def usuario_y_permisos(request):
         "branch_activa": branch_activa,
         "empresas_disponibles": empresas_disponibles,
         "sucursales_disponibles": sucursales_disponibles,
+        "session_user": session_user,  # Agregar datos de sesión para el navbar
     }
 
 def menu_context(request):
@@ -102,14 +174,15 @@ def menu_context(request):
         app_name = request.resolver_match.app_name
         if app_name == 'core':
             current_app_id = 'settings'
-        elif app_name == 'inventory':
-            current_app_id = 'inventory'
-        elif app_name == 'tiendanube':
-            current_app_id = 'tiendanube'
-        elif app_name == 'purchases':
-            current_app_id = 'purchases'
-        elif app_name == 'sales':
-            current_app_id = 'sales'
+        # Módulos deshabilitados para administraNET Analytics
+        # elif app_name == 'inventory':
+        #     current_app_id = 'inventory'
+        # elif app_name == 'tiendanube':
+        #     current_app_id = 'tiendanube'
+        # elif app_name == 'purchases':
+        #     current_app_id = 'purchases'
+        # elif app_name == 'sales':
+        #     current_app_id = 'sales'
         elif app_name == 'accounting':
             current_app_id = 'accounting'
         elif app_name == 'administraNET_integration':
@@ -137,59 +210,18 @@ def menu_context(request):
         "show_sidebar": bool(current_sidebar_items),
     }
 
-def inventory_menu_context(request):
-    """
-    Procesa el contexto para el menú lateral del módulo de inventario.
-    Mantenido para compatibilidad.
-    """
-    user = getattr(request, "user", None)
-    inventory_sidebar_items = []
-    
-    if user and getattr(user, "is_authenticated", False):
-        if request.resolver_match and request.resolver_match.app_name == 'inventory':
-            app = obtener_app_por_id("inventory")
-            if app and app.get("submenus"):
-                inventory_sidebar_items = app["submenus"]
+# Funciones de contexto de menú deshabilitadas para administraNET Analytics
+# def inventory_menu_context(request):
+#     """Módulo inventory deshabilitado"""
+#     return {"inventory_sidebar_items": []}
 
-    return {
-        "inventory_sidebar_items": inventory_sidebar_items
-    }
+# def tiendanube_menu_context(request):
+#     """Módulo tiendanube deshabilitado"""
+#     return {"tiendanube_sidebar_items": []}
 
-def tiendanube_menu_context(request):
-    """
-    Procesa el contexto para el menú lateral del módulo de TiendaNube.
-    Mantenido para compatibilidad.
-    """
-    user = getattr(request, "user", None)
-    tiendanube_sidebar_items = []
-    
-    if user and getattr(user, "is_authenticated", False):
-        if request.resolver_match and request.resolver_match.app_name == 'tiendanube':
-            app = obtener_app_por_id("tiendanube")
-            if app and app.get("submenus"):
-                tiendanube_sidebar_items = app["submenus"]
-
-    return {
-        "tiendanube_sidebar_items": tiendanube_sidebar_items
-    }
-
-def purchases_menu_context(request):
-    """
-    Procesa el contexto para el menú lateral del módulo de Purchases.
-    Mantenido para compatibilidad.
-    """
-    user = getattr(request, "user", None)
-    purchases_sidebar_items = []
-    
-    if user and getattr(user, "is_authenticated", False):
-        if request.resolver_match and request.resolver_match.app_name == 'purchases':
-            app = obtener_app_por_id("purchases")
-            if app and app.get("submenus"):
-                purchases_sidebar_items = app["submenus"]
-
-    return {
-        "purchases_sidebar_items": purchases_sidebar_items
-    }
+# def purchases_menu_context(request):
+#     """Módulo purchases deshabilitado"""
+#     return {"purchases_sidebar_items": []}
 
 def administraNET_integration_menu_context(request):
     """

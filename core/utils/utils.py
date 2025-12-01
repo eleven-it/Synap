@@ -1026,45 +1026,19 @@ APPS_MENU = [
             }
         ]
     },
-    {
-        "id": "tiendanube_administranet",
-        "nombre": _("Tiendanube-AdministraNET"),
-        "permiso": "tiendanube_administranet.view_tiendanubeconfig",
-        "url": "tiendanube_administranet:dashboard",
-        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
-            <path stroke-linecap='round' stroke-linejoin='round' d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'/>
-        </svg>""",
-        "orden": 16,
-        "color": "purple",
-        "submenus": [
-            {
-                "seccion": _("Status"),
-                "items": [
-                    {"label": _("Status"), "url": "tiendanube_administranet:dashboard", "icon": "monitor_heart", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
-                    {"label": _("Tiendanube Configuration"), "url": "tiendanube_administranet:tiendanube_config_list", "icon": "settings", "permission": "tiendanube_administranet.view_tiendanubeconfig"},
-                    {"label": _("AdministraNET Configuration"), "url": "tiendanube_administranet:adminet_config", "icon": "storage", "permission": "tiendanube_administranet.view_administranetconfig"},
-                ]
-            },
-            {
-                "seccion": _("Mappings"),
-                "items": [
-                    {"label": _("Customer Mappings"), "url": "tiendanube_administranet:customer_mapping_list", "icon": "people", "permission": "tiendanube_administranet.view_customermapping"},
-                    {"label": _("Product Mappings"), "url": "tiendanube_administranet:product_list", "icon": "inventory", "permission": "tiendanube_administranet.view_productmapping"},
-                    {"label": _("Order Mappings"), "url": "tiendanube_administranet:order_mapping_list", "icon": "receipt", "permission": "tiendanube_administranet.view_ordermapping"},
-                ]
-            },
-            {
-                "seccion": _("Synchronization"),
-                "items": [
-                    {"label": _("Auto Sync Config"), "url": "tiendanube_administranet:auto_sync_config", "icon": "settings_suggest", "permission": "tiendanube_administranet.change_tiendanubeconfig"},
-                    {"label": _("Manual Sync"), "url": "tiendanube_administranet:manual_sync", "icon": "sync", "permission": "tiendanube_administranet.run_sync"},
-                    {"label": _("Sync History"), "url": "tiendanube_administranet:sync_history", "icon": "history", "permission": "tiendanube_administranet.view_synclog"},
-                    {"label": _("Webhook Configurations"), "url": "tiendanube_administranet:webhook_config_list", "icon": "webhook", "permission": "tiendanube_administranet.view_webhookconfig"},
-                    {"label": _("Webhook Events"), "url": "tiendanube_administranet:webhook_event_list", "icon": "notifications", "permission": "tiendanube_administranet.view_webhookevent"},
-                ]
-            }
-        ]
-    },
+    # Módulo tiendanube_administranet deshabilitado para administraNET Analytics
+    # {
+    #     "id": "tiendanube_administranet",
+    #     "nombre": _("Tiendanube-AdministraNET"),
+    #     "permiso": "tiendanube_administranet.view_tiendanubeconfig",
+    #     "url": "tiendanube_administranet:dashboard",
+    #     "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'>
+    #         <path stroke-linecap='round' stroke-linejoin='round' d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'/>
+    #     </svg>""",
+    #     "orden": 16,
+    #     "color": "purple",
+    #     "submenus": [...]
+    # },
     {
         "id": "reports_ai",
         "nombre": _("Reports AI"),
@@ -1335,21 +1309,37 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     permisos_usuario = set()
     if isinstance(user, UsuarioExtendido):
         permisos_usuario = user.get_permisos_totales()
+    elif hasattr(user, 'get_permisos_totales'):
+        # Para AdministraNETUser (usuario de administraNET Gestión)
+        permisos_usuario = user.get_permisos_totales()
+    
+    # Solo el usuario "supervisor" (por cod_usuario) tiene todos los permisos
+    # NOTA: El puesto/rol "Supervisor" NO otorga acceso total, solo permisos específicos (reports.ver)
+    es_supervisor_usuario = False
+    if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
+        es_supervisor_usuario = True
+        permisos_usuario = {"*"}
 
     # Obtener módulos activos desde la base de datos
     active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
     
     # Agregar módulos core que siempre deben estar activos
-    core_modules = {'core', 'login', 'dashboard'}
+    core_modules = {'core', 'login', 'dashboard', 'reports'}
     active_modules.update(core_modules)
 
     apps_filtradas = []
     for app in APPS_MENU:
         app_id = app.get("id")
         
-        # REGLA 1: Module Management y Settings siempre visibles para superusuarios
+        # REGLA 1: Module Management y Settings solo visibles para el usuario 'supervisor' (superuser)
+        # NOTA: El puesto/rol "Supervisor" NO puede ver estos módulos
         if app_id in ["module_management", "settings"]:
-            if user.is_superuser:
+            # Solo el usuario 'supervisor' (por cod_usuario) es superuser
+            es_superuser = False
+            if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
+                es_superuser = True
+            
+            if es_superuser or user.is_superuser:
                 app_copy = app.copy()
                 try:
                     app_copy["url"] = reverse(app["url"])
@@ -1370,11 +1360,18 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
             continue
             
         # REGLA 3: Si la app es solo para superusuarios y el usuario no lo es, saltar
-        if app.get("superuser_only") and not user.is_superuser:
+        # Solo el usuario 'supervisor' (por cod_usuario) es superuser
+        es_superuser = False
+        if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
+            es_superuser = True
+        
+        if app.get("superuser_only") and not (es_superuser or user.is_superuser):
             continue
             
-        # REGLA 4: Verificar permisos (excepto para superusuarios que tienen acceso total)
-        if user.is_superuser or "*" in permisos_usuario or app["permiso"] in permisos_usuario:
+        # REGLA 4: Verificar permisos
+        # Solo usuarios con permisos "*" (usuario supervisor) o con el permiso específico pueden acceder
+        # El puesto/rol "Supervisor" solo tiene permisos específicos (reports.ver)
+        if "*" in permisos_usuario or app["permiso"] in permisos_usuario:
             app_copy = app.copy()
             
             # Resolver la URL principal de la app
@@ -1416,63 +1413,67 @@ def modulos_visibles_para_usuario(user: Optional[UsuarioExtendido]) -> List[Dict
     """Función de compatibilidad que usa la nueva estructura"""
     return apps_visibles_para_usuario(user)
 
+# Firebase deshabilitado para administraNET Analytics
 # Antes de usar firestore, asegúrate de inicializar Firebase:
-# get_firebase_app()  # Comentado temporalmente para desarrollo
+# get_firebase_app()  # Comentado - Firebase deshabilitado
 
 def sincronizar_usuario_desde_firestore(decoded_token: Dict[str, Any]) -> UsuarioExtendido:
     """
-    Sincroniza un usuario autenticado por Firebase con el modelo UsuarioExtendido.
-    Ya no usa tipo_usuario de Firebase. Solo actualiza nombre, idioma y email.
+    DESHABILITADO: Esta función sincronizaba usuarios desde Firebase.
+    Para administraNET Analytics, los usuarios se autentican directamente contra MySQL.
     """
-    uid = decoded_token.get("uid")
-    email = decoded_token.get("email")
-    nombre = decoded_token.get("name", "")
-
-    if not uid or not email:
-        raise ValueError("UID y email son requeridos para sincronizar usuario")
-
-    try:
-        firestore_db = firestore.client()
-        doc_ref = firestore_db.collection("usuarios").document(uid)
-        doc = doc_ref.get()
-
-        idioma = "es"
-        if doc.exists:
-            data = doc.to_dict()
-            idioma = data.get("idioma", "es")
-
-        usuario, creado = UsuarioExtendido.objects.get_or_create(
-            uid=uid, 
-            defaults={
-                "email": email,
-                "nombre": nombre,
-                "idioma": idioma,
-            }
-        )
-
-        # Actualizar campos si han cambiado
-        actualizado = False
-        if usuario.email != email:
-            usuario.email = email
-            actualizado = True
-        if usuario.nombre != nombre:
-            usuario.nombre = nombre
-            actualizado = True
-        if usuario.idioma != idioma:
-            usuario.idioma = idioma
-            actualizado = True
-
-        if actualizado:
-            usuario.save()
-            # Invalidar cache
-            cache.delete(f"user_uid_{uid}")
-            cache.delete(f"user_session_{uid}")
-
-        return usuario
-
-    except Exception as e:
-        logger.error(f"Error sincronizando usuario {uid}: {e}")
-        raise
+    raise NotImplementedError("Firebase deshabilitado - usar autenticación administraNET Gestión")
+    
+    # Código deshabilitado
+    # uid = decoded_token.get("uid")
+    # email = decoded_token.get("email")
+    # nombre = decoded_token.get("name", "")
+    # 
+    # if not uid or not email:
+    #     raise ValueError("UID y email son requeridos para sincronizar usuario")
+    # 
+    # try:
+    #     firestore_db = firestore.client()
+    #     doc_ref = firestore_db.collection("usuarios").document(uid)
+    #     doc = doc_ref.get()
+    # 
+    #     idioma = "es"
+    #     if doc.exists:
+    #         data = doc.to_dict()
+    #         idioma = data.get("idioma", "es")
+    # 
+    #     usuario, creado = UsuarioExtendido.objects.get_or_create(
+    #         uid=uid, 
+    #         defaults={
+    #             "email": email,
+    #             "nombre": nombre,
+    #             "idioma": idioma,
+    #         }
+    #     )
+    # 
+    #     # Actualizar campos si han cambiado
+    #     actualizado = False
+    #     if usuario.email != email:
+    #         usuario.email = email
+    #         actualizado = True
+    #     if usuario.nombre != nombre:
+    #         usuario.nombre = nombre
+    #         actualizado = True
+    #     if usuario.idioma != idioma:
+    #         usuario.idioma = idioma
+    #         actualizado = True
+    # 
+    #     if actualizado:
+    #         usuario.save()
+    #         # Invalidar cache
+    #         cache.delete(f"user_uid_{uid}")
+    #         cache.delete(f"user_session_{uid}")
+    # 
+    #     return usuario
+    # 
+    # except Exception as e:
+    #     logger.error(f"Error sincronizando usuario {uid}: {e}")
+    #     raise
 
 
 def permisos_contextuales(
@@ -1498,8 +1499,15 @@ def permisos_contextuales(
     # Usar método optimizado del modelo
     if isinstance(user, UsuarioExtendido):
         permisos_usuario = user.get_permisos_totales()
+    elif hasattr(user, 'get_permisos_totales'):
+        # Para AdministraNETUser (usuario de administraNET Gestión)
+        permisos_usuario = user.get_permisos_totales()
     else:
         permisos_usuario = set()
+    
+    # El usuario "supervisor" de administraNET tiene todos los permisos
+    if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
+        permisos_usuario = {"*"}
 
     # Evaluar permisos solicitados
     faltantes = []
@@ -1512,9 +1520,17 @@ def permisos_contextuales(
             faltantes.append(cod)
 
     # Roles permitidos (si aplica)
-    if roles_permitidos and isinstance(user, UsuarioExtendido):
+    # Solo el usuario "supervisor" (por cod_usuario) tiene acceso total
+    # NOTA: El puesto/rol "Supervisor" NO otorga acceso total
+    es_supervisor_usuario = False
+    if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
+        es_supervisor_usuario = True
+        permisos["rol_permitido"] = True
+    elif roles_permitidos and isinstance(user, UsuarioExtendido):
         user_roles = [r.nombre.lower() for r in user.roles.filter(activo=True)]
         permisos["rol_permitido"] = any(r.lower() in user_roles for r in roles_permitidos)
+    elif roles_permitidos and hasattr(user, 'is_admin') and user.is_admin():
+        permisos["rol_permitido"] = True
     elif roles_permitidos:
         permisos["rol_permitido"] = False
 

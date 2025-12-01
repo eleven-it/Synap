@@ -1,167 +1,289 @@
 {% extends "core/core_app_base.html" %}
-{% load i18n %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 {% block admin_content %}
-<div class="bg-white p-6 rounded-lg shadow-md" x-data="syncComponent()">
-    <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-semibold text-gray-800">Administración de Permisos</h1>
-        <div class="flex items-center space-x-2">
-            <button @click="startSync" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg flex items-center transition duration-150 ease-in-out">
-                <span class="material-icons mr-2">sync</span>
-                Sincronizar Sistema
-            </button>
-            <a href="{% url 'core:crear_permiso' %}" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg flex items-center">
-                <span class="material-icons mr-2">add</span>
-                Crear Permiso
-            </a>
-        </div>
+<div class="max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Permisos del Sistema</h1>
+  </div>
+
+  <!-- Búsqueda y filtros -->
+  <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+    <form method="get" class="flex gap-2">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nombre, código, módulo o detalle..." 
+             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+      <select name="grupo" class="px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+        <option value="">Todos los módulos</option>
+        {% for grupo_item in grupos %}
+        <option value="{{ grupo_item }}" {% if grupo_seleccionado == grupo_item %}selected{% endif %}>{{ grupo_item }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
+        <span class="material-icons text-base">search</span>
+      </button>
+      {% if q or grupo_seleccionado %}
+      <a href="{% url 'core:listar_permisos' %}" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-xs transition-colors" title="Limpiar">
+        <span class="material-icons text-base">clear</span>
+      </a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Controles de agrupación -->
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-xs text-gray-600">
+      Total: <span class="font-semibold">{{ total_permisos }}</span> permisos en <span class="font-semibold">{{ permisos_agrupados.paginator.count }}</span> módulos
     </div>
-
-    <!-- Modal de Sincronización -->
-    <div x-show="modalOpen" class="fixed inset-0 bg-gray-800 bg-opacity-60 overflow-y-auto h-full w-full z-50 flex items-center justify-center" x-transition>
-        <div @click.away="closeModal" class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl transform transition-all" :class="modalOpen ? 'scale-100' : 'scale-95'">
-            <div class="flex justify-between items-start">
-                <h3 class="text-2xl font-bold text-gray-800 mb-4">Estado de la Sincronización</h3>
-                <button @click="closeModal" class="text-gray-400 hover:text-gray-600">&times;</button>
-            </div>
-            
-            <div class="space-y-4">
-                <template x-if="loading && results.length === 0">
-                    <div class="flex items-center p-4 bg-gray-100 rounded-lg">
-                        <svg class="animate-spin h-6 w-6 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <p class="ml-3 font-medium text-gray-700">Iniciando sincronización...</p>
-                    </div>
-                </template>
-
-                <template x-for="(result, index) in results" :key="index">
-                    <div class="p-4 rounded-lg" :class="{ 'bg-green-50 border-green-200': result.status === 'success', 'bg-red-50 border-red-200': result.status === 'error' }">
-                        <div class="flex items-center">
-                            <!-- Icono de estado -->
-                            <template x-if="result.status === 'success'">
-                                <div class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center flex-shrink-0">
-                                    <span class="material-icons text-lg">check</span>
-                                </div>
-                            </template>
-                            <template x-if="result.status === 'error'">
-                                <div class="w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center flex-shrink-0">
-                                    <span class="material-icons text-lg">close</span>
-                                </div>
-                            </template>
-
-                            <div class="ml-4">
-                                <p class="font-bold text-gray-800" x-text="result.step"></p>
-                                <p class="text-sm text-gray-600" x-text="result.summary"></p>
-                            </div>
-                            <button @click="result.showLog = !result.showLog" class="ml-auto text-xs text-blue-500 hover:underline">Ver detalles</button>
-                        </div>
-                        <template x-if="result.showLog">
-                            <pre class="mt-4 bg-gray-900 text-white text-xs rounded-md p-3 overflow-x-auto max-h-48" x-text="result.log"></pre>
-                        </template>
-                    </div>
-                </template>
-            </div>
-            
-            <template x-if="globalError">
-                <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                    <p class="font-bold">Error General</p>
-                    <p x-text="globalError"></p>
-                </div>
-            </template>
-            
-            <div class="mt-6 text-right">
-                <button @click="closeModal" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition" :disabled="loading">
-                    {% trans "Close" %}
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Barra de búsqueda -->
-    <div class="mb-4">
-  <div class="max-w-4xl mx-auto">
-    <div class="bg-white rounded-lg shadow-md">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Permission Name" %}</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{% trans "Identifier (Codename)" %}</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          {% for permiso in permisos %}
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ permiso.nombre }}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">{{ permiso.codigo }}</td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="2" class="text-center py-4">{% trans "No permissions available." %}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="flex gap-2">
+      <button type="button" onclick="expandirTodosModulos()" class="text-xs text-purple-600 hover:text-purple-800 px-2 py-1 rounded hover:bg-purple-50 transition-colors">
+        Expandir Todos
+      </button>
+      <button type="button" onclick="colapsarTodosModulos()" class="text-xs text-gray-600 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-50 transition-colors">
+        Colapsar Todos
+      </button>
     </div>
   </div>
-</div>
 
+  <!-- Tabla de permisos agrupados por módulo -->
+  <div class="space-y-4">
+    {% for modulo, permisos_modulo in permisos_agrupados %}
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+      <!-- Encabezado del módulo -->
+      <div class="bg-gradient-to-r from-purple-50 to-blue-50 border-b border-purple-200">
+        <button type="button" 
+                onclick="toggleModulo('modulo_{{ forloop.counter0 }}')" 
+                class="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-100 transition-colors focus:outline-none">
+          <div class="flex items-center gap-3">
+            <span class="material-icons text-purple-600 expand-icon-modulo" id="icon_modulo_{{ forloop.counter0 }}">expand_more</span>
+            <div>
+              <h3 class="text-sm font-semibold text-gray-900">{{ modulo|default:"Sin módulo" }}</h3>
+              <p class="text-xs text-gray-600 mt-0.5">{{ permisos_modulo|length }} permiso{{ permisos_modulo|length|pluralize }}</p>
+            </div>
+          </div>
+        </button>
+      </div>
+      
+      <!-- Contenido del módulo (colapsable) -->
+      <div class="modulo-contenido" id="modulo_{{ forloop.counter0 }}">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            {% for permiso in permisos_modulo %}
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 text-xs">
+                <div class="font-medium text-gray-900">{{ permiso.nombre_permiso }}</div>
+                {% if permiso.detalle_permiso %}
+                <div class="text-gray-500 text-xs mt-1">{{ permiso.detalle_permiso }}</div>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 font-mono">{{ permiso.id_permiso_sistema }}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                {% with valor=permiso.valor_guardado|default:permiso.default_permiso %}
+                  {% if valor|lower == 'si' or valor|lower == 'yes' or valor|lower == 'true' or valor|lower == '1' or valor|lower == 'activo' %}
+                    <button type="button" 
+                            onclick="togglePermiso({{ permiso.id_permiso_sistema }}, 'No', this)"
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 transition-colors cursor-pointer toggle-permiso-btn"
+                            data-permiso-id="{{ permiso.id_permiso_sistema }}"
+                            data-valor-actual="Si"
+                            title="Clic para cambiar a Inactivo">
+                      <span class="w-1.5 h-1.5 mr-1.5 bg-green-500 rounded-full"></span>
+                      Activo
+                    </button>
+                  {% else %}
+                    <button type="button" 
+                            onclick="togglePermiso({{ permiso.id_permiso_sistema }}, 'Si', this)"
+                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors cursor-pointer toggle-permiso-btn"
+                            data-permiso-id="{{ permiso.id_permiso_sistema }}"
+                            data-valor-actual="No"
+                            title="Clic para cambiar a Activo">
+                      <span class="w-1.5 h-1.5 mr-1.5 bg-gray-500 rounded-full"></span>
+                      Inactivo
+                    </button>
+                  {% endif %}
+                {% endwith %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="px-6 py-4 text-center text-xs text-gray-500">No hay permisos en este módulo</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% empty %}
+    <div class="bg-white rounded-lg shadow-md p-8 text-center">
+      <p class="text-xs text-gray-500">No se encontraron permisos</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Paginación -->
+  {% if permisos_agrupados.has_other_pages %}
+  <div class="px-6 py-4 border-t flex items-center justify-between bg-white rounded-lg shadow-md mt-4">
+    <div class="text-xs text-gray-700">
+      Mostrando módulo {{ permisos_agrupados.start_index }} a {{ permisos_agrupados.end_index }} de {{ permisos_agrupados.paginator.count }}
+    </div>
+    <div class="flex gap-2">
+      {% if permisos_agrupados.has_previous %}
+      <a href="?page={{ permisos_agrupados.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grupo_seleccionado %}&grupo={{ grupo_seleccionado }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Anterior</a>
+      {% endif %}
+      {% if permisos_agrupados.has_next %}
+      <a href="?page={{ permisos_agrupados.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if grupo_seleccionado %}&grupo={{ grupo_seleccionado }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Siguiente</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
 {% endblock admin_content %}
 
-{% block extra_js %}
+{% block admin_extra_js %}
 <script>
-    function syncComponent() {
-        return {
-            modalOpen: false,
-            loading: false,
-            results: [],
-            globalError: '',
-
-            startSync() {
-                this.modalOpen = true;
-                this.loading = true;
-                this.results = [];
-                this.globalError = '';
-
-                fetch("{% url 'core:sincronizar_sistema' %}", {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': '{{ csrf_token }}',
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Error del servidor: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    this.loading = false;
-                    if (data.status === 'success') {
-                        this.results = data.results.map(r => ({ ...r, showLog: false }));
-                    } else {
-                        this.globalError = data.message || 'Ocurrió un error desconocido durante el proceso.';
-                        if (data.results) {
-                            this.results = data.results.map(r => ({ ...r, showLog: r.status === 'error' }));
-                        }
-                    }
-                })
-                .catch(err => {
-                    this.loading = false;
-                    this.globalError = `Error de conexión: ${err.message}. Revisa la consola para más detalles.`;
-                    console.error(err);
-                });
-            },
-            closeModal() {
-                this.modalOpen = false;
-                // Si la sincronización fue exitosa, recargamos la página para ver los cambios
-                if (!this.globalError && this.results.length > 0) {
-                    setTimeout(() => window.location.reload(), 300);
-                }
-            }
-        }
+// Función para colapsar/expandir un módulo específico
+function toggleModulo(moduloId) {
+  const contenido = document.getElementById(moduloId);
+  const icon = document.getElementById(`icon_${moduloId}`);
+  
+  if (contenido) {
+    if (contenido.style.display === 'none') {
+      contenido.style.display = 'block';
+      if (icon) {
+        icon.textContent = 'expand_more';
+        icon.classList.remove('rotate-180');
+      }
+    } else {
+      contenido.style.display = 'none';
+      if (icon) {
+        icon.textContent = 'chevron_right';
+        icon.classList.add('rotate-180');
+      }
     }
+  }
+}
+
+// Expandir todos los módulos
+function expandirTodosModulos() {
+  const modulos = document.querySelectorAll('.modulo-contenido');
+  modulos.forEach(modulo => {
+    modulo.style.display = 'block';
+  });
+  const icons = document.querySelectorAll('.expand-icon-modulo');
+  icons.forEach(icon => {
+    icon.textContent = 'expand_more';
+    icon.classList.remove('rotate-180');
+  });
+}
+
+// Colapsar todos los módulos
+function colapsarTodosModulos() {
+  const modulos = document.querySelectorAll('.modulo-contenido');
+  modulos.forEach(modulo => {
+    modulo.style.display = 'none';
+  });
+  const icons = document.querySelectorAll('.expand-icon-modulo');
+  icons.forEach(icon => {
+    icon.textContent = 'chevron_right';
+    icon.classList.add('rotate-180');
+  });
+}
+
+// Inicializar: todos los módulos expandidos por defecto
+document.addEventListener('DOMContentLoaded', function() {
+  expandirTodosModulos();
+});
+
+// Función para cambiar el valor de un permiso
+function togglePermiso(permisoId, nuevoValor, boton) {
+  // Deshabilitar el botón mientras se procesa
+  boton.disabled = true;
+  const botonOriginal = boton.cloneNode(true);
+  
+  // Mostrar estado de carga
+  const esActivo = nuevoValor === 'Si';
+  boton.className = esActivo 
+    ? 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 opacity-50 cursor-wait'
+    : 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 opacity-50 cursor-wait';
+  
+  // Realizar petición AJAX
+  fetch(`/core/permisos/${permisoId}/toggle-valor/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: JSON.stringify({
+      valor: nuevoValor
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Actualizar el botón con el nuevo estado
+      if (nuevoValor === 'Si') {
+        boton.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 transition-colors cursor-pointer toggle-permiso-btn';
+        boton.innerHTML = '<span class="w-1.5 h-1.5 mr-1.5 bg-green-500 rounded-full"></span>Activo';
+        boton.setAttribute('data-valor-actual', 'Si');
+        boton.setAttribute('onclick', `togglePermiso(${permisoId}, 'No', this)`);
+        boton.setAttribute('title', 'Clic para cambiar a Inactivo');
+      } else {
+        boton.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors cursor-pointer toggle-permiso-btn';
+        boton.innerHTML = '<span class="w-1.5 h-1.5 mr-1.5 bg-gray-500 rounded-full"></span>Inactivo';
+        boton.setAttribute('data-valor-actual', 'No');
+        boton.setAttribute('onclick', `togglePermiso(${permisoId}, 'Si', this)`);
+        boton.setAttribute('title', 'Clic para cambiar a Activo');
+      }
+    } else {
+      // Restaurar el botón original en caso de error
+      boton.replaceWith(botonOriginal);
+      alert('Error al actualizar el permiso: ' + (data.error || 'Error desconocido'));
+    }
+  })
+  .catch(error => {
+    // Restaurar el botón original en caso de error
+    boton.replaceWith(botonOriginal);
+    console.error('Error:', error);
+    alert('Error al actualizar el permiso. Por favor, intente nuevamente.');
+  })
+  .finally(() => {
+    boton.disabled = false;
+  });
+}
+
+// Función auxiliar para obtener el token CSRF
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
 </script>
-{% endblock extra_js %}
+<style>
+.modulo-contenido {
+  display: block;
+}
+.expand-icon-modulo {
+  transition: transform 0.2s;
+}
+.expand-icon-modulo.rotate-180 {
+  transform: rotate(-90deg);
+}
+</style>
+{% endblock %}

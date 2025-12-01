@@ -284,8 +284,11 @@ class Command(BaseCommand):
     def setup_payment_methods(self, empresa, branch):
         """Configurar métodos de pago básicos"""
         self.stdout.write('💳 Configurando métodos de pago...')
+        self.stdout.write('  ⚠️ Payment methods disabled for administraNET Analytics')
+        return
         
-        from sales.models import PaymentMethod
+        # Código deshabilitado - requiere módulo sales
+        # from sales.models import PaymentMethod
         
         if not self.dry_run:
             # Métodos de pago básicos
@@ -375,8 +378,9 @@ class Command(BaseCommand):
         
         from core.models import Empresa, Branch, UsuarioExtendido, Rol, Permiso
         from core.models import UnitOfMeasure
-        from accounting.models import ChartOfAccounts, Journal, Tax, FiscalYear
-        from sales.models import PaymentMethod
+        # Módulos deshabilitados para administraNET Analytics
+        # from accounting.models import ChartOfAccounts, Journal, Tax, FiscalYear
+        # from sales.models import PaymentMethod
         
         # Verificaciones básicas
         checks = [

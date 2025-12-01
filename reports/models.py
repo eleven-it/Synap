@@ -3,7 +3,8 @@ from __future__ import annotations
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 
 class ReportCategory(models.TextChoices):
@@ -86,6 +87,11 @@ class ReportDefinition(models.Model):
         verbose_name=_("Is active"),
         help_text=_("Inactive definitions are hidden from catalogs and APIs."),
     )
+    is_visible = models.BooleanField(
+        default=True,
+        verbose_name=_("Is visible"),
+        help_text=_("Visible reports are shown to users with Supervisor role. Only the supervisor user can toggle this."),
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -114,6 +120,7 @@ class ReportDefinition(models.Model):
             models.Index(fields=["empresa", "category"], name="reports_by_company_cat"),
             models.Index(fields=["slug"], name="reports_slug_idx"),
             models.Index(fields=["is_active"], name="reports_active_idx"),
+            models.Index(fields=["is_visible"], name="reports_visible_idx"),
         ]
 
     def __str__(self) -> str:

@@ -1,154 +1,229 @@
 # core/views/views_permisos.py
 
 import json
-from django.shortcuts import render, redirect, get_object_or_404
+from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.db.models import Q
 from django.views.decorators.csrf import csrf_protect
-from core.models import Permiso
-from core.decorators import tiene_permiso
-from core.constantes_permisos import PERMISOS_POR_MODULO
-from django.core.exceptions import PermissionDenied
-from django.core.management import call_command
+from django.core.paginator import Paginator
 from django.http import JsonResponse
-from io import StringIO
+from core.decorators import tiene_permiso
+from core.services.administranet_permiso_sistema import AdministraNETPermisoSistemaService
+from django.core.exceptions import PermissionDenied
 import logging
-import re
-from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
 
-@tiene_permiso("usuarios.ver")
+@tiene_permiso("administrar.usuarios")
 def listar_permisos_view(request):
     """
-    Muestra una lista plana y filtrable de todos los permisos del sistema.
-    Ordenados por código (codename) alfabéticamente para agrupar por módulos.
+    Muestra una lista filtrable de todos los permisos del sistema de administraNET.
+    Ordenados por grupo y nombre.
     """
-    consulta = request.GET.get("q", "").strip()
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_puesto = session_user.get("id_puesto")
     
-    # Ordenar por código (codename) para agrupar por módulos alfabéticamente
-    permisos_qs = Permiso.objects.all().order_by("codigo")
-
-    if consulta:
-        permisos_qs = permisos_qs.filter(
-            Q(nombre__icontains=consulta) | Q(codigo__icontains=consulta)
-        )
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+    
+    # Inicializar servicio
+    permisos_service = AdministraNETPermisoSistemaService()
+    
+    # Búsqueda y filtros
+    consulta = request.GET.get("q", "").strip()
+    grupo = request.GET.get("grupo", "").strip() or None
+    
+    # Obtener permisos desde MySQL de administraNET, filtrando por el puesto del usuario actual
+    permisos = permisos_service.listar_permisos(
+        base_empresa=base_empresa,
+        busqueda=consulta if consulta else None,
+        grupo=grupo,
+        id_puesto=id_puesto
+    )
+    
+    # Obtener grupos disponibles
+    grupos = permisos_service.obtener_grupos(base_empresa)
+    
+    # Agrupar permisos por módulo
+    permisos_por_modulo = {}
+    for permiso in permisos:
+        modulo = permiso.get('grupo_permiso', 'Sin módulo')
+        if modulo not in permisos_por_modulo:
+            permisos_por_modulo[modulo] = []
+        permisos_por_modulo[modulo].append(permiso)
+    
+    # Convertir a lista de tuplas (modulo, permisos) para el template
+    permisos_agrupados = sorted(permisos_por_modulo.items(), key=lambda x: x[0])
+    
+    # Paginación manual (paginamos los módulos, no los permisos individuales)
+    # Para simplificar, mostramos todos los módulos pero podríamos paginar si hay muchos
+    paginator = Paginator(permisos_agrupados, 10)  # 10 módulos por página
+    page_number = request.GET.get("page")
+    page_obj = paginator.get_page(page_number)
 
     context = {
-        "permisos": permisos_qs,
+        "permisos_agrupados": page_obj,
         "q": consulta,
+        "grupo_seleccionado": grupo,
+        "grupos": grupos,
+        "base_empresa": base_empresa,
+        "total_permisos": len(permisos),
     }
     return render(request, "core/permisos_list.html", context)
 
 
 @csrf_protect
-@tiene_permiso("usuarios.permisos.crear")
+@tiene_permiso("administrar.usuarios")
 def crear_editar_permiso_view(request, permiso_id=None):
-    if permiso_id:
-        permiso = get_object_or_404(Permiso, id=permiso_id)
-        if not request.user.tiene_permiso("usuarios.permisos.editar"):
-            raise PermissionDenied
-        editar = True
+    """
+    Crea o edita un permiso del sistema de administraNET
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:listar_permisos")
+    
+    # Inicializar servicio
+    permisos_service = AdministraNETPermisoSistemaService()
+    
+    editar = permiso_id is not None
+    
+    if editar:
+        permiso = permisos_service.obtener_permiso(base_empresa, permiso_id)
+        if not permiso:
+            messages.error(request, "Permiso no encontrado.")
+            return redirect("core:listar_permisos")
     else:
         permiso = None
-        editar = False
-
+    
     if request.method == "POST":
-        codigo = request.POST.get("codigo", "").strip()
-        nombre = request.POST.get("nombre", "").strip()
+        key_permiso = request.POST.get("key_permiso", "").strip()
+        nombre_permiso = request.POST.get("nombre_permiso", "").strip()
+        detalle_permiso = request.POST.get("detalle_permiso", "").strip()
+        grupo_permiso = request.POST.get("grupo_permiso", "Generales").strip()
+        tipo_permiso = request.POST.get("tipo_permiso", "Si-No").strip()
+        default_permiso = request.POST.get("default_permiso", "No").strip()
+        detalle_valor_permiso = request.POST.get("detalle_valor_permiso", "Si-No").strip()
         
-        if not codigo or not nombre:
-            messages.error(request, _("Code and name are required."))
+        if not key_permiso or not nombre_permiso:
+            messages.error(request, "El código y nombre del permiso son requeridos.")
         else:
-            # Para edición, excluimos el propio objeto de la validación de unicidad
-            query = Permiso.objects.filter(codigo=codigo)
+            datos_permiso = {
+                'key_permiso': key_permiso,
+                'nombre_permiso': nombre_permiso,
+                'detalle_permiso': detalle_permiso,
+                'grupo_permiso': grupo_permiso,
+                'tipo_permiso': tipo_permiso,
+                'default_permiso': default_permiso,
+                'detalle_valor_permiso': detalle_valor_permiso,
+            }
+            
             if editar:
-                query = query.exclude(pk=permiso_id)
-
-            if query.exists():
-                messages.error(request, _("A permission with code '%(code)s' already exists.") % {'code': codigo})
-            else:
-                if editar:
-                    permiso.nombre = nombre # Solo se puede editar el nombre
-                    permiso.save()
-                    messages.success(request, _("Permission updated successfully."))
+                if permisos_service.actualizar_permiso(base_empresa, permiso_id, datos_permiso):
+                    messages.success(request, f"✅ Permiso '{nombre_permiso}' actualizado correctamente.")
+                    return redirect("core:listar_permisos")
                 else:
-                    Permiso.objects.create(codigo=codigo, nombre=nombre)
-                    messages.success(request, _("Permission created successfully."))
-                return redirect("core:listar_permisos")
-
-    return render(request, "core/permisos_form.html", {"permiso": permiso, "editar": editar})
+                    messages.error(request, "Error al actualizar el permiso. Verifique que el código no esté duplicado.")
+            else:
+                nuevo_id = permisos_service.crear_permiso(base_empresa, datos_permiso)
+                if nuevo_id:
+                    messages.success(request, f"✅ Permiso '{nombre_permiso}' creado correctamente.")
+                    return redirect("core:listar_permisos")
+                else:
+                    messages.error(request, "Error al crear el permiso. Verifique que el código no esté duplicado.")
+    
+    # Obtener grupos disponibles
+    grupos = permisos_service.obtener_grupos(base_empresa)
+    
+    return render(request, "core/permisos_form.html", {
+        "permiso": permiso, 
+        "editar": editar,
+        "grupos": grupos,
+        "base_empresa": base_empresa,
+    })
 
 
 @csrf_protect
-@tiene_permiso("usuarios.permisos.eliminar")
+@tiene_permiso("administrar.usuarios")
 def eliminar_permiso_view(request, permiso_id):
-    permiso = get_object_or_404(Permiso, id=permiso_id)
-    permiso.delete()
-    messages.success(request, _("Permission '%(code)s' deleted successfully.") % {'code': permiso.codigo})
+    """
+    Elimina un permiso del sistema de administraNET
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:listar_permisos")
+    
+    # Inicializar servicio
+    permisos_service = AdministraNETPermisoSistemaService()
+    
+    # Obtener permiso para mostrar su nombre en el mensaje
+    permiso = permisos_service.obtener_permiso(base_empresa, permiso_id)
+    
+    if not permiso:
+        messages.error(request, "Permiso no encontrado.")
+        return redirect("core:listar_permisos")
+    
+    if permisos_service.eliminar_permiso(base_empresa, permiso_id):
+        messages.success(request, f"✅ Permiso '{permiso.get('nombre_permiso', '')}' eliminado correctamente.")
+    else:
+        messages.error(request, "Error al eliminar el permiso.")
+    
     return redirect("core:listar_permisos")
 
 
 @csrf_protect
-@tiene_permiso("administrar.sync")
-def sincronizar_sistema_view(request):
+@tiene_permiso("administrar.usuarios")
+def toggle_valor_permiso_view(request, permiso_id):
     """
-    Ejecuta los comandos de sincronización y devuelve un JSON estructurado
-    con el resultado de cada paso.
+    Vista API para cambiar el valor de un permiso (Si/No) mediante AJAX
+    Solo actualiza el valor para el puesto del usuario actual
     """
-    if request.method != "POST":
-        return JsonResponse({'status': 'error', 'message': _('Method not allowed')}, status=405)
-
-    results = []
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_puesto = session_user.get("id_puesto")
+    
+    if not base_empresa:
+        return JsonResponse({'success': False, 'error': 'No se pudo determinar la empresa activa'}, status=400)
+    
+    if not id_puesto:
+        return JsonResponse({'success': False, 'error': 'No se pudo determinar el puesto del usuario'}, status=400)
     
     try:
-        # --- Paso 1: Sincronizar Permisos ---
-        perm_out = StringIO()
-        call_command('sincronizar_permisos', stdout=perm_out)
-        perm_log = perm_out.getvalue()
+        data = json.loads(request.body)
+        nuevo_valor = data.get('valor', '').strip()
         
-        perm_added = len(re.findall(r'\[\+\] Agregando permiso', perm_log))
-        perm_updated = len(re.findall(r'\[\*\] Actualizando nombre', perm_log))
-        perm_summary = f"{perm_added} permisos creados, {perm_updated} actualizados."
+        if nuevo_valor not in ['Si', 'No']:
+            return JsonResponse({'success': False, 'error': 'Valor inválido. Debe ser "Si" o "No"'}, status=400)
         
-        results.append({
-            'step': 'Sincronización de Permisos',
-            'status': 'success',
-            'summary': perm_summary,
-            'log': perm_log,
-        })
+        # Inicializar servicio
+        permisos_service = AdministraNETPermisoSistemaService()
         
-        # --- Paso 2: Asignar Roles ---
-        role_out = StringIO()
-        call_command('asignar_roles_predeterminados', stdout=role_out)
-        role_log = role_out.getvalue()
-
-        roles_created = len(re.findall(r'\[\+\] Rol', role_log))
-        roles_updated = len(re.findall(r'\[\*\] Rol', role_log))
-        perms_assigned = sum(map(int, re.findall(r'Se añadieron (\d+)', role_log)))
-        role_summary = f"{roles_created} roles creados, {roles_updated} actualizados. {perms_assigned} permisos asignados."
-
-        results.append({
-            'step': 'Asignación de Roles',
-            'status': 'success',
-            'summary': role_summary,
-            'log': role_log,
-        })
-
-        logger.info(f"Sincronización manual exitosa por {request.user.email}")
-        return JsonResponse({'status': 'success', 'results': results})
-
+        # Actualizar el valor solo para el puesto del usuario actual
+        if permisos_service.actualizar_valor_permiso(base_empresa, permiso_id, nuevo_valor, id_puesto):
+            return JsonResponse({
+                'success': True,
+                'valor': nuevo_valor,
+                'mensaje': f'Permiso actualizado a {nuevo_valor} para tu puesto'
+            })
+        else:
+            return JsonResponse({'success': False, 'error': 'Error al actualizar el permiso'}, status=500)
+            
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
     except Exception as e:
-        logger.error(f"Error en sincronización por {request.user.email}: {e}")
-        # Añade el error al último paso que falló, si lo hay
-        if results:
-            results[-1]['status'] = 'error'
-            results[-1]['summary'] = f"Falló: {str(e)}"
-            results[-1]['log'] += f"\\nERROR: {str(e)}"
-        
-        return JsonResponse({
-            'status': 'error',
-            'message': str(e),
-            'results': results
-        }, status=500)
+        logger.error(f"Error inesperado al cambiar valor del permiso: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

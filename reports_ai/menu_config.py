@@ -2,7 +2,8 @@
 Configuración del menú para Reports AI
 Integración con el navbar de Synap
 """
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 MENU_CONFIG = [
     {

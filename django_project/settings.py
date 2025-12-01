@@ -37,42 +37,40 @@ INSTALLED_APPS = [
     'corsheaders',
     'crispy_forms',
     'crispy_tailwind',
-    'rosetta',  # Herramienta de traducción web
 
-    # Apps propias
+    # Apps propias - administraNET Analytics
     'core',
     'login',
     'dashboard',
-    'sales',
-    'inventory',
-    'tiendanube',
-    'tiendanube_administranet',
-    'django_celery_beat',
-    'celery',
-    'accounting',
-    'purchases',
-    'mercadopago',
-    'clover',
-    'administraNET_integration',
-    'logistics',
-    'finance',
     'reports',
-    "support_ai",
     'reports_ai',  # Sistema de Reportes AI con CrewAI
+    # Módulos deshabilitados para Analytics
+    # 'sales',
+    # 'inventory',
+    # 'tiendanube',
+    # 'tiendanube_administranet',
+    # 'django_celery_beat',
+    # 'celery',
+    # 'accounting',
+    # 'purchases',
+    # 'mercadopago',
+    # 'clover',
+    # 'administraNET_integration',
+    # 'logistics',
+    # 'finance',
+    # "support_ai",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',  # Movido antes de los middlewares personalizados
     'core.middleware.RequestUserMiddleware',
     'core.middleware.AdminAccessMiddleware',
-    'core.middleware.IdiomaUsuarioMiddleware',
     'core.middleware.DeviceDetectionMiddleware',  # Detección de dispositivos
     'core.middleware.module_middleware.ModuleMiddleware',  # Gestión de módulos
     'core.middleware.module_middleware.ModulePermissionMiddleware',  # Permisos de módulos
@@ -117,10 +115,11 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.usuario_y_permisos',
                 'core.context_processors.menu_context',
-                'core.context_processors.inventory_menu_context',
-                'core.context_processors.tiendanube_menu_context',
-                'core.context_processors.purchases_menu_context',
-                'administraNET_integration.context_processors.administraNET_integration_menu',
+                # Context processors deshabilitados para administraNET Analytics
+                # 'core.context_processors.inventory_menu_context',
+                # 'core.context_processors.tiendanube_menu_context',
+                # 'core.context_processors.purchases_menu_context',
+                # 'administraNET_integration.context_processors.administraNET_integration_menu',
             ],
         },
     },
@@ -138,30 +137,24 @@ DATABASES = {
     },
     'mysql': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'administranet',
-        'USER': 'testuser',
-        'PASSWORD': 'testpass',
-        'HOST': 'mysql',
-        'PORT': '3306',
+        'NAME': config('DB_NAME', default='administranet'),
+        'USER': config('DB_USER', default='administranet'),
+        'PASSWORD': config('DB_PASSWORD', default='a7v8xx0805'),
+        'HOST': config('DB_HOST', default='mysql'),
+        'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            'charset': 'latin1',
         },
     }
 }
 
-# Internacionalización
+# Configuración regional (solo español)
 LANGUAGE_CODE = 'es-ar'
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
-USE_I18N = True
+USE_I18N = False  # Internacionalización deshabilitada - solo español
 USE_L10N = True
 USE_TZ = True
-
-LANGUAGES = [
-    ('es', 'Español'),
-    ('en', 'Inglés'),
-    ('pt', 'Portugués'),
-]
-LOCALE_PATHS = [BASE_DIR / 'locale']
 
 # Archivos estáticos
 STATIC_URL = '/static/'
@@ -194,18 +187,9 @@ AUTHENTICATION_BACKENDS = (
 LOGIN_REDIRECT_URL = '/core/dashboard/'
 LOGIN_URL = '/login/'
 
-# Firebase
-FIREBASE_CONFIG = {
-    "apiKey": config("FIREBASE_API_KEY", default=""),
-    "authDomain": config("FIREBASE_AUTH_DOMAIN", default=""),
-    "projectId": config("FIREBASE_PROJECT_ID", default=""),
-    "storageBucket": config("FIREBASE_STORAGE_BUCKET", default=""),
-    "messagingSenderId": config("FIREBASE_MESSAGING_SENDER_ID", default=""),
-    "appId": config("FIREBASE_APP_ID", default=""),
-    "measurementId": config("FIREBASE_MEASUREMENT_ID", default=""),
-    "clientId": config("FIREBASE_CLIENT_ID", default=""),  
-}
-FIREBASE_CREDENTIALS_PATH = config("FIREBASE_CREDENTIALS_PATH", default="")
+# administraNET Analytics - Configuración de autenticación
+# Se usa autenticación directa contra MySQL de administraNET Gestión
+# Las credenciales se configuran en la conexión 'mysql' de DATABASES
 
 # Django REST Framework
 REST_FRAMEWORK = {

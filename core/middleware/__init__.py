@@ -3,7 +3,6 @@
 from .base_middleware import (
     RateLimitMiddleware,
     AdminAccessMiddleware,
-    IdiomaUsuarioMiddleware,
     AuditoriaMiddleware,
     PerformanceMiddleware,
     SeguridadMiddleware,
@@ -15,7 +14,6 @@ from .base_middleware import (
 __all__ = [
     'RateLimitMiddleware',
     'AdminAccessMiddleware',
-    'IdiomaUsuarioMiddleware',
     'AuditoriaMiddleware',
     'PerformanceMiddleware',
     'SeguridadMiddleware',

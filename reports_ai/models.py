@@ -2,7 +2,8 @@
 Modelos de datos para el sistema de Reportes AI
 """
 from django.db import models
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 from django.contrib.auth import get_user_model
 from core.models.models import Empresa
 import json

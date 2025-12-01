@@ -130,40 +130,43 @@
   </nav>
 
   <!-- Controles derecha -->
-  <div class="ml-auto flex items-center gap-4" x-data="{ 
+  <div class="ml-auto flex items-center gap-3" x-data="{ 
     branchDropdownOpen: false,
     activeBranch: null,
     availableBranches: [],
     loading: false,
     
-    async loadBranches() {
-      this.loading = true;
-      try {
-        const response = await fetch('/core/api/branches/');
-        if (response.ok) {
-          this.availableBranches = await response.json();
-          // Establecer la sucursal activa desde la sesión o default
-          this.activeBranch = this.availableBranches.find(b => b.id === {{ request.user.branch_activa.id|default:'null' }}) || 
-                             this.availableBranches.find(b => b.id === {{ request.user.default_branch.id|default:'null' }}) ||
-                             this.availableBranches[0];
-        }
-      } catch (error) {
-        console.error('Error loading branches:', error);
-      } finally {
-        this.loading = false;
-      }
+    init() {
+      // Inicializar datos desde el contexto de Django
+      {% if branch_activa %}
+      this.activeBranch = {
+        id: {{ branch_activa.id }},
+        name: '{{ branch_activa.name|escapejs }}',
+        city: '{{ branch_activa.city|default:""|escapejs }}'
+      };
+      {% endif %}
+      
+      this.availableBranches = [
+        {% for sucursal in sucursales_disponibles %}
+        {
+          id: {{ sucursal.id }},
+          name: '{{ sucursal.name|escapejs }}',
+          city: '{{ sucursal.city|default:""|escapejs }}'
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ];
     },
     
     async changeBranch(branchId) {
       try {
-        const response = await fetch(`/api/user/${request.user.id}/`, {
+        const response = await fetch('{% url "core:cambiar_empresa_branch" %}', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
           },
           body: JSON.stringify({
-            default_branch_id: branchId
+            branch_id: branchId
           })
         });
         
@@ -177,23 +180,25 @@
         console.error('Error changing branch:', error);
       }
     }
-  }" x-init="loadBranches()">
+  }">
     
     <!-- Empresa -->
-    <span class="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-sm">
-      <span class="material-icons text-base mr-1">business</span>
-      {{ empresa_activa.nombre }}
+    {% if empresa_activa %}
+    <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 text-xs font-medium">
+      <span class="material-icons text-base mr-1.5">business</span>
+      <span class="truncate max-w-[10rem]">{{ empresa_activa.nombre }}</span>
     </span>
+    {% endif %}
     
     <!-- Sucursal activa con dropdown -->
+    {% if sucursales_disponibles %}
     <div class="relative">
       <button 
         @click="branchDropdownOpen = !branchDropdownOpen"
-        class="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm hover:bg-blue-200 transition-colors duration-200"
-        :disabled="loading"
+        class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors duration-200"
       >
-        <span class="material-icons text-base mr-1">location_on</span>
-        <span x-text="loading ? '{% trans "Loading..." %}' : (activeBranch ? activeBranch.name : '{% trans "No Branch" %}')" class="truncate max-w-[8rem]"></span>
+        <span class="material-icons text-base mr-1.5">location_on</span>
+        <span x-text="activeBranch ? activeBranch.name : '{% trans "No Branch" %}'" class="truncate max-w-[8rem]"></span>
         <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
       </button>
       
@@ -207,43 +212,45 @@
         x-transition:leave-start="opacity-100 scale-100"
         x-transition:leave-end="opacity-0 scale-95"
         @click.away="branchDropdownOpen = false"
-        class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+        class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
       >
-        <div class="p-3 border-b border-gray-100">
-          <h3 class="text-sm font-semibold text-gray-900">{% trans "Active Branch" %}</h3>
-          <p class="text-xs text-gray-500 mt-1">{% trans "Select the branch to work with" %}</p>
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100">{% trans "Active Branch" %}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Select the branch to work with" %}</p>
         </div>
         
         <div class="max-h-48 overflow-y-auto">
           <template x-for="branch in availableBranches" :key="branch.id">
             <button
               @click="changeBranch(branch.id)"
-              class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 transition-colors duration-150"
-              :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'"
+              class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150"
+              :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'"
             >
-              <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600' : 'text-gray-400'">
+              <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
                 location_on
               </span>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium" x-text="branch.name"></div>
-                <div class="text-xs text-gray-500" x-text="branch.city || ''"></div>
+                <div class="text-xs font-medium" x-text="branch.name"></div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="branch.city || ''"></div>
               </div>
-              <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 text-sm">check</span>
+              <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 dark:text-blue-400 text-sm">check</span>
             </button>
           </template>
         </div>
         
-        <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 text-sm">
+        <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
           {% trans "No branches available" %}
         </div>
       </div>
     </div>
+    {% endif %}
     
     <!-- Usuario -->
     <div class="relative" x-data="{ userMenuOpen: false }">
       <button @click="userMenuOpen = !userMenuOpen" 
-              class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200" 
-              aria-label="{% trans 'User Menu' %}">
+              class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 shadow-sm" 
+              aria-label="{% trans 'User Menu' %}"
+              title="{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}Usuario{% endif %}">
         <span class="material-icons text-sm">person</span>
       </button>
       
@@ -260,11 +267,21 @@
         
         <!-- User Info -->
         <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <p class="text-sm font-medium text-gray-900 dark:text-white">
-            {{ request.user.nombre|default:request.user.email }}
+          <p class="text-xs font-medium text-gray-900 dark:text-white">
+            {% if session_user.nombre_completo %}
+              {{ session_user.nombre_completo }}
+            {% elif session_user.cod_usuario %}
+              {{ session_user.cod_usuario }}
+            {% else %}
+              {{ request.user.nombre|default:request.user.email }}
+            {% endif %}
           </p>
           <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-            {{ request.user.email }}
+            {% if session_user.cod_usuario %}
+              {{ session_user.cod_usuario }}
+            {% else %}
+              {{ request.user.email|default:"" }}
+            {% endif %}
           </p>
         </div>
         

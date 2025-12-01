@@ -1,155 +1,88 @@
 {% extends "core/core_app_base.html" %}
 {% load static %}
-{% load i18n %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 {% block admin_content %}
-<div class="max-w-7xl mx-auto" x-data="roleManagement()">
+<div class="max-w-7xl mx-auto">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Administración de Roles</h1>
-    <button @click="openCreateModal()" class="bg-purple-600 text-white px-4 py-2 rounded-lg shadow hover:bg-purple-700 transition duration-300">
-      <span class="font-semibold">➕ Crear Rol</span>
-    </button>
+    <h1 class="text-2xl font-bold text-gray-800">Administración de Puestos</h1>
+    <a href="{% url 'core:crear_rol' %}" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Crear Puesto">
+      <span class="material-icons text-base">add</span>
+    </a>
   </div>
 
-  <div class="bg-white shadow-md rounded-lg overflow-hidden">
+  <!-- Búsqueda -->
+  <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+    <form method="get" class="flex gap-2">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto por nombre..." 
+             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+      <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
+        <span class="material-icons text-base">search</span>
+      </button>
+      {% if q %}
+      <a href="{% url 'core:listar_roles' %}" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-xs transition-colors" title="Limpiar">
+        <span class="material-icons text-base">clear</span>
+      </a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Tabla de puestos -->
+  <div class="bg-white rounded-lg shadow-md overflow-hidden">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre del Rol</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Permisos</th>
-          <th scope="col" class="relative px-6 py-3">
-            <span class="sr-only">Editar</span>
-          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
-        {% for rol in roles %}
-        <tr>
+        {% for puesto in puestos %}
+        <tr class="hover:bg-gray-50">
           <td class="px-6 py-4 whitespace-nowrap">
-            <div class="text-sm font-medium text-gray-900">{{ rol.nombre }}</div>
-          </td>
-          <td class="px-6 py-4">
-            <div class="flex flex-wrap gap-1">
-              {% for permiso in rol.permisos.all|slice:":5" %}
-                <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">{{ permiso.nombre }}</span>
-              {% endfor %}
-              {% if rol.permisos.all|length > 5 %}
-                <span class="px-2 py-1 text-xs rounded-full bg-gray-200 text-gray-800">+{{ rol.permisos.all|length|add:"-5" }} {% trans "more" %}</span>
-              {% endif %}
-            </div>
+            <div class="text-sm font-medium text-gray-900">{{ puesto.nombre }}</div>
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-            <button @click="openEditModal({{ rol.id }})" class="text-purple-600 hover:text-purple-900">{% trans "Edit" %}</button>
+            <div class="flex justify-end gap-2">
+              <a href="{% url 'core:editar_rol' puesto.id %}" 
+                 class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded transition-colors" title="Editar">
+                <span class="material-icons text-base">edit</span>
+              </a>
+              <form action="{% url 'core:eliminar_rol' puesto.id %}" method="post" class="inline" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este puesto?');">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition-colors" title="Eliminar">
+                  <span class="material-icons text-base">delete</span>
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="3" class="px-6 py-4 text-center text-sm text-gray-500">{% trans "No roles defined." %}</td>
+          <td colspan="2" class="px-6 py-4 text-center text-xs text-gray-500">No se encontraron puestos</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  
-  <!-- Incluir el modal -->
-  {% include "core/partials/modal_gestion_rol.html" %}
+
+  <!-- Paginación -->
+  {% if puestos.has_other_pages %}
+  <div class="px-6 py-4 border-t flex items-center justify-between bg-white rounded-lg shadow-md mt-4">
+    <div class="text-xs text-gray-700">
+      Mostrando {{ puestos.start_index }} a {{ puestos.end_index }} de {{ puestos.paginator.count }} puestos
+    </div>
+    <div class="flex gap-2">
+      {% if puestos.has_previous %}
+      <a href="?page={{ puestos.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Anterior</a>
+      {% endif %}
+      {% if puestos.has_next %}
+      <a href="?page={{ puestos.next_page_number }}{% if q %}&q={{ q }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Siguiente</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
-
-{% block extra_js %}
-<script>
-function roleManagement() {
-  return {
-    isModalOpen: false,
-    isCreateMode: false,
-    allPermissions: [],
-    currentRole: {},
-    assignedPermissions: [],
-    searchTerm: '',
-
-    init() {
-      fetch("{% url 'core:api_permission_list' %}")
-        .then(res => res.json())
-        .then(data => {
-            // Maneja respuestas paginadas y no paginadas
-            this.allPermissions = Array.isArray(data) ? data : data.results;
-        });
-    },
-
-    get availablePermissions() {
-      const assignedIds = new Set(this.assignedPermissions.map(p => p.id));
-      let filtered = this.allPermissions.filter(p => !assignedIds.has(p.id));
-      if (this.searchTerm) {
-        filtered = filtered.filter(p => 
-          p.nombre.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-          p.codigo.toLowerCase().includes(this.searchTerm.toLowerCase())
-        );
-      }
-      return filtered;
-    },
-
-    openCreateModal() {
-        this.isCreateMode = true;
-        this.currentRole = { id: null, nombre: '', descripcion: '' };
-        this.assignedPermissions = [];
-        this.searchTerm = '';
-        this.isModalOpen = true;
-    },
-
-    openEditModal(roleId) {
-        this.isCreateMode = false;
-        fetch(`/core/api/roles/${roleId}/`)
-          .then(res => res.json())
-          .then(data => {
-            this.currentRole = data;
-            this.assignedPermissions = [...data.permisos];
-            this.isModalOpen = true;
-            this.searchTerm = '';
-          });
-    },
-
-    assignPermission(permiso) {
-      this.assignedPermissions.push(permiso);
-    },
-
-    unassignPermission(permiso) {
-      this.assignedPermissions = this.assignedPermissions.filter(p => p.id !== permiso.id);
-    },
-
-    saveRole() {
-      const payload = {
-        nombre: this.currentRole.nombre,
-        descripcion: this.currentRole.descripcion,
-        permisos_ids: this.assignedPermissions.map(p => p.id)
-      };
-      
-      const isCreate = this.currentRole.id === null;
-      const url = isCreate ? "{% url 'core:api_role_list_create' %}" : `/core/api/roles/${this.currentRole.id}/`;
-      const method = isCreate ? 'POST' : 'PUT';
-
-      fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': '{{ csrf_token }}',
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(res => {
-          if (!res.ok) {
-              return res.json().then(err => { throw new Error(err.error || 'Ocurrió un error') });
-          }
-          return res.json();
-      })
-      .then(data => {
-        this.isModalOpen = false;
-        location.reload();
-      })
-      .catch(error => {
-          alert(error.message); // Muestra el error de validación
-      });
-    }
-  }
-}
-</script>
-{% endblock %} 

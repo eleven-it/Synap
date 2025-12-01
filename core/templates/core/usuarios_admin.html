@@ -1,28 +1,19 @@
 {% extends "core/core_app_base.html" %}
 {% load static %}
-{% load i18n %}
 
 {% block admin_content %}
   <div class="max-w-7xl mx-auto">
     <div class="flex justify-between items-center mb-6">
-      <h1 class="text-2xl font-bold">{% trans "User Administration" %}</h1>
-      <a href="{% url 'core:crear_usuario' %}" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">
-        ➕ {% trans "Create user" %}
-      </a>
+      <h1 class="text-2xl font-bold text-gray-800">Administración de Usuarios</h1>
+      <div class="flex gap-2">
+        <a href="{% url 'core:validar_integridad_usuarios' %}" class="inline-flex items-center justify-center px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs transition-colors" title="Validar Integridad">
+          <span class="material-icons text-base">verified</span>
+        </a>
+        <a href="{% url 'core:crear_usuario' %}" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Crear Usuario">
+          <span class="material-icons text-base">person_add</span>
+        </a>
+      </div>
     </div>
     {% include "core/usuarios_admin_tabla.html" %}
-    <!-- Paginación si es necesario -->
   </div>
-
-  <!-- Modales que ahora se gestionarán a sí mismos -->
-  {% include "core/partials/modal_gestion_usuario.html" %}
-  
-  {% include "core/partials/command_palette.html" %}
 {% endblock %}
-
-{% comment %}
-  El bloque extra_js se elimina porque cada modal tendrá su propia lógica interna,
-  o la lógica se moverá a un script global si fuera necesario.
-  Por ahora, la eliminamos para mantenerlo limpio.
-{% endcomment %}
-{% block extra_js %}{% endblock %}

@@ -83,32 +83,25 @@ def dashboard_view(request):
         ],
         "quick_actions": [
             {
-                "title": "Sales",
-                "description": "Manage orders and invoices",
-                "url": "/sales/",
-                "icon": "document-text",
-                "color": "blue"
-            },
-            {
-                "title": "Inventory",
-                "description": "Track products and stock",
-                "url": "/inventory/",
-                "icon": "cube",
-                "color": "green"
-            },
-            {
-                "title": "Customers",
-                "description": "Manage customer database",
-                "url": "/sales/clients/",
-                "icon": "users",
-                "color": "purple"
-            },
-            {
                 "title": "Reports",
                 "description": "Analytics and insights",
                 "url": "/reports/",
                 "icon": "chart-bar",
                 "color": "orange"
+            },
+            {
+                "title": "Reports AI",
+                "description": "AI-powered reports",
+                "url": "/reports-ai/",
+                "icon": "sparkles",
+                "color": "purple"
+            },
+            {
+                "title": "Settings",
+                "description": "System configuration",
+                "url": "/core/settings/",
+                "icon": "cog",
+                "color": "blue"
             }
         ],
         "last_login": user_data["last_login"],

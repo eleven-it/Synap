@@ -4,91 +4,68 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_protect
-from core.models import UsuarioExtendido, Permiso, Rol
+from core.models import Permiso, Rol
 from core.decorators import tiene_permiso
 from core.constantes_permisos import PERMISOS_POR_MODULO
 from core.utils import permisos_contextuales
-from django_project.firebase_config import get_firebase_app
-import firebase_admin
-from django.views.generic.edit import CreateView
-from django.contrib.auth.hashers import make_password
-from django.urls import reverse_lazy
-from django.http import HttpResponseRedirect
-from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
-from ..forms import UsuarioCreateForm
+from core.services.administranet_users import AdministraNETUserService
+from core.services.administranet_validacion_puestos import AdministraNETValidacionPuestosService
 import logging
-from firebase_admin import firestore
-from firebase_admin import auth
 
 logger = logging.getLogger(__name__)
-
-# Antes de usar auth o firestore, asegúrate de inicializar Firebase:
-get_firebase_app()
 
 
 @tiene_permiso("administrar.usuarios")
 def usuarios_admin_view(request):
+    """
+    Vista principal de administración de usuarios
+    Usa AdministraNETUserService para gestionar usuarios directamente en MySQL de administraNET
+    """
     context = permisos_contextuales(request, "usuarios.ver", roles_permitidos=["Administrador"], debug=True)
     if not context.get("puede_usuarios_ver") and not context.get("rol_permitido"):
         return render(request, "core/403.html", context, status=403)
 
-    q = request.GET.get("q", "")
-    rol_filter = request.GET.get("rol_filter", "")
-    usuarios = UsuarioExtendido.objects.all().prefetch_related("roles", "permisos_extra")
-
-    if q:
-        usuarios = usuarios.filter(nombre__icontains=q) | usuarios.filter(email__icontains=q)
-    if rol_filter:
-        usuarios = usuarios.filter(roles__id=rol_filter)
-
-    usuarios = usuarios.order_by("email")
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_empresa = session_user.get("id_empresa")
+    
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+    
+    # Inicializar servicio
+    user_service = AdministraNETUserService()
+    
+    # Búsqueda
+    q = request.GET.get("q", "").strip()
+    solo_activos = request.GET.get("activos", "true").lower() == "true"
+    
+    # Obtener usuarios desde MySQL de administraNET
+    usuarios = user_service.listar_usuarios(
+        base_empresa=base_empresa,
+        id_empresa=id_empresa,
+        busqueda=q if q else None,
+        solo_activos=solo_activos
+    )
+    
+    # Paginación manual
     paginator = Paginator(usuarios, 15)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
-
-    roles = Rol.objects.all().order_by("nombre")
-    todos_permisos = Permiso.objects.all().order_by("nombre")
-
-    modulos_permisos = {}
-    usados = set()
-    for modulo, lista in PERMISOS_POR_MODULO.items():
-        codigos = [c for c, _ in lista]
-        modulos_permisos[modulo] = todos_permisos.filter(codigo__in=codigos)
-        usados.update(codigos)
-
-    restantes = todos_permisos.exclude(codigo__in=usados)
-    if restantes.exists():
-        modulos_permisos["Otros"] = restantes
-
-    if request.method == "POST":
-        for usuario in usuarios:
-            # Roles
-            roles_ids = request.POST.getlist(f"roles_{usuario.uid}")
-            usuario.roles.set(roles_ids)
-
-            # Permisos extra
-            permisos_ids = request.POST.getlist(f"perm_{usuario.uid}")
-            usuario.permisos_extra.set(permisos_ids)
-
-            usuario.save()
-
-            # 🔁 Sync roles to Firebase
-            try:
-                firestore.client().collection("usuarios").document(usuario.uid).set({
-                    "roles": list(usuario.roles.values_list("nombre", flat=True))
-                }, merge=True)
-            except Exception as e:
-                messages.warning(request, f"⚠️ Error al sincronizar {usuario.email} con Firebase: {e}")
-
-        messages.success(request, "✅ Cambios guardados exitosamente.")
-        return redirect("core:usuarios")
+    
+    # Obtener puestos y sucursales para formularios
+    puestos = user_service.obtener_puestos(base_empresa)
+    sucursales = user_service.obtener_sucursales(base_empresa)
 
     context.update({
         "usuarios": page_obj,
-        "roles": roles,
-        "modulos_permisos": modulos_permisos,
+        "puestos": puestos,
+        "sucursales": sucursales,
         "q": q,
-        "rol_filter": rol_filter,
+        "solo_activos": solo_activos,
+        "base_empresa": base_empresa,
+        "id_empresa": id_empresa,
     })
     return render(request, "core/usuarios_admin.html", context)
 
@@ -96,102 +73,284 @@ def usuarios_admin_view(request):
 @tiene_permiso("administrar.usuarios")
 @csrf_protect
 def crear_usuario_view(request):
-    if request.method == "POST":
-        email = request.POST.get("email", "").strip().lower()
-        nombre = request.POST.get("nombre", "").strip()
-        idioma = request.POST.get("idioma", "es")
-        password = request.POST.get("password", "")
-        confirm = request.POST.get("confirmar_password", "")
-        roles_ids = request.POST.getlist("roles")
-
-        if not email or not password or not confirm:
-            messages.error(request, "Completa todos los campos obligatorios.")
-            return redirect("core:usuarios")
-
-        if password != confirm:
-            messages.error(request, "Las contraseñas no coinciden.")
-            return redirect("core:usuarios")
-
-        try:
-            firebase_user = auth.create_user(email=email, password=password, display_name=nombre)
-            uid = firebase_user.uid
-        except Exception as e:
-            messages.error(request, f"Error al crear usuario en Firebase: {e}")
-            return redirect("core:usuarios")
-
-        usuario = UsuarioExtendido.objects.create(
-            uid=uid,
-            email=email,
-            nombre=nombre,
-            idioma=idioma
-        )
-        usuario.roles.set(roles_ids)
-        usuario.save()
-
-        try:
-            firestore.client().collection("usuarios").document(uid).set({
-                "email": email,
-                "nombre": nombre,
-                "idioma": idioma,
-                "roles": list(usuario.roles.values_list("nombre", flat=True))
-            })
-        except Exception as e:
-            messages.warning(request, f"Usuario creado localmente, pero falló la sincronización: {e}")
-
-        messages.success(request, "✅ Usuario creado correctamente.")
+    """
+    Vista para crear un nuevo usuario en administraNET
+    Similar a ABMUsuarios.frm - Agregar
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_empresa = session_user.get("id_empresa")
+    
+    if not base_empresa or not id_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:usuarios")
+    
+    # Inicializar servicio
+    user_service = AdministraNETUserService()
+    
+    if request.method == "POST":
+        cod_usuario = request.POST.get("cod_usuario", "").strip().lower()
+        nombre_usuario = request.POST.get("nombre_usuario", "").strip()
+        apellido_usuario = request.POST.get("apellido_usuario", "").strip()
+        password = request.POST.get("password", "")
+        confirm_password = request.POST.get("confirmar_password", "")
+        id_puesto = request.POST.get("id_puesto")
+        id_sucursal = request.POST.get("id_sucursal")
+        
+        # Validaciones
+        if not cod_usuario or not password or not confirm_password or not nombre_usuario:
+            messages.error(request, "Completa todos los campos obligatorios.")
+            puestos = user_service.obtener_puestos(base_empresa)
+            sucursales = user_service.obtener_sucursales(base_empresa)
+            return render(request, "core/usuarios_crear.html", {
+                'puestos': puestos,
+                'sucursales': sucursales,
+                'base_empresa': base_empresa,
+            })
+        
+        if password != confirm_password:
+            messages.error(request, "Las contraseñas no coinciden.")
+            puestos = user_service.obtener_puestos(base_empresa)
+            sucursales = user_service.obtener_sucursales(base_empresa)
+            return render(request, "core/usuarios_crear.html", {
+                'puestos': puestos,
+                'sucursales': sucursales,
+                'base_empresa': base_empresa,
+            })
+        
+        # Verificar si el usuario ya existe
+        usuarios_existentes = user_service.listar_usuarios(base_empresa, id_empresa, busqueda=cod_usuario, solo_activos=False)
+        if any(u['cod_usuario'].lower() == cod_usuario.lower() for u in usuarios_existentes):
+            messages.error(request, f"El usuario '{cod_usuario}' ya existe.")
+            puestos = user_service.obtener_puestos(base_empresa)
+            sucursales = user_service.obtener_sucursales(base_empresa)
+            return render(request, "core/usuarios_crear.html", {
+                'puestos': puestos,
+                'sucursales': sucursales,
+                'base_empresa': base_empresa,
+            })
+        
+        # Preparar datos del usuario
+        datos_usuario = {
+            'cod_usuario': cod_usuario,
+            'nombre_usuario': nombre_usuario,
+            'apellido_usuario': apellido_usuario,
+            'password': password,
+            'id_puesto': int(id_puesto) if id_puesto else None,
+            'id_sucursal': int(id_sucursal) if id_sucursal else None,
+            'baja_usuario': 'No',
+            'tipo_busqueda_defecto': 0,
+            'permiso_supervisor_venta': 'No',
+            'vendedor_web': 'No',
+            'zoom_reportes': 100,
+        }
+        
+        # Validar integridad del puesto antes de crear el usuario
+        if id_puesto:
+            validacion_service = AdministraNETValidacionPuestosService()
+            validacion = validacion_service.validar_integridad_puesto(base_empresa, int(id_puesto))
+            
+            if not validacion['valido']:
+                messages.error(request, f"⚠️ El puesto seleccionado tiene problemas de integridad: {', '.join(validacion['errores'])}")
+                puestos = user_service.obtener_puestos(base_empresa)
+                sucursales = user_service.obtener_sucursales(base_empresa)
+                return render(request, "core/usuarios_crear.html", {
+                    'puestos': puestos,
+                    'sucursales': sucursales,
+                    'base_empresa': base_empresa,
+                })
+            
+            if validacion['advertencias']:
+                for advertencia in validacion['advertencias']:
+                    messages.warning(request, f"⚠️ {advertencia}")
+        
+        # Crear usuario
+        nuevo_id = user_service.crear_usuario(base_empresa, id_empresa, datos_usuario)
+        
+        if nuevo_id:
+            messages.success(request, f"✅ Usuario '{cod_usuario}' creado correctamente.")
+            return redirect("core:usuarios")
+        else:
+            messages.error(request, "Error al crear el usuario. Por favor intente nuevamente.")
+            puestos = user_service.obtener_puestos(base_empresa)
+            sucursales = user_service.obtener_sucursales(base_empresa)
+            return render(request, "core/usuarios_crear.html", {
+                'puestos': puestos,
+                'sucursales': sucursales,
+                'base_empresa': base_empresa,
+            })
+    
+    # GET - mostrar formulario
+    puestos = user_service.obtener_puestos(base_empresa)
+    sucursales = user_service.obtener_sucursales(base_empresa)
+    
+    context = {
+        'puestos': puestos,
+        'sucursales': sucursales,
+        'base_empresa': base_empresa,
+    }
+    return render(request, "core/usuarios_crear.html", context)
 
+
+@tiene_permiso("administrar.usuarios")
+@csrf_protect
+def editar_usuario_view(request, id_usuario):
+    """
+    Vista para editar un usuario existente en administraNET
+    Similar a ABMUsuarios.frm - Modificar
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_empresa = session_user.get("id_empresa")
+    
+    if not base_empresa or not id_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:usuarios")
+    
+    # Inicializar servicio
+    user_service = AdministraNETUserService()
+    
+    # Obtener usuario existente
+    usuario = user_service.obtener_usuario(base_empresa, id_usuario)
+    if not usuario:
+        messages.error(request, "Usuario no encontrado.")
+        return redirect("core:usuarios")
+    
+    # No permitir editar el usuario Supervisor (id_usuario = 1) excepto contraseña
+    es_supervisor = id_usuario == 1
+    
+    if request.method == "POST":
+        # Preparar datos a actualizar
+        datos_usuario = {}
+        
+        # Campos editables (excepto supervisor)
+        if not es_supervisor:
+            datos_usuario['cod_usuario'] = request.POST.get("cod_usuario", "").strip().lower()
+            datos_usuario['nombre_usuario'] = request.POST.get("nombre_usuario", "").strip()
+            datos_usuario['apellido_usuario'] = request.POST.get("apellido_usuario", "").strip()
+            datos_usuario['id_puesto'] = int(request.POST.get("id_puesto")) if request.POST.get("id_puesto") else None
+            datos_usuario['id_sucursal'] = int(request.POST.get("id_sucursal")) if request.POST.get("id_sucursal") else None
+        
+        # Contraseña (siempre editable)
+        password = request.POST.get("password", "")
+        confirm_password = request.POST.get("confirmar_password", "")
+        if password and confirm_password:
+            if password != confirm_password:
+                messages.error(request, "Las contraseñas no coinciden.")
+                puestos = user_service.obtener_puestos(base_empresa)
+                sucursales = user_service.obtener_sucursales(base_empresa)
+                return render(request, "core/usuarios_editar.html", {
+                    'usuario': usuario,
+                    'puestos': puestos,
+                    'sucursales': sucursales,
+                    'base_empresa': base_empresa,
+                    'es_supervisor': es_supervisor,
+                })
+            datos_usuario['password'] = password
+        
+        # Validar integridad del puesto si se está cambiando
+        if 'id_puesto' in datos_usuario and datos_usuario['id_puesto']:
+            nuevo_id_puesto = datos_usuario['id_puesto']
+            puesto_actual = usuario.get('id_puesto')
+            
+            # Solo validar si el puesto cambió
+            if nuevo_id_puesto != puesto_actual:
+                validacion_service = AdministraNETValidacionPuestosService()
+                validacion = validacion_service.validar_integridad_puesto(base_empresa, nuevo_id_puesto)
+                
+                if not validacion['valido']:
+                    messages.error(request, f"⚠️ El puesto seleccionado tiene problemas de integridad: {', '.join(validacion['errores'])}")
+                    puestos = user_service.obtener_puestos(base_empresa)
+                    sucursales = user_service.obtener_sucursales(base_empresa)
+                    return render(request, "core/usuarios_editar.html", {
+                        'usuario': usuario,
+                        'puestos': puestos,
+                        'sucursales': sucursales,
+                        'base_empresa': base_empresa,
+                        'es_supervisor': es_supervisor,
+                    })
+                
+                if validacion['advertencias']:
+                    for advertencia in validacion['advertencias']:
+                        messages.warning(request, f"⚠️ {advertencia}")
+        
+        # Actualizar usuario
+        if user_service.actualizar_usuario(base_empresa, id_usuario, datos_usuario):
+            messages.success(request, f"✅ Usuario actualizado correctamente.")
+            return redirect("core:usuarios")
+        else:
+            messages.error(request, "Error al actualizar el usuario.")
+    
+    # GET - mostrar formulario
+    puestos = user_service.obtener_puestos(base_empresa)
+    sucursales = user_service.obtener_sucursales(base_empresa)
+    
+    context = {
+        'usuario': usuario,
+        'puestos': puestos,
+        'sucursales': sucursales,
+        'base_empresa': base_empresa,
+        'es_supervisor': es_supervisor,
+    }
+    return render(request, "core/usuarios_editar.html", context)
+
+
+@tiene_permiso("administrar.usuarios")
+@csrf_protect
+def eliminar_usuario_view(request, id_usuario):
+    """
+    Vista para eliminar (dar de baja) un usuario
+    Similar a ABMUsuarios.frm - no elimina físicamente, marca como dado de baja
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:usuarios")
+    
+    # No permitir eliminar el usuario Supervisor
+    if id_usuario == 1:
+        messages.error(request, "No se puede eliminar el usuario Supervisor.")
+        return redirect("core:usuarios")
+    
+    # Inicializar servicio
+    user_service = AdministraNETUserService()
+    
+    if request.method == "POST":
+        if user_service.eliminar_usuario(base_empresa, id_usuario):
+            messages.success(request, "✅ Usuario dado de baja correctamente.")
+        else:
+            messages.error(request, "Error al eliminar el usuario.")
+    
     return redirect("core:usuarios")
 
 
-class UsuarioCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
-    model = UsuarioExtendido
-    form_class = UsuarioCreateForm
-    template_name = 'core/usuarios_crear_form.html'
-    permission_required = 'core.add_usuarioextendido'
-
-    def form_valid(self, form):
-        email = form.cleaned_data['email']
-        password = form.cleaned_data['password']
-        nombre = form.cleaned_data['nombre']
-
-        logger.info(f"Intentando crear usuario en Firebase con email: {email}, nombre: {nombre}")
-
-        try:
-            # Paso 1: Crear usuario solo con email y contraseña
-            firebase_user = auth.create_user(
-                email=email,
-                password=password,
-            )
-            uid = firebase_user.uid
-
-            # Paso 2: Actualizar el nombre (displayName)
-            auth.update_user(uid, display_name=nombre)
-
-        except auth.EmailAlreadyExistsError:
-            form.add_error('email', 'Este correo electrónico ya está registrado en Firebase.')
-            return self.form_invalid(form)
-        except Exception as e:
-            error_message = f"Error inesperado al crear usuario en Firebase: {e}"
-            if hasattr(e, 'http_response'):
-                try:
-                    error_data = e.http_response.json()
-                    error_message += f" | Detalles: {error_data.get('error', {}).get('message', 'Sin detalles')}"
-                except:
-                    pass
-            logger.error(error_message)
-            messages.error(self.request, error_message)
-            return self.form_invalid(form)
-
-        self.object = form.save(commit=False)
-        self.object.uid = uid
-        self.object.nombre = nombre
-        self.object.username = email
-        self.object.password = '' 
-        self.object.save()
-        
-        messages.success(self.request, f"Usuario {email} creado exitosamente.")
-        return HttpResponseRedirect(self.get_success_url())
-
-    def get_success_url(self):
-        return reverse_lazy('core:usuarios')
+@tiene_permiso("administrar.usuarios")
+def validar_integridad_usuarios_view(request):
+    """
+    Vista para validar la integridad de todos los usuarios y sus puestos
+    """
+    # Obtener datos de la sesión del usuario actual
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_empresa = session_user.get("id_empresa")
+    
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+    
+    # Inicializar servicio de validación
+    validacion_service = AdministraNETValidacionPuestosService()
+    
+    # Validar todos los usuarios
+    resultado = validacion_service.validar_todos_los_usuarios(base_empresa, id_empresa)
+    
+    context = {
+        'resultado': resultado,
+        'base_empresa': base_empresa,
+    }
+    return render(request, "core/usuarios_validacion.html", context)

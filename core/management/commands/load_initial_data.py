@@ -2,9 +2,10 @@ from django.core.management.base import BaseCommand
 from django.utils.translation import gettext_lazy as _
 from django.db import transaction
 from core.models import Country, State, Currency, FiscalResponsibility, UnitOfMeasure, SystemConfiguration
-from sales.models import PaymentMethod, PaymentTerm, PriceList
-from inventory.models import Category, Brand
-from accounting.models import TaxGroup, Tax, ChartOfAccounts, AccountTypes
+# Módulos deshabilitados para administraNET Analytics
+# from sales.models import PaymentMethod, PaymentTerm, PriceList
+# from inventory.models import Category, Brand
+# from accounting.models import TaxGroup, Tax, ChartOfAccounts, AccountTypes
 from decimal import Decimal
 
 
@@ -321,15 +322,18 @@ class Command(BaseCommand):
     def create_payment_methods(self):
         """Crear métodos de pago básicos"""
         self.stdout.write('💳 Loading payment methods...')
+        self.stdout.write('  ⚠️ Payment methods disabled for administraNET Analytics')
+        return
         
+        # Código deshabilitado - requiere módulo sales
         # Obtener primera empresa para asignar métodos de pago
-        from core.models import Empresa
-        empresa = Empresa.objects.first()
-        if not empresa:
-            self.stdout.write('  ⚠️ No company found, skipping payment methods')
-            return
+        # from core.models import Empresa
+        # empresa = Empresa.objects.first()
+        # if not empresa:
+        #     self.stdout.write('  ⚠️ No company found, skipping payment methods')
+        #     return
         
-        payment_methods_data = [
+        # payment_methods_data = [
             {
                 'name': 'Efectivo',
                 'code': 'CASH',
@@ -390,25 +394,28 @@ class Command(BaseCommand):
             },
         ]
         
-        created_methods = 0
-        for method_data in payment_methods_data:
-            method, created = PaymentMethod.objects.get_or_create(
-                code=method_data['code'],
-                empresa=method_data['empresa'],
-                defaults=method_data
-            )
-            if created:
-                created_methods += 1
-                self.stdout.write(f'  ✅ Created payment method: {method.name}')
-        
-        self.stdout.write(f'  💳 {created_methods} payment methods created/updated')
+        # created_methods = 0
+        # for method_data in payment_methods_data:
+        #     method, created = PaymentMethod.objects.get_or_create(
+        #         code=method_data['code'],
+        #         empresa=method_data['empresa'],
+        #         defaults=method_data
+        #     )
+        #     if created:
+        #         created_methods += 1
+        #         self.stdout.write(f'  ✅ Created payment method: {method.name}')
+        # 
+        # self.stdout.write(f'  💳 {created_methods} payment methods created/updated')
 
     def create_categories_and_brands(self):
         """Crear categorías y marcas básicas"""
         self.stdout.write('🏷️ Loading categories and brands...')
+        self.stdout.write('  ⚠️ Categories and brands disabled for administraNET Analytics')
+        return
         
+        # Código deshabilitado - requiere módulo inventory
         # Categorías básicas
-        categories_data = [
+        # categories_data = [
             'Electrónicos',
             'Ropa y Accesorios',
             'Hogar y Jardín',
@@ -423,53 +430,56 @@ class Command(BaseCommand):
             'Oficina y Papelería',
         ]
         
-        created_categories = 0
-        for category_name in categories_data:
-            category, created = Category.objects.get_or_create(
-                name=category_name,
-                defaults={'is_active': True}
-            )
-            if created:
-                created_categories += 1
-                self.stdout.write(f'  ✅ Created category: {category.name}')
-        
-        self.stdout.write(f'  📂 {created_categories} categories created/updated')
-        
-        # Marcas básicas
-        brands_data = [
-            'Genérica',
-            'Sin Marca',
-            'Marca Propia',
-        ]
-        
-        created_brands = 0
-        for brand_name in brands_data:
-            brand, created = Brand.objects.get_or_create(
-                name=brand_name,
-                defaults={'is_active': True}
-            )
-            if created:
-                created_brands += 1
-                self.stdout.write(f'  ✅ Created brand: {brand.name}')
-        
-        self.stdout.write(f'  🏭 {created_brands} brands created/updated')
+        # created_categories = 0
+        # for category_name in categories_data:
+        #     category, created = Category.objects.get_or_create(
+        #         name=category_name,
+        #         defaults={'is_active': True}
+        #     )
+        #     if created:
+        #         created_categories += 1
+        #         self.stdout.write(f'  ✅ Created category: {category.name}')
+        # 
+        # self.stdout.write(f'  📂 {created_categories} categories created/updated')
+        # 
+        # # Marcas básicas
+        # brands_data = [
+        #     'Genérica',
+        #     'Sin Marca',
+        #     'Marca Propia',
+        # ]
+        # 
+        # created_brands = 0
+        # for brand_name in brands_data:
+        #     brand, created = Brand.objects.get_or_create(
+        #         name=brand_name,
+        #         defaults={'is_active': True}
+        #     )
+        #     if created:
+        #         created_brands += 1
+        #         self.stdout.write(f'  ✅ Created brand: {brand.name}')
+        # 
+        # self.stdout.write(f'  🏭 {created_brands} brands created/updated')
 
     def create_tax_configuration(self):
         """Crear configuración de impuestos básica"""
         self.stdout.write('💰 Loading tax configuration...')
+        self.stdout.write('  ⚠️ Tax configuration disabled for administraNET Analytics')
+        return
         
+        # Código deshabilitado - requiere módulo accounting
         # Obtener primera empresa
-        from core.models import Empresa
-        empresa = Empresa.objects.first()
-        if not empresa:
-            self.stdout.write('  ⚠️ No company found, skipping tax configuration')
-            return
-        
-        # Crear plan de cuentas básico si no existe
-        self.create_basic_chart_of_accounts(empresa)
-        
-        # Crear grupos de impuestos
-        tax_groups_data = [
+        # from core.models import Empresa
+        # empresa = Empresa.objects.first()
+        # if not empresa:
+        #     self.stdout.write('  ⚠️ No company found, skipping tax configuration')
+        #     return
+        # 
+        # # Crear plan de cuentas básico si no existe
+        # self.create_basic_chart_of_accounts(empresa)
+        # 
+        # # Crear grupos de impuestos
+        # tax_groups_data = [
             {
                 'name': 'IVA',
                 'code': 'IVA',
@@ -558,15 +568,18 @@ class Command(BaseCommand):
     def create_payment_terms(self):
         """Crear condiciones de pago básicas"""
         self.stdout.write('📅 Loading payment terms...')
+        self.stdout.write('  ⚠️ Payment terms disabled for administraNET Analytics')
+        return
         
+        # Código deshabilitado - requiere módulo sales
         # Obtener primera empresa
-        from core.models import Empresa
-        empresa = Empresa.objects.first()
-        if not empresa:
-            self.stdout.write('  ⚠️ No company found, skipping payment terms')
-            return
-        
-        payment_terms_data = [
+        # from core.models import Empresa
+        # empresa = Empresa.objects.first()
+        # if not empresa:
+        #     self.stdout.write('  ⚠️ No company found, skipping payment terms')
+        #     return
+        # 
+        # payment_terms_data = [
             {
                 'code': 'CONTADO',
                 'name': 'Contado',
@@ -609,18 +622,18 @@ class Command(BaseCommand):
             },
         ]
         
-        created_terms = 0
-        for term_data in payment_terms_data:
-            term, created = PaymentTerm.objects.get_or_create(
-                code=term_data['code'],
-                empresa=term_data['empresa'],
-                defaults=term_data
-            )
-            if created:
-                created_terms += 1
-                self.stdout.write(f'  ✅ Created payment term: {term.name}')
-        
-        self.stdout.write(f'  📅 {created_terms} payment terms created/updated')
+        # created_terms = 0
+        # for term_data in payment_terms_data:
+        #     term, created = PaymentTerm.objects.get_or_create(
+        #         code=term_data['code'],
+        #         empresa=term_data['empresa'],
+        #         defaults=term_data
+        #     )
+        #     if created:
+        #         created_terms += 1
+        #         self.stdout.write(f'  ✅ Created payment term: {term.name}')
+        # 
+        # self.stdout.write(f'  📅 {created_terms} payment terms created/updated')
 
     def create_system_configuration(self):
         """Crear configuración del sistema por defecto"""
@@ -694,29 +707,32 @@ class Command(BaseCommand):
     def create_price_lists(self):
         """Crear lista de precios predeterminada"""
         self.stdout.write('💰 Loading price lists...')
+        self.stdout.write('  ⚠️ Price lists disabled for administraNET Analytics')
+        return
         
+        # Código deshabilitado - requiere módulo sales
         # Obtener primera empresa
-        from core.models import Empresa
-        empresa = Empresa.objects.first()
-        if not empresa:
-            self.stdout.write('  ⚠️ No company found, skipping price lists')
-            return
-        
-        # Obtener moneda por defecto (ARS para Argentina)
-        default_currency = 'ARS'
-        
-        # Crear lista de precios predeterminada
-        price_list, created = PriceList.objects.get_or_create(
-            name='Lista de precios predeterminada',
-            defaults={
-                'currency': default_currency,
-                'is_active': True,
-            }
-        )
-        
-        if created:
-            self.stdout.write(f'  ✅ Created price list: {price_list.name}')
-        else:
-            self.stdout.write(f'  ℹ️ Price list already exists: {price_list.name}')
-        
-        self.stdout.write(f'  💰 1 price list created/updated') 
+        # from core.models import Empresa
+        # empresa = Empresa.objects.first()
+        # if not empresa:
+        #     self.stdout.write('  ⚠️ No company found, skipping price lists')
+        #     return
+        # 
+        # # Obtener moneda por defecto (ARS para Argentina)
+        # default_currency = 'ARS'
+        # 
+        # # Crear lista de precios predeterminada
+        # price_list, created = PriceList.objects.get_or_create(
+        #     name='Lista de precios predeterminada',
+        #     defaults={
+        #         'currency': default_currency,
+        #         'is_active': True,
+        #     }
+        # )
+        # 
+        # if created:
+        #     self.stdout.write(f'  ✅ Created price list: {price_list.name}')
+        # else:
+        #     self.stdout.write(f'  ℹ️ Price list already exists: {price_list.name}')
+        # 
+        # self.stdout.write(f'  💰 1 price list created/updated') 

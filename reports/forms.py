@@ -1,5 +1,6 @@
 from django import forms
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 from .models import ReportDashboard, ReportCategory
 

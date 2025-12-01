@@ -1,0 +1,88 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">Crear Nuevo Usuario</h1>
+
+  {% if messages %}
+    <div class="mb-4">
+      {% for message in messages %}
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" class="bg-white p-6 rounded-lg shadow-md space-y-4">
+    {% csrf_token %}
+    
+    <div>
+      <label for="cod_usuario" class="block text-xs font-medium text-gray-700 mb-1">Código de Usuario *</label>
+      <input type="text" name="cod_usuario" id="cod_usuario" required
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+             placeholder="Ej: jperez">
+    </div>
+
+    <div>
+      <label for="nombre_usuario" class="block text-xs font-medium text-gray-700 mb-1">Nombre *</label>
+      <input type="text" name="nombre_usuario" id="nombre_usuario" required
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+             placeholder="Ej: Juan">
+    </div>
+
+    <div>
+      <label for="apellido_usuario" class="block text-xs font-medium text-gray-700 mb-1">Apellido</label>
+      <input type="text" name="apellido_usuario" id="apellido_usuario"
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+             placeholder="Ej: Pérez">
+    </div>
+
+    <div>
+      <label for="password" class="block text-xs font-medium text-gray-700 mb-1">Contraseña *</label>
+      <input type="password" name="password" id="password" required
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+    </div>
+
+    <div>
+      <label for="confirmar_password" class="block text-xs font-medium text-gray-700 mb-1">Confirmar Contraseña *</label>
+      <input type="password" name="confirmar_password" id="confirmar_password" required
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+    </div>
+
+    <div>
+      <label for="id_puesto" class="block text-xs font-medium text-gray-700 mb-1">Puesto</label>
+      <select name="id_puesto" id="id_puesto"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+        <option value="">Seleccionar...</option>
+        {% for puesto in puestos %}
+        <option value="{{ puesto.id }}">{{ puesto.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="id_sucursal" class="block text-xs font-medium text-gray-700 mb-1">Sucursal</label>
+      <select name="id_sucursal" id="id_sucursal"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+        <option value="">Seleccionar...</option>
+        {% for sucursal in sucursales %}
+        <option value="{{ sucursal.id }}">{{ sucursal.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex items-center justify-between pt-4 border-t">
+      <a href="{% url 'core:usuarios' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors" title="Cancelar">
+        <span class="material-icons text-base">close</span>
+      </a>
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Crear Usuario">
+        <span class="material-icons text-base">person_add</span>
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+

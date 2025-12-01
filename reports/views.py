@@ -4,12 +4,44 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.http import Http404
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 from django.views.generic import TemplateView
 
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission
+
+
+def get_user_for_foreignkey(user):
+    """
+    Helper para obtener un usuario válido para ForeignKeys.
+    Si es AdministraNETUser, retorna None (no se puede usar en ForeignKeys).
+    Si es UsuarioExtendido, retorna el usuario directamente.
+    """
+    from core.models import UsuarioExtendido
+    if isinstance(user, UsuarioExtendido):
+        return user
+    # Para AdministraNETUser, retornar None ya que no es un modelo de Django
+    return None
+
+
+def get_workspace_for_user(user, empresa):
+    """
+    Helper para obtener el workspace de un usuario.
+    Maneja tanto UsuarioExtendido como AdministraNETUser.
+    """
+    from core.models import UsuarioExtendido
+    
+    # Para AdministraNETUser, no podemos usar ForeignKey directamente
+    # Retornar None ya que no podemos guardar AdministraNETUser en ForeignKey
+    # En el futuro se podría implementar almacenamiento en sesión o cache
+    if not isinstance(user, UsuarioExtendido):
+        return None
+    
+    # Para UsuarioExtendido, usar el ForeignKey normalmente
+    workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+    return workspace
 
 
 class ReportsCatalogView(LoginRequiredMixin, TemplateView):
@@ -20,7 +52,7 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
     def get_workspace_items(self):
         user = self.request.user
         empresa = getattr(user, "empresa_activa", None)
-        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+        workspace = get_workspace_for_user(user, empresa)
         if not workspace:
             return []
         return list(workspace.items or [])
@@ -30,6 +62,11 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
         empresa = getattr(self.request.user, "empresa_activa", None)
         empresa_id = empresa.id if empresa else None
         catalog = build_catalog_for_user(self.request.user, empresa_id)
+        
+        # Verificar si el usuario es el supervisor (por cod_usuario)
+        is_supervisor_user = False
+        if hasattr(self.request.user, 'cod_usuario') and (self.request.user.cod_usuario or '').lower() == 'supervisor':
+            is_supervisor_user = True
 
         context.update(
             {
@@ -40,6 +77,7 @@ class ReportsCatalogView(LoginRequiredMixin, TemplateView):
                 "workspace_api_url": reverse("reports-api:reports-workspace"),
                 "workspace_view_url": reverse("reports:workspace"),
                 "workspace_count": len(self.get_workspace_items()),
+                "is_supervisor_user": is_supervisor_user,
             }
         )
         return context
@@ -90,7 +128,7 @@ class ReportsWorkspaceView(LoginRequiredMixin, TemplateView):
     def get_workspace_items(self):
         user = self.request.user
         empresa = getattr(user, "empresa_activa", None)
-        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+        workspace = get_workspace_for_user(user, empresa)
         if not workspace:
             return []
         return list(workspace.items or [])
@@ -123,7 +161,7 @@ class ReportsWorkspaceTVView(LoginRequiredMixin, TemplateView):
     def get_workspace_items(self):
         user = self.request.user
         empresa = getattr(user, "empresa_activa", None)
-        workspace = ReportWorkspace.objects.filter(owner=user, empresa=empresa).first()
+        workspace = get_workspace_for_user(user, empresa)
         if not workspace:
             return []
         return list(workspace.items or [])

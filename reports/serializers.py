@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 from .models import ReportDefinition, ReportWidget, ReportDashboard, ReportCategory
 from .services.catalog_service import CatalogEntry
@@ -46,6 +47,7 @@ class CatalogEntrySerializer(serializers.Serializer):
     metrics = serializers.ListField(child=serializers.CharField(), default=list())
     dimensions = serializers.ListField(child=serializers.CharField(), default=list())
     version = serializers.CharField()
+    is_visible = serializers.BooleanField(default=True)
 
     @classmethod
     def from_catalog_entry(cls, entry: CatalogEntry) -> dict:
@@ -60,6 +62,7 @@ class CatalogEntrySerializer(serializers.Serializer):
             "metrics": entry.metrics,
             "dimensions": entry.dimensions,
             "version": entry.version,
+            "is_visible": getattr(entry, "is_visible", True),
         }
 
 
@@ -71,7 +74,8 @@ class ReportQueryRequestSerializer(serializers.Serializer):
     date_to = serializers.DateField(required=False)
     metrics = serializers.ListField(child=serializers.CharField(), required=False)
     dimensions = serializers.ListField(child=serializers.CharField(), required=False)
-    filters = serializers.DictField(child=serializers.ListField(child=serializers.CharField()), required=False)
+    # filters puede contener cualquier tipo de valor: strings, números, booleanos, listas, etc.
+    filters = serializers.DictField(required=False, allow_empty=True)
     group_by = serializers.ListField(child=serializers.CharField(), required=False)
     limit = serializers.IntegerField(default=5000, min_value=1, max_value=20000)
 

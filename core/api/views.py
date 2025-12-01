@@ -142,4 +142,44 @@ def currency_search_api(request):
             'symbol': c.symbol,
         } for c in currencies
     ]
-    return JsonResponse({'results': results}) 
+    return JsonResponse({'results': results})
+
+def provincias_api(request):
+    """API para obtener provincias desde administraNET Gestión"""
+    from core.services.administranet_empresas import AdministraNETEmpresaService
+    
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    
+    if not base_empresa:
+        return JsonResponse({'provincias': []}, status=400)
+    
+    id_pais = request.GET.get('id_pais')
+    empresa_service = AdministraNETEmpresaService()
+    
+    if id_pais:
+        provincias = empresa_service.obtener_provincias(base_empresa, int(id_pais))
+    else:
+        provincias = empresa_service.obtener_provincias(base_empresa)
+    
+    return JsonResponse({'provincias': provincias})
+
+def departamentos_api(request):
+    """API para obtener departamentos desde administraNET Gestión"""
+    from core.services.administranet_empresas import AdministraNETEmpresaService
+    
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    
+    if not base_empresa:
+        return JsonResponse({'departamentos': []}, status=400)
+    
+    cod_provincia = request.GET.get('cod_provincia')
+    empresa_service = AdministraNETEmpresaService()
+    
+    if cod_provincia:
+        departamentos = empresa_service.obtener_departamentos(base_empresa, int(cod_provincia))
+    else:
+        departamentos = empresa_service.obtener_departamentos(base_empresa)
+    
+    return JsonResponse({'departamentos': departamentos}) 

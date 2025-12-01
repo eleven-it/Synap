@@ -30,19 +30,21 @@ urlpatterns = [
     path("rosetta/", include("rosetta.urls")),  # Herramienta de traducción
     path("login/", include("login.urls")),  
     path("core/", include("core.urls", namespace="core")),
-    path("mercadopago/", include("mercadopago.urls")),
-    path("tiendanube-adminet/", include("tiendanube_administranet.urls", namespace="tiendanube_administranet")),
-    path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
+    # Módulos deshabilitados para administraNET Analytics
+    # path("mercadopago/", include("mercadopago.urls")),
+    # path("tiendanube-adminet/", include("tiendanube_administranet.urls", namespace="tiendanube_administranet")),
+    # path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
 ]
 
 # URLs críticas siempre disponibles (workaround para tests y desarrollo)
 urlpatterns.extend([
-    path('accounting/', include('accounting.urls', namespace='accounting')),
-    path('sales/', include('sales.urls', namespace='sales')),
-    path('api/sales/', include('sales.api.urls')),
+    # Módulos deshabilitados para administraNET Analytics
+    # path('accounting/', include('accounting.urls', namespace='accounting')),
+    # path('sales/', include('sales.urls', namespace='sales')),
+    # path('api/sales/', include('sales.api.urls')),
     path('core/api/', include('core.api.urls', namespace='core_api')),
-    path('administraNET_integration/', include('administraNET_integration.urls', namespace='administraNET_integration')),
-    path('api/tiendanube-adminet/', include('tiendanube_administranet.api.urls', namespace='tiendanube_administranet_api')),
+    # path('administraNET_integration/', include('administraNET_integration.urls', namespace='administraNET_integration')),
+    # path('api/tiendanube-adminet/', include('tiendanube_administranet.api.urls', namespace='tiendanube_administranet_api')),
 ])
 
 # URLs de módulos dinámicos
@@ -52,13 +54,15 @@ try:
     urlpatterns.extend(module_url_patterns)
 except ImportError:
     # Fallback: URLs estáticas si el sistema de módulos no está disponible
-    urlpatterns.extend([
-        path("inventory/", include("inventory.urls", namespace="inventory")),    
-        path("sales/", include("sales.urls", namespace="sales")),
-        path('api/sales/', include('sales.api.urls')),
-        path('purchases/', include('purchases.urls', namespace='purchases')),
-        path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),
-    ])
+    # Módulos deshabilitados para administraNET Analytics
+    # urlpatterns.extend([
+    #     path("inventory/", include("inventory.urls", namespace="inventory")),    
+    #     path("sales/", include("sales.urls", namespace="sales")),
+    #     path('api/sales/', include('sales.api.urls')),
+    #     path('purchases/', include('purchases.urls', namespace='purchases')),
+    #     path('purchases/api/', include(('purchases.api.urls', 'api'), namespace='purchases-api')),
+    # ])
+    pass
 
 if settings.DEBUG:
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
@@ -67,26 +71,27 @@ if settings.DEBUG:
 # ⛔ Handler global de error 403    
 handler403 = "core.views.error_403_view"
 
+# Módulos deshabilitados para administraNET Analytics
 # Logistics web
-urlpatterns.extend([
-    path('logistics/', include('logistics.urls', namespace='logistics')),
-])
+# urlpatterns.extend([
+#     path('logistics/', include('logistics.urls', namespace='logistics')),
+# ])
 
-# Finance web
+# Finance web (mantener reports)
 urlpatterns.extend([
-    path('finance/', include('finance.urls', namespace='finance')),
-    path('support/', include('support_ai.urls', namespace='support_ai')),
+    # path('finance/', include('finance.urls', namespace='finance')),
+    # path('support/', include('support_ai.urls', namespace='support_ai')),
     path('reports/', include('reports.urls', namespace='reports')),
 ])
 
 # Logistics API
-urlpatterns.extend([
-    path('api/logistics/', include('logistics.api_urls')),
-])
+# urlpatterns.extend([
+#     path('api/logistics/', include('logistics.api_urls')),
+# ])
 
-# Finance API
+# Finance API (mantener reports)
 urlpatterns.extend([
-    path('api/finance/', include('finance.api_urls')),
+    # path('api/finance/', include('finance.api_urls')),
     path('api/reports/', include('reports.api_urls', namespace='reports-api')),
 ])
 

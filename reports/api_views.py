@@ -7,6 +7,19 @@ from rest_framework.views import APIView
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission
+
+
+def get_user_for_foreignkey(user):
+    """
+    Helper para obtener un usuario válido para ForeignKeys.
+    Si es AdministraNETUser, retorna None (no se puede usar en ForeignKeys).
+    Si es UsuarioExtendido, retorna el usuario directamente.
+    """
+    from core.models import UsuarioExtendido
+    if isinstance(user, UsuarioExtendido):
+        return user
+    # Para AdministraNETUser, retornar None ya que no es un modelo de Django
+    return None
 from .serializers import (
     CatalogEntrySerializer,
     ReportQueryRequestSerializer,
@@ -44,9 +57,37 @@ class ReportQueryAPIView(APIView):
         if report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
             return Response({"detail": "Managerial reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
-        result = QueryRunnerService(request.user).run(report, payload)
-        response_serializer = ReportQueryResponseSerializer(result.__dict__)
-        return Response(response_serializer.data)
+        # Agregar base_empresa al payload si está disponible en la sesión
+        if hasattr(request, 'session') and request.session:
+            session_user = request.session.get('user', {})
+            if session_user and 'base_empresa' in session_user:
+                if 'filters' not in payload:
+                    payload['filters'] = {}
+                payload['filters']['base_empresa'] = session_user['base_empresa']
+
+        try:
+            result = QueryRunnerService(request.user).run(report, payload)
+            if result is None:
+                return Response(
+                    {
+                        "detail": "El servicio de consulta retornó None. Verifique los logs del servidor.",
+                        "error_type": "NoneResultError",
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            response_serializer = ReportQueryResponseSerializer(result.__dict__)
+            return Response(response_serializer.data)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error ejecutando reporte {payload.get('slug')}: {e}", exc_info=True)
+            return Response(
+                {
+                    "detail": f"Error al ejecutar el reporte: {str(e)}",
+                    "error_type": type(e).__name__,
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class WorkspaceSelectionAPIView(APIView):
@@ -56,11 +97,36 @@ class WorkspaceSelectionAPIView(APIView):
 
     MAX_ITEMS = 16
 
-    def _get_workspace(self, request) -> ReportWorkspace:
+    def _get_workspace(self, request):
+        """
+        Obtiene el workspace del usuario.
+        Para AdministraNETUser retorna un objeto mock ya que no podemos usar ForeignKey.
+        """
         user = request.user
         empresa = getattr(user, "empresa_activa", None)
+        
+        # Para AdministraNETUser, no podemos usar ForeignKey directamente
+        # Retornar un objeto mock con la misma interfaz
+        owner_user = get_user_for_foreignkey(user)
+        if owner_user is None:
+            # Para usuarios de administraNET, crear objeto mock
+            # Los items se pueden almacenar en sesión en el futuro
+            from .models import ReportWorkspace
+            # Crear instancia sin guardar (no tiene owner válido)
+            class MockWorkspace:
+                def __init__(self):
+                    self.items = request.session.get('report_workspace_items', [])
+                    self.empresa = empresa
+                
+                def save(self, update_fields=None):
+                    # Guardar items en sesión en lugar de base de datos
+                    request.session['report_workspace_items'] = self.items
+                    request.session.modified = True
+            
+            return MockWorkspace()
+        
         workspace, _ = ReportWorkspace.objects.get_or_create(
-            owner=user,
+            owner=owner_user,
             empresa=empresa,
             defaults={"items": []},
         )
@@ -193,14 +259,196 @@ class ReportExportAPIView(APIView):
         if report.is_managerial() and not ManagerialReportsPermission().has_permission(request, self):
             return Response({"detail": "Managerial reports not allowed."}, status=status.HTTP_403_FORBIDDEN)
 
-        export_result = ExportService(request.user).export(report.slug, payload, export_type)
-        return Response(
-            {
-                "path": export_result.path,
-                "created_at": export_result.created_at,
-                "expires_at": export_result.expires_at,
-            },
-            status=status.HTTP_202_ACCEPTED,
-        )
+        try:
+            export_service = ExportService(request.user)
+            export_result = export_service.export(report.slug, payload, export_type)
+            
+            # Retornar el archivo directamente para descarga
+            return export_service.get_file_response(export_result)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error exportando reporte: {e}", exc_info=True)
+            return Response(
+                {"detail": f"Error al exportar el reporte: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class ReportVisibilityAPIView(APIView):
+    """API para cambiar la visibilidad de reportes (solo para usuario supervisor)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        """Cambia la visibilidad de un reporte."""
+        # Solo el usuario 'supervisor' (por cod_usuario) puede cambiar la visibilidad
+        is_supervisor_user = False
+        if hasattr(request.user, 'cod_usuario') and (request.user.cod_usuario or '').lower() == 'supervisor':
+            is_supervisor_user = True
+        
+        if not is_supervisor_user:
+            return Response(
+                {"detail": "Solo el usuario supervisor puede cambiar la visibilidad de reportes."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        slug = request.data.get("slug")
+        is_visible = request.data.get("is_visible", True)
+        
+        if not slug:
+            return Response(
+                {"detail": "Slug requerido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            report = ReportDefinition.objects.get(slug=slug)
+            old_visible = report.is_visible
+            report.is_visible = bool(is_visible)
+            report.save(update_fields=["is_visible", "updated_at"])
+            
+            # Log para debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Visibilidad de reporte '{report.slug}' cambiada de {old_visible} a {report.is_visible} por usuario {request.user.cod_usuario}")
+            
+            return Response({
+                "status": "success",
+                "slug": report.slug,
+                "is_visible": report.is_visible,
+                "message": f"Reporte {'visible' if report.is_visible else 'oculto'} para usuarios con puesto Supervisor"
+            })
+        except ReportDefinition.DoesNotExist:
+            return Response(
+                {"detail": "Reporte no encontrado."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ReportFiltersAPIView(APIView):
+    """API para obtener opciones de filtros (puntos de venta, sucursales, etc.)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        """Obtiene las opciones disponibles para los filtros de reportes."""
+        # Obtener base_empresa de la sesión
+        base_empresa = None
+        if hasattr(request, 'session') and request.session:
+            session_user = request.session.get('user', {})
+            if session_user and 'base_empresa' in session_user:
+                base_empresa = session_user['base_empresa']
+        
+        if not base_empresa:
+            return Response(
+                {"detail": "No se pudo determinar la base de datos de la empresa."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        filter_type = request.query_params.get("type")
+        
+        try:
+            from django.conf import settings
+            import MySQLdb
+            
+            mysql_config = settings.DATABASES['mysql']
+            conn = MySQLdb.connect(
+                host=mysql_config['HOST'],
+                port=int(mysql_config['PORT']),
+                user=mysql_config['USER'],
+                passwd=mysql_config['PASSWORD'],
+                db=base_empresa,
+                charset='latin1'
+            )
+            cursor = conn.cursor()
+            
+            if filter_type == "puntos_venta":
+                cursor.execute("""
+                    SELECT id_punto_venta, nro_punto_venta, id_sucursal
+                    FROM punto_venta
+                    WHERE anulado = 'No' OR anulado IS NULL
+                    ORDER BY nro_punto_venta
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    results.append({
+                        "id": row_dict.get("id_punto_venta"),
+                        "label": f"PV {row_dict.get('nro_punto_venta', row_dict.get('id_punto_venta'))}",
+                        "value": row_dict.get("id_punto_venta"),
+                        "sucursal_id": row_dict.get("id_sucursal"),
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"puntos_venta": results})
+            
+            elif filter_type == "sucursales":
+                cursor.execute("""
+                    SELECT id_sucursal, nombre_sucursal
+                    FROM sucursales
+                    WHERE anulado = 'No' OR anulado IS NULL
+                    ORDER BY nombre_sucursal
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    results.append({
+                        "id": row_dict.get("id_sucursal"),
+                        "label": row_dict.get("nombre_sucursal", f"Sucursal {row_dict.get('id_sucursal')}"),
+                        "value": row_dict.get("id_sucursal"),
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"sucursales": results})
+            
+            elif filter_type == "cajas":
+                # Obtener TODAS las cajas activas de caja_abm
+                # Se muestran todas para un mejor control, incluso si no tienen movimientos
+                cursor.execute("""
+                    SELECT id_caja, nombre_caja, tipo_caja
+                    FROM caja_abm
+                    WHERE anulado = 'No' OR anulado IS NULL
+                    ORDER BY nombre_caja
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    nombre_caja = row_dict.get('nombre_caja', '')
+                    tipo_caja = row_dict.get('tipo_caja', '')
+                    # Formatear label: solo nombre si no hay tipo, o nombre (tipo) si hay tipo
+                    if tipo_caja:
+                        label = f"{nombre_caja} ({tipo_caja})"
+                    else:
+                        label = nombre_caja if nombre_caja else f"Caja {row_dict.get('id_caja')}"
+                    results.append({
+                        "id": row_dict.get("id_caja"),
+                        "label": label,
+                        "value": row_dict.get("id_caja"),
+                        "tipo_caja": tipo_caja,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"cajas": results})
+            
+            else:
+                cursor.close()
+                conn.close()
+                return Response(
+                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales' o 'cajas'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error obteniendo filtros: {e}", exc_info=True)
+            return Response(
+                {"detail": f"Error al obtener filtros: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 

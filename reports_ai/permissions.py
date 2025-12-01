@@ -2,7 +2,8 @@
 Sistema de permisos para Reports AI
 Siguiendo la lógica de core para consistencia
 """
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 
 # Permisos del módulo siguiendo el patrón de core

@@ -1,16 +1,20 @@
 {% extends "core/core_app_base.html" %}
-{% load i18n %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 {% block admin_content %}
-<div class="max-w-xl mx-auto py-10 px-4">
-  <h1 class="text-2xl font-bold text-gray-800 mb-6">
-    {% if editar %}✏️ {% trans "Edit Permission" %}{% else %}➕ {% trans "Create New Permission" %}{% endif %}
-  </h1>
+<div class="max-w-2xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">
+      {% if editar %}✏️ Editar Permiso del Sistema{% else %}➕ Crear Nuevo Permiso del Sistema{% endif %}
+    </h1>
+    <p class="text-xs text-gray-600 mt-1">Gestionar permisos del sistema de administraNET</p>
+  </div>
 
   {% if messages %}
     <div class="mb-4">
       {% for message in messages %}
-        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %}">
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
           {{ message }}
         </div>
       {% endfor %}
@@ -19,25 +23,78 @@
 
   <form method="post" class="bg-white p-6 rounded-lg shadow-md space-y-4">
     {% csrf_token %}
+    
     <div>
-      <label for="codigo" class="block text-sm font-medium text-gray-700">{% trans "Permission Code" %}</label>
-      <input type="text" name="codigo" id="codigo" value="{{ permiso.codigo|default:'' }}" 
-             class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
+      <label for="key_permiso" class="block text-xs font-medium text-gray-700 mb-1">Código del Permiso (key_permiso) *</label>
+      <input type="text" name="key_permiso" id="key_permiso" value="{{ permiso.key_permiso|default:'' }}" 
+             class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500"
              required {% if editar %}readonly{% endif %}>
       {% if editar %}
-      <p class="text-xs text-gray-500 mt-1">{% trans "The code cannot be modified." %}</p>
+      <p class="text-xs text-gray-500 mt-1">El código no puede modificarse.</p>
+      {% else %}
+      <p class="text-xs text-gray-500 mt-1">Identificador único del permiso (ej: acceso_pv, mod_precio_fact)</p>
       {% endif %}
     </div>
+    
     <div>
-      <label for="nombre" class="block text-sm font-medium text-gray-700">{% trans "Descriptive Name" %}</label>
-      <input type="text" name="nombre" id="nombre" value="{{ permiso.nombre|default:'' }}"
-             class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-purple-500 focus:border-purple-500"
+      <label for="nombre_permiso" class="block text-xs font-medium text-gray-700 mb-1">Nombre del Permiso *</label>
+      <input type="text" name="nombre_permiso" id="nombre_permiso" value="{{ permiso.nombre_permiso|default:'' }}"
+             class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500"
              required>
+      <p class="text-xs text-gray-500 mt-1">Nombre descriptivo del permiso</p>
     </div>
-    <div class="text-right">
-      <a href="{% url 'core:listar_permisos' %}" class="text-gray-600 mr-4">{% trans "Cancel" %}</a>
-      <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700">
-        {% trans "Save" %}
+    
+    <div>
+      <label for="detalle_permiso" class="block text-xs font-medium text-gray-700 mb-1">Detalle/Descripción</label>
+      <textarea name="detalle_permiso" id="detalle_permiso" rows="2"
+                class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500">{{ permiso.detalle_permiso|default:'' }}</textarea>
+      <p class="text-xs text-gray-500 mt-1">Descripción detallada del permiso</p>
+    </div>
+    
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="grupo_permiso" class="block text-xs font-medium text-gray-700 mb-1">Grupo</label>
+        <select name="grupo_permiso" id="grupo_permiso" 
+                class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500">
+          {% for grupo_item in grupos %}
+          <option value="{{ grupo_item }}" {% if permiso.grupo_permiso == grupo_item %}selected{% endif %}>{{ grupo_item }}</option>
+          {% endfor %}
+          <option value="Generales" {% if not permiso.grupo_permiso or permiso.grupo_permiso == 'Generales' %}selected{% endif %}>Generales</option>
+        </select>
+      </div>
+      
+      <div>
+        <label for="tipo_permiso" class="block text-xs font-medium text-gray-700 mb-1">Tipo</label>
+        <select name="tipo_permiso" id="tipo_permiso" 
+                class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500">
+          <option value="Si-No" {% if permiso.tipo_permiso == 'Si-No' or not permiso.tipo_permiso %}selected{% endif %}>Si-No</option>
+          <option value="Texto" {% if permiso.tipo_permiso == 'Texto' %}selected{% endif %}>Texto</option>
+          <option value="Indice" {% if permiso.tipo_permiso == 'Indice' %}selected{% endif %}>Índice</option>
+          <option value="Numero" {% if permiso.tipo_permiso == 'Numero' %}selected{% endif %}>Número</option>
+        </select>
+      </div>
+    </div>
+    
+    <div>
+      <label for="default_permiso" class="block text-xs font-medium text-gray-700 mb-1">Valor por Defecto</label>
+      <input type="text" name="default_permiso" id="default_permiso" value="{{ permiso.default_permiso|default:'No' }}"
+             class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500">
+      <p class="text-xs text-gray-500 mt-1">Valor por defecto cuando se asigna a un puesto (ej: Si, No, Todos, Normal)</p>
+    </div>
+    
+    <div>
+      <label for="detalle_valor_permiso" class="block text-xs font-medium text-gray-700 mb-1">Valores Posibles</label>
+      <input type="text" name="detalle_valor_permiso" id="detalle_valor_permiso" value="{{ permiso.detalle_valor_permiso|default:'Si-No' }}"
+             class="block w-full border border-gray-300 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500">
+      <p class="text-xs text-gray-500 mt-1">Valores permitidos separados por guión (ej: Si-No, Todos-Seleccion, Normal-TPV)</p>
+    </div>
+    
+    <div class="flex items-center justify-between pt-4 border-t">
+      <a href="{% url 'core:listar_permisos' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors" title="Cancelar">
+        <span class="material-icons text-base">close</span>
+      </a>
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Guardar">
+        <span class="material-icons text-base">save</span>
       </button>
     </div>
   </form>

@@ -137,37 +137,37 @@ def auditar_cambios_permiso(sender, instance, created, **kwargs):
             limpiar_cache_usuario(usuario)
 
 
-# Signal para sincronización con Firebase
-@receiver(post_save, sender=UsuarioExtendido)
-def sincronizar_usuario_firebase(sender, instance, created, **kwargs):
-    """Sincroniza cambios de usuario con Firebase"""
-    try:
-        from firebase_admin import firestore
-        
-        firestore_db = firestore.client()
-        doc_ref = firestore_db.collection("usuarios").document(instance.uid)
-        
-        # Evita el error al acceder a M2M en un objeto recién creado.
-        # Si es nuevo, los roles están vacíos. Si no, los consultamos.
-        roles_nombres = []
-        if not created:
-            roles_nombres = list(instance.roles.filter(activo=True).values_list("nombre", flat=True))
-
-        datos_usuario = {
-            "email": instance.email,
-            "nombre": instance.nombre,
-            "idioma": instance.idioma,
-            "is_active": instance.is_active,
-            "roles": roles_nombres,
-            "ultimo_acceso": instance.ultimo_acceso.isoformat() if instance.ultimo_acceso else None,
-            "fecha_modificacion": instance.fecha_modificacion.isoformat()
-        }
-        
-        doc_ref.set(datos_usuario, merge=True)
-        logger.debug(f"Usuario {instance.email} sincronizado con Firebase")
-        
-    except Exception as e:
-        logger.error(f"Error sincronizando usuario {instance.email} con Firebase: {e}")
+# Signal para sincronización con Firebase - DESHABILITADO para administraNET Analytics
+# @receiver(post_save, sender=UsuarioExtendido)
+# def sincronizar_usuario_firebase(sender, instance, created, **kwargs):
+#     """Sincroniza cambios de usuario con Firebase"""
+#     try:
+#         from firebase_admin import firestore
+#         
+#         firestore_db = firestore.client()
+#         doc_ref = firestore_db.collection("usuarios").document(instance.uid)
+#         
+#         # Evita el error al acceder a M2M en un objeto recién creado.
+#         # Si es nuevo, los roles están vacíos. Si no, los consultamos.
+#         roles_nombres = []
+#         if not created:
+#             roles_nombres = list(instance.roles.filter(activo=True).values_list("nombre", flat=True))
+# 
+#         datos_usuario = {
+#             "email": instance.email,
+#             "nombre": instance.nombre,
+#             "idioma": instance.idioma,
+#             "is_active": instance.is_active,
+#             "roles": roles_nombres,
+#             "ultimo_acceso": instance.ultimo_acceso.isoformat() if instance.ultimo_acceso else None,
+#             "fecha_modificacion": instance.fecha_modificacion.isoformat()
+#         }
+#         
+#         doc_ref.set(datos_usuario, merge=True)
+#         logger.debug(f"Usuario {instance.email} sincronizado con Firebase")
+#         
+#     except Exception as e:
+#         logger.error(f"Error sincronizando usuario {instance.email} con Firebase: {e}")
 
 
 # Signal para limpiar cache cuando se modifica configuración del sistema

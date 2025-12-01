@@ -66,11 +66,25 @@ class ModulePermissionMiddleware:
         self.get_response = get_response
     
     def __call__(self, request):
-        if not request.user.is_authenticated:
+        path = request.path_info.lstrip('/')
+        
+        # Permitir acceso a login y logout sin verificar permisos
+        if path.startswith('login/') or path.startswith('logout/'):
             response = self.get_response(request)
             return response
         
-        path = request.path_info.lstrip('/')
+        # Verificar sesión directamente además de request.user.is_authenticated
+        has_session = "user" in request.session
+        is_authenticated = hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False)
+        
+        if not has_session and not is_authenticated:
+            response = self.get_response(request)
+            return response
+        
+        # Permitir acceso al dashboard sin verificar permisos de módulo
+        if path.startswith('core/dashboard/'):
+            response = self.get_response(request)
+            return response
         
         # Verificar permisos por módulo
         for module_name in MODULE_CONFIGS.keys():
@@ -91,7 +105,8 @@ class ModulePermissionMiddleware:
     
     def user_has_module_access(self, user, module_name):
         """Verifica si el usuario tiene acceso al módulo"""
-        # Administradores tienen acceso total
+        # Solo el usuario 'supervisor' (por cod_usuario) tiene acceso total
+        # NOTA: El puesto/rol "Supervisor" NO otorga acceso total, solo permisos específicos
         if user.is_superuser or user.is_admin():
             return True
         
@@ -103,10 +118,23 @@ class ModulePermissionMiddleware:
             # Si no hay permisos definidos, permitir acceso
             return True
         
+        # Obtener todos los permisos del usuario
+        user_permissions = set()
+        if hasattr(user, 'get_permisos_totales'):
+            user_permissions = user.get_permisos_totales()
+        
+        # Verificar si el usuario tiene acceso total
+        if "*" in user_permissions:
+            return True
+        
         # Verificar si el usuario tiene al menos un permiso del módulo
         for permission in permissions:
-            if user.tiene_permiso(permission):
+            if permission in user_permissions:
                 return True
+            # También verificar usando tiene_permiso si está disponible
+            if hasattr(user, 'tiene_permiso') and callable(user.tiene_permiso):
+                if user.tiene_permiso(permission):
+                    return True
         
         return False
 

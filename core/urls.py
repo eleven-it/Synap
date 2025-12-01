@@ -27,22 +27,29 @@ urlpatterns = [
     path('api/roles/', views_api.RoleListCreateApiView.as_view(), name='api_role_list_create'),
     path('api/roles/<int:rol_id>/', views_api.RoleDetailApiView.as_view(), name='api_role_detail'),
 
-    # Usuarios
+    # Usuarios (administraNET Gestión)
     path('usuarios/', views.usuarios_admin_view, name='usuarios'),
-    path('usuarios/crear/', views.UsuarioCreateView.as_view(), name='crear_usuario'),
+    path('usuarios/crear/', views.crear_usuario_view, name='crear_usuario'),
+    path('usuarios/<int:id_usuario>/editar/', views.editar_usuario_view, name='editar_usuario'),
+    path('usuarios/<int:id_usuario>/eliminar/', views.eliminar_usuario_view, name='eliminar_usuario'),
+    path('usuarios/validar-integridad/', views.validar_integridad_usuarios_view, name='validar_integridad_usuarios'),
+    
+    # Permisos del Sistema por Puesto (administraNET Gestión)
+    path('permisos-sistema/', views.listar_puestos_permisos_view, name='permisos_sistema'),
+    path('permisos-sistema/puesto/<int:id_puesto>/', views.editar_permisos_puesto_view, name='editar_permisos_puesto'),
 
-    # Permisos
+    # Permisos del Sistema (administraNET Gestión) - Solo lectura con toggle de valores
     path('permisos/', views.listar_permisos_view, name='listar_permisos'),
-    path('permisos/crear/', views.crear_editar_permiso_view, name='crear_permiso'),
-    path('permisos/<int:permiso_id>/editar/', views.crear_editar_permiso_view, name='editar_permiso'),
-    path('permisos/<int:permiso_id>/eliminar/', views.eliminar_permiso_view, name='eliminar_permiso'),
-    path('permisos/sincronizar/', views.sincronizar_sistema_view, name='sincronizar_sistema'),
+    path('permisos/<int:permiso_id>/toggle-valor/', views.toggle_valor_permiso_view, name='toggle_valor_permiso'),
+    # path('permisos/crear/', views.crear_editar_permiso_view, name='crear_permiso'),  # Creación deshabilitada
+    # path('permisos/<int:permiso_id>/editar/', views.crear_editar_permiso_view, name='editar_permiso'),  # Edición deshabilitada
+    # path('permisos/<int:permiso_id>/eliminar/', views.eliminar_permiso_view, name='eliminar_permiso'),  # Eliminación deshabilitada
 
-    # Roles
+    # Puestos (Roles) (administraNET Gestión)
     path('roles/', views.listar_roles_view, name='listar_roles'),
     path('roles/crear/', views.crear_editar_rol_view, name='crear_rol'),
-    path('roles/<int:rol_id>/editar/', views.crear_editar_rol_view, name='editar_rol'),
-    path('roles/<int:rol_id>/eliminar/', views.eliminar_rol_view, name='eliminar_rol'),
+    path('roles/<int:puesto_id>/editar/', views.crear_editar_rol_view, name='editar_rol'),
+    path('roles/<int:puesto_id>/eliminar/', views.eliminar_rol_view, name='eliminar_rol'),
     
     # UoM
     path('uom/', views.UoMListView.as_view(), name='uom_list'),

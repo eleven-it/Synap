@@ -6,6 +6,8 @@ from .api_views import (
     KPIAPIView,
     ReportExportAPIView,
     WorkspaceSelectionAPIView,
+    ReportFiltersAPIView,
+    ReportVisibilityAPIView,
 )
 
 app_name = "reports-api"
@@ -16,6 +18,8 @@ urlpatterns = [
     path("kpi/", KPIAPIView.as_view(), name="reports-kpi"),
     path("export/", ReportExportAPIView.as_view(), name="reports-export"),
     path("workspace/", WorkspaceSelectionAPIView.as_view(), name="reports-workspace"),
+    path("filters/", ReportFiltersAPIView.as_view(), name="reports-filters"),
+    path("visibility/", ReportVisibilityAPIView.as_view(), name="reports-visibility"),
 ]
 
 

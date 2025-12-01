@@ -1,0 +1,246 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Synap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #f0f2f5;
+    }
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 0 2rem;
+    }
+    .login-box {
+      background: white;
+      padding: 3rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 450px;
+    }
+    .logo-container {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .logo {
+      max-width: 240px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="logo-container">
+        {% if empresa_activa and empresa_activa.logo %}
+          <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="logo" />
+        {% else %}
+          <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo de Synap" class="logo" />
+        {% endif %}
+      </div>
+
+      <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-6">
+        <div id="error-message" class="text-red-600 text-sm text-center hidden"></div>
+        
+        <!-- Servidor -->
+        <div>
+          <label for="server" class="block text-sm font-medium text-gray-700">Servidor</label>
+          <input 
+            id="server" 
+            type="text" 
+            name="server" 
+            value="{% if server_default %}{{ server_default.host }}{% else %}{{ DB_HOST|default:'' }}{% endif %}"
+            readonly
+            class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 bg-gray-50"
+          />
+        </div>
+
+        <!-- Empresa -->
+        <div>
+          <label for="empresa" class="block text-sm font-medium text-gray-700">Empresa</label>
+          <select 
+            id="empresa" 
+            name="empresa" 
+            required
+            class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500"
+          >
+            <option value="">Seleccione una empresa</option>
+            {% for empresa in empresas %}
+            <option value="{{ empresa.base_empresa }}">{{ empresa.nombre_empresa }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Usuario -->
+        <div>
+          <label for="usuario" class="block text-sm font-medium text-gray-700">Usuario</label>
+          <input 
+            id="usuario" 
+            type="text" 
+            name="usuario" 
+            autocomplete="username" 
+            required
+            class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" 
+          />
+        </div>
+
+        <!-- Contraseña -->
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+          <input 
+            id="password" 
+            type="password" 
+            name="password" 
+            autocomplete="current-password" 
+            required
+            class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" 
+          />
+        </div>
+
+        <div>
+          <button 
+            type="submit"
+            class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-md transition-colors duration-300"
+          >
+            Ingresar
+          </button>
+        </div>
+      </form>
+
+      <!-- Enlace de recuperación de contraseña deshabilitado - no implementado -->
+      <!-- <div class="text-sm text-center mt-6">
+        <a href="#" class="font-medium text-purple-600 hover:text-purple-500">
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div> -->
+    </div>
+  </div>
+  
+  <script>
+    function showError(message) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.textContent = message;
+      errorDiv.classList.remove('hidden');
+      setTimeout(() => {
+        errorDiv.classList.add('hidden');
+      }, 5000);
+    }
+    
+    async function handleLogin(event) {
+      event.preventDefault();
+      
+      const errorDiv = document.getElementById('error-message');
+      const form = event.target;
+      const submitButton = form.querySelector('button[type="submit"]');
+      
+      const cod_usuario = document.getElementById('usuario').value.trim();
+      const password = document.getElementById('password').value.trim();
+      const base_empresa = document.getElementById('empresa').value.trim();
+      const server = document.getElementById('server').value.trim();
+      
+      if (!cod_usuario || !password || !base_empresa) {
+        showError('Por favor complete todos los campos');
+        return;
+      }
+      
+      // Ocultar error y deshabilitar botón
+      errorDiv.classList.add('hidden');
+      submitButton.disabled = true;
+      submitButton.textContent = 'Ingresando...';
+      
+      try {
+        const response = await fetch('{% url "login:login" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            cod_usuario: cod_usuario,
+            password: password,
+            base_empresa: base_empresa,
+            server: server || ''
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.redirect) {
+          // Guardar empresa seleccionada en localStorage para persistencia
+          if (base_empresa) {
+            localStorage.setItem('last_selected_empresa', base_empresa);
+          }
+          // Guardar usuario también para facilitar el siguiente login
+          if (cod_usuario) {
+            localStorage.setItem('last_username', cod_usuario);
+          }
+          window.location.href = data.redirect;
+        } else {
+          showError(data.error || 'Error al iniciar sesión');
+          submitButton.disabled = false;
+          submitButton.textContent = 'Ingresar';
+        }
+      } catch (error) {
+        showError('Error de conexión. Por favor intente nuevamente.');
+        submitButton.disabled = false;
+        submitButton.textContent = 'Ingresar';
+      }
+    }
+    
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+      return '';
+    }
+    
+    // Restaurar última empresa y usuario seleccionados al cargar
+    document.addEventListener('DOMContentLoaded', function() {
+      const empresaSelect = document.getElementById('empresa');
+      const usuarioInput = document.getElementById('usuario');
+      
+      // Restaurar última empresa seleccionada
+      if (empresaSelect) {
+        const lastEmpresa = localStorage.getItem('last_selected_empresa');
+        if (lastEmpresa) {
+          // Verificar que la empresa existe en las opciones disponibles
+          const optionExists = Array.from(empresaSelect.options).some(
+            option => option.value === lastEmpresa
+          );
+          if (optionExists) {
+            empresaSelect.value = lastEmpresa;
+          }
+        }
+        // Auto-focus en empresa si no hay valor, o en usuario si ya hay empresa
+        if (!empresaSelect.value) {
+          empresaSelect.focus();
+        } else if (usuarioInput) {
+          usuarioInput.focus();
+        }
+      }
+      
+      // Restaurar último usuario (opcional, para facilitar el login)
+      if (usuarioInput) {
+        const lastUsername = localStorage.getItem('last_username');
+        if (lastUsername) {
+          usuarioInput.value = lastUsername;
+          // Si ya hay empresa seleccionada, focus en password
+          if (empresaSelect && empresaSelect.value) {
+            document.getElementById('password').focus();
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+

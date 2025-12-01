@@ -129,4 +129,67 @@ const attachWorkspaceHandlers = () => {
   });
 };
 
-document.addEventListener("DOMContentLoaded", attachWorkspaceHandlers);
+const attachVisibilityHandlers = () => {
+  // La URL correcta es /api/reports/visibility/ según la configuración en django_project/urls.py
+  const visibilityApiUrl = "/api/reports/visibility/";
+  const toggles = document.querySelectorAll("[data-toggle-visibility]");
+  
+  toggles.forEach((toggle) => {
+    toggle.addEventListener("change", async (e) => {
+      const slug = toggle.dataset.reportSlug;
+      const isVisible = e.target.checked;
+      
+      if (!slug) {
+        return;
+      }
+      
+      // Deshabilitar el toggle mientras se procesa
+      toggle.disabled = true;
+      
+      try {
+        const response = await fetch(visibilityApiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": getCsrfToken(),
+          },
+          body: JSON.stringify({ slug, is_visible: isVisible }),
+        });
+        
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail.detail || "No se pudo cambiar la visibilidad");
+        }
+        
+        const payload = await response.json();
+        showToast(
+          payload.message || (isVisible 
+            ? "Reporte visible para usuarios con puesto Supervisor" 
+            : "Reporte oculto para usuarios con puesto Supervisor"),
+          "success"
+        );
+        
+        // Actualizar el estado visual del toggle para reflejar el cambio guardado
+        if (payload.is_visible !== undefined) {
+          e.target.checked = payload.is_visible;
+        }
+        
+        // Nota: El catálogo se actualizará automáticamente al recargar la página
+        // Los usuarios con puesto Supervisor verán solo los reportes con is_visible=True
+        // El cambio se guarda en la base de datos y se aplicará en la próxima carga del catálogo
+      } catch (error) {
+        // Revertir el estado del toggle si hay error
+        e.target.checked = !isVisible;
+        showToast(error.message || "No se pudo cambiar la visibilidad", "error");
+      } finally {
+        toggle.disabled = false;
+      }
+    });
+  });
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  attachWorkspaceHandlers();
+  attachVisibilityHandlers();
+});

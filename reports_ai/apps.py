@@ -2,7 +2,8 @@
 Configuración de la aplicación Reports AI
 """
 from django.apps import AppConfig
-from django.utils.translation import gettext_lazy as _
+# Función dummy para mantener compatibilidad - no se usa internacionalización
+def _(s): return s
 
 
 class ReportsAiConfig(AppConfig):
