@@ -1,0 +1,140 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+{% load menu_tags %}
+
+{% block title %}{% block page_title %}{% trans "Module Management" %}{% endblock %} - Synap{% endblock %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body, .font-inter { font-family: 'Inter', sans-serif; }
+  .admin-layout { @apply flex min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800; }
+  .admin-sidebar { @apply w-20 md:w-64 bg-white dark:bg-gray-900 shadow-xl border-r border-gray-200 dark:border-gray-800 fixed left-0 top-0 h-screen z-30 transition-all duration-300 flex flex-col items-center py-6; }
+  .admin-sidebar.collapsed { @apply w-16; }
+  .sidebar-toggle { @apply p-2 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-900/20 text-orange-600 dark:text-orange-400 transition-colors duration-200 mb-6; }
+  .admin-content { @apply flex-1 ml-20 md:ml-64 transition-all duration-300; }
+  .admin-content.expanded { @apply ml-16; }
+  .admin-header { @apply bg-white dark:bg-gray-900 shadow-lg border-b border-gray-200 dark:border-gray-800 px-8 py-6 sticky top-0 z-20 flex items-center justify-between; background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%); }
+  .admin-main { @apply p-8; }
+  .quick-actions { @apply flex space-x-2; }
+  .btn-sm { @apply px-4 py-2 text-sm rounded-lg font-semibold transition-all duration-200 shadow hover:scale-105 focus:ring-2 focus:ring-orange-400; }
+  .btn-primary-sm { @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white hover:from-orange-500 hover:to-orange-700; }
+  .btn-secondary-sm { @apply bg-gray-500 text-white hover:bg-gray-600; }
+  .btn-danger-sm { @apply bg-red-500 text-white hover:bg-red-600; }
+  .stats-grid { @apply grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-8; }
+  .stat-card { @apply bg-white dark:bg-gray-800 rounded-2xl shadow-md border border-gray-100 dark:border-gray-800 p-6 flex flex-col items-center justify-center transition hover:shadow-xl hover:-translate-y-1; animation: fadeIn 0.5s; }
+  .stat-value { @apply text-3xl font-extrabold text-gray-900 dark:text-white mb-1 animate-pulse; }
+  .stat-label { @apply text-sm text-gray-500 dark:text-gray-300; }
+  .stat-icon { @apply text-4xl mb-2; filter: drop-shadow(0 2px 8px #fbbf24cc); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(16px);} to { opacity: 1; transform: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-layout font-inter" x-data="{ sidebarCollapsed: false }">
+  <!-- Sidebar -->
+  {% comment %} <aside class="admin-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
+    <button @click="sidebarCollapsed = !sidebarCollapsed" class="sidebar-toggle" :class="{ 'collapsed': sidebarCollapsed }" aria-label="{% trans 'Toggle Menu' %}">
+      <i class="fas fa-bars"></i>
+    </button>
+    <div class="w-full flex-1 flex flex-col items-center mt-4">
+      <div x-show="!sidebarCollapsed" class="w-full">
+        {% include 'core/partials/dynamic_menu.html' %}
+      </div>
+      <div x-show="sidebarCollapsed" class="space-y-4 mt-8">
+        <div class="text-center"><i class="fas fa-cogs text-orange-500 text-2xl"></i></div>
+        <div class="text-center"><i class="fas fa-puzzle-piece text-gray-400 text-xl"></i></div>
+        <div class="text-center"><i class="fas fa-chart-bar text-gray-400 text-xl"></i></div>
+      </div>
+    </div>
+  </aside> {% endcomment %}
+  <!-- Contenido principal -->
+  <div class="admin-content" :class="{ 'expanded': sidebarCollapsed }">
+    <header class="admin-header">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between w-full">
+        <div class="mb-4 md:mb-0">
+          <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+            {% block admin_title %}{% trans "Module Management" %}{% endblock %}
+          </h1>
+          <p class="text-gray-500 dark:text-gray-300 mt-1 text-base">
+            {% block admin_subtitle %}{% trans "Manage system modules and configurations" %}{% endblock %}
+          </p>
+        </div>
+        {% comment %} <div class="flex items-center space-x-4">
+          <div class="hidden md:block">{% include 'core/partials/dynamic_breadcrumb.html' %}</div>
+          <div class="quick-actions">
+            {% block quick_actions %}
+            <a href="{% url 'core:module_list' %}" class="btn-sm btn-secondary-sm">
+              <i class="fas fa-list mr-1"></i> {% trans "Modules" %}
+            </a>
+            <a href="{% url 'core:module_validation' %}" class="btn-sm btn-primary-sm">
+              <i class="fas fa-check-circle mr-1"></i> {% trans "Validate" %}
+            </a>
+            {% endblock %}
+          </div>
+        </div> {% endcomment %}
+      </div>
+    </header>
+    <main class="admin-main">
+      {% block admin_stats %}
+      {% if module_summary %}
+      <div class="flex flex-wrap gap-6 justify-center items-center my-8">
+        <!-- Total Modules -->
+        <div class="relative flex flex-col items-center group">
+          <div class="bg-gradient-to-br from-orange-100 to-orange-300 dark:from-orange-900 dark:to-orange-700 rounded-full shadow-lg px-8 py-6 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl cursor-pointer border-2 border-orange-200 dark:border-orange-800">
+            <span class="block text-4xl font-extrabold text-orange-600 dark:text-orange-300 animate-pulse">
+              <i class="fas fa-puzzle-piece animate-spin-slow"></i>
+            </span>
+            <span class="text-3xl font-black text-orange-700 dark:text-orange-200 mt-2" x-data="{ val: 0 }" x-init="let t = setInterval(()=>{ if(val < {{ module_summary.total_modules }}) val++; else clearInterval(t); }, 20)"><span x-text="val">0</span></span>
+            <span class="mt-1 text-base font-semibold text-orange-800 dark:text-orange-100">{% trans "Total Modules" %}</span>
+            <span class="text-xs text-orange-500 dark:text-orange-200 mt-1">{% trans "Instalados en el sistema" %}</span>
+          </div>
+        </div>
+        <!-- Active Modules -->
+        <div class="relative flex flex-col items-center group">
+          <div class="bg-gradient-to-br from-green-100 to-green-300 dark:from-green-900 dark:to-green-700 rounded-full shadow-lg px-8 py-6 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl cursor-pointer border-2 border-green-200 dark:border-green-800">
+            <span class="block text-4xl font-extrabold text-green-600 dark:text-green-300 animate-pulse">
+              <i class="fas fa-check-circle animate-bounce"></i>
+            </span>
+            <span class="text-3xl font-black text-green-700 dark:text-green-200 mt-2" x-data="{ val: 0 }" x-init="let t = setInterval(()=>{ if(val < {{ module_summary.active_modules }}) val++; else clearInterval(t); }, 20)"><span x-text="val">0</span></span>
+            <span class="mt-1 text-base font-semibold text-green-800 dark:text-green-100">{% trans "Active Modules" %}</span>
+            <span class="text-xs text-green-500 dark:text-green-200 mt-1">{% trans "En funcionamiento" %}</span>
+          </div>
+        </div>
+        <!-- Core Modules -->
+        <div class="relative flex flex-col items-center group">
+          <div class="bg-gradient-to-br from-blue-100 to-blue-300 dark:from-blue-900 dark:to-blue-700 rounded-full shadow-lg px-8 py-6 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl cursor-pointer border-2 border-blue-200 dark:border-blue-800">
+            <span class="block text-4xl font-extrabold text-blue-600 dark:text-blue-300 animate-pulse">
+              <i class="fas fa-shield-alt animate-wiggle"></i>
+            </span>
+            <span class="text-3xl font-black text-blue-700 dark:text-blue-200 mt-2" x-data="{ val: 0 }" x-init="let t = setInterval(()=>{ if(val < {{ module_summary.core_modules }}) val++; else clearInterval(t); }, 20)"><span x-text="val">0</span></span>
+            <span class="mt-1 text-base font-semibold text-blue-800 dark:text-blue-100">{% trans "Core Modules" %}</span>
+            <span class="text-xs text-blue-500 dark:text-blue-200 mt-1">{% trans "Esenciales del sistema" %}</span>
+          </div>
+        </div>
+        <!-- Optional Modules -->
+        <div class="relative flex flex-col items-center group">
+          <div class="bg-gradient-to-br from-purple-100 to-purple-300 dark:from-purple-900 dark:to-purple-700 rounded-full shadow-lg px-8 py-6 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl cursor-pointer border-2 border-purple-200 dark:border-purple-800">
+            <span class="block text-4xl font-extrabold text-purple-600 dark:text-purple-300 animate-pulse">
+              <i class="fas fa-cog animate-spin"></i>
+            </span>
+            <span class="text-3xl font-black text-purple-700 dark:text-purple-200 mt-2" x-data="{ val: 0 }" x-init="let t = setInterval(()=>{ if(val < {{ module_summary.optional_modules }}) val++; else clearInterval(t); }, 20)"><span x-text="val">0</span></span>
+            <span class="mt-1 text-base font-semibold text-purple-800 dark:text-purple-100">{% trans "Optional Modules" %}</span>
+            <span class="text-xs text-purple-500 dark:text-purple-200 mt-1">{% trans "Adicionales y configurables" %}</span>
+          </div>
+        </div>
+      </div>
+      <style>
+      @keyframes animate-spin-slow { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+      .animate-spin-slow { animation: animate-spin-slow 3s linear infinite; }
+      @keyframes animate-wiggle { 0%,100%{transform:rotate(-8deg);} 50%{transform:rotate(8deg);} }
+      .animate-wiggle { animation: animate-wiggle 1.2s ease-in-out infinite; }
+      </style>
+      {% endif %}
+      {% endblock %}
+      {% block admin_content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %} 

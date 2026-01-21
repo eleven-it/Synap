@@ -1,0 +1,727 @@
+{% load static %}
+{% load i18n %}
+
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'es' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>{% trans "Synap - Intelligent Management" %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'inter': ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        'synap': {
+                            50: '#f0f4ff',
+                            100: '#e0e9ff',
+                            200: '#c7d7ff',
+                            300: '#a4bfff',
+                            400: '#819dff',
+                            500: '#667eea',
+                            600: '#5a67d8',
+                            700: '#4c51bf',
+                            800: '#434190',
+                            900: '#3c366b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        /* CSS Variables for dynamic theming */
+        :root {
+            --safe-area-inset-top: env(safe-area-inset-top);
+            --safe-area-inset-bottom: env(safe-area-inset-bottom);
+            --safe-area-inset-left: env(safe-area-inset-left);
+            --safe-area-inset-right: env(safe-area-inset-right);
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        html {
+            -webkit-text-size-adjust: 100%;
+            -webkit-tap-highlight-color: transparent;
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            padding-top: var(--safe-area-inset-top);
+            padding-bottom: var(--safe-area-inset-bottom);
+            padding-left: var(--safe-area-inset-left);
+            padding-right: var(--safe-area-inset-right);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 1rem;
+            padding: 1rem 2rem;
+            font-weight: 600;
+            font-size: 1rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            min-height: 3.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-primary:hover:before {
+            left: 100%;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 1rem;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            min-height: 3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feature-icon {
+            width: 4rem;
+            height: 4rem;
+            border-radius: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        
+        /* Animations */
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(1deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .slide-in {
+            animation: slideInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 1s ease-out;
+        }
+        
+        .floating {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .pulse-glow {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* Background elements */
+        .bg-element {
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        /* Navigation */
+        .nav-glass {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .nav-glass.scrolled {
+            background: rgba(255, 255, 255, 0.95);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-glass.scrolled .nav-link {
+            color: rgba(0, 0, 0, 0.8);
+        }
+        
+        .nav-glass.scrolled .nav-link:hover {
+            color: #667eea;
+        }
+        
+        .nav-glass.scrolled .btn-secondary {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+            border-color: rgba(102, 126, 234, 0.2);
+        }
+        
+        .nav-glass.scrolled .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        /* Responsive breakpoints for iPhone 15 */
+        @media screen and (max-width: 430px) {
+            /* iPhone 15 Pro Max */
+            .container {
+                padding: 1rem;
+            }
+            .hero-section {
+                padding: 2rem 1rem;
+            }
+            .features-section {
+                padding: 3rem 1rem;
+            }
+        }
+        
+        @media screen and (max-width: 393px) {
+            /* iPhone 15 Pro */
+            .container {
+                padding: 0.75rem;
+            }
+            .hero-section {
+                padding: 1.5rem 0.75rem;
+            }
+            .features-section {
+                padding: 2.5rem 0.75rem;
+            }
+        }
+        
+        @media screen and (max-width: 375px) {
+            /* iPhone 15 */
+            .container {
+                padding: 0.5rem;
+            }
+            .hero-section {
+                padding: 1.25rem 0.5rem;
+            }
+            .features-section {
+                padding: 2rem 0.5rem;
+            }
+        }
+        
+        @media screen and (max-width: 360px) {
+            /* iPhone 15 mini */
+            .container {
+                padding: 0.5rem;
+            }
+            .hero-section {
+                padding: 1rem 0.5rem;
+            }
+            .features-section {
+                padding: 1.5rem 0.5rem;
+            }
+            .btn-primary {
+                padding: 0.875rem 1.5rem;
+                font-size: 0.95rem;
+            }
+            .btn-secondary {
+                padding: 0.625rem 1.25rem;
+                font-size: 0.9rem;
+            }
+        }
+        
+        /* Landscape orientation */
+        @media screen and (max-height: 500px) and (orientation: landscape) {
+            body {
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+            }
+            .hero-section {
+                padding: 1rem;
+                min-height: auto;
+            }
+            .features-section {
+                padding: 2rem 1rem;
+            }
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            .feature-card {
+                background: rgba(0, 0, 0, 0.8);
+                border-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .nav-glass.scrolled {
+                background: rgba(0, 0, 0, 0.95);
+                border-bottom-color: rgba(255, 255, 255, 0.1);
+            }
+            
+            .nav-glass.scrolled .nav-link {
+                color: rgba(255, 255, 255, 0.8);
+            }
+        }
+        
+        /* High contrast mode */
+        @media (prefers-contrast: high) {
+            .glass-effect {
+                background: white;
+                border: 2px solid black;
+            }
+            
+            .feature-card {
+                background: white;
+                border: 2px solid black;
+            }
+        }
+        
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-white">
+    <!-- Background decorative elements -->
+    <div class="bg-element floating" style="width: 300px; height: 300px; top: 10%; right: -100px; animation-delay: 0s;"></div>
+    <div class="bg-element floating" style="width: 200px; height: 200px; bottom: 20%; left: -50px; animation-delay: -2s;"></div>
+    <div class="bg-element floating" style="width: 150px; height: 150px; top: 60%; right: 15%; animation-delay: -4s;"></div>
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 nav-glass">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <!-- Logo -->
+                <a href="/" class="flex items-center space-x-2">
+                    <img src="{% if empresa_activa and empresa_activa.logo %}{{ empresa_activa.logo.url }}{% else %}{% static 'images/Synap-transparencia.png' %}{% endif %}" 
+                         alt="{% trans 'Synap Logo' %}" 
+                         class="h-8 md:h-10"
+                         loading="eager">
+                    <span class="text-xl md:text-2xl font-bold text-white">Synap</span>
+                </a>
+
+                <!-- Navigation Links -->
+                <div class="hidden md:flex items-center space-x-6">
+                    <a href="#features" class="nav-link text-white/80 hover:text-white transition-colors">
+                        {% trans "Features" %}
+                    </a>
+                    <a href="#about" class="nav-link text-white/80 hover:text-white transition-colors">
+                        {% trans "About" %}
+                    </a>
+                    <a href="#contact" class="nav-link text-white/80 hover:text-white transition-colors">
+                        {% trans "Contact" %}
+                    </a>
+                </div>
+
+                <!-- Auth Buttons -->
+                <div class="flex items-center space-x-3">
+                    {% if user.is_authenticated %}
+                        <span class="text-white/80 text-sm hidden md:block">
+                            {% trans "Hello" %}, {{ user.username }}
+                        </span>
+                        <a href="{% url 'account_logout' %}" 
+                           class="btn-secondary">
+                            {% trans "Logout" %}
+                        </a>
+                    {% else %}
+                        <a href="{% url 'login:login' %}" 
+                           class="btn-secondary">
+                            {% trans "Sign In" %}
+                        </a>
+                        <a href="{% url 'login:register' %}" 
+                           class="btn-primary pulse-glow">
+                            {% trans "Sign Up" %}
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-section gradient-bg min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div class="container mx-auto text-center relative z-10">
+            <div class="max-w-4xl mx-auto">
+                <!-- Main Heading -->
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight slide-in">
+                    {% trans "Intelligent" %}
+                    <span class="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">
+                        {% trans "Business Management" %}
+                    </span>
+                </h1>
+                
+                <!-- Subtitle -->
+                <p class="text-xl md:text-2xl text-white/90 mb-8 max-w-2xl mx-auto leading-relaxed slide-in" style="animation-delay: 0.2s;">
+                    {% trans "Streamline your operations, connect with clients, and grow your business with our comprehensive management platform." %}
+                </p>
+                
+                <!-- CTA Buttons -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center slide-in" style="animation-delay: 0.4s;">
+                    <a href="{% url 'login:register' %}" 
+                       class="btn-primary text-lg px-8 py-4 pulse-glow">
+                        {% trans "Get Started Free" %}
+                    </a>
+                    <a href="#features" 
+                       class="btn-secondary text-lg px-8 py-4">
+                        {% trans "Learn More" %}
+                    </a>
+                </div>
+                
+                <!-- Trust Indicators -->
+                <div class="mt-12 flex flex-wrap justify-center items-center gap-8 text-white/70 slide-in" style="animation-delay: 0.6s;">
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="text-sm">{% trans "Secure & Reliable" %}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="text-sm">{% trans "24/7 Support" %}</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="text-sm">{% trans "Easy to Use" %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features-section py-20 bg-gray-50">
+        <div class="container mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 mb-6">
+                    {% trans "Everything you need to" %}
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-synap-600 to-purple-600">
+                        {% trans "succeed" %}
+                    </span>
+                </h2>
+                <p class="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                    {% trans "Powerful tools designed to help you manage your business efficiently and grow your customer base." %}
+                </p>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.1s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "Smart Analytics" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Get real-time insights into your business performance with advanced analytics and customizable dashboards." %}
+                    </p>
+                </div>
+
+                <!-- Feature 2 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.2s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "Secure Connection" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Find clients and professionals with total confidence. Our platform ensures secure transactions and protected data." %}
+                    </p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.3s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "Lightning Fast" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Experience blazing-fast performance with our optimized platform designed for speed and efficiency." %}
+                    </p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.4s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "User Friendly" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Intuitive interface designed for users of all skill levels. Get started in minutes, not hours." %}
+                    </p>
+                </div>
+
+                <!-- Feature 5 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.5s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "Enterprise Security" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Bank-level security with encryption, regular backups, and compliance with industry standards." %}
+                    </p>
+                </div>
+
+                <!-- Feature 6 -->
+                <div class="feature-card p-8 fade-in" style="animation-delay: 0.6s;">
+                    <div class="feature-icon">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">
+                        {% trans "24/7 Support" %}
+                    </h3>
+                    <p class="text-gray-600 leading-relaxed">
+                        {% trans "Round-the-clock customer support to help you succeed. We're here when you need us." %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 gradient-bg">
+        <div class="container mx-auto text-center">
+            <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-6">
+                {% trans "Ready to get started?" %}
+            </h2>
+            <p class="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
+                {% trans "Join thousands of businesses already using Synap to grow and succeed." %}
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="{% url 'login:register' %}" 
+                   class="btn-primary text-lg px-8 py-4 pulse-glow">
+                    {% trans "Start Free Trial" %}
+                </a>
+                <a href="{% url 'login:login' %}" 
+                   class="btn-secondary text-lg px-8 py-4">
+                    {% trans "Sign In" %}
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div class="col-span-1 md:col-span-2">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <img src="{% if empresa_activa and empresa_activa.logo %}{{ empresa_activa.logo.url }}{% else %}{% static 'images/Synap-transparencia.png' %}{% endif %}" 
+                             alt="{% trans 'Synap Logo' %}" 
+                             class="h-8">
+                        <span class="text-xl font-bold">Synap</span>
+                    </div>
+                    <p class="text-gray-400 mb-4 max-w-md">
+                        {% trans "Intelligent business management platform designed to help you streamline operations and grow your business." %}
+                    </p>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">{% trans "Product" %}</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#features" class="hover:text-white transition-colors">{% trans "Features" %}</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">{% trans "Pricing" %}</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">{% trans "API" %}</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold mb-4">{% trans "Company" %}</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="#" class="hover:text-white transition-colors">{% trans "About" %}</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">{% trans "Contact" %}</a></li>
+                        <li><a href="#" class="hover:text-white transition-colors">{% trans "Support" %}</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2025 Synap. {% trans "All rights reserved." %}</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, observerOptions);
+
+        // Observe all feature cards
+        document.querySelectorAll('.feature-card').forEach(card => {
+            observer.observe(card);
+        });
+
+        // Add scroll effect to navbar
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 100) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // Enhanced input focus effects
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle viewport changes
+            let resizeTimer;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function() {
+                    console.log('Viewport resized');
+                }, 250);
+            });
+        });
+        
+        // Prevent zoom on double tap (iOS)
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function (event) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+    </script>
+</body>
+</html> 

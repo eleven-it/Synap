@@ -1,0 +1,99 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+{% load core_extras %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Permisos del Sistema - {{ puesto.nombre }}</h1>
+    <p class="text-xs text-gray-600 mt-1">Gestionar permisos del sistema para el puesto seleccionado</p>
+  </div>
+
+  {% if messages %}
+    <div class="mb-4">
+      {% for message in messages %}
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" class="bg-white p-6 rounded-lg shadow-md">
+    {% csrf_token %}
+    
+    <div class="space-y-6">
+      {% for categoria, permisos_cat in permisos_por_categoria.items %}
+      <div class="border rounded-lg p-4">
+        <h3 class="text-sm font-bold text-gray-800 mb-4 pb-2 border-b">{{ categoria }}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {% for campo, descripcion in permisos_cat.items %}
+          <div class="flex items-center">
+            {% if campo == 'lim_desc_renglon' or campo == 'lim_desc_pie' or campo == 'id_refmovstock' %}
+              <!-- Campos numéricos -->
+              <label class="flex items-center gap-2 w-full">
+                <span class="text-xs text-gray-700 flex-1">{{ descripcion }}:</span>
+                {% with valor=permisos|dict_get:campo %}
+                <input type="number" name="{{ campo }}" value="{% if valor %}{{ valor }}{% else %}0{% endif %}" 
+                       class="w-20 px-2 py-1 border border-gray-300 rounded text-xs">
+                {% endwith %}
+              </label>
+            {% elif campo == 'carga_comp_venta' or campo == 'carga_comp_cobranza' or campo == 'carga_comp_ped' or campo == 'acceso_ref_movstock' or campo == 'acceso_motivo_movstock' or campo == 'medio_cobro_pend' or campo == 'reporte_pedido' %}
+              <!-- Campos de selección -->
+              <label class="flex items-center gap-2 w-full">
+                <span class="text-xs text-gray-700 flex-1">{{ descripcion }}:</span>
+                <select name="{{ campo }}" class="px-2 py-1 border border-gray-300 rounded text-xs">
+                  {% with valor=permisos|dict_get:campo %}
+                  {% if campo == 'carga_comp_venta' or campo == 'carga_comp_cobranza' or campo == 'carga_comp_ped' %}
+                    <option value="Todos" {% if valor == 'Todos' or not valor %}selected{% endif %}>Todos</option>
+                    <option value="Sistema" {% if valor == 'Sistema' %}selected{% endif %}>Sistema</option>
+                    <option value="Talonario" {% if valor == 'Talonario' %}selected{% endif %}>Talonario</option>
+                    <option value="Electronico" {% if valor == 'Electronico' %}selected{% endif %}>Electrónico</option>
+                  {% elif campo == 'acceso_ref_movstock' %}
+                    <option value="Todos" {% if valor == 'Todos' or not valor %}selected{% endif %}>Todos</option>
+                    <option value="Seleccion" {% if valor == 'Seleccion' %}selected{% endif %}>Selección</option>
+                  {% elif campo == 'acceso_motivo_movstock' %}
+                    <option value="Todos" {% if valor == 'Todos' or not valor %}selected{% endif %}>Todos</option>
+                    <option value="Movimiento interno E/S" {% if valor == 'Movimiento interno E/S' %}selected{% endif %}>Movimiento interno E/S</option>
+                    <option value="Transferencia" {% if valor == 'Transferencia' %}selected{% endif %}>Transferencia</option>
+                    <option value="Ajuste" {% if valor == 'Ajuste' %}selected{% endif %}>Ajuste</option>
+                  {% elif campo == 'medio_cobro_pend' %}
+                    <option value="Normal" {% if valor == 'Normal' or not valor %}selected{% endif %}>Normal</option>
+                    <option value="TPV" {% if valor == 'TPV' %}selected{% endif %}>TPV</option>
+                  {% elif campo == 'reporte_pedido' %}
+                    <option value="Formal" {% if valor == 'Formal' or not valor %}selected{% endif %}>Formal</option>
+                    <option value="Reducido" {% if valor == 'Reducido' %}selected{% endif %}>Reducido</option>
+                  {% endif %}
+                  {% endwith %}
+                </select>
+              </label>
+            {% else %}
+              <!-- Campos booleanos (checkbox) -->
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="{{ campo }}" value="Si" 
+                       {% if permisos|dict_get:campo == 'Si' %}checked{% endif %}
+                       class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+                <span class="text-xs text-gray-700">{{ descripcion }}</span>
+              </label>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="flex items-center justify-between pt-6 mt-6 border-t">
+      <a href="{% url 'core:permisos_sistema' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors" title="Cancelar">
+        <span class="material-icons text-base">close</span>
+      </a>
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Guardar Permisos">
+        <span class="material-icons text-base">save</span>
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+

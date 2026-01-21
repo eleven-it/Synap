@@ -1,0 +1,141 @@
+{% extends 'core/core_app_base.html' %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="flex flex-col bg-gray-50 dark:bg-gray-900 min-h-0">
+    <!-- Header fijo -->
+    <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Sucursales</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    {{ sucursales|length }} sucursal{{ sucursales|length|pluralize:"es" }}
+                </span>
+            </div>
+            <a href="{% url 'core:branch_create' empresa_id=1 %}" class="btn-primary">
+                <span class="flex items-center gap-x-1">
+                    <span class="material-icons text-base">add</span>
+                    <span>Nueva Sucursal</span>
+                </span>
+            </a>
+        </div>
+        
+        <!-- Búsqueda rápida -->
+        <div class="mt-4">
+            <form method="get" action="{% url 'core:branch_list' empresa_id=1 %}" class="flex gap-2">
+                <div class="flex-1 relative">
+                    <input type="text" 
+                           name="busqueda" 
+                           value="{{ busqueda|default:'' }}" 
+                           placeholder="Buscar por nombre, provincia, empresa o descripción..."
+                           class="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-gray-600 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-100">
+                    <span class="material-icons absolute left-2 top-2 text-gray-400 text-base">search</span>
+                </div>
+                <button type="submit" class="btn-secondary px-4 py-2">
+                    <span class="material-icons text-base">search</span>
+                </button>
+                {% if busqueda %}
+                <a href="{% url 'core:branch_list' empresa_id=1 %}" class="btn-secondary px-4 py-2">
+                    <span class="material-icons text-base">clear</span>
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Contenido adaptativo -->
+    <div class="flex-1 overflow-y-auto">
+        <div class="p-4 sm:p-6">
+            {% if sucursales %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800 rounded-lg shadow">
+                        <thead class="bg-gray-50 dark:bg-gray-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Código</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sucursal</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Provincia</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Domicilio</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Descripción</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Estado</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for sucursal in sucursales %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100">{{ sucursal.id_sucursal }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-xs font-semibold text-gray-900 dark:text-gray-100">{{ sucursal.nombre_sucursal }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-700 dark:text-gray-300">{{ sucursal.nomb_provincia|default:"-" }}</td>
+                                <td class="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">{{ sucursal.domicilio_sucursal|default:"-" }}</td>
+                                <td class="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">{{ sucursal.desc_sucursal|default:"-"|truncatewords:10 }}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    {% if sucursal.activa %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                            <span class="material-icons text-sm mr-1">check_circle</span>
+                                            Activa
+                                        </span>
+                                    {% else %}
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                            <span class="material-icons text-sm mr-1">cancel</span>
+                                            Anulada
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <a href="{% url 'core:branch_edit' empresa_id=1 branch_id=sucursal.id_sucursal %}" 
+                                           class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 transition" 
+                                           title="Editar">
+                                            <span class="material-icons text-base">edit</span>
+                                        </a>
+                                        <a href="{% url 'core:branch_delete' empresa_id=1 branch_id=sucursal.id_sucursal %}" 
+                                           class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition" 
+                                           onclick="return confirm('¿Está seguro que desea eliminar esta sucursal?');"
+                                           title="Eliminar">
+                                            <span class="material-icons text-base">delete</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <!-- Estado vacío -->
+                <div class="flex flex-col items-center justify-center py-12">
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+                        <span class="material-icons text-gray-400 text-5xl">store</span>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        {% if busqueda %}
+                            No se encontraron sucursales
+                        {% else %}
+                            No hay sucursales registradas
+                        {% endif %}
+                    </h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-center mb-6 max-w-md">
+                        {% if busqueda %}
+                            Intente con otros términos de búsqueda.
+                        {% else %}
+                            Comience creando su primera sucursal para gestionar sus puntos de venta.
+                        {% endif %}
+                    </p>
+                    {% if not busqueda %}
+                    <a href="{% url 'core:branch_create' empresa_id=1 %}" class="btn-primary">
+                        <span class="flex items-center gap-x-1">
+                            <span class="material-icons text-base">add</span>
+                            <span>Crear Primera Sucursal</span>
+                        </span>
+                    </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-6 right-6 z-50 space-y-2"></div>
+
+{% endblock %}

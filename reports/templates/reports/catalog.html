@@ -1,0 +1,122 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load reports_extras %}
+
+{% block title %}Catálogo de Reportes - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500" data-workspace-api="{{ workspace_api_url }}">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-white tracking-tight">
+                    Centro Interactivo de Analítica
+                </h1>
+                <p class="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-2">
+                    Explora tableros operativos y gerenciales.
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="{{ workspace_view_url }}"
+                   class="inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-900 transition-all duración-300">
+                    <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M4 4h16v16H4z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M4 9h16M9 4v16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Abrir workspace
+                    <span class="ml-2 inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/20 text-[11px] font-bold" data-workspace-count>{{ workspace_count|default:0 }}</span>
+                </a>
+            </div>
+        </header>
+
+        <div class="relative h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden mb-12">
+            <div class="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 animate-[pulse_3s_ease-in-out_infinite]"></div>
+        </div>
+
+        {% include "reports/partials/_catalog_list.html" %}
+    </div>
+</section>
+
+<!-- Modal de Confirmación para Eliminación -->
+<div id="confirmDeleteModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity" onclick="closeDeleteModal()">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-slate-200 dark:border-slate-700 transform transition-all scale-95" onclick="event.stopPropagation()">
+        <div class="p-6">
+            <div class="flex items-start gap-4 mb-4">
+                <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Confirmar eliminación</h3>
+                    <div id="deleteMessage" class="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line"></div>
+                </div>
+            </div>
+            <div class="flex gap-3 justify-end mt-6">
+                <button id="deleteCancel" onclick="closeDeleteModal()" class="px-4 py-2.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 transform hover:scale-105">
+                    Cancelar
+                </button>
+                <button id="deleteConfirm" onclick="executeDelete()" class="px-4 py-2.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-red-500/50">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Container para Toasts -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+// Variables globales para eliminación
+let deleteSlug = null;
+let deleteName = null;
+
+// Función helper para obtener cookie
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+// Función para mostrar toast
+function showToast(message, type = 'info', duration = 3000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-amber-500',
+        info: 'bg-sky-500'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 min-w-[300px] max-w-md`;
+    toast.innerHTML = `
+        <span>${message}</span>
+        <button onclick="this.parentElement.remove()" class="ml-auto text-white/80 hover:text-white">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    if (duration > 0) {
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+    
+    return toast;
+}
+
+</script>
+
+<script src="{% static 'reports/js/catalog.js' %}" type="module"></script>
+{% endblock %}

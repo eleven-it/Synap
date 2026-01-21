@@ -1,0 +1,334 @@
+{% load i18n %}
+{% load static %}
+{% load menu_tags %}
+{% get_media_prefix as MEDIA_URL %}
+{% csrf_token %}
+
+<!-- Fuente principal -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Estilos unificados y optimizados - Version 2.0 - Alineación corregida -->
+<style>
+  body, .font-inter { font-family: 'Inter', sans-serif; }
+
+  /* Animaciones y estilo visual */
+  .synap-animated {
+    background: linear-gradient(90deg, #a855f7, #3b82f6, #f472b6, #a855f7);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-move 2.5s linear infinite alternate;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    filter: drop-shadow(0 1px 6px #a855f7cc);
+  }
+  @keyframes gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 100% 50%; }
+  }
+
+  /* Dropdown animado */
+  .dropdown-fade {
+    transition: all 0.2s ease-in-out;
+    animation: fade-slide-down 0.25s ease;
+  }
+  @keyframes fade-slide-down {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Tarjetas de menú */
+  .app-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px !important;
+    transition: all 0.2s ease;
+    border: 1px solid #f1f5f9;
+  }
+  .app-card > h3 {
+    padding: 0 !important;
+    margin: 0 0 12px 0 !important;
+  }
+  .app-card > div {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    border-color: #e2e8f0;
+  }
+  .app-card .app-menu-item {
+    display: flex !important;
+    align-items: center !important;
+    padding: 8px 0px !important;
+    margin: 0 !important;
+    border-radius: 8px;
+    color: #475569;
+    font-size: 14px;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+  .app-card .app-menu-item:hover {
+    background: #f8fafc;
+    color: #1e293b;
+  }
+  .app-card .app-menu-item .material-icons {
+    margin-right: 8px !important;
+    margin-left: 0 !important;
+  }
+</style>
+
+<!-- NAVBAR PRINCIPAL -->
+<div class="flex items-center justify-between w-full h-20 px-6 bg-white border-b border-transparent font-inter relative shadow-sm">
+  <!-- Logo -->
+  <a href="/" class="flex items-center">
+    {% get_administranet_logo as logo_path %}
+    {% if logo_path %}
+      <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="{% trans 'Logo' %}" class="h-12 w-auto mr-2" />
+    {% endif %}
+  </a>
+
+  <!-- Menú horizontal (desktop) -->
+  <nav class="hidden md:flex items-center gap-6 text-sm font-medium" x-data="{ openApp: null, closeTimeout: null, openMenu(id) { clearTimeout(this.closeTimeout); this.openApp = id }, scheduleClose() { this.closeTimeout = setTimeout(() => this.openApp = null, 200) } }">
+    {% get_dynamic_menu as modules %}
+    {% for module in modules %}
+      <div class="relative" @mouseenter="openMenu('{{ module.id }}')" @mouseleave="scheduleClose()">
+        <a href="{{ module.url }}" class="flex items-center gap-1 text-gray-700 hover:text-indigo-600">
+          {{ module.nombre }}
+          {% if module.submenus %}<span class="material-icons text-xs">expand_more</span>{% endif %}
+        </a>
+        {% if module.submenus %}
+        <template x-if="openApp === '{{ module.id }}'">
+          <div class="fixed left-0 top-20 w-full z-50 bg-[#f9fbfd] px-12 py-10 dropdown-fade shadow-xl border-t border-gray-200 rounded-b-xl">
+            <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {% for submenu in module.submenus %}
+                <div class="app-card">
+                  <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">{{ submenu.seccion }}</h3>
+                  <div class="space-y-1">
+                    {% for item in submenu.items %}
+                      <a href="{{ item.url }}" class="app-menu-item">
+                        <span class="material-icons text-base mr-2">{{ item.icon }}</span>
+                        {{ item.label }}
+                      </a>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+            <div class="mt-8 text-center">
+              <a href="{{ module.url }}" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow text-sm font-semibold transition">
+                <span class="material-icons mr-2">apps</span>
+                {% trans "Go to" %} {{ module.nombre }} {% trans "Dashboard" %}
+              </a>
+            </div>
+          </div>
+        </template>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </nav>
+
+  <!-- Controles derecha -->
+  <div class="ml-auto flex items-center gap-3" x-data="{ 
+    branchDropdownOpen: false,
+    activeBranch: null,
+    availableBranches: [],
+    loading: false,
+    
+    init() {
+      // Inicializar datos desde el contexto de Django
+      {% if branch_activa %}
+      this.activeBranch = {
+        id: {{ branch_activa.id }},
+        name: '{{ branch_activa.name|escapejs }}',
+        city: '{{ branch_activa.city|default:""|escapejs }}'
+      };
+      {% endif %}
+      
+      this.availableBranches = [
+        {% for sucursal in sucursales_disponibles %}
+        {
+          id: {{ sucursal.id }},
+          name: '{{ sucursal.name|escapejs }}',
+          city: '{{ sucursal.city|default:""|escapejs }}'
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ];
+    },
+    
+    async changeBranch(branchId) {
+      try {
+        const response = await fetch('{% url "core:cambiar_empresa_branch" %}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            branch_id: branchId
+          })
+        });
+        
+        if (response.ok) {
+          this.activeBranch = this.availableBranches.find(b => b.id === branchId);
+          this.branchDropdownOpen = false;
+          // Recargar la página para aplicar los cambios
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Error changing branch:', error);
+      }
+    }
+  }">
+    
+    <!-- Empresa -->
+    {% if empresa_activa %}
+    <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 text-xs font-medium">
+      <span class="material-icons text-base mr-1.5">business</span>
+      <span class="truncate max-w-[10rem]">{{ empresa_activa.nombre }}</span>
+    </span>
+    {% endif %}
+    
+    <!-- Sucursal activa con dropdown -->
+    {% if sucursales_disponibles %}
+    <div class="relative">
+      <button 
+        @click="branchDropdownOpen = !branchDropdownOpen"
+        class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors duration-200"
+      >
+        <span class="material-icons text-base mr-1.5">location_on</span>
+        <span x-text="activeBranch ? activeBranch.name : '{% trans "No Branch" %}'" class="truncate max-w-[8rem]"></span>
+        <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
+      </button>
+      
+      <!-- Dropdown de sucursales -->
+      <div 
+        x-show="branchDropdownOpen" 
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        @click.away="branchDropdownOpen = false"
+        class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
+      >
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100">{% trans "Active Branch" %}</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Select the branch to work with" %}</p>
+        </div>
+        
+        <div class="max-h-48 overflow-y-auto">
+          <template x-for="branch in availableBranches" :key="branch.id">
+            <button
+              @click="changeBranch(branch.id)"
+              class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150"
+              :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'"
+            >
+              <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
+                location_on
+              </span>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs font-medium" x-text="branch.name"></div>
+                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="branch.city || ''"></div>
+              </div>
+              <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 dark:text-blue-400 text-sm">check</span>
+            </button>
+          </template>
+        </div>
+        
+        <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
+          {% trans "No branches available" %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- Usuario -->
+    <div class="relative" x-data="{ userMenuOpen: false }">
+      <button @click="userMenuOpen = !userMenuOpen" 
+              class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 shadow-sm" 
+              aria-label="{% trans 'User Menu' %}"
+              title="{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}Usuario{% endif %}">
+        <span class="material-icons text-sm">person</span>
+      </button>
+      
+      <!-- Dropdown Menu -->
+      <div x-show="userMenuOpen" 
+           @click.away="userMenuOpen = false"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+        
+        <!-- User Info -->
+        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <p class="text-xs font-medium text-gray-900 dark:text-white">
+            {% if session_user.nombre_completo %}
+              {{ session_user.nombre_completo }}
+            {% elif session_user.cod_usuario %}
+              {{ session_user.cod_usuario }}
+            {% else %}
+              {{ request.user.nombre|default:request.user.email }}
+            {% endif %}
+          </p>
+          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+            {% if session_user.cod_usuario %}
+              {{ session_user.cod_usuario }}
+            {% else %}
+              {{ request.user.email|default:"" }}
+            {% endif %}
+          </p>
+        </div>
+        
+        <!-- Menu Items -->
+        <div class="py-1">
+          <a href="{% url 'core:perfil' %}" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">account_circle</span>
+            {% trans "My Profile" %}
+          </a>
+          
+          <a href="{% url 'core:historial' %}" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">history</span>
+            {% trans "Activity History" %}
+          </a>
+          
+          {% if request.user.is_staff %}
+          <a href="/admin/" 
+             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">admin_panel_settings</span>
+            {% trans "Admin Panel" %}
+          </a>
+          {% endif %}
+          
+        </div>
+        
+        <!-- Logout -->
+        <div class="border-t border-gray-200 dark:border-gray-700 py-1">
+          <a href="{% url 'login:logout' %}" 
+             class="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-150">
+            <span class="material-icons text-sm mr-3">logout</span>
+            {% trans "Logout" %}
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Dark mode -->
+    <label class="ml-2 flex items-center cursor-pointer">
+      <input id="dark-mode-switch" type="checkbox" class="sr-only">
+      <span class="w-9 h-5 flex items-center bg-gray-300 rounded-full p-1">
+        <span class="dot w-4 h-4 bg-white rounded-full shadow transform transition"></span>
+      </span>
+    </label>
+  </div>
+</div>
+
+<!-- Alpine.js -->
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

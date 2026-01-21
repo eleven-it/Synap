@@ -1,0 +1,64 @@
+services:
+  app:
+    build: .
+    container_name: Synap_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    # El comando se ejecuta a través del entrypoint
+    # El entrypoint ejecuta setup automático antes de iniciar el servidor
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  db:
+    image: postgres:13
+    container_name: Synap_db
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:6-alpine
+    container_name: Synap_redis
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --stop-writes-on-bgsave-error no
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+  # Servicios eliminados para instalación mínima de Reportes
+  # celery_worker: No necesario
+  # celery_beat: No necesario
+  # qdrant: No necesario
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  # media_volume: Eliminado - usar bind mount (.:/app) para media/
+  # qdrant_data: Eliminado (no necesario)

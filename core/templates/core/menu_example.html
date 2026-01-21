@@ -1,0 +1,150 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}Ejemplo de Menú - Synap{% endblock %}
+
+{% block admin_content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <h1 class="text-2xl font-bold text-gray-900">Ejemplo de Nueva Arquitectura de Menús</h1>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-500">Usuario: {{ user.nombre }}</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Apps Disponibles -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Apps Disponibles</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {% for app in apps_menu %}
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                    <div class="flex items-center mb-4">
+                        <div class="flex-shrink-0">
+                            {{ app.icono_svg|safe }}
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-lg font-medium text-gray-900">{{ app.nombre }}</h3>
+                            <p class="text-sm text-gray-500">ID: {{ app.id }}</p>
+                        </div>
+                    </div>
+                    
+                    {% if app.submenus %}
+                        <div class="space-y-3">
+                            <h4 class="text-sm font-medium text-gray-700">Submenús:</h4>
+                            {% for submenu in app.submenus %}
+                                <div class="bg-gray-50 rounded p-3">
+                                    <h5 class="text-sm font-medium text-gray-600 mb-2">{{ submenu.seccion }}</h5>
+                                    <ul class="space-y-1">
+                                        {% for item in submenu.items %}
+                                            <li class="text-sm text-gray-500">
+                                                <span class="material-icons text-xs align-text-bottom mr-1">{{ item.icon }}</span>
+                                                {{ item.label }}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-gray-500">Sin submenús</p>
+                    {% endif %}
+                    
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <div class="flex items-center justify-between text-xs text-gray-500">
+                            <span>Orden: {{ app.orden }}</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium bg-{{ app.color }}-100 text-{{ app.color }}-800">
+                                {{ app.color }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Información del Context -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Información del Context</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Variables Disponibles</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li><strong>apps_menu:</strong> {{ apps_menu|length }} apps</li>
+                        <li><strong>current_app_id:</strong> {{ current_app_id|default:"Ninguna" }}</li>
+                        <li><strong>show_sidebar:</strong> {{ show_sidebar|yesno:"Sí,No" }}</li>
+                        <li><strong>current_sidebar_items:</strong> {{ current_sidebar_items|length }} secciones</li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-medium text-gray-900 mb-2">Permisos del Usuario</h3>
+                    <div class="bg-gray-50 rounded p-3">
+                        <p class="text-sm text-gray-600 mb-2">Total: {{ permisos_usuario|length }} permisos</p>
+                        <div class="max-h-32 overflow-y-auto">
+                            {% for permiso in permisos_usuario %}
+                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ permiso }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar de Ejemplo -->
+        {% if show_sidebar %}
+        <div class="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">Sidebar Actual ({{ current_app_id }})</h2>
+            <div class="flex">
+                <aside class="w-64 bg-gray-50 rounded-lg p-4">
+                    {% for submenu in current_sidebar_items %}
+                        <div class="mb-6">
+                            <h3 class="text-sm font-medium text-gray-700 uppercase tracking-wider mb-3">{{ submenu.seccion }}</h3>
+                            <ul class="space-y-2">
+                                {% for item in submenu.items %}
+                                    <li>
+                                        <a href="{{ item.url }}" class="flex items-center px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors">
+                                            <span class="material-icons text-lg mr-3">{{ item.icon }}</span>
+                                            {{ item.label }}
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endfor %}
+                </aside>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Código de Ejemplo -->
+        <div class="mt-8 bg-gray-900 rounded-lg p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Código de Ejemplo</h2>
+            <pre class="text-green-400 text-sm overflow-x-auto"><code>{% templatetag openblock %} for app in apps_menu {% templatetag closeblock %}
+&lt;div class="app-card" data-app-id="{% templatetag openvariable %} app.id {% templatetag closevariable %}"&gt;
+    &lt;div class="app-icon"&gt;{% templatetag openvariable %} app.icono_svg|safe {% templatetag closevariable %}&lt;/div&gt;
+    &lt;div class="app-name"&gt;{% templatetag openvariable %} app.nombre {% templatetag closevariable %}&lt;/div&gt;
+    {% templatetag openblock %} if app.submenus {% templatetag closeblock %}
+        &lt;div class="app-submenus"&gt;
+            {% templatetag openblock %} for submenu in app.submenus {% templatetag closeblock %}
+                &lt;div class="submenu-section"&gt;
+                    &lt;h4&gt;{% templatetag openvariable %} submenu.seccion {% templatetag closevariable %}&lt;/h4&gt;
+                    {% templatetag openblock %} for item in submenu.items {% templatetag closeblock %}
+                        &lt;a href="{% templatetag openvariable %} item.url {% templatetag closevariable %}"&gt;{% templatetag openvariable %} item.label {% templatetag closevariable %}&lt;/a&gt;
+                    {% templatetag openblock %} endfor {% templatetag closeblock %}
+                &lt;/div&gt;
+            {% templatetag openblock %} endfor {% templatetag closeblock %}
+        &lt;/div&gt;
+    {% templatetag openblock %} endif {% templatetag closeblock %}
+&lt;/div&gt;
+{% templatetag openblock %} endfor {% templatetag closeblock %}</code></pre>
+        </div>
+    </div>
+</div>
+{% endblock admin_content %} 

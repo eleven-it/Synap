@@ -1,0 +1,328 @@
+{% extends "core/core_app_base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Module Validation" %} - {% trans "System" %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .validation-card {
+        @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6;
+    }
+    
+    .validation-header {
+        @apply flex items-center justify-between mb-6;
+    }
+    
+    .validation-title {
+        @apply text-2xl font-bold text-gray-900 dark:text-white;
+    }
+    
+    .validation-summary {
+        @apply grid grid-cols-1 md:grid-cols-3 gap-4 mb-6;
+    }
+    
+    .summary-card {
+        @apply bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center;
+    }
+    
+    .summary-value {
+        @apply text-2xl font-bold;
+    }
+    
+    .summary-value.success {
+        @apply text-green-600 dark:text-green-400;
+    }
+    
+    .summary-value.error {
+        @apply text-red-600 dark:text-red-400;
+    }
+    
+    .summary-value.warning {
+        @apply text-yellow-600 dark:text-yellow-400;
+    }
+    
+    .summary-label {
+        @apply text-sm text-gray-600 dark:text-gray-400 mt-1;
+    }
+    
+    .validation-section {
+        @apply mb-8;
+    }
+    
+    .section-title {
+        @apply text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center;
+    }
+    
+    .section-icon {
+        @apply mr-2;
+    }
+    
+    .validation-item {
+        @apply p-4 rounded-lg mb-3 border-l-4;
+    }
+    
+    .validation-item.success {
+        @apply bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-600;
+    }
+    
+    .validation-item.error {
+        @apply bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-600;
+    }
+    
+    .validation-item.warning {
+        @apply bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600;
+    }
+    
+    .validation-header-item {
+        @apply flex items-center justify-between mb-2;
+    }
+    
+    .validation-message {
+        @apply text-sm font-medium;
+    }
+    
+    .validation-message.success {
+        @apply text-green-800 dark:text-green-200;
+    }
+    
+    .validation-message.error {
+        @apply text-red-800 dark:text-red-200;
+    }
+    
+    .validation-message.warning {
+        @apply text-yellow-800 dark:text-yellow-200;
+    }
+    
+    .validation-module {
+        @apply text-xs text-gray-600 dark:text-gray-400;
+    }
+    
+    .validation-details {
+        @apply mt-2 text-sm text-gray-700 dark:text-gray-300;
+    }
+    
+    .btn-primary {
+        @apply bg-gradient-to-r from-orange-400 to-orange-600 text-white px-4 py-2 rounded-lg 
+               font-medium hover:from-orange-500 hover:to-orange-700 
+               transform hover:scale-105 transition-all duration-200 shadow-lg;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-500 text-white px-4 py-2 rounded-lg font-medium 
+               hover:bg-gray-600 transform hover:scale-105 transition-all duration-200;
+    }
+    
+    .circular-dependency {
+        @apply bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4;
+    }
+    
+    .circular-title {
+        @apply text-lg font-semibold text-red-800 dark:text-red-200 mb-2;
+    }
+    
+    .circular-list {
+        @apply space-y-1;
+    }
+    
+    .circular-item {
+        @apply text-sm text-red-700 dark:text-red-300;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                        {% trans "Module Validation" %}
+                    </h1>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        {% trans "Validate module configurations, dependencies and menu structures" %}
+                    </p>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'core:module_list' %}" class="btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        {% trans "Back to Modules" %}
+                    </a>
+                    <button onclick="location.reload()" class="btn-primary">
+                        <i class="fas fa-sync-alt mr-2"></i>
+                        {% trans "Refresh" %}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Validation Summary -->
+        <div class="validation-card">
+            <div class="validation-header">
+                <h2 class="validation-title">{% trans "Validation Summary" %}</h2>
+            </div>
+            
+            <div class="validation-summary">
+                {% with validation_results.dependencies as deps %}
+                <div class="summary-card">
+                    <div class="summary-value {% if deps.0.type == 'error' %}error{% elif deps.0.type == 'warning' %}warning{% else %}success{% endif %}">
+                        {{ deps|length }}
+                    </div>
+                    <div class="summary-label">{% trans "Dependency Checks" %}</div>
+                </div>
+                {% endwith %}
+                
+                {% with validation_results.menus as menus %}
+                <div class="summary-card">
+                    <div class="summary-value {% if menus.0.type == 'error' %}error{% elif menus.0.type == 'warning' %}warning{% else %}success{% endif %}">
+                        {{ menus|length }}
+                    </div>
+                    <div class="summary-label">{% trans "Menu Validations" %}</div>
+                </div>
+                {% endwith %}
+                
+                {% with validation_results.modules as mods %}
+                <div class="summary-card">
+                    <div class="summary-value {% if mods.0.type == 'error' %}error{% elif mods.0.type == 'warning' %}warning{% else %}success{% endif %}">
+                        {{ mods|length }}
+                    </div>
+                    <div class="summary-label">{% trans "Module Checks" %}</div>
+                </div>
+                {% endwith %}
+            </div>
+        </div>
+
+        <!-- Dependencies Validation -->
+        <div class="validation-section">
+            <h3 class="section-title">
+                <i class="fas fa-project-diagram section-icon text-blue-500"></i>
+                {% trans "Dependencies Validation" %}
+            </h3>
+            
+            {% for result in validation_results.dependencies %}
+            <div class="validation-item {{ result.type }}">
+                <div class="validation-header-item">
+                    <div class="validation-message {{ result.type }}">
+                        {% if result.type == 'success' %}
+                        <i class="fas fa-check-circle mr-2"></i>
+                        {% elif result.type == 'error' %}
+                        <i class="fas fa-times-circle mr-2"></i>
+                        {% elif result.type == 'warning' %}
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {% endif %}
+                        {{ result.message }}
+                    </div>
+                    {% if result.module %}
+                    <div class="validation-module">{{ result.module }}</div>
+                    {% endif %}
+                </div>
+                
+                {% if result.details %}
+                <div class="validation-details">
+                    {% for detail in result.details %}
+                    <div class="ml-4">• {{ detail }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Menu Validation -->
+        <div class="validation-section">
+            <h3 class="section-title">
+                <i class="fas fa-bars section-icon text-green-500"></i>
+                {% trans "Menu Configuration Validation" %}
+            </h3>
+            
+            {% for result in validation_results.menus %}
+            <div class="validation-item {{ result.type }}">
+                <div class="validation-header-item">
+                    <div class="validation-message {{ result.type }}">
+                        {% if result.type == 'success' %}
+                        <i class="fas fa-check-circle mr-2"></i>
+                        {% elif result.type == 'error' %}
+                        <i class="fas fa-times-circle mr-2"></i>
+                        {% elif result.type == 'warning' %}
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {% endif %}
+                        {{ result.message }}
+                    </div>
+                    {% if result.module %}
+                    <div class="validation-module">{{ result.module }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Module Validation -->
+        <div class="validation-section">
+            <h3 class="section-title">
+                <i class="fas fa-puzzle-piece section-icon text-purple-500"></i>
+                {% trans "Module Configuration Validation" %}
+            </h3>
+            
+            {% for result in validation_results.modules %}
+            <div class="validation-item {{ result.type }}">
+                <div class="validation-header-item">
+                    <div class="validation-message {{ result.type }}">
+                        {% if result.type == 'success' %}
+                        <i class="fas fa-check-circle mr-2"></i>
+                        {% elif result.type == 'error' %}
+                        <i class="fas fa-times-circle mr-2"></i>
+                        {% elif result.type == 'warning' %}
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        {% endif %}
+                        {{ result.message }}
+                    </div>
+                    {% if result.module %}
+                    <div class="validation-module">{{ result.module }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Recommendations -->
+        {% if validation_results.dependencies.0.type == 'error' or validation_results.menus.0.type == 'error' or validation_results.modules.0.type == 'error' %}
+        <div class="validation-card">
+            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                {% trans "Recommendations" %}
+            </h3>
+            
+            <div class="space-y-3">
+                {% if validation_results.dependencies.0.type == 'error' %}
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>{% trans "Dependency Issues:" %}</strong>
+                        {% trans "Review and resolve circular dependencies or missing dependencies before activating modules." %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if validation_results.menus.0.type == 'error' %}
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>{% trans "Menu Issues:" %}</strong>
+                        {% trans "Check menu configuration files for missing required fields or invalid URLs." %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if validation_results.modules.0.type == 'error' %}
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div class="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>{% trans "Module Issues:" %}</strong>
+                        {% trans "Ensure all required dependencies are active before activating dependent modules." %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,351 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+{% load core_extras %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">
+      {% if editar %}✏️ Editar Puesto{% else %}➕ Crear Nuevo Puesto{% endif %}
+    </h1>
+    <p class="text-xs text-gray-600 mt-1">Gestionar puesto y sus permisos del menú</p>
+  </div>
+
+  {% if messages %}
+    <div class="mb-4">
+      {% for message in messages %}
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" class="bg-white p-6 rounded-lg shadow-md">
+    {% csrf_token %}
+    
+    <!-- Nombre del puesto -->
+    <div class="mb-6">
+      <label for="nombre" class="block text-xs font-medium text-gray-700 mb-1">Nombre del Puesto *</label>
+      <input type="text" name="nombre" id="nombre" value="{{ puesto.nombre|default:'' }}" required
+             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+             placeholder="Ej: Vendedor, Administrador">
+    </div>
+
+    <!-- Heredar desde puesto base (solo al crear) -->
+    {% if not editar %}
+    <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+      <div class="flex items-start gap-3">
+        <input type="checkbox" 
+               name="heredar_desde_puesto" 
+               id="heredar_desde_puesto"
+               onchange="togglePuestoBase(this.checked)"
+               class="mt-1 rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+        <div class="flex-1">
+          <label for="heredar_desde_puesto" class="block text-xs font-medium text-gray-700 mb-2 cursor-pointer">
+            Heredar permisos desde otro puesto
+          </label>
+          <p class="text-xs text-gray-600 mb-2">Al marcar esta opción, se copiarán todos los permisos del menú y del sistema desde el puesto seleccionado.</p>
+          <select name="puesto_base_id" 
+                  id="puesto_base_id"
+                  disabled
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500 bg-gray-100">
+            <option value="">Seleccione un puesto base...</option>
+            {% for puesto_item in puestos_disponibles %}
+            <option value="{{ puesto_item.id }}">{{ puesto_item.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Permisos del menú en estructura jerárquica -->
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <label class="block text-xs font-medium text-gray-700">Permisos del Menú</label>
+        <div class="flex gap-2">
+          <button type="button" onclick="expandirTodo()" class="text-xs text-purple-600 hover:text-purple-800">Expandir Todo</button>
+          <button type="button" onclick="colapsarTodo()" class="text-xs text-gray-600 hover:text-gray-800">Colapsar Todo</button>
+        </div>
+      </div>
+      <div class="border rounded-lg p-4 max-h-96 overflow-y-auto bg-gray-50">
+        {% for clave_raiz, datos_raiz in estructura_menu.items %}
+        <div class="mb-2">
+          <!-- Nivel raíz -->
+          <div class="flex items-center mb-1">
+            {% if datos_raiz.hijos %}
+            <button type="button" 
+                    onclick="toggleNodo('{{ clave_raiz }}')" 
+                    class="toggle-btn text-gray-500 hover:text-gray-700 mr-1 focus:outline-none"
+                    id="toggle_{{ clave_raiz }}">
+              <span class="material-icons text-sm expand-icon">expand_more</span>
+            </button>
+            {% else %}
+            <span class="w-5"></span>
+            {% endif %}
+            <input type="checkbox" 
+                   id="permiso_{{ clave_raiz }}" 
+                   name="permisos" 
+                   value="{{ clave_raiz }}"
+                   {% if clave_raiz in permisos_actuales %}checked{% endif %}
+                   class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                   onchange="toggleHijos('{{ clave_raiz }}', this.checked)">
+            <label for="permiso_{{ clave_raiz }}" class="ml-2 text-xs font-semibold text-gray-800 cursor-pointer">
+              {{ datos_raiz.nombre }}
+            </label>
+          </div>
+          
+          {% if datos_raiz.hijos %}
+          <div class="nodo-hijos nodo_{{ clave_raiz }} ml-6 space-y-1" id="nodo_{{ clave_raiz }}">
+            {% for clave_hijo1, datos_hijo1 in datos_raiz.hijos.items %}
+            <div class="mb-1">
+              <!-- Nivel 1 -->
+              <div class="flex items-center">
+                {% if datos_hijo1.hijos %}
+                <button type="button" 
+                        onclick="toggleNodo('{{ clave_hijo1 }}')" 
+                        class="toggle-btn text-gray-500 hover:text-gray-700 mr-1 focus:outline-none"
+                        id="toggle_{{ clave_hijo1 }}">
+                  <span class="material-icons text-sm expand-icon">expand_more</span>
+                </button>
+                {% else %}
+                <span class="w-5"></span>
+                {% endif %}
+                <input type="checkbox" 
+                       id="permiso_{{ clave_hijo1 }}" 
+                       name="permisos" 
+                       value="{{ clave_hijo1 }}"
+                       {% if clave_hijo1 in permisos_actuales %}checked{% endif %}
+                       class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_raiz }}"
+                       onchange="toggleHijos('{{ clave_hijo1 }}', this.checked)">
+                <label for="permiso_{{ clave_hijo1 }}" class="ml-2 text-xs text-gray-700 cursor-pointer">
+                  {{ datos_hijo1.nombre }}
+                </label>
+              </div>
+              
+              {% if datos_hijo1.hijos %}
+              <div class="nodo-hijos nodo_{{ clave_hijo1 }} ml-6 mt-1 space-y-1" id="nodo_{{ clave_hijo1 }}">
+                {% for clave_hijo2, datos_hijo2 in datos_hijo1.hijos.items %}
+                <div class="mb-1">
+                  <!-- Nivel 2 -->
+                  <div class="flex items-center">
+                    {% if datos_hijo2.hijos %}
+                    <button type="button" 
+                            onclick="toggleNodo('{{ clave_hijo2 }}')" 
+                            class="toggle-btn text-gray-500 hover:text-gray-700 mr-1 focus:outline-none"
+                            id="toggle_{{ clave_hijo2 }}">
+                      <span class="material-icons text-sm expand-icon">expand_more</span>
+                    </button>
+                    {% else %}
+                    <span class="w-5"></span>
+                    {% endif %}
+                    <input type="checkbox" 
+                           id="permiso_{{ clave_hijo2 }}" 
+                           name="permisos" 
+                           value="{{ clave_hijo2 }}"
+                           {% if clave_hijo2 in permisos_actuales %}checked{% endif %}
+                           class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_hijo1 }}"
+                           onchange="toggleHijos('{{ clave_hijo2 }}', this.checked)">
+                    <label for="permiso_{{ clave_hijo2 }}" class="ml-2 text-xs text-gray-600 cursor-pointer">
+                      {{ datos_hijo2.nombre }}
+                    </label>
+                  </div>
+                  
+                  {% if datos_hijo2.hijos %}
+                  <div class="nodo-hijos nodo_{{ clave_hijo2 }} ml-6 mt-1 space-y-1" id="nodo_{{ clave_hijo2 }}">
+                    {% for clave_hijo3, datos_hijo3 in datos_hijo2.hijos.items %}
+                    <div class="mb-1">
+                      <!-- Nivel 3 -->
+                      <div class="flex items-center">
+                        <span class="w-5"></span>
+                        <input type="checkbox" 
+                               id="permiso_{{ clave_hijo3 }}" 
+                               name="permisos" 
+                               value="{{ clave_hijo3 }}"
+                               {% if clave_hijo3 in permisos_actuales %}checked{% endif %}
+                               class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_hijo2 }}">
+                        <label for="permiso_{{ clave_hijo3 }}" class="ml-2 text-xs text-gray-500 cursor-pointer">
+                          {{ datos_hijo3.nombre }}
+                        </label>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-4 border-t">
+      <a href="{% url 'core:listar_roles' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors" title="Cancelar">
+        <span class="material-icons text-base">close</span>
+      </a>
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Guardar">
+        <span class="material-icons text-base">save</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+{% block admin_extra_js %}
+<script>
+// Función para colapsar/expandir un nodo
+function toggleNodo(clave) {
+  const nodo = document.getElementById(`nodo_${clave}`);
+  const toggleBtn = document.getElementById(`toggle_${clave}`);
+  const icon = toggleBtn?.querySelector('.expand-icon');
+  
+  if (nodo) {
+    if (nodo.style.display === 'none') {
+      nodo.style.display = 'block';
+      if (icon) {
+        icon.textContent = 'expand_more';
+        icon.classList.remove('rotate-180');
+      }
+    } else {
+      nodo.style.display = 'none';
+      if (icon) {
+        icon.textContent = 'chevron_right';
+        icon.classList.add('rotate-180');
+      }
+    }
+  }
+}
+
+// Expandir todos los nodos
+function expandirTodo() {
+  const nodos = document.querySelectorAll('.nodo-hijos');
+  nodos.forEach(nodo => {
+    nodo.style.display = 'block';
+  });
+  const icons = document.querySelectorAll('.expand-icon');
+  icons.forEach(icon => {
+    icon.textContent = 'expand_more';
+    icon.classList.remove('rotate-180');
+  });
+}
+
+// Colapsar todos los nodos
+function colapsarTodo() {
+  const nodos = document.querySelectorAll('.nodo-hijos');
+  nodos.forEach(nodo => {
+    nodo.style.display = 'none';
+  });
+  const icons = document.querySelectorAll('.expand-icon');
+  icons.forEach(icon => {
+    icon.textContent = 'chevron_right';
+    icon.classList.add('rotate-180');
+  });
+}
+
+// Función para marcar/desmarcar hijos cuando se marca un padre
+function toggleHijos(clavePadre, checked) {
+  // Seleccionar todos los checkboxes hijos de este nodo
+  const hijos = document.querySelectorAll(`.hijo_${clavePadre}`);
+  hijos.forEach(hijo => {
+    hijo.checked = checked;
+    // Si el hijo tiene hijos, también marcarlos/desmarcarlos
+    const hijoId = hijo.id.replace('permiso_', '');
+    toggleHijos(hijoId, checked);
+  });
+}
+
+// Al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+  // Inicializar: todos los nodos expandidos por defecto
+  expandirTodo();
+  
+  // Manejar cambios en checkboxes
+  const checkboxes = document.querySelectorAll('input[type="checkbox"][name="permisos"]');
+  checkboxes.forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+      // Encontrar el contenedor padre (.nodo-hijos) navegando hacia arriba
+      let contenedorPadre = this.closest('.nodo-hijos');
+      
+      if (contenedorPadre) {
+        // Buscar el div padre que contiene el checkbox del padre
+        let elementoPadre = contenedorPadre.parentElement;
+        while (elementoPadre && !elementoPadre.classList.contains('mb-2') && !elementoPadre.classList.contains('mb-1')) {
+          elementoPadre = elementoPadre.parentElement;
+        }
+        
+        if (elementoPadre) {
+          const padre = elementoPadre.querySelector('.flex.items-center input[type="checkbox"]');
+          
+          // Si se desmarca un hijo, desmarcar el padre
+          if (padre && !this.checked && padre !== this) {
+            padre.checked = false;
+          }
+          
+          // Si se marca un hijo, verificar si todos los hermanos están marcados para marcar el padre
+          if (this.checked && padre && padre !== this) {
+            const hermanos = contenedorPadre.querySelectorAll('input[type="checkbox"]');
+            const todosMarcados = Array.from(hermanos).every(cb => cb.checked);
+            if (todosMarcados) {
+              padre.checked = true;
+            }
+          }
+        }
+      }
+    });
+  });
+});
+
+// Función para habilitar/deshabilitar el selector de puesto base
+function togglePuestoBase(habilitar) {
+  const selectPuestoBase = document.getElementById('puesto_base_id');
+  const seccionPermisos = document.querySelector('.mb-6:has(.border.rounded-lg.p-4.max-h-96)');
+  
+  if (selectPuestoBase) {
+    if (habilitar) {
+      selectPuestoBase.disabled = false;
+      selectPuestoBase.classList.remove('bg-gray-100');
+      selectPuestoBase.classList.add('bg-white');
+      selectPuestoBase.required = true;
+      
+      // Ocultar la sección de permisos del menú si se hereda desde puesto base
+      if (seccionPermisos) {
+        seccionPermisos.style.display = 'none';
+      }
+    } else {
+      selectPuestoBase.disabled = true;
+      selectPuestoBase.classList.add('bg-gray-100');
+      selectPuestoBase.classList.remove('bg-white');
+      selectPuestoBase.required = false;
+      selectPuestoBase.value = '';
+      
+      // Mostrar la sección de permisos del menú
+      if (seccionPermisos) {
+        seccionPermisos.style.display = 'block';
+      }
+    }
+  }
+}
+</script>
+<style>
+.nodo-hijos {
+  display: block;
+}
+.toggle-btn {
+  transition: transform 0.2s;
+}
+.expand-icon {
+  transition: transform 0.2s;
+}
+.expand-icon.rotate-180 {
+  transform: rotate(-90deg);
+}
+</style>
+{% endblock admin_extra_js %}
+{% endblock admin_content %}

@@ -1,0 +1,228 @@
+{% extends 'core/core_app_base.html' %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="flex flex-col bg-gray-50 dark:bg-gray-900 min-h-0">
+    <!-- Header fijo -->
+    <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{% trans 'Companies' %}</h1>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    {{ empresas.count }} {% trans 'company' %}{{ empresas.count|pluralize }}
+                </span>
+            </div>
+            <a href="{% url 'core:empresa_nueva' %}" class="btn-primary">
+                <span class="flex items-center gap-x-1">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                  </svg>
+                  <span>{% trans 'New Company' %}</span>
+                </span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Contenido adaptativo -->
+    <div class="flex-1 w-full flex justify-center items-start overflow-y-auto">
+        <div class="w-full max-w-2xl md:max-w-4xl lg:max-w-7xl p-4 sm:p-6">
+            {% if empresas %}
+                <!-- Grid de tarjetas responsivo, centrado si hay pocas -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-center items-start" style="min-height:0;">
+                    {% for empresa in empresas %}
+                        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-200 hover:scale-105 flex flex-col min-h-[340px]">
+                            <!-- Header de la tarjeta -->
+                            <div class="p-5 border-b border-gray-100 dark:border-gray-700 flex flex-col items-center">
+                                {% if empresa.logo %}
+                                    <img src="{{ empresa.logo.url }}" alt="Logo {{ empresa.nombre }}" 
+                                         class="h-12 w-12 rounded-lg object-cover border border-gray-200 dark:border-gray-600 mb-2">
+                                {% else %}
+                                    <div class="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mb-2">
+                                        <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                        </svg>
+                                    </div>
+                                {% endif %}
+                                <h3 class="text-base font-bold text-gray-900 dark:text-gray-100 text-center leading-tight">{{ empresa.Nombre|default:"Sin nombre" }}</h3>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-0.5">{{ empresa.CUIT|default:"-" }}</p>
+                                <div class="mt-2 flex items-center justify-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 gap-x-1 transition-colors">
+                                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <span class="estado-texto">{% trans 'Active' %}</span>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Contenido de la tarjeta -->
+                            <div class="flex-1 p-5 flex flex-col justify-between">
+                                <div class="space-y-2 mb-2">
+                                    {% if empresa.Email %}
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400 gap-x-2">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span class="truncate">{{ empresa.Email }}</span>
+                                        </div>
+                                    {% endif %}
+                                    {% if empresa.Telefono %}
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400 gap-x-2">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                                            </svg>
+                                            <span class="truncate">{{ empresa.Telefono }}</span>
+                                        </div>
+                                    {% endif %}
+                                    {% if empresa.Pais %}
+                                        <div class="flex items-center text-sm text-gray-600 dark:text-gray-400 gap-x-2">
+                                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                            </svg>
+                                            <span class="truncate">{{ empresa.Pais }}</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                                <div class="flex flex-col sm:flex-row items-center justify-between mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 gap-y-2">
+                                    <div class="flex gap-x-2 w-full sm:w-auto justify-end items-center">
+                                        <a href="{% url 'core:empresa_detalle' empresa_id=1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="{% trans 'Edit company' %}">
+                                            <span class="material-icons text-base">edit</span>
+                                            <span class="sr-only">{% trans 'Edit' %}</span>
+                                        </a>
+                                        <a href="{% url 'core:branch_list' empresa_id=1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="{% trans 'View branches' %}">
+                                            <span class="material-icons text-base">store</span>
+                                            <span class="sr-only">{% trans 'Branches' %}</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <!-- Estado vacío -->
+                <div class="flex flex-col items-center justify-center py-12">
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+                        <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                        {% trans 'No companies registered' %}
+                    </h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-center mb-6 max-w-md">
+                        {% trans 'Start by creating your first company to manage your business efficiently.' %}
+                    </p>
+                    <a href="{% url 'core:empresa_nueva' %}" class="btn-primary">
+                        <span class="flex items-center gap-x-1">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                          </svg>
+                          <span>{% trans 'Create First Company' %}</span>
+                        </span>
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-6 right-6 z-50 space-y-2"></div>
+
+<!-- CSRF Token para AJAX -->
+{% csrf_token %}
+
+<style>
+.btn-primary {
+    @apply inline-flex items-center gap-x-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2;
+}
+
+.btn-secondary {
+    @apply inline-flex items-center gap-x-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+}
+
+.btn-danger {
+    @apply inline-flex items-center gap-x-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900 dark:hover:bg-red-800 dark:text-red-300 text-xs font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.grid > div {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.grid > div:nth-child(1) { animation-delay: 0.1s; }
+.grid > div:nth-child(2) { animation-delay: 0.2s; }
+.grid > div:nth-child(3) { animation-delay: 0.3s; }
+.grid > div:nth-child(4) { animation-delay: 0.4s; }
+
+@media (max-width: 640px) {
+  .grid {
+    gap: 1rem;
+  }
+  .min-h-[340px] {
+    min-height: 260px;
+  }
+  .p-5 {
+    padding: 1rem !important;
+  }
+}
+</style>
+
+<script>
+function confirmarEliminacion(empresaId, empresaNombre) {
+    if (confirm(`{% trans 'Are you sure you want to delete the company' %} "${empresaNombre}"? {% trans 'This action cannot be undone.' %}`)) {
+        window.location.href = `/core/empresa/${empresaId}/eliminar/`;
+    }
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-2 rounded-lg shadow-lg text-white font-medium flex items-center gap-2 animate-fade-in ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+    toast.innerHTML = `<span class="material-icons">${type === 'success' ? 'check_circle' : 'error'}</span> ${message}`;
+    document.getElementById('toast-container').appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+
+function toggleEmpresaActiva(checkbox) {
+    const empresaId = checkbox.getAttribute('data-empresa-id');
+    const activa = checkbox.checked;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch(`/core/empresas/${empresaId}/editar/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: `activa=${activa ? 'on' : ''}&csrfmiddlewaretoken=${csrfToken}`
+    })
+    .then(response => response.ok ? response.text() : Promise.reject(response))
+    .then(() => {
+        showToast(activa ? '{% trans "Company activated" %}' : '{% trans "Company deactivated" %}', 'success');
+        // Actualizar badge de estado
+        const badge = document.getElementById(`estado-empresa-${empresaId}`);
+        if (badge) {
+            badge.className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium gap-x-1 transition-colors ${activa ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`;
+            badge.querySelector('.estado-texto').textContent = activa ? '{% trans "Active" %}' : '{% trans "Inactive" %}';
+        }
+    })
+    .catch(() => {
+        showToast('{% trans "Error updating status" %}', 'error');
+        checkbox.checked = !activa;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.grid > div');
+    cards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.1}s`;
+    });
+});
+</script>
+{% endblock %} 

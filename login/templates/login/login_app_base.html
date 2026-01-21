@@ -1,0 +1,13 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Login" %} - Synap{% endblock %}
+
+{% block content %}
+    {% block login_content %}{% endblock login_content %}
+{% endblock %}
+
+{% block extra_js %}
+    {% block login_extra_js %}{% endblock login_extra_js %}
+{% endblock %} 

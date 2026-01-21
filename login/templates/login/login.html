@@ -1,0 +1,84 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-g" />
+  <title>Synap</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module" src="{% static 'login/firebase-init.js' %}"></script>
+  <script type="module" src="{% static 'login/firebase-init-handler.js' %}"></script>
+  <style>
+    body {
+      background-color: #f0f2f5;
+    }
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 0 2rem;
+    }
+    .login-box {
+      background: white;
+      padding: 3rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 450px;
+    }
+    .logo-container {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .logo {
+      max-width: 240px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-container">
+    <div class="login-box">
+      <div class="logo-container">
+        {% if empresa_activa and empresa_activa.logo %}
+          <img src="{{ empresa_activa.logo.url }}" alt="Logo {{ empresa_activa.nombre }}" class="logo" />
+        {% else %}
+          <img src="{% static 'images/Synap-transparencia.png' %}" alt="Logo de Synap" class="logo" />
+        {% endif %}
+      </div>
+
+      <form onsubmit="loginUser(event)" class="space-y-6">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700">Correo electrónico</label>
+          <input id="email" type="email" autocomplete="email" required
+                 class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" />
+        </div>
+
+        <div>
+            <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
+            <input id="password" type="password" autocomplete="current-password" required
+                   class="mt-1 w-full p-3 rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500" />
+        </div>
+
+        <div id="error-message" class="text-red-600 text-sm text-center hidden"></div>
+
+        <div>
+          <button type="submit"
+                  class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-md transition-colors duration-300">
+            Ingresar
+          </button>
+        </div>
+      </form>
+
+      <!-- Enlace de recuperación de contraseña deshabilitado - no implementado -->
+      <!-- <div class="text-sm text-center mt-6">
+        <a href="#" class="font-medium text-purple-600 hover:text-purple-500">
+          ¿Olvidaste tu contraseña?
+        </a>
+      </div> -->
+    </div>
+  </div>
+</body>
+</html>

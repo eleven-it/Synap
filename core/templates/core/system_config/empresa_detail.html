@@ -1,0 +1,409 @@
+{% extends 'core/core_app_base.html' %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">
+      {% if modo_creacion %}➕ Crear Empresa{% else %}✏️ Editar Empresa{% endif %}
+    </h1>
+    <p class="text-xs text-gray-600 mt-1">Datos de la empresa</p>
+  </div>
+
+  {% if error %}
+    <div class="mb-4 p-3 rounded text-white bg-red-500 text-xs">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  {% if messages %}
+    <div class="mb-4">
+      {% for message in messages %}
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="bg-white p-6 rounded-lg shadow-md">
+    {% csrf_token %}
+    
+    <div class="border rounded-lg p-4 mb-6">
+      <h2 class="text-base font-bold text-gray-800 mb-4">Detalle de Información</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Columna Izquierda -->
+        <div class="space-y-4">
+          <!-- Denominación -->
+          <div>
+            <label for="Nombre" class="block text-xs font-medium text-gray-700 mb-1">Denominación *</label>
+            <input type="text" name="Nombre" id="Nombre" value="{{ empresa.Nombre|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- País -->
+          <div>
+            <label for="id_pais" class="block text-xs font-medium text-gray-700 mb-1">País *</label>
+            <select name="id_pais" id="id_pais" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+                    onchange="cambiarPais()">
+              <option value="">-- Seleccione un país --</option>
+              {% for pais in paises %}
+                <option value="{{ pais.id }}" {% if empresa.id_pais == pais.id %}selected{% endif %}>{{ pais.nombre }}</option>
+              {% endfor %}
+            </select>
+            <input type="hidden" name="Pais" id="Pais" value="{{ empresa.Pais|default:'' }}">
+          </div>
+
+          <!-- Provincia -->
+          <div>
+            <label for="CodProvincia" class="block text-xs font-medium text-gray-700 mb-1">Provincia *</label>
+            <select name="CodProvincia" id="CodProvincia" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+                    onchange="cambiarProvincia()">
+              <option value="">-- Seleccione una provincia --</option>
+              {% for provincia in provincias %}
+                <option value="{{ provincia.id }}" {% if empresa.CodProvincia == provincia.id %}selected{% endif %}>{{ provincia.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Departamento -->
+          <div>
+            <label for="CodDepartamento" class="block text-xs font-medium text-gray-700 mb-1">Departamento / Partido *</label>
+            <select name="CodDepartamento" id="CodDepartamento" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+              <option value="">-- Seleccione un departamento --</option>
+              {% for departamento in departamentos %}
+                <option value="{{ departamento.id }}" {% if empresa.CodDepartamento == departamento.id %}selected{% endif %}>{{ departamento.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Domicilio -->
+          <div>
+            <label for="Domicilio" class="block text-xs font-medium text-gray-700 mb-1">Domicilio *</label>
+            <input type="text" name="Domicilio" id="Domicilio" value="{{ empresa.Domicilio|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Condición IVA -->
+          <div>
+            <label for="IDIva" class="block text-xs font-medium text-gray-700 mb-1">Condición IVA *</label>
+            <select name="IDIva" id="IDIva" required
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+              <option value="">-- Seleccione una condición --</option>
+              {% for contribuyente in contribuyentes %}
+                <option value="{{ contribuyente.id }}" {% if empresa.IDIva == contribuyente.id %}selected{% endif %}>{{ contribuyente.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- CUIT -->
+          <div>
+            <label for="CUIT" class="block text-xs font-medium text-gray-700 mb-1" id="label_cuit">CUIT *</label>
+            <input type="text" name="CUIT" id="CUIT" value="{{ empresa.CUIT|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+                   placeholder="00-00000000-0" maxlength="13">
+            <span class="text-xs text-gray-500" id="cuit_help">Formato: XX-XXXXXXXX-X</span>
+          </div>
+
+          <!-- CP -->
+          <div>
+            <label for="cod_postal" class="block text-xs font-medium text-gray-700 mb-1">CP</label>
+            <input type="text" name="cod_postal" id="cod_postal" value="{{ empresa.cod_postal|default:'' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Teléfono -->
+          <div>
+            <label for="Telefono" class="block text-xs font-medium text-gray-700 mb-1">Teléfono *</label>
+            <input type="text" name="Telefono" id="Telefono" value="{{ empresa.Telefono|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- E-mail -->
+          <div>
+            <label for="Email" class="block text-xs font-medium text-gray-700 mb-1">E-mail *</label>
+            <input type="email" name="Email" id="Email" value="{{ empresa.Email|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
+                   onblur="validarEmail()">
+          </div>
+
+          <!-- Fax -->
+          <div>
+            <label for="Fax" class="block text-xs font-medium text-gray-700 mb-1">Fax *</label>
+            <input type="text" name="Fax" id="Fax" value="{{ empresa.Fax|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Nro. Ingresos Brutos -->
+          <div>
+            <label for="IngBrutos" class="block text-xs font-medium text-gray-700 mb-1">Nro. Ingresos Brutos *</label>
+            <input type="text" name="IngBrutos" id="IngBrutos" value="{{ empresa.IngBrutos|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Nro. Establecimiento -->
+          <div>
+            <label for="Establecimiento" class="block text-xs font-medium text-gray-700 mb-1">Nro. Establecimiento *</label>
+            <input type="text" name="Establecimiento" id="Establecimiento" value="{{ empresa.Establecimiento|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Inicio Actividades -->
+          <div>
+            <label for="InicioAct" class="block text-xs font-medium text-gray-700 mb-1">Inicio Actividades *</label>
+            <input type="date" name="InicioAct" id="InicioAct" {% if empresa.InicioAct %}value="{{ empresa.InicioAct }}"{% endif %} required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Logo -->
+          <div>
+            <label for="logo" class="block text-xs font-medium text-gray-700 mb-1">Logo</label>
+            {% if empresa and empresa.logo %}
+              <div class="mb-2">
+                <img src="{{ empresa.logo.url }}" alt="Logo actual" class="h-16 w-auto border border-gray-300 rounded-md p-1 bg-gray-50">
+                <p class="text-xs text-gray-500 mt-1">Logo actual</p>
+              </div>
+            {% endif %}
+            <input type="file" name="logo" id="logo" accept="image/*"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+            <p class="text-xs text-gray-500 mt-1">Formatos soportados: PNG, JPG, SVG, etc.</p>
+          </div>
+        </div>
+
+        <!-- Columna Derecha -->
+        <div class="space-y-4">
+          <!-- Sede Timbrado -->
+          <div>
+            <label for="Timbrado" class="block text-xs font-medium text-gray-700 mb-1">Sede Timbrado *</label>
+            <input type="text" name="Timbrado" id="Timbrado" value="{{ empresa.Timbrado|default:'' }}" required
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- WhatsApp -->
+          <div>
+            <label for="whatsapp" class="block text-xs font-medium text-gray-700 mb-1">WhatsApp</label>
+            <input type="text" name="whatsapp" id="whatsapp" value="{{ empresa.whatsapp|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Facebook Messenger -->
+          <div>
+            <label for="facebook_messenger" class="block text-xs font-medium text-gray-700 mb-1">Facebook mess</label>
+            <input type="text" name="facebook_messenger" id="facebook_messenger" value="{{ empresa.facebook_messenger|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Twitter -->
+          <div>
+            <label for="twitter" class="block text-xs font-medium text-gray-700 mb-1">Twitter</label>
+            <input type="text" name="twitter" id="twitter" value="{{ empresa.twitter|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- URL empresa -->
+          <div>
+            <label for="direccion_web" class="block text-xs font-medium text-gray-700 mb-1">URL empresa</label>
+            <input type="url" name="direccion_web" id="direccion_web" value="{{ empresa.direccion_web|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- URL ecom cli -->
+          <div>
+            <label for="url_ecommerce_cliente" class="block text-xs font-medium text-gray-700 mb-1">URL ecom cli</label>
+            <input type="url" name="url_ecommerce_cliente" id="url_ecommerce_cliente" value="{{ empresa.url_ecommerce_cliente|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- URL ecom vend -->
+          <div>
+            <label for="url_ecommerce_vendedor" class="block text-xs font-medium text-gray-700 mb-1">URL ecom vend</label>
+            <input type="url" name="url_ecommerce_vendedor" id="url_ecommerce_vendedor" value="{{ empresa.url_ecommerce_vendedor|default:'-' }}"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+          </div>
+
+          <!-- Rubro / Canal -->
+          <div>
+            <label for="rubro_canal" class="block text-xs font-medium text-gray-700 mb-1">Rubro / Canal</label>
+            <select name="rubro_canal" id="rubro_canal"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+              {% for valor in valores_rubro_canal %}
+                <option value="{{ valor }}" {% if empresa.rubro_canal == valor %}selected{% endif %}>{{ valor }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Actividad -->
+          <div>
+            <label for="actividad" class="block text-xs font-medium text-gray-700 mb-1">Actividad</label>
+            <select name="actividad" id="actividad"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+              {% for valor in valores_actividad %}
+                <option value="{{ valor }}" {% if empresa.actividad == valor %}selected{% endif %}>{{ valor }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Observaciones -->
+          <div>
+            <label for="observaciones" class="block text-xs font-medium text-gray-700 mb-1">Observaciones</label>
+            <textarea name="observaciones" id="observaciones" rows="6"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">{{ empresa.observaciones|default:'' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 mt-6">
+      <a href="{% url 'core:empresa_listar' %}" class="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 bg-white hover:bg-gray-50">
+        <span class="material-icons text-base mr-2">close</span>
+        Cancelar
+      </a>
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-purple-600 hover:bg-purple-700">
+        <span class="material-icons text-base mr-2">save</span>
+        Guardar
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+// Función para cambiar país y actualizar provincias
+function cambiarPais() {
+  const paisSelect = document.getElementById('id_pais');
+  const provinciaSelect = document.getElementById('CodProvincia');
+  const departamentoSelect = document.getElementById('CodDepartamento');
+  const paisNombreInput = document.getElementById('Pais');
+  const cuitInput = document.getElementById('CUIT');
+  const labelCuit = document.getElementById('label_cuit');
+  const cuitHelp = document.getElementById('cuit_help');
+  
+  const paisId = paisSelect.value;
+  const paisNombre = paisSelect.options[paisSelect.selectedIndex].text;
+  
+  if (paisNombreInput) {
+    paisNombreInput.value = paisNombre;
+  }
+  
+  // Limpiar provincias y departamentos
+  provinciaSelect.innerHTML = '<option value="">-- Seleccione una provincia --</option>';
+  departamentoSelect.innerHTML = '<option value="">-- Seleccione un departamento --</option>';
+  
+  // Cambiar label y máscara de CUIT según país
+  if (paisId == '1') {
+    // Argentina
+    labelCuit.textContent = 'CUIT *';
+    cuitHelp.textContent = 'Formato: XX-XXXXXXXX-X';
+    cuitInput.maxLength = 13;
+    cuitInput.placeholder = '00-00000000-0';
+  } else {
+    // Otros países
+    labelCuit.textContent = 'NIT/NIF *';
+    cuitHelp.textContent = 'Ingrese el número de identificación fiscal';
+    cuitInput.maxLength = 50;
+    cuitInput.placeholder = '';
+  }
+  
+  // Cargar provincias del país seleccionado
+  if (paisId) {
+    fetch(`/core/api/provincias/?id_pais=${paisId}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.provincias) {
+          data.provincias.forEach(provincia => {
+            const option = document.createElement('option');
+            option.value = provincia.id;
+            option.textContent = provincia.nombre;
+            provinciaSelect.appendChild(option);
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Error al cargar provincias:', error);
+      });
+  }
+}
+
+// Función para cambiar provincia y actualizar departamentos
+function cambiarProvincia() {
+  const provinciaSelect = document.getElementById('CodProvincia');
+  const departamentoSelect = document.getElementById('CodDepartamento');
+  const provinciaId = provinciaSelect.value;
+  
+  // Limpiar departamentos
+  departamentoSelect.innerHTML = '<option value="">-- Seleccione un departamento --</option>';
+  
+  // Cargar departamentos de la provincia seleccionada
+  if (provinciaId) {
+    fetch(`/core/api/departamentos/?cod_provincia=${provinciaId}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.departamentos) {
+          data.departamentos.forEach(departamento => {
+            const option = document.createElement('option');
+            option.value = departamento.id;
+            option.textContent = departamento.nombre;
+            departamentoSelect.appendChild(option);
+          });
+        }
+      })
+      .catch(error => {
+        console.error('Error al cargar departamentos:', error);
+      });
+  }
+}
+
+// Función para validar email
+function validarEmail() {
+  const emailInput = document.getElementById('Email');
+  const email = emailInput.value.trim();
+  
+  if (email && !email.match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
+    alert('El formato del email es inválido');
+    emailInput.focus();
+  }
+}
+
+// Aplicar máscara de CUIT para Argentina
+document.getElementById('CUIT').addEventListener('input', function(e) {
+  const paisId = document.getElementById('id_pais').value;
+  if (paisId == '1') {
+    // Solo aplicar máscara para Argentina
+    let value = e.target.value.replace(/\D/g, ''); // Remover no numéricos
+    if (value.length > 11) value = value.substring(0, 11);
+    
+    // Aplicar formato XX-XXXXXXXX-X
+    if (value.length > 2) {
+      value = value.substring(0, 2) + '-' + value.substring(2);
+    }
+    if (value.length > 11) {
+      value = value.substring(0, 11) + '-' + value.substring(11);
+    }
+    
+    e.target.value = value;
+  }
+});
+
+// Inicializar al cargar la página - NO limpiar selects si ya tienen valores
+document.addEventListener('DOMContentLoaded', function() {
+  const paisSelect = document.getElementById('id_pais');
+  const provinciaSelect = document.getElementById('CodProvincia');
+  const departamentoSelect = document.getElementById('CodDepartamento');
+  
+  // Solo cargar provincias/departamentos si el país cambió pero NO si ya hay valores seleccionados
+  // Los valores ya están en el HTML del servidor, no necesitamos recargarlos
+  // Solo necesitamos asegurarnos de que el país tenga el nombre correcto
+  if (paisSelect && paisSelect.value) {
+    const paisNombreInput = document.getElementById('Pais');
+    if (paisNombreInput && !paisNombreInput.value) {
+      const paisNombre = paisSelect.options[paisSelect.selectedIndex].text;
+      paisNombreInput.value = paisNombre;
+    }
+  }
+});
+</script>
+{% endblock admin_content %}

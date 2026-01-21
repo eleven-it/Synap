@@ -1,0 +1,121 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Eliminar Departamento - SIA{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Breadcrumb -->
+        <div class="mb-4">
+            <a href="{% url 'sia:department_list' %}" 
+               class="text-xs text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition inline-flex items-center">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Volver a Departamentos
+            </a>
+        </div>
+
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                Eliminar Departamento
+            </h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Confirma la eliminación del departamento
+            </p>
+        </div>
+
+        <!-- Confirmación -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <div class="ml-4 flex-1">
+                    <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                        ¿Estás seguro de que deseas eliminar este departamento?
+                    </h2>
+                    <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                        Esta acción no se puede deshacer. El departamento <strong class="text-gray-900 dark:text-white">{{ object.name }}</strong> será eliminado permanentemente.
+                    </p>
+                    
+                    {% if object.survey_responses.exists %}
+                    <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                        <p class="text-xs text-yellow-800 dark:text-yellow-200">
+                            ⚠️ <strong>Advertencia:</strong> Este departamento tiene {{ object.survey_responses.count }} respuesta(s) asociada(s). 
+                            Al eliminarlo, las respuestas mantendrán la referencia al departamento (se establecerá como NULL).
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Información del Departamento -->
+            <div class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+                <dl class="grid grid-cols-1 gap-4 text-xs">
+                    <div>
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Nombre:</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-white">{{ object.name }}</dd>
+                    </div>
+                    {% if object.code %}
+                    <div>
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Código:</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-white">{{ object.code }}</dd>
+                    </div>
+                    {% endif %}
+                    {% if object.description %}
+                    <div>
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Descripción:</dt>
+                        <dd class="mt-1 text-gray-900 dark:text-white">{{ object.description|truncatewords:20 }}</dd>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <dt class="font-medium text-gray-500 dark:text-gray-400">Estado:</dt>
+                        <dd class="mt-1">
+                            {% if object.is_active %}
+                            <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 rounded-full">
+                                Activo
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 rounded-full">
+                                Inactivo
+                            </span>
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Botones de acción -->
+            <form method="post" class="mt-6 flex items-center justify-end gap-3">
+                {% csrf_token %}
+                <a href="{% url 'sia:department_list' %}" 
+                   class="text-xs px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                    Cancelar
+                </a>
+                <button type="submit" 
+                        class="text-xs px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">
+                    Sí, Eliminar Departamento
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,263 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}Dashboard - Synap{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header del Dashboard -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">
+            {% blocktrans with name=user.nombre_completo|default:user.email %}Hello, {{ name }}! 👋{% endblocktrans %}
+        </h1>
+        <p class="text-gray-600 text-lg">
+            {% trans "Welcome to Synap. Select an app to start working." %}
+        </p>
+    </div>
+
+    <!-- Stats rápidos -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">{% trans "Active Company" %}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ empresa_activa.nombre }}</p>
+                </div>
+                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-purple-600">business</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">{% trans "Assigned Roles" %}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ user.roles.all|length }}</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-blue-600">admin_panel_settings</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">{% trans "Available Apps" %}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ apps_menu|length }}</p>
+                </div>
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-green-600">apps</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">{% trans "Permissions" %}</p>
+                    <p class="text-2xl font-bold text-gray-900">{{ permisos_usuario|length }}</p>
+                </div>
+                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-orange-600">security</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid de Apps -->
+    <div class="mb-8">
+        <h2 class="text-xl font-semibold text-gray-900 mb-6">{% trans "Available Applications" %}</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {% for app in apps_menu %}
+            <div class="group relative">
+                <a href="{{ app.url }}" class="block">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-2 hover:scale-105 group-hover:border-{{ app.color }}-300">
+                        <!-- Header de la app -->
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center mr-4" 
+                                 style="background: linear-gradient(135deg, {{ app.color }}50 0%, {{ app.color }}20 100%);">
+                                {{ app.icono_svg|safe }}
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="text-lg font-semibold text-gray-900 group-hover:text-{{ app.color }}-700 transition-colors">
+                                    {{ app.nombre }}
+                                </h3>
+                                <p class="text-sm text-gray-500">{% trans "ID:" %} {{ app.id }}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Submenús preview -->
+                        {% if app.submenus %}
+                        <div class="space-y-3">
+                            {% for submenu in app.submenus|slice:":2" %}
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">
+                                        {{ submenu.seccion }}
+                                    </h4>
+                                    <div class="space-y-1">
+                                        {% for item in submenu.items|slice:":3" %}
+                                            <div class="flex items-center text-sm text-gray-600">
+                                                <span class="material-icons text-xs mr-2 opacity-60">{{ item.icon }}</span>
+                                                <span class="truncate">{{ item.label }}</span>
+                                            </div>
+                                        {% endfor %}
+                                        {% if submenu.items|length > 3 %}
+                                            <div class="text-xs text-gray-400 mt-1">
+                                                +{{ submenu.items|length|add:"-3" }} {% trans "more" %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            {% if app.submenus|length > 2 %}
+                                <div class="text-xs text-gray-400 text-center">
+                                    +{{ app.submenus|length|add:"-2" }} {% trans "more sections" %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                            <span class="material-icons text-gray-300 text-4xl mb-2">dashboard</span>
+                            <p class="text-sm text-gray-500">{% trans "No submenus" %}</p>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Footer -->
+                        <div class="mt-4 pt-4 border-t border-gray-100">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-500">{% trans "Order:" %} {{ app.orden }}</span>
+                                <span class="px-2 py-1 rounded-full text-xs font-medium bg-{{ app.color }}-100 text-{{ app.color }}-800">
+                                    {{ app.color }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                
+                <!-- Indicador de hover -->
+                <div class="absolute inset-0 rounded-xl bg-gradient-to-r from-{{ app.color }}-500/10 to-{{ app.color }}-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Información del usuario -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Roles y permisos -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">🔒 {% trans "Access Information" %}</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">{% trans "Assigned Roles" %}</h4>
+                    {% if user.roles.all %}
+                        <div class="flex flex-wrap gap-2">
+                            {% for rol in user.roles.all %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                                    <span class="material-icons text-sm mr-1">admin_panel_settings</span>
+                                    {{ rol.nombre }}
+                                </span>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 italic text-sm">{% trans "You have no assigned roles" %}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">{% trans "Email" %}</h4>
+                    <p class="text-gray-900">{{ user.email }}</p>
+                </div>
+                
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">{% trans "Language" %}</h4>
+                    <p class="text-gray-900">{{ user.idioma|default:_("Not specified")|upper }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Permisos detallados -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">🔑 {% trans "Detailed Permissions" %}</h3>
+            
+            {% if permisos_usuario %}
+                <div class="h-64 overflow-y-auto pr-4">
+                    <div class="grid grid-cols-1 gap-2">
+                        {% for permiso in permisos_usuario %}
+                            <div class="flex items-center p-2 bg-gray-50 rounded-lg">
+                                <span class="material-icons text-green-500 text-sm mr-2">check_circle</span>
+                                <span class="font-mono text-sm text-gray-700">{{ permiso }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">{% blocktrans with total=permisos_usuario|length %}Total: {{ total }} permissions{% endblocktrans %}</p>
+            {% else %}
+                <p class="text-gray-500 italic text-sm">{% trans "You have no assigned permissions" %}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="mt-8 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">⚡ {% trans "Quick Actions" %}</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="{% url 'core:menu_example' %}" class="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group">
+                <span class="material-icons text-purple-600 mr-3 group-hover:scale-110 transition-transform">visibility</span>
+                <div>
+                    <p class="font-medium text-gray-900">{% trans "See Menu Example" %}</p>
+                    <p class="text-sm text-gray-500">{% trans "New architecture" %}</p>
+                </div>
+            </a>
+            
+            <a href="{% url 'core:dashboard' %}" class="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group">
+                <span class="material-icons text-blue-600 mr-3 group-hover:scale-110 transition-transform">dashboard</span>
+                <div>
+                    <p class="font-medium text-gray-900">{% trans "Classic Dashboard" %}</p>
+                    <p class="text-sm text-gray-500">{% trans "Classic view" %}</p>
+                </div>
+            </a>
+            
+            <a href="{% url 'inventory:stock_dashboard' %}" class="flex items-center p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 group">
+                <span class="material-icons text-green-600 mr-3 group-hover:scale-110 transition-transform">inventory</span>
+                <div>
+                    <p class="font-medium text-gray-900">{% trans "Inventory" %}</p>
+                    <p class="text-sm text-gray-500">{% trans "Manage stock" %}</p>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Animación de entrada escalonada para las apps
+    const appCards = document.querySelectorAll('.group');
+    appCards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+    
+    // Efecto de hover mejorado para las cards
+    appCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-8px) scale(1.02)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+});
+</script>
+{% endblock %} 

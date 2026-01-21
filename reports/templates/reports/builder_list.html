@@ -1,0 +1,1123 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-90"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
+                        Report Builder
+                    </p>
+                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">
+                        {{ page_title }}
+                    </h1>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <a href="{% url 'reports:data_map' %}" 
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all duration-300">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Mapa de Datos
+                    </a>
+                    <a href="{% url 'reports:builder_detail' slug='new' %}" 
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 transition-all duration-300">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M12 5v14m7-7H5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Crear nuevo reporte
+                    </a>
+                    <a href="{% url 'reports:catalog' %}" 
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-all duration-300">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Volver al catálogo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-10 space-y-6">
+        <!-- Panel de Plantillas -->
+        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden">
+            <div class="p-6 sm:p-10">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                            📋 Plantillas
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Crea un nuevo reporte desde una plantilla predefinida
+                        </p>
+                    </div>
+                </div>
+                <div id="templates-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Las plantillas se cargarán aquí con JavaScript -->
+                    <div class="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
+                        Cargando plantillas...
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lista de Reportes -->
+        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden">
+            <div class="p-6 sm:p-10">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                            📊 Mis Reportes
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Reportes que puedes editar
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="selected-count" class="text-xs text-slate-500 dark:text-slate-400 hidden">
+                            <span id="selected-number">0</span> seleccionado(s)
+                        </span>
+                        <button onclick="deleteSelectedReports()" 
+                                id="delete-selected-btn"
+                                class="hidden inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 transition-all duration-200">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            Eliminar seleccionados
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Tabs para separar Legacy y Declarativos -->
+                <div class="mb-6">
+                    <div class="border-b border-slate-200 dark:border-slate-700">
+                        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                            <button onclick="switchBuilderTab('all')" 
+                                    id="builder-tab-all"
+                                    class="builder-tab-button active border-b-2 border-sky-500 py-4 px-1 text-xs font-semibold text-sky-600 dark:text-sky-400 whitespace-nowrap">
+                                Todos los reportes
+                                <span class="ml-2 py-0.5 px-2 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 text-[10px] font-bold" id="builder-count-all">{{ reports|length }}</span>
+                            </button>
+                            <button onclick="switchBuilderTab('declarative')" 
+                                    id="builder-tab-declarative"
+                                    class="builder-tab-button border-b-2 border-transparent py-4 px-1 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 whitespace-nowrap">
+                                Declarativos
+                                <span class="ml-2 py-0.5 px-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold" id="builder-count-declarative">{{ declarative_reports|length }}</span>
+                            </button>
+                            <button onclick="switchBuilderTab('legacy')" 
+                                    id="builder-tab-legacy"
+                                    class="builder-tab-button border-b-2 border-transparent py-4 px-1 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300 whitespace-nowrap">
+                                Legacy
+                                <span class="ml-2 py-0.5 px-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold" id="builder-count-legacy">{{ legacy_reports|length }}</span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+                
+                {% if reports %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                        <thead class="bg-slate-50 dark:bg-slate-800">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider w-12">
+                                    <input type="checkbox" 
+                                           id="select-all-reports" 
+                                           onclick="toggleSelectAll()"
+                                           class="w-4 h-4 text-sky-600 bg-slate-100 border-slate-300 rounded focus:ring-sky-500 dark:focus:ring-sky-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600">
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nombre</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Slug</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Categoría</th>
+                                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Estado</th>
+                                <th class="px-4 py-3 text-right text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
+                            {% for report in reports %}
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors builder-report-row"
+                                data-report-type="{% if report.config.version == 'declarative-v1' %}declarative{% else %}legacy{% endif %}"
+                                data-report-slug="{{ report.slug }}"
+                                data-report-name="{{ report.name|escapejs }}">
+                                <td class="px-4 py-3 text-center">
+                                    <input type="checkbox" 
+                                           class="report-checkbox w-4 h-4 text-sky-600 bg-slate-100 border-slate-300 rounded focus:ring-sky-500 dark:focus:ring-sky-600 dark:ring-offset-slate-800 focus:ring-2 dark:bg-slate-700 dark:border-slate-600"
+                                           data-report-slug="{{ report.slug }}"
+                                           data-report-name="{{ report.name|escapejs }}"
+                                           onchange="updateSelectedCount()">
+                                </td>
+                                <td class="px-4 py-3 text-sm text-slate-900 dark:text-slate-100">{{ report.name }}</td>
+                                <td class="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 font-mono">{{ report.slug }}</td>
+                                <td class="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium {% if report.category == 'operational' %}bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200{% else %}bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200{% endif %}">
+                                        {{ report.get_category_display }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-xs">
+                                    {% if report.config.version == 'declarative-v1' %}
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                        Declarativo
+                                    </span>
+                                    {% else %}
+                                    <span class="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                                        Legacy
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                    <a href="{% url 'reports:builder_detail' slug=report.slug %}" 
+                                       class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-all duration-200">
+                                        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                            <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        Editar
+                                    </a>
+                                        <button onclick="deleteReport('{{ report.slug }}', '{{ report.name|escapejs }}')" 
+                                                class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200">
+                                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                            Eliminar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-12">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">No hay reportes declarativos disponibles para editar.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Panel de Exportación/Importación -->
+        <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden">
+            <div class="p-6 sm:p-10">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-1">
+                            📦 Exportar / Importar
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Exporta reportes, relaciones aprendidas y schema para transferir entre instancias
+                        </p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Exportar -->
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Exportar</h3>
+                        <div class="space-y-2">
+                            <button onclick="exportData('reports')" 
+                                    class="w-full text-left px-3 py-2 text-xs rounded-lg bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/40 transition-colors">
+                                📊 Exportar Reportes
+                            </button>
+                            <button onclick="exportData('relationships')" 
+                                    class="w-full text-left px-3 py-2 text-xs rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
+                                🔗 Exportar Relaciones Aprendidas
+                            </button>
+                            <button onclick="exportData('schema')" 
+                                    class="w-full text-left px-3 py-2 text-xs rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                                🗄️ Exportar Schema Metadata
+                            </button>
+                            <button onclick="exportData('all')" 
+                                    class="w-full text-left px-3 py-2 text-xs rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
+                                📦 Exportar Todo
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Importar -->
+                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                        <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">Importar</h3>
+                        <div class="space-y-2">
+                            <input type="file" id="importFile" accept=".json" class="hidden" onchange="handleFileSelect(event)">
+                            <button onclick="document.getElementById('importFile').click()" 
+                                    class="w-full text-left px-3 py-2 text-xs rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors">
+                                📥 Seleccionar archivo JSON para importar
+                            </button>
+                            <div class="mt-2">
+                                <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                                    <input type="checkbox" id="overwriteCheck" class="w-3 h-3">
+                                    Sobrescribir reportes existentes
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Modal de Confirmación Personalizado -->
+<div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity" onclick="closeConfirmModal()">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-slate-200 dark:border-slate-700 transform transition-all scale-95" onclick="event.stopPropagation()">
+        <div class="p-6">
+            <div class="flex items-start gap-4 mb-4">
+                <div class="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center animate-pulse">
+                    <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Confirmar acción</h3>
+                    <div id="confirmMessage" class="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line"></div>
+                </div>
+            </div>
+            <div class="flex gap-3 justify-end mt-6">
+                <button id="confirmCancel" onclick="closeConfirmModal()" class="px-4 py-2.5 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 transform hover:scale-105">
+                    Cancelar
+                </button>
+                <button id="confirmOk" onclick="executeConfirmAction()" class="px-4 py-2.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-105 shadow-lg shadow-red-500/50">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Container para Toasts -->
+<div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+<script>
+// Función helper para obtener cookie (debe estar disponible globalmente)
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+// Sistema de Toasts/Notificaciones
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const toast = document.createElement('div');
+    const icons = {
+        success: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        error: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+        warning: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>',
+        info: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+    };
+    
+    const colors = {
+        success: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200',
+        error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200',
+        warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200',
+        info: 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200'
+    };
+    
+    toast.className = `${colors[type]} border rounded-lg shadow-lg p-4 flex items-start gap-3 min-w-[300px] max-w-md animate-slide-in-right`;
+    toast.innerHTML = `
+        <div class="flex-shrink-0 mt-0.5">
+            ${icons[type] || icons.info}
+        </div>
+        <div class="flex-1 text-sm font-medium">
+            ${message}
+        </div>
+        <button onclick="this.parentElement.remove()" class="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remover después de la duración
+    setTimeout(() => {
+        toast.style.animation = 'slide-out-right 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+    
+    return toast;
+}
+
+// Sistema de Modal de Progreso
+let progressModal = null;
+let progressMessageEl = null;
+
+function showProgressModal(message) {
+    // Si ya existe un modal, solo actualizar el mensaje
+    if (progressModal && progressMessageEl) {
+        progressMessageEl.textContent = message;
+        return;
+    }
+    
+    // Crear nuevo modal
+    progressModal = document.createElement('div');
+    progressModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    progressModal.innerHTML = `
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div class="flex flex-col items-center gap-4">
+                <div class="relative w-16 h-16">
+                    <div class="absolute inset-0 border-4 border-sky-200 dark:border-sky-800 rounded-full"></div>
+                    <div class="absolute inset-0 border-4 border-sky-600 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <div class="text-center">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                        Exportando datos
+                    </h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-300" id="progressMessage">
+                        ${message}
+                    </p>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(progressModal);
+    progressMessageEl = document.getElementById('progressMessage');
+}
+
+function updateProgressModal(message) {
+    if (progressMessageEl) {
+        progressMessageEl.textContent = message;
+    } else if (progressModal) {
+        showProgressModal(message);
+    }
+}
+
+function hideProgressModal() {
+    if (progressModal) {
+        progressModal.remove();
+        progressModal = null;
+        progressMessageEl = null;
+    }
+}
+
+// Sistema de Confirmación Personalizado
+let confirmCallback = null;
+
+function showConfirmModal(message, onConfirm, onCancel = null) {
+    const modal = document.getElementById('confirmModal');
+    const messageEl = document.getElementById('confirmMessage');
+    
+    if (!modal || !messageEl) {
+        // Fallback a confirm nativo si no existe el modal
+        if (confirm(message)) {
+            onConfirm();
+        } else if (onCancel) {
+            onCancel();
+        }
+        return;
+    }
+    
+    // Convertir saltos de línea a HTML
+    messageEl.innerHTML = message.replace(/\n/g, '<br>');
+    confirmCallback = onConfirm;
+    
+    // Resetear el botón cancelar
+    const cancelBtn = document.getElementById('confirmCancel');
+    cancelBtn.onclick = () => {
+        closeConfirmModal();
+        if (onCancel) onCancel();
+    };
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    // Animación de entrada
+    setTimeout(() => {
+        const modalContent = modal.querySelector('.transform');
+        if (modalContent) {
+            modalContent.classList.remove('scale-95');
+            modalContent.classList.add('scale-100');
+        }
+    }, 10);
+}
+
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal) {
+        const modalContent = modal.querySelector('.transform');
+        if (modalContent) {
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+        }
+        setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }, 200);
+    }
+    confirmCallback = null;
+}
+
+function executeConfirmAction() {
+    if (confirmCallback) {
+        confirmCallback();
+    }
+    closeConfirmModal();
+}
+
+// Agregar estilos de animación
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slide-in-right {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    @keyframes slide-out-right {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    .animate-slide-in-right {
+        animation: slide-in-right 0.3s ease-out;
+    }
+`;
+document.head.appendChild(style);
+
+document.addEventListener('DOMContentLoaded', function() {
+    const templatesContainer = document.getElementById('templates-container');
+    const templatesApiUrl = '{% url "reports-api:reports-builder-templates" %}';
+    
+    // Cargar plantillas
+    fetch(templatesApiUrl, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        credentials: 'same-origin'
+    })
+    .then(response => {
+        if (!response.ok) {
+            // Si la respuesta no es OK, intentar obtener el texto para ver el error
+            return response.text().then(text => {
+                throw new Error(`HTTP ${response.status}: ${text.substring(0, 200)}`);
+            });
+        }
+        // Verificar que el contenido sea JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            return response.text().then(text => {
+                throw new Error('La respuesta no es JSON. Contenido: ' + text.substring(0, 200));
+            });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.templates && data.templates.length > 0) {
+            templatesContainer.innerHTML = data.templates.map(template => `
+                <div class="p-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-sky-300 dark:hover:border-sky-600 transition-colors">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                                ${template.name}
+                                ${template.is_system ? '<span class="text-[10px] px-2 py-0.5 rounded bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 ml-2">Sistema</span>' : ''}
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">${template.description || 'Sin descripción'}</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between">
+                        <span class="text-[10px] px-2 py-1 rounded ${template.category === 'operational' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'}">
+                            ${template.category === 'operational' ? 'Operacional' : 'Gerencial'}
+                        </span>
+                        <button onclick="applyTemplate(${template.id})" 
+                                class="px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors">
+                            Usar
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            templatesContainer.innerHTML = '<div class="col-span-full text-center py-8 text-sm text-slate-500 dark:text-slate-400">No hay plantillas disponibles</div>';
+        }
+    })
+    .catch(error => {
+        console.error('Error cargando plantillas:', error);
+        templatesContainer.innerHTML = `<div class="col-span-full text-center py-8 text-sm text-rose-500">
+            Error al cargar plantillas: ${error.message || 'Error desconocido'}
+        </div>`;
+    });
+    
+    window.applyTemplate = function(templateId) {
+        const name = prompt('Nombre del nuevo reporte:');
+        if (!name) return;
+        
+        const slug = prompt('Slug (identificador único, solo letras minúsculas, números y guiones bajos):');
+        if (!slug) return;
+        
+        if (!/^[a-z0-9_-]+$/.test(slug)) {
+            showToast('El slug solo puede contener letras minúsculas, números, guiones y guiones bajos', 'error', 5000);
+            return;
+        }
+        
+        fetch(`/api/reports/builder/templates/${templateId}/apply/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                name: name,
+                slug: slug
+            })
+        })
+        .then(response => {
+            return response.json().then(data => ({ ok: response.ok, data }));
+        })
+        .then(result => {
+            if (result.ok && result.data.redirect_url) {
+                showToast('Plantilla aplicada exitosamente. Redirigiendo...', 'success', 2000);
+                setTimeout(() => {
+                    window.location.href = result.data.redirect_url;
+                }, 1500);
+            } else {
+                showToast(`Error: ${result.data.detail || 'Error desconocido'}`, 'error', 5000);
+            }
+        })
+        .catch(error => {
+            console.error('Error aplicando plantilla:', error);
+            showToast('Error al aplicar la plantilla. Por favor, intenta nuevamente.', 'error', 5000);
+        });
+    };
+});
+
+// Función para eliminar reporte
+function deleteReport(slug, name) {
+    const message = `¿Estás seguro de que deseas eliminar el reporte "${name}"?\n\nEsta acción eliminará el reporte completamente de la base de datos y no se puede deshacer.`;
+    
+    showConfirmModal(message, () => {
+        const apiUrl = '{% url "reports-api:reports-builder-config" slug="PLACEHOLDER" %}'.replace('PLACEHOLDER', slug);
+        
+        // Mostrar toast de carga
+        const loadingToast = showToast('Eliminando reporte...', 'info', 0);
+        
+        fetch(apiUrl, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            return response.json().then(data => ({ ok: response.ok, data }));
+        })
+        .then(result => {
+            loadingToast.remove();
+            
+            if (result.ok) {
+                showToast(`Reporte "${name}" eliminado exitosamente`, 'success', 3000);
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showToast(`Error al eliminar reporte: ${result.data.detail || 'Error desconocido'}`, 'error', 5000);
+            }
+        })
+        .catch(error => {
+            console.error('Error eliminando reporte:', error);
+            loadingToast.remove();
+            showToast('Error al eliminar reporte. Por favor, intenta nuevamente.', 'error', 5000);
+        });
+    });
+}
+
+// Función para exportar datos (completamente en frontend, usando endpoints GET simples)
+async function exportData(type) {
+    showProgressModal('Preparando exportación...');
+    
+    try {
+        let exportData = {
+            version: "1.0.0",
+            export_type: type === "all" ? "full_export" : type,
+            exported_at: new Date().toISOString()
+        };
+        
+        if (type === "reports" || type === "all") {
+            updateProgressModal('Obteniendo reportes...');
+            
+            const reports = await exportReportsFromFrontend();
+            exportData.reports = reports.reports || [];
+            exportData.widgets = reports.widgets || {};
+            
+            if (exportData.reports.length === 0 && type === "reports") {
+                hideProgressModal();
+                showToast('No hay reportes para exportar', 'warning', 4000);
+                return;
+            }
+        }
+        
+        if (type === "relationships" || type === "all") {
+            updateProgressModal('Obteniendo relaciones aprendidas...');
+            
+            try {
+                const relsUrl = '{% url "reports-api:reports-builder-learned-relationships" %}';
+                const relsResponse = await fetch(relsUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (relsResponse.ok) {
+                    const relsData = await relsResponse.json();
+                    exportData.learned_relationships = relsData.relationships || [];
+                } else {
+                    exportData.learned_relationships = [];
+                }
+            } catch (error) {
+                console.error('Error obteniendo relaciones:', error);
+                exportData.learned_relationships = [];
+            }
+        }
+        
+        if (type === "schema" || type === "all") {
+            updateProgressModal('Leyendo schema metadata de la empresa activa...');
+            
+            try {
+                // El endpoint obtendrá automáticamente base_empresa de la sesión/empresa activa
+                const schemaUrl = '{% url "reports-api:reports-builder-schema-metadata" %}';
+                const schemaResponse = await fetch(schemaUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (schemaResponse.ok) {
+                    const schemaData = await schemaResponse.json();
+                    exportData.schema_metadata = schemaData.tables || {};
+                    exportData.base_empresa = schemaData.base_empresa;
+                } else {
+                    const errorData = await schemaResponse.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `Error ${schemaResponse.status}: ${schemaResponse.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error obteniendo schema:', error);
+                hideProgressModal();
+                showToast(`Error obteniendo schema: ${error.message}`, 'error', 5000);
+                exportData.schema_metadata = {};
+            }
+        }
+        
+        // Generar y descargar archivo JSON
+        updateProgressModal('Guardando archivo JSON...');
+        
+        // Pequeño delay para que el usuario vea el mensaje de guardado
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        const filename = `synap_export_${type}_${new Date().toISOString().split('T')[0]}.json`;
+        downloadJSON(exportData, filename);
+        
+        hideProgressModal();
+        
+        let message = 'Exportación completada exitosamente';
+        if (exportData.reports) message += `: ${exportData.reports.length} reporte(s)`;
+        if (exportData.learned_relationships) message += `, ${exportData.learned_relationships.length} relación(es)`;
+        if (exportData.schema_metadata) {
+            const tableCount = Object.keys(exportData.schema_metadata).length;
+            message += `, ${tableCount} tabla(s)`;
+        }
+        
+        showToast(message, 'success', 5000);
+        
+    } catch (error) {
+        console.error('Error exportando:', error);
+        hideProgressModal();
+        showToast(`Error al exportar: ${error.message}`, 'error', 5000);
+    }
+}
+
+// Función para exportar reportes desde el frontend
+async function exportReportsFromFrontend() {
+    const reports = [];
+    const widgets = {};
+    
+    // Obtener lista de reportes desde la página
+    const reportRows = document.querySelectorAll('tbody tr');
+    
+    for (const row of reportRows) {
+        const slugCell = row.querySelector('td:nth-child(2)');
+        if (!slugCell) continue;
+        
+        const slug = slugCell.textContent.trim();
+        if (!slug) continue;
+        
+        try {
+            // Obtener configuración completa del reporte
+            const configUrl = '{% url "reports-api:reports-builder-config" slug="PLACEHOLDER" %}'.replace('PLACEHOLDER', slug);
+            const configResponse = await fetch(configUrl, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+            
+            if (!configResponse.ok) {
+                console.warn(`No se pudo obtener configuración para ${slug}`);
+                continue;
+            }
+            
+            const configData = await configResponse.json();
+            
+            // Obtener widgets del reporte
+            const widgetsUrl = '{% url "reports-api:reports-builder-widgets" slug="PLACEHOLDER" %}'.replace('PLACEHOLDER', slug);
+            const widgetsResponse = await fetch(widgetsUrl, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+            
+            let reportWidgets = [];
+            if (widgetsResponse.ok) {
+                const widgetsData = await widgetsResponse.json();
+                reportWidgets = (widgetsData.widgets || []).map(w => ({
+                    name: w.name,
+                    widget_type: w.widget_type,
+                    order: w.order,
+                    layout: w.layout || {},
+                    configuration: w.configuration || {}
+                }));
+            }
+            
+            // Construir objeto de reporte para exportación
+            const reportExport = {
+                slug: configData.slug || slug,
+                name: configData.name || slug,
+                description: configData.description || "",
+                category: configData.category || "operational",
+                version: configData.config?.version || "1.0.0",
+                config: configData.config || {},
+                metadata: configData.metadata || {},
+                refresh_interval: configData.refresh_interval || "daily",
+                is_active: true,
+                is_visible: configData.is_visible !== false,
+                show_in_catalog: configData.show_in_catalog !== false,
+                widgets: reportWidgets
+            };
+            
+            reports.push(reportExport);
+            widgets[slug] = reportWidgets;
+            
+        } catch (error) {
+            console.error(`Error exportando reporte ${slug}:`, error);
+        }
+    }
+    
+    return { reports, widgets };
+}
+
+// Función para descargar JSON
+function downloadJSON(data, filename) {
+    const jsonStr = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Función para manejar selección de archivo
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            importData(data);
+        } catch (error) {
+            showToast(`Error leyendo archivo JSON: ${error.message}`, 'error', 5000);
+        }
+    };
+    reader.readAsText(file);
+}
+
+// Función para importar datos
+function importData(data) {
+    const overwrite = document.getElementById('overwriteCheck').checked;
+    const message = `¿Estás seguro de que deseas importar estos datos?\n\nEsto puede sobrescribir reportes existentes si están configurados para hacerlo.`;
+    
+    showConfirmModal(message, () => {
+        const apiUrl = '{% url "reports-api:reports-builder-export-import" %}';
+        
+        // Determinar tipo de importación
+        let importType = 'all';
+        if (data.export_type === 'report' || data.export_type === 'reports_batch') {
+            importType = 'reports';
+        } else if (data.export_type === 'learned_relationships') {
+            importType = 'relationships';
+        }
+        
+        const formData = new FormData();
+        formData.append('type', importType);
+        formData.append('data', JSON.stringify(data));
+        formData.append('overwrite', overwrite);
+        formData.append('merge_strategy', 'merge');
+        
+        // Mostrar toast de carga
+        const loadingToast = showToast('Importando datos...', 'info', 0);
+        
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: formData,
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            return response.json().then(data => ({ ok: response.ok, data }));
+        })
+        .then(result => {
+            loadingToast.remove();
+            
+            if (result.ok) {
+                const results = result.data.results || {};
+                let message = 'Importación completada exitosamente.';
+                
+                if (results.reports) {
+                    const imported = results.reports.filter(r => r.status === 'imported').length;
+                    const errors = results.reports.filter(r => r.status === 'error').length;
+                    message += `\n\nReportes: ${imported} importados`;
+                    if (errors > 0) {
+                        message += `, ${errors} con errores`;
+                    }
+                }
+                
+                if (results.relationships) {
+                    message += `\n\nRelaciones: ${results.relationships.imported_count || 0} importadas`;
+                }
+                
+                showToast(message, 'success', 5000);
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                showToast(`Error al importar: ${result.data.detail || 'Error desconocido'}`, 'error', 5000);
+            }
+        })
+        .catch(error => {
+            console.error('Error importando:', error);
+            loadingToast.remove();
+            showToast('Error al importar. Por favor, intenta nuevamente.', 'error', 5000);
+        });
+    });
+}
+
+// Función para cambiar tabs en el builder
+function switchBuilderTab(type) {
+    // Actualizar estado de tabs
+    document.querySelectorAll('.builder-tab-button').forEach(btn => {
+        btn.classList.remove('active', 'border-sky-500', 'text-sky-600', 'dark:text-sky-400');
+        btn.classList.add('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+    });
+    
+    const activeTab = document.getElementById(`builder-tab-${type}`);
+    if (activeTab) {
+        activeTab.classList.add('active', 'border-sky-500', 'text-sky-600', 'dark:text-sky-400');
+        activeTab.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400');
+    }
+    
+    // Filtrar filas de la tabla
+    const allRows = document.querySelectorAll('.builder-report-row');
+    allRows.forEach(row => {
+        const reportType = row.getAttribute('data-report-type');
+        if (type === 'all') {
+            row.style.display = '';
+        } else if (type === 'declarative') {
+            row.style.display = reportType === 'declarative' ? '' : 'none';
+        } else if (type === 'legacy') {
+            row.style.display = reportType === 'legacy' ? '' : 'none';
+        }
+    });
+    
+    // Actualizar estado del checkbox "Seleccionar todos"
+    updateSelectAllCheckbox();
+    // Actualizar contador de seleccionados
+    updateSelectedCount();
+}
+
+// Función para seleccionar/deseleccionar todos los reportes
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('select-all-reports');
+    const checkboxes = document.querySelectorAll('.report-checkbox:not([style*="display: none"])');
+    
+    checkboxes.forEach(checkbox => {
+        // Solo seleccionar checkboxes de filas visibles
+        const row = checkbox.closest('.builder-report-row');
+        if (row && row.style.display !== 'none') {
+            checkbox.checked = selectAllCheckbox.checked;
+        }
+    });
+    
+    updateSelectedCount();
+}
+
+// Función para actualizar el estado del checkbox "Seleccionar todos"
+function updateSelectAllCheckbox() {
+    const selectAllCheckbox = document.getElementById('select-all-reports');
+    if (!selectAllCheckbox) return;
+    
+    const visibleCheckboxes = Array.from(document.querySelectorAll('.report-checkbox')).filter(cb => {
+        const row = cb.closest('.builder-report-row');
+        return row && row.style.display !== 'none';
+    });
+    
+    if (visibleCheckboxes.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        return;
+    }
+    
+    const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
+    
+    if (checkedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else if (checkedCount === visibleCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+// Función para actualizar el contador de reportes seleccionados
+function updateSelectedCount() {
+    const checkboxes = document.querySelectorAll('.report-checkbox:checked');
+    const count = checkboxes.length;
+    const selectedCountEl = document.getElementById('selected-count');
+    const selectedNumberEl = document.getElementById('selected-number');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    
+    if (selectedNumberEl) {
+        selectedNumberEl.textContent = count;
+    }
+    
+    if (count > 0) {
+        if (selectedCountEl) selectedCountEl.classList.remove('hidden');
+        if (deleteSelectedBtn) deleteSelectedBtn.classList.remove('hidden');
+    } else {
+        if (selectedCountEl) selectedCountEl.classList.add('hidden');
+        if (deleteSelectedBtn) deleteSelectedBtn.classList.add('hidden');
+    }
+    
+    // Actualizar estado del checkbox "Seleccionar todos"
+    updateSelectAllCheckbox();
+}
+
+// Función para eliminar reportes seleccionados
+function deleteSelectedReports() {
+    const checkboxes = document.querySelectorAll('.report-checkbox:checked');
+    const selectedReports = Array.from(checkboxes).map(cb => ({
+        slug: cb.getAttribute('data-report-slug'),
+        name: cb.getAttribute('data-report-name')
+    }));
+    
+    if (selectedReports.length === 0) {
+        showToast('No hay reportes seleccionados', 'warning', 3000);
+        return;
+    }
+    
+    const reportNames = selectedReports.map(r => r.name).join(', ');
+    const message = `¿Estás seguro de que deseas eliminar ${selectedReports.length} reporte(s)?\n\nReportes a eliminar:\n${reportNames}\n\nEsta acción no se puede deshacer.`;
+    
+    showConfirmModal(message, () => {
+        const loadingToast = showToast(`Eliminando ${selectedReports.length} reporte(s)...`, 'info', 0);
+        let completed = 0;
+        let errors = 0;
+        const errorsList = [];
+        
+        // Eliminar reportes uno por uno
+        const deletePromises = selectedReports.map(report => {
+            const apiUrl = '{% url "reports-api:reports-builder-config" slug="PLACEHOLDER" %}'.replace('PLACEHOLDER', report.slug);
+            
+            return fetch(apiUrl, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => {
+                return response.json().then(data => ({ ok: response.ok, data, report }));
+            })
+            .then(result => {
+                if (result.ok) {
+                    completed++;
+                } else {
+                    errors++;
+                    errorsList.push(result.report.name);
+                }
+            })
+            .catch(error => {
+                errors++;
+                errorsList.push(report.name);
+                console.error(`Error eliminando ${report.name}:`, error);
+            });
+        });
+        
+        // Esperar a que todas las eliminaciones terminen
+        Promise.all(deletePromises).then(() => {
+            loadingToast.remove();
+            
+            let message = '';
+            if (completed > 0) {
+                message = `${completed} reporte(s) eliminado(s) exitosamente`;
+            }
+            if (errors > 0) {
+                message += (message ? '. ' : '') + `${errors} reporte(s) con error(es): ${errorsList.join(', ')}`;
+            }
+            
+            showToast(message, errors > 0 ? 'warning' : 'success', 5000);
+            
+            // Recargar la página después de un breve delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        });
+    });
+}
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+

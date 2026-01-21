@@ -1,0 +1,89 @@
+# Archivos de entorno y credenciales
+.env
+firebase_credentials.json
+
+# Python
+*.pyc
+__pycache__/
+
+# Módulos eliminados para instalación mínima de Reportes
+accounting/
+administraNET_integration/
+administraNET_Limpio/
+administraNET_Limpio.zip
+administraNET-ecom/
+clover/
+finance/
+inventory/
+logistics/
+mercadopago/
+purchases/
+pyafipws/
+qdrant/
+reports_ai/
+sales/
+support_ai/
+tiendanube/
+tiendanube_administranet/
+
+# Archivos de desarrollo y prueba
+debug_*.py
+test_*.py
+investigate_*.py
+build_*.sh
+verify_*.sh
+setup_*.sh
+instalar_*.sh
+actualizar_*.sh
+rollback_*.sh
+clean_*.sh
+reload
+*.log
+*.tmp
+*.temp
+test_db.sqlite3
+test_invoice.png
+ultimo_usuario_creado.txt
+
+    # Documentación (mantener solo README_REPORTS.md y README_INSTALLATION.md)
+    *.md
+    !README_REPORTS.md
+    !README.md
+    !README_INSTALLATION.md
+
+# Scripts de fix y test
+misc/fix/
+misc/test/
+misc/scripts/
+misc/documentacion/
+
+# Archivos de backup
+media_bak/
+*.backup
+*.bak
+*_backup.py
+
+# Logs
+logs/
+
+# Archivos temporales
+.DS_Store
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# Static files generados (se generan en runtime)
+staticfiles/
+
+# Media files (se suben en runtime)
+
+
+# Certificados
+certs/
+
+# Archivos de configuración de desarrollo
+docker-compose.override.yml
+gitignore.txt

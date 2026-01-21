@@ -1,0 +1,116 @@
+{% extends 'core/core_app_base.html' %}
+{% load i18n %}
+
+<script>
+window.gettext = window.gettext || function(msg) { return msg; };
+</script>
+
+{% block admin_content %}
+<div class="max-w-2xl mx-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mt-8 animate-fade-in">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">{% trans 'CDN Configuration Wizard' %}</h1>
+    <!-- Barra de progreso -->
+    <div class="flex items-center mb-8">
+        <div class="flex-1 flex items-center">
+            {% for s in steps %}
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold transition-all duration-300
+                        {% if step == s %}bg-purple-600 text-white scale-110 shadow-lg{% elif steps|slice:':forloop.counter'|last == step %}bg-purple-500 text-white{% else %}bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-300{% endif %}">
+                        {{ forloop.counter }}
+                    </div>
+                    {% if not forloop.last %}
+                        <div class="w-8 h-1 bg-gray-300 dark:bg-gray-700 mx-1 rounded transition-all duration-300"></div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+        <span class="ml-4 text-sm text-gray-500 dark:text-gray-400">{% trans step|capfirst %}</span>
+    </div>
+    <form method="post" class="space-y-6 animate-slide-up" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="{{ step }}">
+        {% if step == 'provider' %}
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Select CDN Provider' %}</label>
+                <div class="grid grid-cols-2 gap-4">
+                    {% for value, label in providers %}
+                        <label class="flex items-center p-4 border rounded-lg cursor-pointer transition hover:shadow-lg dark:border-gray-700">
+                            <input type="radio" name="provider" value="{{ value }}" class="form-radio mr-2" {% if data.provider == value %}checked{% endif %}>
+                            <span class="text-gray-800 dark:text-gray-100">{{ label }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+        {% elif step == 'domain' %}
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'CDN Domain' %}</label>
+                <input type="text" name="domain" value="{{ data.domain|default:'' }}" placeholder="cdn.tudominio.com" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition">
+                <p class="text-xs text-gray-500 mt-1">{% trans 'Debe ser un subdominio configurado en tu proveedor de CDN.' %}</p>
+            </div>
+        {% elif step == 'activate' %}
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Activate CDN?' %}</label>
+                <input type="checkbox" name="enabled" class="form-checkbox h-5 w-5 text-purple-600 border-gray-300 rounded focus:ring-2 focus:ring-purple-500 transition" {% if data.enabled %}checked{% endif %}>
+                <span class="ml-2 text-gray-700 dark:text-gray-200">{% trans 'Sí, activar el CDN para archivos estáticos y media.' %}</span>
+            </div>
+        {% elif step == 'advanced' %}
+            <div>
+                <label class="block text-sm font-semibold mb-2">{% trans 'Cache Headers (Opcional)' %}</label>
+                <div class="mb-2">
+                    <span class="text-xs text-gray-500">{% trans 'Archivos estáticos' %}</span>
+                    <input type="text" name="cache_headers_static" value="{{ data.cache_headers_static|default:'public, max-age=31536000, immutable' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition">
+                </div>
+                <div class="mb-2">
+                    <span class="text-xs text-gray-500">{% trans 'Archivos media' %}</span>
+                    <input type="text" name="cache_headers_media" value="{{ data.cache_headers_media|default:'public, max-age=86400' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition">
+                </div>
+                <div>
+                    <span class="text-xs text-gray-500">{% trans 'Imágenes' %}</span>
+                    <input type="text" name="cache_headers_images" value="{{ data.cache_headers_images|default:'public, max-age=604800' }}" class="form-input w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-purple-500 transition">
+                </div>
+            </div>
+        {% elif step == 'summary' %}
+            <div class="text-center animate-fade-in">
+                <h2 class="text-xl font-bold text-purple-600 mb-4">{% trans '¡Configuración completada!' %}</h2>
+                <div class="mb-4">
+                    <p class="text-gray-700 dark:text-gray-200">{% trans 'Proveedor:' %} <span class="font-semibold">{{ data.provider|capfirst }}</span></p>
+                    <p class="text-gray-700 dark:text-gray-200">{% trans 'Dominio:' %} <span class="font-semibold">{{ data.domain }}</span></p>
+                    <p class="text-gray-700 dark:text-gray-200">{% trans 'CDN Activo:' %} <span class="font-semibold">{{ data.enabled|yesno:_('Sí,No') }}</span></p>
+                </div>
+                <div class="mb-4">
+                    <p class="text-xs text-gray-500">{% trans 'Puedes modificar la configuración en cualquier momento.' %}</p>
+                </div>
+                <div id="confetti" class="w-full h-32"></div>
+            </div>
+        {% endif %}
+        <div class="flex justify-between mt-8">
+            {% if prev_step %}
+                <a href="?step={{ prev_step }}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg transition">{% trans 'Anterior' %}</a>
+            {% endif %}
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-lg shadow transition transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-500">{% if step == 'summary' %}{% trans 'Finalizar' %}{% else %}{% trans 'Siguiente' %}{% endif %}</button>
+        </div>
+    </form>
+    <!-- Toasts de feedback -->
+    <div id="toast" class="fixed bottom-8 right-8 z-50 hidden"></div>
+</div>
+<script>
+// Animación de confetti al finalizar
+if (window.location.search.includes('step=summary')) {
+    setTimeout(() => {
+        // Simple confetti (puedes mejorar con canvas si quieres)
+        const confetti = document.getElementById('confetti');
+        if (confetti) {
+            for (let i = 0; i < 80; i++) {
+                const el = document.createElement('div');
+                el.className = 'absolute w-2 h-2 rounded-full';
+                el.style.background = `hsl(${Math.random()*360},80%,60%)`;
+                el.style.left = Math.random()*100+'%';
+                el.style.top = Math.random()*100+'%';
+                el.style.opacity = 0.7;
+                el.style.transform = `scale(${0.7+Math.random()*0.7})`;
+                confetti.appendChild(el);
+            }
+        }
+    }, 300);
+}
+</script>
+{% endblock %} 

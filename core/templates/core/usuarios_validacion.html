@@ -1,0 +1,109 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Validación de Integridad de Usuarios</h1>
+    <a href="{% url 'core:usuarios' %}" class="inline-flex items-center justify-center px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-xs transition-colors" title="Volver">
+      <span class="material-icons text-base">arrow_back</span>
+    </a>
+  </div>
+
+  <!-- Resumen -->
+  <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <h2 class="text-lg font-semibold text-gray-800 mb-4">Resumen de Validación</h2>
+    <div class="grid grid-cols-4 gap-4">
+      <div class="bg-blue-50 rounded-lg p-4">
+        <div class="text-2xl font-bold text-blue-800">{{ resultado.total_usuarios }}</div>
+        <div class="text-xs text-blue-600">Total Usuarios</div>
+      </div>
+      <div class="bg-green-50 rounded-lg p-4">
+        <div class="text-2xl font-bold text-green-800">{{ resultado.usuarios_validos }}</div>
+        <div class="text-xs text-green-600">Válidos</div>
+      </div>
+      <div class="bg-red-50 rounded-lg p-4">
+        <div class="text-2xl font-bold text-red-800">{{ resultado.usuarios_invalidos }}</div>
+        <div class="text-xs text-red-600">Con Errores</div>
+      </div>
+      <div class="bg-yellow-50 rounded-lg p-4">
+        <div class="text-2xl font-bold text-yellow-800">{{ resultado.usuarios_sin_puesto }}</div>
+        <div class="text-xs text-yellow-600">Sin Puesto</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detalles -->
+  <div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuario</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errores</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Advertencias</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for detalle in resultado.detalles %}
+        <tr class="{% if not detalle.valido %}bg-red-50{% elif detalle.advertencias %}bg-yellow-50{% endif %}">
+          <td class="px-6 py-4 whitespace-nowrap text-xs">
+            <div class="font-medium text-gray-900">{{ detalle.cod_usuario }}</div>
+            <div class="text-gray-500">{{ detalle.nombre_completo }}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+            {% if detalle.id_puesto %}
+              Puesto ID: {{ detalle.id_puesto }}
+            {% else %}
+              <span class="text-red-600">Sin puesto</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            {% if detalle.valido %}
+              <span class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                <span class="w-1.5 h-1.5 mr-1 bg-green-500 rounded-full"></span>
+                Válido
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">
+                <span class="material-icons text-xs mr-1">error</span>
+                Error
+              </span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 text-xs text-red-600">
+            {% if detalle.errores %}
+              <ul class="list-disc list-inside">
+                {% for error in detalle.errores %}
+                <li>{{ error }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="text-gray-400">-</span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-4 text-xs text-yellow-600">
+            {% if detalle.advertencias %}
+              <ul class="list-disc list-inside">
+                {% for advertencia in detalle.advertencias %}
+                <li>{{ advertencia }}</li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="text-gray-400">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="px-6 py-4 text-center text-xs text-gray-500">No se encontraron usuarios</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+

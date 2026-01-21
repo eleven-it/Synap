@@ -1,0 +1,148 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Media files (se copiarán en runtime)
+media/
+media_bak/
+
+# Static files (se generarán en runtime)
+staticfiles/
+static/
+
+# Database
+*.db
+*.sqlite3
+
+# Documentation
+*.md
+docs/
+documentation/
+
+# Tests
+tests/
+test_*
+*_test.py
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node modules (se instalarán en runtime)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Backup files
+*.bak
+*.backup
+
+# Environment files
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Development files
+docker-compose.override.yml
+docker-compose.dev.yml
+docker-compose.test.yml
+
+# Monitoring
+.prometheus.yml
+grafana/
+
+# Certificates (se montarán como volumen)
+certs/
+*.pem
+*.key
+*.crt
+
+# firebase_credentials.json
+
+# AI models (se montarán como volumen)
+models/
+*.pkl
+*.joblib
+*.h5
+*.onnx
+*.pt
+*.pth
+
+# Qdrant data (se montará como volumen)
+qdrant_data/
+
+# PostgreSQL data (se montará como volumen)
+postgres_data/
+
+# Redis data (se montará como volumen)
+redis_data/ 

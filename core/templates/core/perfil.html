@@ -1,0 +1,150 @@
+{% extends "core/core_app_base.html" %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-3xl mx-auto py-10 px-4">
+  <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-6">Editar Perfil</h1>
+
+  {# Mostrar mensajes de éxito/error #}
+  {% if messages %}
+    <div id="messages-container" class="mb-6 space-y-2">
+      {% for message in messages %}
+        <div class="message-alert p-4 rounded-lg border-l-4 text-xs shadow-md animate-fade-in
+                    {% if message.tags == 'success' %}bg-green-50 dark:bg-green-900/20 border-green-400 text-green-700 dark:text-green-300
+                    {% elif message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-400 text-red-700 dark:text-red-300
+                    {% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-400 text-blue-700 dark:text-blue-300{% endif %}">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <span class="material-icons text-base mr-2">
+                {% if message.tags == 'success' %}check_circle
+                {% elif message.tags == 'error' %}error
+                {% else %}info{% endif %}
+              </span>
+              <span>{{ message }}</span>
+            </div>
+            <button type="button" onclick="this.parentElement.parentElement.remove()" 
+                    class="ml-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <span class="material-icons text-sm">close</span>
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <script>
+      // Auto-ocultar mensajes después de 5 segundos
+      document.addEventListener('DOMContentLoaded', function() {
+        const messages = document.querySelectorAll('.message-alert');
+        messages.forEach(function(message, index) {
+          setTimeout(function() {
+            message.style.transition = 'opacity 0.5s ease-out';
+            message.style.opacity = '0';
+            setTimeout(function() {
+              message.remove();
+            }, 500);
+          }, 5000 + (index * 200)); // Escalonar la desaparición
+        });
+      });
+    </script>
+    <style>
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.4s ease;
+      }
+    </style>
+  {% endif %}
+
+  <form method="post" class="space-y-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+    {% csrf_token %}
+    
+    <!-- Información del Usuario -->
+    <div class="border-b border-gray-200 dark:border-gray-700 pb-4">
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Información Personal</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="cod_usuario" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Código de Usuario</label>
+          <input type="text" id="cod_usuario" value="{% if usuario %}{{ usuario.cod_usuario|default:session_user.cod_usuario|default:'' }}{% else %}{{ session_user.cod_usuario|default:'' }}{% endif %}" 
+                 class="block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400" 
+                 disabled>
+        </div>
+        
+        <div>
+          <label for="id_usuario" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ID Usuario</label>
+          <input type="text" id="id_usuario" value="{% if usuario %}{{ usuario.id_usuario|default:session_user.id_usuario|default:'' }}{% else %}{{ session_user.id_usuario|default:'' }}{% endif %}" 
+                 class="block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400" 
+                 disabled>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div>
+          <label for="nombre_usuario" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre</label>
+          <input type="text" name="nombre_usuario" id="nombre_usuario" 
+                 value="{% if usuario %}{{ usuario.nombre_usuario|default:session_user.nombre_usuario|default:'' }}{% else %}{{ session_user.nombre_usuario|default:'' }}{% endif %}" 
+                 class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-200">
+        </div>
+        
+        <div>
+          <label for="apellido_usuario" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Apellido</label>
+          <input type="text" name="apellido_usuario" id="apellido_usuario" 
+                 value="{% if usuario %}{{ usuario.apellido_usuario|default:session_user.apellido_usuario|default:'' }}{% else %}{{ session_user.apellido_usuario|default:'' }}{% endif %}" 
+                 class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-200">
+        </div>
+      </div>
+    </div>
+
+    <!-- Cambio de Contraseña -->
+    <div>
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Cambiar Contraseña</h2>
+      
+      <div class="space-y-4">
+        <div>
+          <label for="password_actual" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña Actual</label>
+          <input type="password" name="password_actual" id="password_actual" 
+                 placeholder="Ingrese su contraseña actual" 
+                 class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-200">
+        </div>
+        
+        <div>
+          <label for="nueva_password" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nueva Contraseña</label>
+          <input type="password" name="nueva_password" id="nueva_password" 
+                 placeholder="Ingrese la nueva contraseña" 
+                 class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-200">
+        </div>
+        
+        <div>
+          <label for="confirmar_password" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Confirmar Nueva Contraseña</label>
+          <input type="password" name="confirmar_password" id="confirmar_password" 
+                 placeholder="Confirme la nueva contraseña" 
+                 class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-200">
+        </div>
+        
+        <p class="text-xs text-gray-500 dark:text-gray-400">
+          <span class="material-icons text-xs align-middle">info</span>
+          La contraseña debe tener al menos 4 caracteres. Deje los campos vacíos si no desea cambiar la contraseña.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4">
+      <a href="{% url 'core:dashboard' %}" 
+         class="px-4 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors">
+        Cancelar
+      </a>
+      <button type="submit" 
+              class="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors shadow-sm">
+        Guardar Cambios
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock admin_content %}

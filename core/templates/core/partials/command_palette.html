@@ -1,0 +1,42 @@
+{% load i18n %}
+<script>
+window.gettext = window.gettext || function(msg) { return msg; };
+const commandPalette = {
+  open: false,
+  query: '',
+  items: [
+    { label: gettext('Manage users'), url: '/core/usuarios/', icon: 'group' },
+    { label: gettext('Manage roles'), url: '/core/roles/', icon: 'admin_panel_settings' },
+    { label: gettext('Manage permissions'), url: '/core/permisos/', icon: 'vpn_key' },
+    { label: gettext('Dashboard'), url: '/dashboard/', icon: 'dashboard' },
+    // Add more actions here
+  ],
+  get filtered() {
+    if (!this.query) return this.items;
+    return this.items.filter(i => i.label.toLowerCase().includes(this.query.toLowerCase()));
+  }
+};
+</script>
+<div x-data="commandPalette" @keydown.window.prevent.ctrl.k="open = true" @keydown.window.prevent.meta.k="open = true">
+  <template x-if="open">
+    <div class="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-start justify-center pt-32" @click.self="open = false">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-4 animate-fade-in">
+        <input x-model="query" @keydown.escape="open = false" autofocus type="text" placeholder="{% trans 'Search action or module...' %}" class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg mb-3">
+        <ul>
+          <template x-for="item in filtered" :key="item.label">
+            <li>
+              <a :href="item.url" class="flex items-center px-3 py-2 rounded hover:bg-purple-50 transition text-gray-800" @click="open = false">
+                <span class="material-icons text-purple-600 mr-3">{{ item.icon }}</span>
+                <span x-text="item.label"></span>
+              </a>
+            </li>
+          </template>
+          <template x-if="filtered.length === 0">
+            <li class="text-gray-400 px-3 py-2">{% trans 'No results' %}</li>
+          </template>
+        </ul>
+      </div>
+    </div>
+  </template>
+</div>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"> 

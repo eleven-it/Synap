@@ -1,0 +1,88 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Administración de Puestos</h1>
+    <a href="{% url 'core:crear_rol' %}" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Crear Puesto">
+      <span class="material-icons text-base">add</span>
+    </a>
+  </div>
+
+  <!-- Búsqueda -->
+  <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+    <form method="get" class="flex gap-2">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto por nombre..." 
+             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+      <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
+        <span class="material-icons text-base">search</span>
+      </button>
+      {% if q %}
+      <a href="{% url 'core:listar_roles' %}" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-xs transition-colors" title="Limpiar">
+        <span class="material-icons text-base">clear</span>
+      </a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Tabla de puestos -->
+  <div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        {% for puesto in puestos %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-4 whitespace-nowrap">
+            <div class="text-sm font-medium text-gray-900">{{ puesto.nombre }}</div>
+          </td>
+          <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <div class="flex justify-end gap-2">
+              <a href="{% url 'core:editar_rol' puesto.id %}" 
+                 class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded transition-colors" title="Editar">
+                <span class="material-icons text-base">edit</span>
+              </a>
+              <form action="{% url 'core:eliminar_rol' puesto.id %}" method="post" class="inline" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este puesto?');">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition-colors" title="Eliminar">
+                  <span class="material-icons text-base">delete</span>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="2" class="px-6 py-4 text-center text-xs text-gray-500">No se encontraron puestos</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginación -->
+  {% if puestos.has_other_pages %}
+  <div class="px-6 py-4 border-t flex items-center justify-between bg-white rounded-lg shadow-md mt-4">
+    <div class="text-xs text-gray-700">
+      Mostrando {{ puestos.start_index }} a {{ puestos.end_index }} de {{ puestos.paginator.count }} puestos
+    </div>
+    <div class="flex gap-2">
+      {% if puestos.has_previous %}
+      <a href="?page={{ puestos.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Anterior</a>
+      {% endif %}
+      {% if puestos.has_next %}
+      <a href="?page={{ puestos.next_page_number }}{% if q %}&q={{ q }}{% endif %}" 
+         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Siguiente</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

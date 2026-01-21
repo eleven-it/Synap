@@ -1,0 +1,40 @@
+# Dependencias mínimas para módulo de Reportes
+Django==4.2
+djangorestframework
+psycopg2-binary==2.9.9
+gunicorn==21.2.0
+whitenoise==6.9.0
+dj-database-url==0.5.0
+django-tailwind
+requests
+PyJWT==2.8.0
+cryptography
+python-decouple
+mysqlclient==2.2.7  # Para conexión a MySQL de administraNET
+django-allauth
+django-redis
+django-crispy-forms==2.4
+crispy-tailwind==1.0.3
+Pillow==10.1.0
+six==1.16.0
+django-widget-tweaks==1.5.0
+openpyxl  # Para exportación de reportes a Excel
+reportlab  # Para exportación de reportes a PDF
+django-filter
+PyYAML
+django-cors-headers
+defusedxml
+bleach
+
+# Dependencias eliminadas (no necesarias para Reportes básico):
+# fastapi - No necesario
+# uvicorn - No necesario
+# firebase-admin - No necesario
+# celery>=5.2 - No necesario (sin tareas asíncronas)
+# django-celery-beat>=2.8.1 - No necesario
+# mysql-connector-python - Redundante con mysqlclient
+# geopy - No necesario
+# openai>=1.10.0 - Solo para Reports AI
+# crewai>=0.28.0 - Solo para Reports AI
+# langchain>=0.1.0 - Solo para Reports AI
+# langchain-openai>=0.0.5 - Solo para Reports AI

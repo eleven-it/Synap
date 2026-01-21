@@ -1,0 +1,594 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Respuesta de Encuesta Estratégica - SIA{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6" 
+     x-data="{
+         fodaCounts: { strength: 0, weakness: 0, opportunity: 0, threat: 0 },
+         fodaWarning: '',
+         allQuadrantsFull: false,
+         updateFodaCounts() {
+             this.fodaCounts = { strength: 0, weakness: 0, opportunity: 0, threat: 0 };
+             this.fodaWarning = '';
+             const forms = document.querySelectorAll('[data-form-index]');
+             forms.forEach(form => {
+                 const deleteCheckbox = form.querySelector('input[name*=\'-DELETE\']');
+                 if (deleteCheckbox && deleteCheckbox.checked) return;
+                 const quadrantSelect = form.querySelector('select[name*=\'-quadrant\']');
+                 if (quadrantSelect && quadrantSelect.value) {
+                     const quadrant = quadrantSelect.value;
+                     if (this.fodaCounts.hasOwnProperty(quadrant)) {
+                         this.fodaCounts[quadrant]++;
+                     }
+                 }
+             });
+             
+             // Verificar si todos los cuadrantes están llenos
+             this.allQuadrantsFull = this.fodaCounts.strength >= 3 && 
+                                    this.fodaCounts.weakness >= 3 && 
+                                    this.fodaCounts.opportunity >= 3 && 
+                                    this.fodaCounts.threat >= 3;
+             
+             const quadrantNames = {
+                 strength: 'Fortalezas',
+                 weakness: 'Debilidades',
+                 opportunity: 'Oportunidades',
+                 threat: 'Amenazas'
+             };
+             for (const [key, count] of Object.entries(this.fodaCounts)) {
+                 if (count > 3) {
+                     this.fodaWarning = 'Ya alcanzaste el máximo de 3 elementos para ' + quadrantNames[key] + '. Si agregas más, el formulario mostrará errores al guardar.';
+                 }
+             }
+         }
+     }"
+     x-init="
+         $nextTick(() => {
+             updateFodaCounts();
+         });
+         document.addEventListener('change', (e) => {
+             if (e.target.matches('select[name*=\'-quadrant\']') || e.target.matches('input[name*=\'-DELETE\']')) {
+                 updateFodaCounts();
+             }
+         });
+         document.addEventListener('foda-updated', () => {
+             updateFodaCounts();
+         });
+     ">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                Respuesta de Encuesta Estratégica
+            </h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Completa tu evaluación estratégica
+            </p>
+        </div>
+
+        <form method="post" id="survey-form">
+            {% csrf_token %}
+            
+            <!-- Errores generales del formulario -->
+            {% if form.non_field_errors %}
+            <div class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <ul class="text-xs text-red-600 dark:text-red-400">
+                    {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            <!-- Datos Generales -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-6">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+                    Información General
+                </h2>
+                
+                <!-- Ciclo de Evaluación (solo lectura) -->
+                {% if evaluation_cycle %}
+                <div class="mb-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Ciclo de Evaluación:</span>
+                        <span class="text-xs text-gray-900 dark:text-white font-semibold">{{ evaluation_cycle.name }}</span>
+                    </div>
+                </div>
+                <!-- Input hidden para enviar el ciclo -->
+                <input type="hidden" name="evaluation_cycle" value="{{ evaluation_cycle.id }}">
+                {% else %}
+                <div class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p class="text-xs text-yellow-800 dark:text-yellow-200">
+                        ⚠️ No se pudo determinar el ciclo de evaluación. Por favor, selecciona un ciclo desde el dashboard.
+                    </p>
+                </div>
+                {% endif %}
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        {{ form.department|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- FODA Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-6">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                    Análisis FODA
+                </h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Describe brevemente las fortalezas, debilidades, oportunidades y amenazas. Máximo 3 elementos por cuadrante.
+                    <span x-show="fodaCounts.strength >= 3 || fodaCounts.weakness >= 3 || fodaCounts.opportunity >= 3 || fodaCounts.threat >= 3" x-cloak class="text-orange-600 dark:text-orange-400 font-medium">
+                        Si intentas superar el máximo por cuadrante, el formulario mostrará errores al guardar.
+                    </span>
+                </p>
+                
+                <!-- Contadores dinámicos FODA -->
+                <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600" x-cloak>
+                    <div class="flex flex-wrap items-center gap-3 text-xs">
+                        <span class="font-medium text-gray-700 dark:text-gray-300">Contadores:</span>
+                        <span x-bind:class="fodaCounts.strength >= 3 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-600 dark:text-gray-400'">
+                            Fortalezas: <span x-text="fodaCounts.strength"></span>/3
+                        </span>
+                        <span class="text-gray-400 dark:text-gray-500">·</span>
+                        <span x-bind:class="fodaCounts.weakness >= 3 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-600 dark:text-gray-400'">
+                            Debilidades: <span x-text="fodaCounts.weakness"></span>/3
+                        </span>
+                        <span class="text-gray-400 dark:text-gray-500">·</span>
+                        <span x-bind:class="fodaCounts.opportunity >= 3 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-600 dark:text-gray-400'">
+                            Oportunidades: <span x-text="fodaCounts.opportunity"></span>/3
+                        </span>
+                        <span class="text-gray-400 dark:text-gray-500">·</span>
+                        <span x-bind:class="fodaCounts.threat >= 3 ? 'text-orange-600 dark:text-orange-400 font-semibold' : 'text-gray-600 dark:text-gray-400'">
+                            Amenazas: <span x-text="fodaCounts.threat"></span>/3
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Advertencia si se excede el límite -->
+                <div x-show="fodaWarning && fodaWarning !== ''" x-cloak class="mb-4 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg" style="display: none;">
+                    <p class="text-xs text-orange-800 dark:text-orange-200 flex items-start">
+                        <svg class="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span x-text="fodaWarning || ''"></span>
+                    </p>
+                </div>
+                
+                {{ foda_formset.management_form }}
+                
+                <div class="space-y-6">
+                    {% for form in foda_formset %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4" 
+                         data-form-index="{{ forloop.counter0 }}"
+                         x-data="{ currentQuadrant: '{{ form.quadrant.value|default:"" }}' }"
+                         x-on:change="$dispatch('foda-updated'); currentQuadrant = $el.querySelector('select[name*=\'-quadrant\']')?.value || ''">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                            <div class="md:col-span-3">
+                                <label for="{{ form.quadrant.id_for_label }}" class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    {{ form.quadrant.label }}
+                                    {% if form.quadrant.field.required %}<span class="text-red-500">*</span>{% endif %}
+                                </label>
+                                <select name="{{ form.quadrant.html_name }}" 
+                                        id="{{ form.quadrant.id_for_label }}"
+                                        class="text-xs border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 w-full px-2 py-1.5"
+                                        x-model="currentQuadrant"
+                                        x-on:change="$dispatch('foda-updated')">
+                                    <option value="">---------</option>
+                                    {% for value, label in form.quadrant.field.choices %}
+                                        {% if value %}
+                                            <option value="{{ value }}" 
+                                                    {% if form.quadrant.value == value %}selected{% endif %}
+                                                    x-bind:disabled="fodaCounts['{{ value }}'] >= 3 && currentQuadrant !== '{{ value }}'">
+                                                {{ label }}
+                                            </option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                                {% if form.quadrant.help_text %}
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {{ form.quadrant.help_text }}
+                                </p>
+                                {% endif %}
+                                {% if form.quadrant.errors %}
+                                <div class="mt-1 text-xs text-red-600 dark:text-red-400">
+                                    {{ form.quadrant.errors }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="md:col-span-7">
+                                {{ form.description|as_crispy_field }}
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Describe brevemente la fortaleza/debilidad/oportunidad/amenaza.
+                                </p>
+                            </div>
+                            <div class="md:col-span-1">
+                                {{ form.priority|as_crispy_field }}
+                            </div>
+                            <div class="md:col-span-1 flex items-center justify-center pt-6">
+                                {% if form.DELETE %}
+                                {{ form.DELETE }}
+                                <label for="{{ form.DELETE.id_for_label }}" class="ml-2 text-xs text-red-600 dark:text-red-400 cursor-pointer">
+                                    Eliminar
+                                </label>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if form.errors %}
+                        <div class="mt-2 text-xs text-red-600 dark:text-red-400">
+                            {{ form.errors }}
+                        </div>
+                        {% endif %}
+                        {% for hidden in form.hidden_fields %}
+                        {{ hidden }}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if foda_formset.non_form_errors %}
+                <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p class="text-xs text-red-600 dark:text-red-400">
+                        {{ foda_formset.non_form_errors }}
+                    </p>
+                </div>
+                {% endif %}
+                
+                <button type="button" 
+                        x-bind:disabled="allQuadrantsFull"
+                        x-bind:class="allQuadrantsFull ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'"
+                        class="mt-4 text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md transition"
+                        x-on:click="
+                            if (allQuadrantsFull) {
+                                alert('Todos los cuadrantes han alcanzado el máximo de 3 elementos. No puedes agregar más elementos FODA.');
+                                return false;
+                            }
+                            addFodaForm();
+                        ">
+                    + Agregar Elemento FODA
+                </button>
+            </div>
+
+            <!-- Ratings Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-6">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                    Ratings (1-10)
+                </h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    Evalúa cada dimensión según tu percepción actual del área.
+                </p>
+                
+                {{ rating_formset.management_form }}
+                
+                <div class="space-y-4">
+                    {% for form in rating_formset %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                         x-data="{
+                             sliderValue: 5,
+                             updateValue(val) {
+                                 sliderValue = parseInt(val) || 5;
+                                 const hiddenInput = $el.querySelector('input[type=\'hidden\'][name*=\'-value\']');
+                                 if (hiddenInput) hiddenInput.value = val;
+                             }
+                         }"
+                         x-init="
+                             const hiddenInput = $el.querySelector('input[type=\'hidden\'][name*=\'-value\']');
+                             if (hiddenInput) {
+                                 const initialValue = hiddenInput.value;
+                                 if (initialValue) {
+                                     sliderValue = parseInt(initialValue) || 5;
+                                 } else {
+                                     sliderValue = 5;
+                                     hiddenInput.value = '5';
+                                 }
+                             }
+                         ">
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                            <div class="md:col-span-3">
+                                {{ form.dimension|as_crispy_field }}
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Valor (1-10)
+                                </label>
+                                <!-- Input oculto real del formset (sincronizado con el slider) -->
+                                {{ form.value }}
+                                <!-- Slider visible -->
+                                <div class="flex items-center gap-3">
+                                    <input type="range" 
+                                           min="1" 
+                                           max="10" 
+                                           x-bind:value="sliderValue"
+                                           x-on:input="updateValue($event.target.value)"
+                                           class="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500 transition-all duration-200 ease-out">
+                                    <span class="text-xs font-semibold text-gray-900 dark:text-white w-12 text-right">
+                                        <span x-text="sliderValue || 5"></span>/10
+                                    </span>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Deslizá para elegir de 1 (muy bajo) a 10 (muy alto).
+                                </p>
+                            </div>
+                            <div class="md:col-span-6">
+                                {{ form.notes|as_crispy_field }}
+                            </div>
+                            <div class="md:col-span-1 flex items-center justify-center pt-6">
+                                {% if form.DELETE %}
+                                {{ form.DELETE }}
+                                <label for="{{ form.DELETE.id_for_label }}" class="ml-2 text-xs text-red-600 dark:text-red-400 cursor-pointer">
+                                    Eliminar
+                                </label>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if form.errors %}
+                        <div class="mt-2 text-xs text-red-600 dark:text-red-400">
+                            {{ form.errors }}
+                        </div>
+                        {% endif %}
+                        {% for hidden in form.hidden_fields %}
+                            {% if hidden.name != form.value.html_name %}
+                            {{ hidden }}
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if rating_formset.non_form_errors %}
+                <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p class="text-xs text-red-600 dark:text-red-400">
+                        {{ rating_formset.non_form_errors }}
+                    </p>
+                </div>
+                {% endif %}
+                
+                <button type="button" 
+                        class="mt-4 text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                        onclick="addRatingForm()">
+                    + Agregar Rating
+                </button>
+            </div>
+
+            <!-- Open Answers Section -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow mb-6 p-6">
+                <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2">
+                    Preguntas Abiertas
+                </h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    Sé lo más concreto posible. Ejemplos ayudan.
+                </p>
+                
+                {{ open_answer_formset.management_form }}
+                
+                <div class="space-y-4">
+                    {% for form in open_answer_formset %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                         x-data="{
+                             charCount: 0,
+                             maxChars: 1000,
+                             updateCount() {
+                                 const textarea = $el.querySelector('textarea[name*=\'-answer\']');
+                                 if (textarea) {
+                                     charCount = textarea.value.length || 0;
+                                 }
+                             }
+                         }"
+                         x-init="
+                             updateCount();
+                             const textarea = $el.querySelector('textarea[name*=\'-answer\']');
+                             if (textarea) {
+                                 textarea.addEventListener('input', () => updateCount());
+                             }
+                         ">
+                        <div class="grid grid-cols-1 gap-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    {{ form.question_type|as_crispy_field }}
+                                </div>
+                                <div class="md:col-span-2">
+                                    {{ form.question_text|as_crispy_field }}
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Respuesta
+                                </label>
+                                {{ form.answer }}
+                                <div class="mt-1 flex items-center justify-between">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                        Escribe tu respuesta detallada aquí.
+                                    </p>
+                                    <span class="text-xs font-medium" 
+                                          x-bind:class="charCount > maxChars ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'">
+                                        <span x-text="charCount"></span> / <span x-text="maxChars"></span> caracteres
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex items-center">
+                                {% if form.DELETE %}
+                                {{ form.DELETE }}
+                                <label for="{{ form.DELETE.id_for_label }}" class="ml-2 text-xs text-red-600 dark:text-red-400 cursor-pointer">
+                                    Eliminar
+                                </label>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if form.errors %}
+                        <div class="mt-2 text-xs text-red-600 dark:text-red-400">
+                            {{ form.errors }}
+                        </div>
+                        {% endif %}
+                        {% for hidden in form.hidden_fields %}
+                        {{ hidden }}
+                        {% endfor %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if open_answer_formset.non_form_errors %}
+                <div class="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p class="text-xs text-red-600 dark:text-red-400">
+                        {{ open_answer_formset.non_form_errors }}
+                    </p>
+                </div>
+                {% endif %}
+                
+                <button type="button" 
+                        class="mt-4 text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+                        onclick="addOpenAnswerForm()">
+                    + Agregar Respuesta Abierta
+                </button>
+            </div>
+
+            <!-- Botones de acción -->
+            <div class="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <a href="{% url 'sia:dashboard' %}" 
+                   class="text-xs px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                    Cancelar
+                </a>
+                <button type="submit" 
+                        class="text-xs px-6 py-2 bg-gradient-to-r from-orange-400 to-orange-600 text-white rounded-md hover:from-orange-500 hover:to-orange-700 transition shadow-lg">
+                    Guardar Evaluación Estratégica
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Ocultar elementos con x-cloak hasta que Alpine.js los procese */
+    [x-cloak] { display: none !important; }
+    
+    /* Estilos para el slider de ratings con transición suave */
+    input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        outline: none;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #f97316;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s ease-out;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: #f97316;
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s ease-out;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    
+    input[type="range"]::-moz-range-thumb:hover {
+        transform: scale(1.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    input[type="range"]::-webkit-slider-runnable-track {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        transition: background 0.2s ease-out;
+    }
+    
+    .dark input[type="range"]::-webkit-slider-runnable-track {
+        background: #374151;
+    }
+    
+    input[type="range"]::-moz-range-track {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        transition: background 0.2s ease-out;
+    }
+    
+    .dark input[type="range"]::-moz-range-track {
+        background: #374151;
+    }
+    
+    /* Estilos para opciones deshabilitadas en selects */
+    select option:disabled {
+        color: #9ca3af;
+        font-style: italic;
+    }
+    
+    .dark select option:disabled {
+        color: #6b7280;
+    }
+</style>
+
+<script>
+// Funciones para agregar nuevos formsets dinámicamente
+function addFodaForm() {
+    const formset = document.querySelector('#id_fodaitem_set-TOTAL_FORMS');
+    if (!formset) return;
+    
+    const totalForms = parseInt(formset.value) || 0;
+    const container = document.querySelector('[data-form-index]')?.closest('.space-y-6');
+    
+    if (!container) return;
+    
+    // Clonar el último formulario
+    const lastForm = container.querySelector('[data-form-index]:last-of-type');
+    if (lastForm) {
+        const newForm = lastForm.cloneNode(true);
+        newForm.querySelectorAll('input, select, textarea').forEach(input => {
+            const name = input.name;
+            if (name) {
+                input.name = name.replace(/-\d+-/, `-${totalForms}-`);
+                input.id = input.id.replace(/-\d+-/, `-${totalForms}-`);
+                if (input.type !== 'checkbox' && input.type !== 'hidden') input.value = '';
+                if (input.type === 'checkbox') input.checked = false;
+            }
+        });
+        newForm.setAttribute('data-form-index', totalForms);
+        container.appendChild(newForm);
+        formset.value = totalForms + 1;
+        
+        // Disparar evento personalizado para actualizar contadores
+        const event = new CustomEvent('foda-updated');
+        document.dispatchEvent(event);
+    }
+}
+
+function addRatingForm() {
+    const formset = document.querySelector('#id_rating_set-TOTAL_FORMS');
+    if (formset) {
+        const totalForms = parseInt(formset.value) || 0;
+        formset.value = totalForms + 1;
+        location.reload(); // Simplificado: recargar para mostrar nuevo form
+    }
+}
+
+function addOpenAnswerForm() {
+    const formset = document.querySelector('#id_openanswer_set-TOTAL_FORMS');
+    if (formset) {
+        const totalForms = parseInt(formset.value) || 0;
+        formset.value = totalForms + 1;
+        location.reload(); // Simplificado: recargar para mostrar nuevo form
+    }
+}
+</script>
+{% endblock %}
