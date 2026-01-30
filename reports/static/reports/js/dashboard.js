@@ -4003,6 +4003,7 @@ const renderSummary = (meta, totals) => {
   const isSalesSummary = reportSlug === "sales_summary";
   const isTotalConsolidadoOperativo = reportSlug === "total-consolidado-operativo";
   const isBoStockFacturacion = reportSlug === "bo-stock-facturacion";
+  const isCashFlowReport = reportSlug === "cash_flow_waterfall" || reportSlug === "cash_flow_by_account" || reportSlug === "cash_flow_detailed_movements";
 
   // Helper: formatear fecha YYYY-MM-DD -> DD-MM-YYYY
   const formatDateForPeriod = (dateStr) => {
@@ -4160,7 +4161,8 @@ const renderSummary = (meta, totals) => {
       // Mostrar ingresos y egresos para Flujo Operativo
       const ingresos = totals["operating_ingresos"] || 0;
       const egresos = totals["operating_egresos"] || 0;
-      subtitle = `<p class="text-[9px] ${textColorClass} opacity-75 mt-1 text-right">Ing: ${formatCurrencyCompact(ingresos)} | Egr: ${formatCurrencyCompact(egresos)}</p>`;
+      const fmtMon = isCashFlowReport ? formatCurrency : formatCurrencyCompact;
+      subtitle = `<p class="text-[9px] ${textColorClass} opacity-75 mt-1 text-right">Ing: ${fmtMon(ingresos)} | Egr: ${fmtMon(egresos)}</p>`;
     }
     
     // Formatear el label según la key
@@ -4181,9 +4183,10 @@ const renderSummary = (meta, totals) => {
       displayLabel = "TOTAL CONSOLIDADO";
     }
     
+    const fmtValue = isCurrency ? (isCashFlowReport ? formatCurrency : formatCurrencyCompact) : formatNumber;
     card.innerHTML = `
         <p class="text-[10px] uppercase tracking-[0.25em] ${textColorClass} mb-2">${displayLabel}</p>
-        <p class="text-xl font-semibold text-right">${isCurrency ? formatCurrencyCompact(totals[key]) : formatNumber(totals[key])}</p>
+        <p class="text-xl font-semibold text-right">${fmtValue(totals[key])}</p>
         ${subtitle}
       `;
     summaryGrid.appendChild(card);

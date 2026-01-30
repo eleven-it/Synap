@@ -6,668 +6,334 @@
 
 {% block extra_css %}
 <style>
-  /* Animaciones vibrantes y atractivas */
+  /* Animaciones */
   @keyframes fadeInUp {
     from {
       opacity: 0;
-      transform: translateY(20px) scale(0.96);
+      transform: translateY(20px);
     }
     to {
       opacity: 1;
-      transform: translateY(0) scale(1);
+      transform: translateY(0);
     }
   }
 
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.05);
-    }
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: -1000px 0;
-    }
-    100% {
-      background-position: 1000px 0;
-    }
-  }
-
-  @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
-  }
-
-  @keyframes gradient-shift {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .fade-in-up {
     animation: fadeInUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
   }
 
-  .app-card {
-    opacity: 0;
-    animation: fadeInUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  }
+  .fade-in-up-delay-1 { animation-delay: 0.1s; opacity: 0; }
+  .fade-in-up-delay-2 { animation-delay: 0.2s; opacity: 0; }
+  .fade-in-up-delay-3 { animation-delay: 0.3s; opacity: 0; }
+  .fade-in-up-delay-4 { animation-delay: 0.4s; opacity: 0; }
 
-  /* Efectos hover vibrantes y atractivos */
-  .app-card-wrapper {
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* Hero Card - Reports */
+  .hero-card {
+    background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
     position: relative;
     overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
-  .app-card-wrapper:hover {
-    transform: translateY(-8px) scale(1.02);
-  }
-
-  .app-card-wrapper:active {
-    transform: translateY(-4px) scale(0.98);
-  }
-
-  /* Búsqueda global mejorada */
-  .search-input {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .search-input:focus {
-    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.2), 0 10px 25px -5px rgba(168, 85, 247, 0.3);
-    transform: translateY(-2px);
-  }
-
-  /* Grid responsivo */
-  .modules-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1.75rem;
-  }
-
-  @media (min-width: 640px) {
-    .modules-grid {
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 2rem;
-    }
-  }
-
-  @media (min-width: 1024px) {
-    .modules-grid {
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 2.25rem;
-    }
-  }
-
-  /* Iconos de módulos con gradientes vibrantes */
-  .module-icon {
-    width: 72px;
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 20px;
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  }
-
-  .module-icon::before {
+  .hero-card::before {
     content: '';
     position: absolute;
-    inset: 0;
-    border-radius: 20px;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent);
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 25px 50px -12px rgba(234, 88, 12, 0.4);
+  }
+
+  /* Action Cards */
+  .action-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .action-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--card-accent, #3b82f6), var(--card-accent-end, #60a5fa));
     opacity: 0;
     transition: opacity 0.3s ease;
   }
 
-  .app-card-wrapper:hover .module-icon {
-    transform: scale(1.1) rotate(3deg);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
-  }
-
-  .app-card-wrapper:hover .module-icon::before {
-    opacity: 1;
-  }
-
-  /* Tarjeta con efectos mejorados */
-  .module-card {
-    background: white;
-    border-radius: 24px;
-    padding: 1.75rem;
-    border: 2px solid transparent;
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  }
-
-  .module-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 24px;
-    padding: 2px;
-    background: linear-gradient(135deg, transparent, transparent);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.4s ease;
-  }
-
-  .app-card-wrapper:hover .module-card {
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  .action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
     border-color: transparent;
   }
 
-  .app-card-wrapper:hover .module-card::before {
+  .action-card:hover::before {
     opacity: 1;
-    background-size: 200% 200%;
-    animation: gradient-shift 3s ease infinite;
   }
 
-  /* Gradientes de borde específicos por color */
-  .module-card[data-module-color="orange"]::before {
-    background: linear-gradient(135deg, 
-      rgba(251, 146, 60, 0.5), 
-      rgba(249, 115, 22, 0.5),
-      rgba(234, 88, 12, 0.5),
-      rgba(251, 146, 60, 0.5));
-  }
-  .module-card[data-module-color="green"]::before {
-    background: linear-gradient(135deg, 
-      rgba(74, 222, 128, 0.5), 
-      rgba(34, 197, 94, 0.5),
-      rgba(22, 163, 74, 0.5),
-      rgba(74, 222, 128, 0.5));
-  }
-  .module-card[data-module-color="purple"]::before {
-    background: linear-gradient(135deg, 
-      rgba(167, 139, 250, 0.5), 
-      rgba(139, 92, 246, 0.5),
-      rgba(124, 58, 237, 0.5),
-      rgba(167, 139, 250, 0.5));
-  }
-  .module-card[data-module-color="blue"]::before {
-    background: linear-gradient(135deg, 
-      rgba(96, 165, 250, 0.5), 
-      rgba(59, 130, 246, 0.5),
-      rgba(37, 99, 235, 0.5),
-      rgba(96, 165, 250, 0.5));
-  }
-  .module-card[data-module-color="red"]::before {
-    background: linear-gradient(135deg, 
-      rgba(248, 113, 113, 0.5), 
-      rgba(239, 68, 68, 0.5),
-      rgba(220, 38, 38, 0.5),
-      rgba(248, 113, 113, 0.5));
-  }
-  .module-card[data-module-color="teal"]::before {
-    background: linear-gradient(135deg, 
-      rgba(94, 234, 212, 0.5), 
-      rgba(20, 184, 166, 0.5),
-      rgba(13, 148, 136, 0.5),
-      rgba(94, 234, 212, 0.5));
-  }
-  .module-card[data-module-color="emerald"]::before {
-    background: linear-gradient(135deg, 
-      rgba(110, 231, 183, 0.5), 
-      rgba(16, 185, 129, 0.5),
-      rgba(5, 150, 105, 0.5),
-      rgba(110, 231, 183, 0.5));
-  }
-  .module-card[data-module-color="indigo"]::before {
-    background: linear-gradient(135deg, 
-      rgba(129, 140, 248, 0.5), 
-      rgba(99, 102, 241, 0.5),
-      rgba(79, 70, 229, 0.5),
-      rgba(129, 140, 248, 0.5));
-  }
-  .module-card[data-module-color="pink"]::before {
-    background: linear-gradient(135deg, 
-      rgba(244, 114, 182, 0.5), 
-      rgba(236, 72, 153, 0.5),
-      rgba(219, 39, 119, 0.5),
-      rgba(244, 114, 182, 0.5));
-  }
-  .module-card[data-module-color="gray"]::before {
-    background: linear-gradient(135deg, 
-      rgba(148, 163, 184, 0.5), 
-      rgba(100, 116, 139, 0.5),
-      rgba(71, 85, 105, 0.5),
-      rgba(148, 163, 184, 0.5));
-  }
-
-  /* Efecto de brillo en hover */
-  .module-card::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(
-      45deg,
-      transparent 30%,
-      rgba(255, 255, 255, 0.3) 50%,
-      transparent 70%
-    );
-    transform: rotate(45deg);
-    transition: all 0.6s ease;
-    opacity: 0;
-  }
-
-  .app-card-wrapper:hover .module-card::after {
-    opacity: 1;
-    animation: shimmer 1.5s ease-in-out;
-  }
-
-  /* Nombre del módulo con efecto hover */
-  .module-name {
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-
-  .app-card-wrapper:hover .module-name {
-    transform: scale(1.03);
-  }
-
-  /* Dark mode mejorado */
-  .dark .module-card {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+  .dark .action-card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
     border-color: rgba(148, 163, 184, 0.2);
   }
 
-  .dark .app-card-wrapper:hover .module-card {
-    background: linear-gradient(135deg, rgba(30, 41, 59, 1), rgba(15, 23, 42, 1));
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  .dark .action-card:hover {
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.4);
   }
 
-  /* Animación de entrada escalonada mejorada */
-  .app-card:nth-child(1) { animation-delay: 0.05s; }
-  .app-card:nth-child(2) { animation-delay: 0.1s; }
-  .app-card:nth-child(3) { animation-delay: 0.15s; }
-  .app-card:nth-child(4) { animation-delay: 0.2s; }
-  .app-card:nth-child(5) { animation-delay: 0.25s; }
-  .app-card:nth-child(6) { animation-delay: 0.3s; }
-  .app-card:nth-child(7) { animation-delay: 0.35s; }
-  .app-card:nth-child(8) { animation-delay: 0.4s; }
-  .app-card:nth-child(9) { animation-delay: 0.45s; }
-  .app-card:nth-child(10) { animation-delay: 0.5s; }
+  /* Card accent colors */
+  .card-workspace { --card-accent: #6366f1; --card-accent-end: #818cf8; }
+  .card-settings { --card-accent: #64748b; --card-accent-end: #94a3b8; }
+  .card-modules { --card-accent: #8b5cf6; --card-accent-end: #a78bfa; }
 
-  /* Efecto de pulso sutil en los iconos - reducido para evitar desbordes */
-  .module-icon {
-    animation: float 4s ease-in-out infinite;
+  /* CTA Button */
+  .cta-button {
+    transition: all 0.2s ease;
   }
 
-  .app-card-wrapper:nth-child(1) .module-icon { animation-delay: 0s; }
-  .app-card-wrapper:nth-child(2) .module-icon { animation-delay: 0.2s; }
-  .app-card-wrapper:nth-child(3) .module-icon { animation-delay: 0.4s; }
-  .app-card-wrapper:nth-child(4) .module-icon { animation-delay: 0.6s; }
-  .app-card-wrapper:nth-child(5) .module-icon { animation-delay: 0.8s; }
-  .app-card-wrapper:nth-child(6) .module-icon { animation-delay: 1s; }
-  .app-card-wrapper:nth-child(7) .module-icon { animation-delay: 1.2s; }
-  .app-card-wrapper:nth-child(8) .module-icon { animation-delay: 1.4s; }
-  .app-card-wrapper:nth-child(9) .module-icon { animation-delay: 1.6s; }
-  .app-card-wrapper:nth-child(10) .module-icon { animation-delay: 1.8s; }
-
-  /* Sistema de colores vibrantes por módulo */
-  .module-icon[data-icon-color="orange"] {
-    background: linear-gradient(135deg, #fb923c, #f97316, #ea580c);
-  }
-  .module-icon[data-icon-color="green"] {
-    background: linear-gradient(135deg, #4ade80, #22c55e, #16a34a);
-  }
-  .module-icon[data-icon-color="purple"] {
-    background: linear-gradient(135deg, #a78bfa, #8b5cf6, #7c3aed);
-  }
-  .module-icon[data-icon-color="blue"] {
-    background: linear-gradient(135deg, #60a5fa, #3b82f6, #2563eb);
-  }
-  .module-icon[data-icon-color="red"] {
-    background: linear-gradient(135deg, #f87171, #ef4444, #dc2626);
-  }
-  .module-icon[data-icon-color="teal"] {
-    background: linear-gradient(135deg, #5eead4, #14b8a6, #0d9488);
-  }
-  .module-icon[data-icon-color="emerald"] {
-    background: linear-gradient(135deg, #6ee7b7, #10b981, #059669);
-  }
-  .module-icon[data-icon-color="indigo"] {
-    background: linear-gradient(135deg, #818cf8, #6366f1, #4f46e5);
-  }
-  .module-icon[data-icon-color="pink"] {
-    background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
-  }
-  .module-icon[data-icon-color="gray"] {
-    background: linear-gradient(135deg, #94a3b8, #64748b, #475569);
+  .cta-button:hover {
+    transform: translateX(4px);
   }
 
-  /* Colores hover para nombres */
-  .app-card-wrapper:hover .module-name[data-name-color="orange"] {
-    color: #f97316;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="green"] {
-    color: #22c55e;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="purple"] {
-    color: #8b5cf6;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="blue"] {
-    color: #3b82f6;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="red"] {
-    color: #ef4444;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="teal"] {
-    color: #14b8a6;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="emerald"] {
-    color: #10b981;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="indigo"] {
-    color: #6366f1;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="pink"] {
-    color: #ec4899;
-  }
-  .app-card-wrapper:hover .module-name[data-name-color="gray"] {
-    color: #64748b;
+  .cta-button svg {
+    transition: transform 0.2s ease;
   }
 
-  /* Badges vibrantes */
-  .module-badge[data-badge-color="orange"] {
-    background: linear-gradient(135deg, #fed7aa, #fdba74);
-    color: #9a3412;
-  }
-  .module-badge[data-badge-color="green"] {
-    background: linear-gradient(135deg, #bbf7d0, #86efac);
-    color: #166534;
-  }
-  .module-badge[data-badge-color="purple"] {
-    background: linear-gradient(135deg, #e9d5ff, #d8b4fe);
-    color: #6b21a8;
-  }
-  .module-badge[data-badge-color="blue"] {
-    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-    color: #1e40af;
-  }
-  .module-badge[data-badge-color="red"] {
-    background: linear-gradient(135deg, #fee2e2, #fecaca);
-    color: #991b1b;
-  }
-  .module-badge[data-badge-color="teal"] {
-    background: linear-gradient(135deg, #ccfbf1, #99f6e4);
-    color: #134e4a;
-  }
-  .module-badge[data-badge-color="emerald"] {
-    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-    color: #065f46;
-  }
-  .module-badge[data-badge-color="indigo"] {
-    background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
-    color: #3730a3;
-  }
-  .module-badge[data-badge-color="pink"] {
-    background: linear-gradient(135deg, #fce7f3, #fbcfe8);
-    color: #831843;
-  }
-  .module-badge[data-badge-color="gray"] {
-    background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-    color: #334155;
+  .cta-button:hover svg {
+    transform: translateX(2px);
   }
 
-  .dark .module-badge[data-badge-color="orange"] {
-    background: linear-gradient(135deg, rgba(251, 146, 60, 0.3), rgba(249, 115, 22, 0.2));
-    color: #fdba74;
+  /* Live dot */
+  .live-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
   }
-  .dark .module-badge[data-badge-color="green"] {
-    background: linear-gradient(135deg, rgba(74, 222, 128, 0.3), rgba(34, 197, 94, 0.2));
-    color: #86efac;
+
+  /* Icon containers */
+  .icon-container {
+    transition: transform 0.3s ease;
   }
-  .dark .module-badge[data-badge-color="purple"] {
-    background: linear-gradient(135deg, rgba(167, 139, 250, 0.3), rgba(139, 92, 246, 0.2));
-    color: #c4b5fd;
+
+  .action-card:hover .icon-container {
+    transform: scale(1.1);
   }
-  .dark .module-badge[data-badge-color="blue"] {
-    background: linear-gradient(135deg, rgba(96, 165, 250, 0.3), rgba(59, 130, 246, 0.2));
-    color: #93c5fd;
-  }
-  .dark .module-badge[data-badge-color="red"] {
-    background: linear-gradient(135deg, rgba(248, 113, 113, 0.3), rgba(239, 68, 68, 0.2));
-    color: #fca5a5;
-  }
-  .dark .module-badge[data-badge-color="teal"] {
-    background: linear-gradient(135deg, rgba(94, 234, 212, 0.3), rgba(20, 184, 166, 0.2));
-    color: #5eead4;
-  }
-  .dark .module-badge[data-badge-color="emerald"] {
-    background: linear-gradient(135deg, rgba(110, 231, 183, 0.3), rgba(16, 185, 129, 0.2));
-    color: #6ee7b7;
-  }
-  .dark .module-badge[data-badge-color="indigo"] {
-    background: linear-gradient(135deg, rgba(129, 140, 248, 0.3), rgba(99, 102, 241, 0.2));
-    color: #a5b4fc;
-  }
-  .dark .module-badge[data-badge-color="pink"] {
-    background: linear-gradient(135deg, rgba(244, 114, 182, 0.3), rgba(236, 72, 153, 0.2));
-    color: #f9a8d4;
-  }
-  .dark .module-badge[data-badge-color="gray"] {
-    background: linear-gradient(135deg, rgba(148, 163, 184, 0.3), rgba(100, 116, 139, 0.2));
-    color: #cbd5e1;
+
+  .hero-card:hover .icon-container {
+    transform: scale(1.1) rotate(3deg);
   }
 </style>
 {% endblock %}
 
 {% block admin_content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+  
   <!-- Header Section -->
-  <div class="mb-8 fade-in-up">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-      <!-- Saludo -->
+  <header class="mb-10 fade-in-up">
+    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+      <!-- Saludo y contexto -->
       <div>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-          {% blocktrans with name=user.nombre_completo|default:session_user.nombre_completo|default:"Usuario" %}👋 Hola, {{ name }}{% endblocktrans %}
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3">
+          {% blocktrans with name=user.nombre_completo|default:session_user.nombre_completo|default:"Usuario" %}Hola, {{ name }}{% endblocktrans %} 👋
         </h1>
-        <div class="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
           {% if empresa_activa %}
-            <span class="flex items-center gap-1.5">
-              <span class="material-icons text-base">business</span>
-              <span>{{ empresa_activa.nombre }}</span>
+            <span class="flex items-center gap-1.5 font-medium text-gray-800 dark:text-gray-200">
+              <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+              </svg>
+              {{ empresa_activa.nombre }}
             </span>
           {% endif %}
           {% if branch_activa %}
             <span class="flex items-center gap-1.5">
-              <span class="material-icons text-base">location_on</span>
-              <span>{{ branch_activa.name }}</span>
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              {{ branch_activa.name }}
             </span>
           {% endif %}
-        </div>
-      </div>
-
-      <!-- Búsqueda Global -->
-      <div class="relative w-full sm:w-80" id="search-container">
-        <div class="relative">
-          <input
-            type="text"
-            id="module-search"
-            placeholder="{% trans 'Buscar módulos...' %}"
-            class="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent search-input text-sm"
-          />
-          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <span class="material-icons text-gray-400 dark:text-gray-500 text-xl">search</span>
-          </div>
-          <div class="absolute inset-y-0 right-0 pr-3 flex items-center hidden" id="search-clear">
-            <button type="button" id="clear-search" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <span class="material-icons text-xl">close</span>
-            </button>
-          </div>
+          <span class="flex items-center gap-1.5" id="current-datetime">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span id="datetime-text">--</span>
+          </span>
         </div>
       </div>
     </div>
-  </div>
+  </header>
 
-  <!-- Módulos Grid -->
-  <div class="fade-in-up" style="animation-delay: 0.1s">
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-      {% trans "Todos los Módulos" %}
-    </h2>
-
-    <div class="modules-grid" id="modules-grid">
-      {% for app in apps_menu %}
-        <a 
-          href="{{ app.url }}" 
-          class="app-card-wrapper block relative group"
-          data-module-name="{{ app.nombre|lower }}"
-          data-module-id="{{ app.id|lower }}"
-        >
-          <div class="module-card" data-module-color="{{ app.color }}">
-            <!-- Icono del módulo con gradiente vibrante -->
-            <div class="module-icon mb-5 shadow-lg" data-icon-color="{{ app.color }}">
-              {% if app.icono_svg %}
-                <div class="text-white dark:text-white relative z-10" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">
-                  {{ app.icono_svg|safe }}
-                </div>
-              {% else %}
-                <span class="material-icons text-4xl text-white dark:text-white relative z-10" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">apps</span>
-              {% endif %}
+  <!-- Hero Card: Reports -->
+  <section class="mb-8 fade-in-up fade-in-up-delay-1">
+    <a href="{% url 'reports:catalog' %}" class="block hero-card rounded-3xl p-8 md:p-10 shadow-xl group">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div class="flex-1">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="icon-container w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+              <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+              </svg>
             </div>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-200 live-dot"></span>
+              <span class="text-xs font-medium text-white/80 uppercase tracking-wider">{% trans "Centro de Analítica" %}</span>
+            </div>
+          </div>
+          
+          <h2 class="text-2xl md:text-3xl font-bold text-white mb-2">
+            {% trans "Reports" %}
+          </h2>
+          <p class="text-white/80 text-base md:text-lg max-w-xl">
+            {% trans "Explora dashboards interactivos, KPIs en tiempo real y métricas de negocio para tomar decisiones informadas." %}
+          </p>
+        </div>
+        
+        <div class="flex-shrink-0">
+          <span class="cta-button inline-flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur rounded-full text-white font-semibold text-sm transition-all">
+            {% trans "Ver reportes" %}
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </a>
+  </section>
 
-            <!-- Nombre del módulo -->
-            <h3 class="module-name text-lg font-bold text-gray-900 dark:text-white mb-2" data-name-color="{{ app.color }}">
+  <!-- Secondary Cards Grid -->
+  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+    
+    <!-- Workspace Card -->
+    <a href="{% url 'reports:workspace' %}" class="action-card card-workspace rounded-2xl p-6 group fade-in-up fade-in-up-delay-2">
+      <div class="flex items-start gap-4">
+        <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">
+            {% trans "Workspace" %}
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            {% trans "Tu panel personalizado con los reportes que más usas." %}
+          </p>
+          <span class="cta-button inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-semibold text-sm">
+            {% trans "Abrir workspace" %}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </a>
+
+    {% for app in apps_menu %}
+      {% if app.id == "settings" %}
+      <!-- Settings Card -->
+      <a href="{{ app.url }}" class="action-card card-settings rounded-2xl p-6 group fade-in-up fade-in-up-delay-3">
+        <div class="flex items-start gap-4">
+          <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center shadow-lg shadow-slate-500/30">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">
               {{ app.nombre }}
             </h3>
-            
-            <!-- ID del módulo (oculto para búsqueda) -->
-            <span class="module-id hidden">{{ app.id }}</span>
-
-            <!-- Indicador de submenús con badge vibrante -->
-            {% if app.submenus %}
-              <div class="mt-auto pt-3">
-                <span class="module-badge inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm" data-badge-color="{{ app.color }}">
-                  <span class="material-icons text-sm mr-1">folder</span>
-                  {{ app.submenus|length }} {% trans "sección" %}{{ app.submenus|length|pluralize }}
-                </span>
-              </div>
-            {% endif %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              {% trans "Configura usuarios, permisos y preferencias del sistema." %}
+            </p>
+            <span class="cta-button inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-semibold text-sm">
+              {% trans "Ir a configuración" %}
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+              </svg>
+            </span>
           </div>
-        </a>
-      {% empty %}
-        <div class="col-span-full text-center py-12">
-          <span class="material-icons text-gray-300 dark:text-gray-600 text-6xl mb-4 block">apps</span>
-          <p class="text-gray-500 dark:text-gray-400 text-lg">
-            {% trans "No hay módulos disponibles" %}
-          </p>
-          <p class="text-gray-400 dark:text-gray-500 text-sm mt-2">
-            {% trans "Contacta al administrador para obtener acceso" %}
-          </p>
         </div>
-      {% endfor %}
-    </div>
-  </div>
+      </a>
+      {% endif %}
+
+      {% if app.id == "module_management" %}
+      <!-- Module Management Card -->
+      <a href="{{ app.url }}" class="action-card card-modules rounded-2xl p-6 group fade-in-up fade-in-up-delay-4">
+        <div class="flex items-start gap-4">
+          <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">
+              {{ app.nombre }}
+            </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              {% trans "Administra módulos activos y funcionalidades del sistema." %}
+            </p>
+            <span class="cta-button inline-flex items-center gap-1.5 text-violet-600 dark:text-violet-400 font-semibold text-sm">
+              {% trans "Gestionar módulos" %}
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+              </svg>
+            </span>
+          </div>
+        </div>
+      </a>
+      {% endif %}
+    {% endfor %}
+  </section>
+
+  <!-- Quick tip / Help section (opcional, sutil) -->
+  <footer class="text-center text-sm text-gray-400 dark:text-gray-500 fade-in-up fade-in-up-delay-4">
+    <p>
+      💡 <span class="text-gray-500 dark:text-gray-400">{% trans "Tip:" %}</span> 
+      {% trans "Guarda tus reportes favoritos en el Workspace para acceder más rápido." %}
+    </p>
+  </footer>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  const searchInput = document.getElementById('module-search');
-  const searchClear = document.getElementById('search-clear');
-  const clearButton = document.getElementById('clear-search');
-  const modulesGrid = document.getElementById('modules-grid');
-  const moduleCards = document.querySelectorAll('.app-card-wrapper');
+// Actualizar fecha/hora en tiempo real (solo frontend)
+function updateDateTime() {
+  const el = document.getElementById('datetime-text');
+  if (!el) return;
+  
+  const now = new Date();
+  const options = { 
+    weekday: 'long', 
+    day: 'numeric', 
+    month: 'short',
+    hour: '2-digit', 
+    minute: '2-digit'
+  };
+  
+  // Capitalizar primera letra del día
+  let formatted = now.toLocaleDateString('es-ES', options);
+  formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  
+  el.textContent = formatted;
+}
 
-  // Animar cards al cargar
-  function animateCards() {
-    moduleCards.forEach((card, index) => {
-      card.style.animationDelay = `${index * 0.05}s`;
-      card.classList.add('app-card');
-    });
-  }
-
-  // Filtrar módulos
-  function filterModules(query) {
-    const searchTerm = query.toLowerCase().trim();
-    let visibleCount = 0;
-
-    moduleCards.forEach((card) => {
-      const moduleName = card.querySelector('.module-name')?.textContent?.toLowerCase() || '';
-      const moduleId = card.getAttribute('data-module-id') || '';
-      const matches = !searchTerm || 
-                    moduleName.includes(searchTerm) || 
-                    moduleId.includes(searchTerm);
-      
-      if (matches) {
-        card.style.display = 'block';
-        card.style.animationDelay = `${visibleCount * 0.05}s`;
-        visibleCount++;
-      } else {
-        card.style.display = 'none';
-      }
-    });
-
-    // Mostrar/ocultar botón de limpiar
-    if (searchTerm) {
-      searchClear.classList.remove('hidden');
-    } else {
-      searchClear.classList.add('hidden');
-    }
-  }
-
-  // Event listeners
-  if (searchInput) {
-    searchInput.addEventListener('input', function(e) {
-      filterModules(e.target.value);
-    });
-
-    clearButton.addEventListener('click', function() {
-      searchInput.value = '';
-      filterModules('');
-      searchInput.focus();
-    });
-  }
-
-  // Atajos de teclado
-  document.addEventListener('keydown', function(e) {
-    // Cmd/Ctrl + K para enfocar búsqueda
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.select();
-      }
-    }
-    // Escape para limpiar búsqueda
-    if (e.key === 'Escape' && document.activeElement === searchInput) {
-      searchInput.value = '';
-      filterModules('');
-      searchInput.blur();
-    }
-  });
-
-  // Inicializar animaciones
-  animateCards();
-});
+// Actualizar inmediatamente y cada minuto
+updateDateTime();
+setInterval(updateDateTime, 60000);
 </script>
 {% endblock %}

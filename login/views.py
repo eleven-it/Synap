@@ -36,14 +36,16 @@ def login_view(request):
             password = data.get("password", "").strip()
             base_empresa = data.get("base_empresa", "").strip()
             server = data.get("server", "").strip()
-            port = data.get("port", "3306").strip()
+            # Usar puerto del .env si no se envía (evita "Unknown database" por conectar al puerto equivocado)
+            default_port = str(settings.DATABASES["mysql"].get("PORT", "3306"))
+            port = data.get("port", default_port).strip() or default_port
             
             if not cod_usuario or not password or not base_empresa:
                 return JsonResponse({
                     "error": "Usuario, contraseña y empresa son requeridos"
                 }, status=400)
             
-            # Si se proporciona servidor diferente, crear nueva instancia
+            # Si se proporciona servidor, usar también el puerto configurado
             if server:
                 auth_service = AdministraNETAuth(server=server, port=port)
             
