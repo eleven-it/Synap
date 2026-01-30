@@ -174,8 +174,6 @@ def get_usuario_extendiendo_desde_sesion(request):
                         cursor.close()
                         conn.close()
                     except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
                         logger.warning(f"Error al obtener permisos desde MySQL para puesto {id_puesto}: {e}")
                 
                 # Agregar permisos de Synap (Reports) para:

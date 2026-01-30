@@ -638,105 +638,124 @@ function deleteReport(slug, name) {
     });
 }
 
-// Función para exportar datos (completamente en frontend, usando endpoints GET simples)
+// Función para exportar datos (usa backend cuando está disponible)
 async function exportData(type) {
     showProgressModal('Preparando exportación...');
     
     try {
-        let exportData = {
+        let exportPayload = {
             version: "1.0.0",
             export_type: type === "all" ? "full_export" : type,
             exported_at: new Date().toISOString()
         };
         
-        if (type === "reports" || type === "all") {
-            updateProgressModal('Obteniendo reportes...');
-            
-            const reports = await exportReportsFromFrontend();
-            exportData.reports = reports.reports || [];
-            exportData.widgets = reports.widgets || {};
-            
-            if (exportData.reports.length === 0 && type === "reports") {
-                hideProgressModal();
-                showToast('No hay reportes para exportar', 'warning', 4000);
-                return;
+        if (type === "all") {
+            updateProgressModal('Exportando todo desde el servidor...');
+            try {
+                const fullResponse = await fetch('{% url "reports-api:reports-builder-export-import" %}?type=all', {
+                    method: 'GET',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                if (fullResponse.ok) {
+                    exportPayload = await fullResponse.json();
+                    if (!exportPayload.reports) exportPayload.reports = [];
+                    if (!exportPayload.widgets) exportPayload.widgets = {};
+                    if (!exportPayload.learned_relationships) exportPayload.learned_relationships = [];
+                } else throw new Error((await fullResponse.json().catch(() => ({}))).detail || 'Error');
+            } catch (err) {
+                console.warn('Export completo falló, exportando por partes:', err);
             }
         }
         
-        if (type === "relationships" || type === "all") {
+        if (type === "reports" || (type === "all" && !exportPayload.reports?.length)) {
+            if (type === "reports" || !exportPayload.reports?.length) {
+                updateProgressModal('Obteniendo reportes...');
+                const selectedCheckboxes = document.querySelectorAll('.report-checkbox:checked');
+                const slugsParam = selectedCheckboxes.length > 0
+                    ? Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-report-slug')).filter(Boolean).join(',')
+                    : '';
+                
+                try {
+                    let exportUrl = '{% url "reports-api:reports-builder-export-import" %}?type=reports';
+                    if (slugsParam) exportUrl += '&slugs=' + encodeURIComponent(slugsParam);
+                    
+                    const res = await fetch(exportUrl, {
+                        method: 'GET',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        exportPayload.reports = data.reports || [];
+                        exportPayload.widgets = data.widgets || {};
+                    } else throw new Error((await res.json().catch(() => ({}))).detail || 'Error');
+                } catch (err) {
+                    console.warn('Backend export falló, usando frontend:', err);
+                    const slugsArr = slugsParam ? slugsParam.split(',').map(s => s.trim()).filter(Boolean) : null;
+                    const reports = await exportReportsFromFrontend(slugsArr && slugsArr.length ? slugsArr : null);
+                    exportPayload.reports = reports.reports || [];
+                    exportPayload.widgets = reports.widgets || {};
+                }
+                
+                if (exportPayload.reports.length === 0 && type === "reports") {
+                    hideProgressModal();
+                    showToast('No hay reportes para exportar', 'warning', 4000);
+                    return;
+                }
+            }
+        }
+        
+        if ((type === "relationships" || type === "all") && exportPayload.learned_relationships === undefined) {
             updateProgressModal('Obteniendo relaciones aprendidas...');
-            
             try {
-                const relsUrl = '{% url "reports-api:reports-builder-learned-relationships" %}';
-                const relsResponse = await fetch(relsUrl, {
+                const relsResponse = await fetch('{% url "reports-api:reports-builder-learned-relationships" %}', {
                     method: 'GET',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
                     credentials: 'same-origin'
                 });
-                
-                if (relsResponse.ok) {
-                    const relsData = await relsResponse.json();
-                    exportData.learned_relationships = relsData.relationships || [];
-                } else {
-                    exportData.learned_relationships = [];
-                }
-            } catch (error) {
-                console.error('Error obteniendo relaciones:', error);
-                exportData.learned_relationships = [];
+                exportPayload.learned_relationships = relsResponse.ok ? (await relsResponse.json()).relationships || [] : [];
+            } catch (e) {
+                exportPayload.learned_relationships = [];
             }
         }
         
-        if (type === "schema" || type === "all") {
-            updateProgressModal('Leyendo schema metadata de la empresa activa...');
-            
+        if ((type === "schema" || type === "all") && exportPayload.schema_metadata === undefined) {
+            updateProgressModal('Leyendo schema metadata...');
             try {
-                // El endpoint obtendrá automáticamente base_empresa de la sesión/empresa activa
-                const schemaUrl = '{% url "reports-api:reports-builder-schema-metadata" %}';
-                const schemaResponse = await fetch(schemaUrl, {
+                const schemaResponse = await fetch('{% url "reports-api:reports-builder-schema-metadata" %}', {
                     method: 'GET',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
                     credentials: 'same-origin'
                 });
-                
                 if (schemaResponse.ok) {
-                    const schemaData = await schemaResponse.json();
-                    exportData.schema_metadata = schemaData.tables || {};
-                    exportData.base_empresa = schemaData.base_empresa;
-                } else {
-                    const errorData = await schemaResponse.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `Error ${schemaResponse.status}: ${schemaResponse.statusText}`);
-                }
-            } catch (error) {
-                console.error('Error obteniendo schema:', error);
-                hideProgressModal();
-                showToast(`Error obteniendo schema: ${error.message}`, 'error', 5000);
-                exportData.schema_metadata = {};
+                    const d = await schemaResponse.json();
+                    exportPayload.schema_metadata = d.tables || {};
+                    exportPayload.base_empresa = d.base_empresa;
+                } else throw new Error((await schemaResponse.json().catch(() => ({}))).detail || 'Error');
+            } catch (e) {
+                console.warn('Error obteniendo schema:', e);
+                exportPayload.schema_metadata = {};
             }
         }
         
-        // Generar y descargar archivo JSON
         updateProgressModal('Guardando archivo JSON...');
-        
-        // Pequeño delay para que el usuario vea el mensaje de guardado
         await new Promise(resolve => setTimeout(resolve, 300));
         
         const filename = `synap_export_${type}_${new Date().toISOString().split('T')[0]}.json`;
-        downloadJSON(exportData, filename);
+        downloadJSON(exportPayload, filename);
         
         hideProgressModal();
         
         let message = 'Exportación completada exitosamente';
-        if (exportData.reports) message += `: ${exportData.reports.length} reporte(s)`;
-        if (exportData.learned_relationships) message += `, ${exportData.learned_relationships.length} relación(es)`;
-        if (exportData.schema_metadata) {
-            const tableCount = Object.keys(exportData.schema_metadata).length;
-            message += `, ${tableCount} tabla(s)`;
+        if (exportPayload.reports?.length) message += `: ${exportPayload.reports.length} reporte(s)`;
+        if (exportPayload.learned_relationships?.length) message += `, ${exportPayload.learned_relationships.length} relación(es)`;
+        if (exportPayload.schema_metadata && Object.keys(exportPayload.schema_metadata).length) {
+            message += `, ${Object.keys(exportPayload.schema_metadata).length} tabla(s)`;
         }
         
         showToast(message, 'success', 5000);
@@ -748,21 +767,24 @@ async function exportData(type) {
     }
 }
 
-// Función para exportar reportes desde el frontend
-async function exportReportsFromFrontend() {
+// Función para exportar reportes desde el frontend (usa API backend para mayor fiabilidad)
+async function exportReportsFromFrontend(slugsFilter = null) {
     const reports = [];
     const widgets = {};
     
-    // Obtener lista de reportes desde la página
-    const reportRows = document.querySelectorAll('tbody tr');
+    // Obtener lista de slugs: seleccionados, o todos los visibles en la tabla
+    let slugsToExport = [];
+    if (slugsFilter && slugsFilter.length > 0) {
+        slugsToExport = slugsFilter;
+    } else {
+        const reportRows = document.querySelectorAll('.builder-report-row');
+        for (const row of reportRows) {
+            const slug = row.getAttribute('data-report-slug');
+            if (slug) slugsToExport.push(slug);
+        }
+    }
     
-    for (const row of reportRows) {
-        const slugCell = row.querySelector('td:nth-child(2)');
-        if (!slugCell) continue;
-        
-        const slug = slugCell.textContent.trim();
-        if (!slug) continue;
-        
+    for (const slug of slugsToExport) {
         try {
             // Obtener configuración completa del reporte
             const configUrl = '{% url "reports-api:reports-builder-config" slug="PLACEHOLDER" %}'.replace('PLACEHOLDER', slug);

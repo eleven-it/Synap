@@ -26,6 +26,7 @@ class MetricSchema:
     data_type: Literal["number", "currency", "percentage", "integer"]
     role: Optional[Literal["value", "aux"]] = "value"  # value = métrica principal, aux = de apoyo
     format: Optional[str] = None  # ej: "currency:ARS", "percent:2", "number:0"
+    show_in_kpi: bool = True  # Si se muestra en las tarjetas KPI del resumen
 
 
 @dataclass
@@ -171,7 +172,7 @@ class ReportSchemaService:
         
         return None
     
-    def _build_metric_schema(self, name: str, metric_def: MetricDefinition, custom_format_info: Dict[str, Any] = None) -> MetricSchema:
+    def _build_metric_schema(self, name: str, metric_def: MetricDefinition, custom_format_info: Dict[str, Any] = None, show_in_kpi: bool = True) -> MetricSchema:
         """Construye un MetricSchema desde una MetricDefinition."""
         # Si hay formato personalizado, usarlo; si no, verificar si está en la definición de la métrica
         format_type = None
@@ -225,7 +226,8 @@ class ReportSchemaService:
             label=label,
             expression=metric_def.expression,
             data_type=data_type,
-            role=role
+            role=role,
+            show_in_kpi=show_in_kpi
         )
         
         # Generar formato (usar el personalizado si existe, si no generar automáticamente)
@@ -426,8 +428,8 @@ class ReportSchemaService:
             # Mapear campos legacy a nombres reales de dimensiones
             if series_dimension and available_dimensions:
                 original_series_dim = series_dimension
-                # Si group_field es "sucursal", mapear a "nombre_sucursal" si existe
-                if series_dimension == "sucursal":
+                # Si group_field/serie es "sucursal" o "Sucursal", mapear a "nombre_sucursal" si existe
+                if str(series_dimension).lower() == "sucursal":
                     sucursal_dim = next((d for d in available_dimensions if 'sucursal' in d.name.lower() and 'nombre' in d.name.lower()), None)
                     if sucursal_dim:
                         series_dimension = sucursal_dim.name
@@ -631,7 +633,9 @@ class ReportSchemaService:
                         metric_def = report_config.metrics[field_name]
                         # Obtener información de formato personalizada si existe
                         custom_format = self._get_metric_custom_format(report, field_name, report_config)
-                        metrics.append(self._build_metric_schema(field_name, metric_def, custom_format))
+                        # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                        show_in_kpi = config.get('metrics', {}).get(field_name, {}).get('show_in_kpi', True)
+                        metrics.append(self._build_metric_schema(field_name, metric_def, custom_format, show_in_kpi))
                         processed_names.add(field_name)
                 
                 # Agregar campos que no están en el orden guardado (nuevos campos)
@@ -644,7 +648,9 @@ class ReportSchemaService:
                     if name not in processed_names:
                         # Obtener información de formato personalizada si existe
                         custom_format = self._get_metric_custom_format(report, name, report_config)
-                        metrics.append(self._build_metric_schema(name, metric_def, custom_format))
+                        # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                        show_in_kpi = config.get('metrics', {}).get(name, {}).get('show_in_kpi', True)
+                        metrics.append(self._build_metric_schema(name, metric_def, custom_format, show_in_kpi))
             else:
                 # Si no hay orden guardado, usar el orden por defecto (dimensiones primero, luego métricas)
                 for name, dim_def in report_config.dimensions.items():
@@ -654,7 +660,9 @@ class ReportSchemaService:
                 for name, metric_def in report_config.metrics.items():
                     # Obtener información de formato personalizada si existe
                     custom_format = self._get_metric_custom_format(report, name, report_config)
-                    metrics.append(self._build_metric_schema(name, metric_def, custom_format))
+                    # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                    show_in_kpi = config.get('metrics', {}).get(name, {}).get('show_in_kpi', True)
+                    metrics.append(self._build_metric_schema(name, metric_def, custom_format, show_in_kpi))
             
             # IMPORTANTE: Solo generar widgets por defecto si NO hay widgets manuales guardados
             # Si el usuario ya tiene widgets guardados, NO generar nuevos automáticamente
@@ -805,7 +813,9 @@ class ReportSchemaService:
                         metric_def = report_config.metrics[field_name]
                         # Obtener información de formato personalizada si existe
                         custom_format = self._get_metric_custom_format(report, field_name, report_config)
-                        metrics.append(self._build_metric_schema(field_name, metric_def, custom_format))
+                        # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                        show_in_kpi = config_dict.get('metrics', {}).get(field_name, {}).get('show_in_kpi', True)
+                        metrics.append(self._build_metric_schema(field_name, metric_def, custom_format, show_in_kpi))
                         processed_names.add(field_name)
                 
                 # Agregar campos que no están en el orden guardado (nuevos campos)
@@ -818,7 +828,9 @@ class ReportSchemaService:
                     if name not in processed_names:
                         # Obtener información de formato personalizada si existe
                         custom_format = self._get_metric_custom_format(report, name, report_config)
-                        metrics.append(self._build_metric_schema(name, metric_def, custom_format))
+                        # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                        show_in_kpi = config_dict.get('metrics', {}).get(name, {}).get('show_in_kpi', True)
+                        metrics.append(self._build_metric_schema(name, metric_def, custom_format, show_in_kpi))
             else:
                 # Si no hay orden guardado, usar el orden por defecto (dimensiones primero, luego métricas)
                 for name, dim_def in report_config.dimensions.items():
@@ -828,7 +840,9 @@ class ReportSchemaService:
                 for name, metric_def in report_config.metrics.items():
                     # Obtener información de formato personalizada si existe
                     custom_format = self._get_metric_custom_format(report, name, report_config)
-                    metrics.append(self._build_metric_schema(name, metric_def, custom_format))
+                    # Leer show_in_kpi del config original (default True para retrocompatibilidad)
+                    show_in_kpi = config_dict.get('metrics', {}).get(name, {}).get('show_in_kpi', True)
+                    metrics.append(self._build_metric_schema(name, metric_def, custom_format, show_in_kpi))
             
             # Para preview: incluir widgets guardados del reporte si existen
             # Esto permite que el preview muestre los widgets configurados por el usuario

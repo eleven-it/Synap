@@ -80,7 +80,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pending_orders' or report.slug == 'sales_summary' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pending_orders' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -133,10 +133,13 @@
     <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-10">
         <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow">
             <div id="report-summary" data-summary-container class="px-6 sm:px-10 py-6 border-b border-slate-100 dark:border-slate-800 {% if is_declarative %}{% else %}hidden{% endif %}">
-                <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-100 uppercase tracking-wide mb-4">
-                    <span>Resumen</span>
-                    <span id="summary-period" class="normal-case text-slate-600 dark:text-slate-400 ml-2 font-normal"></span>
-                </h2>
+                <div class="flex flex-row flex-wrap justify-between items-center gap-2 mb-4">
+                    <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-100 uppercase tracking-wide">
+                        <span>Resumen</span>
+                        <span id="summary-period" class="normal-case text-slate-600 dark:text-slate-400 ml-2 font-normal"></span>
+                    </h2>
+                    <div id="last-update-time" class="text-right text-xs text-slate-600 dark:text-slate-400"></div>
+                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-summary-grid></div>
             </div>
 
@@ -149,7 +152,7 @@
                         <div id="period-filters-container" class="hidden lg:col-span-6">
                             <!-- Se generará dinámicamente si hay filtros de fecha -->
                             </div>
-                        {% if report.slug == 'ventas_netas' or report.slug == 'uninvoiced_remitos' %}
+                        {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
                         <!-- Fila 2: Punto de venta, Sucursales -->
                         <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 sm:col-span-3">
                             Punto de venta
@@ -270,6 +273,9 @@
                     {% else %}
                         <!-- Reportes Legacy: Usar templates unificados -->
                         {% include "reports/includes/filters_period.html" %}
+                        {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
+                        {% include "reports/includes/filters_sucursal_punto_venta.html" %}
+                        {% endif %}
                         {% include "reports/includes/filters_interval.html" %}
                         {% comment %}
                         Nota: Los campos "Unidad de negocio" y "Canal" se removieron porque no son parte
@@ -286,6 +292,10 @@
                  data-report-refresh-interval="{{ report.refresh_interval }}"
                  data-workspace-url="{{ workspace_api_url }}"
                  data-is-declarative="{{ is_declarative|yesno:"true,false" }}">
+                {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
+                <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
+                {% endif %}
+                {% if report.slug != 'bo-stock-facturacion' %}
                 {% with widget=widgets|first %}
                 {% if widget %}
                 {% with widget_id=widget.id|stringformat:"s" %}
@@ -333,6 +343,7 @@
                 </div>
                 {% endif %}
                 {% endwith %}
+                {% endif %}
                 
                 {% if report.slug == 'cash_flow_by_account' %}
                 <!-- Sección de Tabla por Cuenta/Caja (solo para cash_flow_by_account) -->
@@ -348,6 +359,266 @@
                         <div id="by-account-table-content">
                             <div class="flex items-center justify-center py-8">
                                 <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                {% endif %}
+                
+                {% if report.slug == 'bo-stock-facturacion' %}
+                <!-- ================================================================ -->
+                <!-- SECCIÓN: BO vs Stock vs Facturación - Tabs estilo Excel          -->
+                <!-- ================================================================ -->
+                <div class="flex flex-row flex-wrap justify-between items-center gap-2 mb-4 mt-2">
+                    <p id="bo-summary-period" class="text-sm text-slate-600 dark:text-slate-400 m-0"></p>
+                    <div id="bo-last-update-time" class="text-right text-xs text-slate-600 dark:text-slate-400"></div>
+                </div>
+                <!-- KPIs Principales (clickeables) -->
+                <section id="bo-kpis-section" class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- KPI 1: TOTAL IMPORTE -->
+                    <button type="button"
+                            data-kpi-card="total_importe"
+                            data-target-tab="facturacion"
+                            class="group rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left hover:border-sky-500 dark:hover:border-sky-500 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Total Importe</span>
+                            <svg class="w-5 h-5 text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M13 7l5 5-5 5M6 12h12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div id="kpi-total-importe" class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+                            = Facturación neta + Remitos no facturados
+                        </p>
+                    </button>
+                    
+                    <!-- KPI 2: TOTAL SIN STOCK -->
+                    <button type="button"
+                            data-kpi-card="sin_stock_total"
+                            data-target-tab="detalle_sin_stock"
+                            class="group rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left hover:border-rose-500 dark:hover:border-rose-500 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Total Sin Stock</span>
+                            <svg class="w-5 h-5 text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M13 7l5 5-5 5M6 12h12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div id="kpi-sin-stock-total" class="text-2xl md:text-3xl font-bold text-rose-600 dark:text-rose-400">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+                            Backorder sin cobertura de stock
+                        </p>
+                    </button>
+                </section>
+                
+                <!-- Navegación de Tabs -->
+                <section id="bo-tabs-section" class="mt-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden">
+                    <!-- Tab Navigation -->
+                    <nav class="flex border-b border-slate-100 dark:border-slate-800 overflow-x-auto" id="bo-tabs-nav">
+                        <button type="button"
+                                data-bo-tab="resumen"
+                                class="bo-tab-btn active px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-sky-500 text-sky-600 dark:text-sky-400 bg-slate-50 dark:bg-slate-900/50">
+                            Resumen
+                        </button>
+                        <button type="button"
+                                data-bo-tab="detalle_sin_stock"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Detalle sin stock
+                        </button>
+                        <button type="button"
+                                data-bo-tab="detalle_con_stock"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Detalle con stock
+                        </button>
+                        <button type="button"
+                                data-bo-tab="detalle_con_ingreso"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Detalle con ingreso
+                        </button>
+                        <button type="button"
+                                data-bo-tab="facturacion"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Facturación
+                        </button>
+                        <button type="button"
+                                data-bo-tab="remitos"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Remitos no facturados
+                        </button>
+                        <button type="button"
+                                data-bo-tab="backorder_detalle"
+                                class="bo-tab-btn px-6 py-4 text-xs font-semibold whitespace-nowrap border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                            Backorder detalle
+                        </button>
+                    </nav>
+                    
+                    <!-- Tab Content -->
+                    <div class="p-6">
+                        <!-- TAB: Resumen (estilo Excel) -->
+                        <div id="bo-tab-resumen" class="bo-tab-content">
+                            <div id="bo-resumen-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando resumen...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Detalle sin stock -->
+                        <div id="bo-tab-detalle_sin_stock" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Detalle Sin Stock</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">BO sin cobertura (ni stock ni OC pend.). Agrupar por categoría para vista por rubro.</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-sin-stock-group-by" name="group_by" multiple class="hidden" data-bo-group-by="sin_stock">
+                                    </select>
+                                    <div id="bo-sin-stock-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-sin-stock-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-sin-stock-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-sin-stock-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Detalle con stock -->
+                        <div id="bo-tab-detalle_con_stock" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Detalle Con Stock</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">BO cubierto con stock disponible (producto)</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-con-stock-group-by" name="group_by" multiple class="hidden" data-bo-group-by="con_stock">
+                                    </select>
+                                    <div id="bo-con-stock-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-con-stock-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-con-stock-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-con-stock-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Detalle con ingreso -->
+                        <div id="bo-tab-detalle_con_ingreso" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Detalle Con Ingreso</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">BO cubierto parcialmente (ingresos / cobertura parcial)</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-con-ingreso-group-by" name="group_by" multiple class="hidden" data-bo-group-by="con_ingreso">
+                                    </select>
+                                    <div id="bo-con-ingreso-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-con-ingreso-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-con-ingreso-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-con-ingreso-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Facturación -->
+                        <div id="bo-tab-facturacion" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Detalle de Facturación</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Facturas y notas de crédito del período</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-facturacion-group-by" name="group_by" multiple class="hidden" data-bo-group-by="facturacion">
+                                    </select>
+                                    <div id="bo-facturacion-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-facturacion-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-facturacion-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-facturacion-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Remitos no facturados -->
+                        <div id="bo-tab-remitos" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Remitos No Facturados</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Remitos pendientes de facturación</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-remitos-group-by" name="group_by" multiple class="hidden" data-bo-group-by="remitos">
+                                    </select>
+                                    <div id="bo-remitos-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-remitos-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-remitos-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-remitos-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- TAB: Backorder detalle -->
+                        <div id="bo-tab-backorder_detalle" class="bo-tab-content hidden">
+                            <div class="mb-4">
+                                <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Backorder Detalle por Producto</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Análisis detallado de productos con backorder y su cobertura de stock</p>
+                            </div>
+                            <div class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 overflow-visible">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="bo-backorder-group-by" name="group_by" multiple class="hidden" data-bo-group-by="backorder">
+                                    </select>
+                                    <div id="bo-backorder-group-by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="bo-backorder-group-by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="bo-backorder-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div id="bo-backorder-content">
+                                <div class="flex items-center justify-center py-8">
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Cargando datos...</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -488,9 +759,11 @@ window.REPORT_CONFIG = {
     config: {{ report_config_json|safe }}
 };
 </script>
-<script src="{% static 'reports/vendor/d3.min.js' %}?v=20250310" defer></script>
+<script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211" defer></script>
+{% if is_declarative or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
+<script src="{% static 'reports/js/widget_engine.js' %}?v=20260211"></script>
+{% endif %}
 {% if is_declarative %}
-<script src="{% static 'reports/js/widget_engine.js' %}?v=20250310"></script>
 <script>
 // Inicializar Widget Engine para reportes declarativos
 document.addEventListener('DOMContentLoaded', function() {
@@ -560,62 +833,81 @@ document.addEventListener('DOMContentLoaded', function() {
     let reportSchema = null; // Cache del schema del reporte
     
     // Función para verificar si hay filtros de fecha definidos en el builder
+    // Soporta config.filters como array (builder) o como objeto (legacy, ej. ventas_netas: { fecha_inicio: {...}, fecha_fin: {...} })
     function hasDateFilters(reportConfig) {
         if (!reportConfig || !reportConfig.filters) return false;
-        const filters = reportConfig.filters || [];
-        return filters.some(filter => {
-            const fieldName = (filter.field || '').toLowerCase();
-            const paramName = (filter.param || '').toLowerCase();
-            return fieldName.includes('fecha') || fieldName.includes('date') ||
-                   paramName.includes('fecha') || paramName.includes('date') ||
-                   filter.operator === 'BETWEEN';
-        });
+        const filters = reportConfig.filters;
+        if (Array.isArray(filters)) {
+            return filters.some(filter => {
+                const fieldName = (filter.field || '').toLowerCase();
+                const paramName = (filter.param || '').toLowerCase();
+                return fieldName.includes('fecha') || fieldName.includes('date') ||
+                       paramName.includes('fecha') || paramName.includes('date') ||
+                       filter.operator === 'BETWEEN';
+            });
+        }
+        if (typeof filters === 'object' && filters !== null && !Array.isArray(filters)) {
+            const keys = Object.keys(filters);
+            return keys.some(key => {
+                const k = key.toLowerCase();
+                return k.includes('fecha') || k.includes('date') || k === 'fecha_inicio' || k === 'fecha_fin';
+            });
+        }
+        return false;
     }
     
     // Función para obtener los nombres de parámetros de filtros de fecha del builder
+    // Soporta config.filters como array (builder) o como objeto (legacy, ej. ventas_netas)
     function getDateFilterParams(reportConfig) {
         if (!reportConfig || !reportConfig.filters) return { inicio: null, fin: null, betweenParam: null };
-        const filters = reportConfig.filters || [];
+        const filters = reportConfig.filters;
         
-        // Buscar filtro BETWEEN (rango de fechas) - tiene prioridad
-        const betweenFilter = filters.find(f => f.operator && f.operator.toUpperCase() === 'BETWEEN');
-        if (betweenFilter) {
-            const param = betweenFilter.param || 'fecha_inicio';
-            return {
-                inicio: param, // Para los controles de fecha
-                fin: param,    // Para los controles de fecha
-                betweenParam: param, // Nombre del parámetro del filtro BETWEEN
-                isBetween: true
-            };
+        // Formato legacy: filters es un objeto { fecha_inicio: {...}, fecha_fin: {...} }
+        if (typeof filters === 'object' && filters !== null && !Array.isArray(filters)) {
+            const hasInicio = Object.prototype.hasOwnProperty.call(filters, 'fecha_inicio');
+            const hasFin = Object.prototype.hasOwnProperty.call(filters, 'fecha_fin');
+            if (hasInicio && hasFin) {
+                return { inicio: 'fecha_inicio', fin: 'fecha_fin', betweenParam: null, isBetween: false };
+            }
+            const dateKeys = Object.keys(filters).filter(k => {
+                const key = k.toLowerCase();
+                return key.includes('fecha') || key.includes('date');
+            });
+            if (dateKeys.length >= 2) {
+                const sorted = dateKeys.sort();
+                return { inicio: sorted[0], fin: sorted[1], betweenParam: null, isBetween: false };
+            }
+            if (dateKeys.length === 1) {
+                return { inicio: dateKeys[0], fin: dateKeys[0], betweenParam: null, isBetween: false };
+            }
+            return { inicio: null, fin: null, betweenParam: null };
         }
         
-        // Buscar filtros de fecha individuales
-        const dateFilters = filters.filter(filter => {
+        // Formato builder: filters es un array
+        const filtersArr = filters || [];
+        const betweenFilter = filtersArr.find(f => f.operator && f.operator.toUpperCase() === 'BETWEEN');
+        if (betweenFilter) {
+            const param = betweenFilter.param || 'fecha_inicio';
+            return { inicio: param, fin: param, betweenParam: param, isBetween: true };
+        }
+        const dateFilters = filtersArr.filter(filter => {
             const fieldName = (filter.field || '').toLowerCase();
             const paramName = (filter.param || '').toLowerCase();
             return fieldName.includes('fecha') || fieldName.includes('date') ||
                    paramName.includes('fecha') || paramName.includes('date');
         });
-        
         if (dateFilters.length >= 2) {
-            // Si hay dos filtros de fecha, usar el primero como inicio y el segundo como fin
             return {
                 inicio: dateFilters[0].param || 'fecha_inicio',
                 fin: dateFilters[1].param || 'fecha_fin',
                 betweenParam: null,
                 isBetween: false
             };
-        } else if (dateFilters.length === 1) {
-            // Si hay un solo filtro de fecha, usarlo para ambos (el usuario puede querer filtrar por una fecha específica)
-            const param = dateFilters[0].param || 'fecha';
-            return {
-                inicio: param,
-                fin: param,
-                betweenParam: null,
-                isBetween: false
-            };
         }
-        
+        if (dateFilters.length === 1) {
+            const param = dateFilters[0].param || 'fecha';
+            return { inicio: param, fin: param, betweenParam: null, isBetween: false };
+        }
         return { inicio: null, fin: null, betweenParam: null };
     }
     
@@ -662,72 +954,76 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Generar controles de período y fechas usando los nombres de parámetros del builder
-        // Si es BETWEEN, los campos se llaman igual pero se enviarán como lista
+        // Generar controles de período y fechas en una sola línea (como ventas netas): Período + Fecha desde + Fecha hasta
         periodContainer.innerHTML = `
-            <!-- Fila 1: Selector de período (botones tipo pill), Fecha desde, Fecha hasta -->
-            <div class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 lg:col-span-2">
-                <span>Período</span>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" 
-                            data-periodo="dia_actual"
-                            class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
-                        <span class="flex items-center gap-1 sm:gap-1.5">
-                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></span>
-                            <span>Día</span>
-                        </span>
-                    </button>
-                    <button type="button" 
-                            data-periodo="mes_actual"
-                            class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
-                        <span class="flex items-center gap-1 sm:gap-1.5">
-                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500"></span>
-                            <span>Mes</span>
-                        </span>
-                    </button>
-                    <button type="button" 
-                            data-periodo="año_actual"
-                            class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
-                        <span class="flex items-center gap-1 sm:gap-1.5">
-                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-500"></span>
-                            <span>Año</span>
-                        </span>
-                    </button>
-                    <button type="button" 
-                            data-periodo="personalizado"
-                            class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md active">
-                        <span class="flex items-center gap-1 sm:gap-1.5">
-                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>
-                            <span>Personalizado</span>
-                        </span>
-                    </button>
+            <div class="period-filter-container flex flex-row flex-nowrap items-end gap-4 w-full" style="display: flex !important;"
+                 data-param-inicio="${dateParams.inicio}"
+                 data-param-fin="${dateParams.fin}">
+                <!-- Período: botones Día | Mes | Año | Personalizado -->
+                <div class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                    <span>Período</span>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" 
+                                data-periodo="dia_actual"
+                                class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                            <span class="flex items-center gap-1 sm:gap-1.5">
+                                <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></span>
+                                <span>Día</span>
+                            </span>
+                        </button>
+                        <button type="button" 
+                                data-periodo="mes_actual"
+                                class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                            <span class="flex items-center gap-1 sm:gap-1.5">
+                                <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500"></span>
+                                <span>Mes</span>
+                            </span>
+                        </button>
+                        <button type="button" 
+                                data-periodo="año_actual"
+                                class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                            <span class="flex items-center gap-1 sm:gap-1.5">
+                                <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-500"></span>
+                                <span>Año</span>
+                            </span>
+                        </button>
+                        <button type="button" 
+                                data-periodo="personalizado"
+                                class="periodo-tipo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md active">
+                            <span class="flex items-center gap-1 sm:gap-1.5">
+                                <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>
+                                <span>Personalizado</span>
+                            </span>
+                        </button>
+                    </div>
+                    <select name="periodo_tipo"
+                            id="periodo_tipo"
+                            class="hidden">
+                        <option value="dia_actual">Día en curso</option>
+                        <option value="mes_actual">Mes en curso</option>
+                        <option value="año_actual">Año en curso</option>
+                        <option value="personalizado" selected>Personalizado</option>
+                    </select>
                 </div>
-                <!-- Select oculto para mantener compatibilidad con el código JavaScript -->
-                <select name="periodo_tipo"
-                        id="periodo_tipo"
-                        class="hidden">
-                    <option value="dia_actual">Día en curso</option>
-                    <option value="mes_actual">Mes en curso</option>
-                    <option value="año_actual">Año en curso</option>
-                    <option value="personalizado" selected>Personalizado</option>
-                </select>
+                <!-- Fecha desde (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
+                <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                    Fecha desde
+                    <input type="date"
+                           name="${dateParams.inicio}"
+                           id="fecha_inicio"
+                           data-param-name="${dateParams.inicio}"
+                           class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                </label>
+                <!-- Fecha hasta (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
+                <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                    Fecha hasta
+                    <input type="date"
+                           name="${dateParams.fin}"
+                           id="fecha_fin"
+                           data-param-name="${dateParams.fin}"
+                           class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                </label>
             </div>
-            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 lg:col-span-2">
-                Fecha desde
-                <input type="date"
-                       name="${dateParams.inicio}"
-                       id="fecha_inicio"
-                       data-param-name="${dateParams.inicio}"
-                       class="synap-input focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-xs">
-            </label>
-            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 lg:col-span-2">
-                Fecha hasta
-                <input type="date"
-                       name="${dateParams.fin}"
-                       id="fecha_fin"
-                       data-param-name="${dateParams.fin}"
-                       class="synap-input focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-xs">
-            </label>
         `;
         periodContainer.classList.remove('hidden');
         
@@ -741,40 +1037,35 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Inicializar eventos de los botones de período
         initializePeriodButtons();
+        // Notificar a dashboard.js para que enlace recarga y guardado al cambiar período
+        window.dispatchEvent(new CustomEvent('reportPeriodFiltersReady'));
     }
     
-    // Función para inicializar eventos de botones de período
+    // Función para inicializar botones de período (estado inicial + handlers de click).
+    // setupPeriodoTipo en dashboard.js también enlaza recarga y guardado; estos handlers aseguran
+    // que las fechas y el estado visual se actualicen al hacer click (p. ej. Mes) aunque dashboard
+    // se ejecute después o falle.
     function initializePeriodButtons() {
         const periodoButtons = document.querySelectorAll('.periodo-tipo-btn');
         const periodoSelect = document.getElementById('periodo_tipo');
-        
+        if (!periodoSelect) return;
+        updateDatesByPeriod(periodoSelect.value || 'personalizado');
         periodoButtons.forEach(btn => {
             btn.addEventListener('click', function() {
                 const periodo = this.getAttribute('data-periodo');
-                
-                // Actualizar select
                 if (periodoSelect) {
                     periodoSelect.value = periodo;
                     periodoSelect.dispatchEvent(new Event('change', { bubbles: true }));
                 }
-                
-                // Actualizar estado visual de botones
                 periodoButtons.forEach(b => {
                     b.classList.remove('border-sky-500', 'bg-sky-50', 'dark:bg-sky-900/20', 'text-sky-700', 'dark:text-sky-300', 'shadow-md', 'active');
                     b.classList.add('border-slate-300', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800', 'text-slate-700', 'dark:text-slate-300');
                 });
                 this.classList.remove('border-slate-300', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800', 'text-slate-700', 'dark:text-slate-300');
                 this.classList.add('border-sky-500', 'bg-sky-50', 'dark:bg-sky-900/20', 'text-sky-700', 'dark:text-sky-300', 'shadow-md', 'active');
-                
-                // Actualizar fechas según período
                 updateDatesByPeriod(periodo);
             });
         });
-        
-        // Inicializar fechas por defecto
-        if (periodoSelect) {
-            updateDatesByPeriod(periodoSelect.value || 'personalizado');
-        }
     }
     
     // Función para actualizar fechas según período seleccionado
@@ -806,6 +1097,62 @@ document.addEventListener('DOMContentLoaded', function() {
         
         fechaInicio.value = startDate;
         fechaFin.value = endDate;
+    }
+    
+    // Función para actualizar el label del período en el RESUMEN
+    function updateSummaryPeriodLabel() {
+        const summaryPeriod = document.getElementById("summary-period");
+        if (!summaryPeriod) return;
+
+        const fechaInicioInput = document.getElementById("fecha_inicio");
+        const fechaFinInput = document.getElementById("fecha_fin");
+
+        let fechaInicio = null;
+        let fechaFin = null;
+
+        if (fechaInicioInput && fechaInicioInput.value) {
+            fechaInicio = fechaInicioInput.value;
+        }
+        if (fechaFinInput && fechaFinInput.value) {
+            fechaFin = fechaFinInput.value;
+        }
+
+        // Fallback para filtros dinámicos si no se encuentran en los inputs principales
+        if (!fechaInicio || !fechaFin) {
+            const periodContainers = document.querySelectorAll('.period-filter-container');
+            periodContainers.forEach(container => {
+                const paramInicio = container.getAttribute('data-param-inicio') || 'fecha_inicio';
+                const paramFin = container.getAttribute('data-param-fin') || 'fecha_fin';
+                const inicioInput = container.querySelector(`input[name="${paramInicio}"], input[id*="${paramInicio}"]`);
+                const finInput = container.querySelector(`input[name="${paramFin}"], input[id*="${paramFin}"]`);
+                if (inicioInput && inicioInput.value && !fechaInicio) {
+                    fechaInicio = inicioInput.value;
+                }
+                if (finInput && finInput.value && !fechaFin) {
+                    fechaFin = finInput.value;
+                }
+            });
+        }
+
+        if (fechaInicio && fechaFin) {
+            try {
+                const fechaInicioObj = new Date(fechaInicio + 'T00:00:00');
+                const fechaFinObj = new Date(fechaFin + 'T00:00:00');
+                
+                const formatoFecha = (fecha) => {
+                    const dia = String(fecha.getDate()).padStart(2, '0');
+                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const año = fecha.getFullYear();
+                    return `${dia}-${mes}-${año}`;
+                };
+                
+                summaryPeriod.textContent = `Periodo ${formatoFecha(fechaInicioObj)} al ${formatoFecha(fechaFinObj)}`;
+            } catch (e) {
+                console.error("Error formateando fechas para el label del período:", e);
+            }
+        } else {
+            summaryPeriod.textContent = "";
+        }
     }
     
     // Función para obtener el tipo de dato de un campo desde el schema
@@ -931,7 +1278,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const allFilters = reportConfig.filters || [];
+        // Soporta config.filters como array (builder) o como objeto (legacy, ej. ventas_netas: { fecha_inicio: {...}, fecha_fin: {...} })
+        // Si es objeto, no hay filtros dinámicos marcados por el usuario; se usará el bloque legacy de período
+        const rawFilters = reportConfig.filters;
+        const allFilters = Array.isArray(rawFilters) ? rawFilters : [];
         console.log("🔍 generateDynamicFilters: Total de filtros en config:", allFilters.length);
         
         // IMPORTANTE: Solo mostrar filtros que fueron explícitamente marcados por el usuario con use_as_filter
@@ -1059,15 +1409,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     finParam = paramName + '_fin';
                 }
                 
-                // Renderizar control de período usando el template unificado - TODO EN UNA LÍNEA
+                // Renderizar control de período con estructura idéntica a legacy (todos en una sola línea)
+                // Estructura: Día | Mes | Año | Personalizado | Fecha desde | Fecha hasta
                 html += `
-                    <div class="period-filter-container" 
+                    <div class="period-filter-container flex flex-row flex-nowrap items-end gap-4 lg:col-span-6" style="display: flex !important;" 
                          data-param-inicio="${inicioParam}"
                          data-param-fin="${finParam}"
                          data-is-between="true"
                          data-between-param="${paramName}">
-                        <div class="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            <span class="whitespace-nowrap">Período:</span>
+                        <!-- Botones de período -->
+                        <div class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                            <span>Período</span>
                             <div class="flex flex-wrap items-center gap-2">
                                 <button type="button" 
                                         data-periodo="dia_actual"
@@ -1110,17 +1462,23 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <option value="año_actual">Año en curso</option>
                                 <option value="personalizado" selected>Personalizado</option>
                             </select>
-                            <span class="whitespace-nowrap ml-2">Fecha desde:</span>
+                        </div>
+                        <!-- Fecha desde (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
+                        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                            Fecha desde
                             <input type="date"
                                    name="${inicioParam}"
                                    id="${inicioParam}"
-                                   class="synap-input focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-xs w-auto min-w-[140px] rounded-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                            <span class="whitespace-nowrap">Fecha hasta:</span>
+                                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                        </label>
+                        <!-- Fecha hasta (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
+                        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+                            Fecha hasta
                             <input type="date"
                                    name="${finParam}"
                                    id="${finParam}"
-                                   class="synap-input focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-xs w-auto min-w-[140px] rounded-full px-3 py-1.5 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        </div>
+                                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                        </label>
                     </div>
                 `;
                 variableIndex++;
@@ -1303,18 +1661,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         filtersContainer.innerHTML = html;
         
-        // Asegurar que el contenedor sea visible
-        filtersContainer.classList.remove("hidden");
-        // Asegurar que el wrapper de filtros también sea visible
-        const filtersWrapper = document.querySelector("[data-filters-wrapper]");
-        if (filtersWrapper) {
-            filtersWrapper.classList.remove("hidden");
-        }
-        // Asegurar que el form de filtros sea visible
-        const filtersForm = document.getElementById("report-filters");
-        if (filtersForm) {
-            filtersForm.classList.remove("hidden");
-        }
+        // NO mostrar los filtros automáticamente - deben iniciar ocultos
+        // Los filtros se mostrarán solo cuando el usuario haga clic en "Mostrar filtros"
         
         // Inicializar controles especiales después de renderizar
         // Inicializar botones de período para filtros de período
@@ -1445,6 +1793,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
             
+            // Actualizar el label del período inmediatamente
+            updateSummaryPeriodLabel();
+            
             // Guardar filtros y recargar dashboard
             if (!isApplyingSavedConfig) {
                 console.log("💾 setPeriodo() (dinámico) llamando a saveFilters() para período:", tipo);
@@ -1457,12 +1808,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Agregar event listeners para guardar cuando cambien las fechas manualmente
         fechaInicioInput.addEventListener('change', () => {
+            updateSummaryPeriodLabel(); // Actualizar label inmediatamente
             if (!isApplyingSavedConfig) {
                 saveFilters();
                 loadDeclarativeDashboard();
             }
         });
         fechaFinInput.addEventListener('change', () => {
+            updateSummaryPeriodLabel(); // Actualizar label inmediatamente
             if (!isApplyingSavedConfig) {
                 saveFilters();
                 loadDeclarativeDashboard();
@@ -1504,6 +1857,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Restaurar flag después de un pequeño delay
         setTimeout(() => {
             isApplyingSavedConfig = false;
+            // Actualizar el label del período después de aplicar filtros guardados
+            updateSummaryPeriodLabel();
         }, 500);
         
         // Agregar event listeners a los botones
@@ -2074,25 +2429,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 const periodContainers = dynamicFiltersContainer.querySelectorAll('.period-filter-container');
                 hasDynamicPeriodFilter = periodContainers.length > 0;
                 
-                const filtersWrapper = document.querySelector("[data-filters-wrapper]");
-                const filtersForm = document.getElementById("report-filters");
-                
-                if (filtersWrapper) {
-                    filtersWrapper.classList.remove("hidden");
-                }
-                if (filtersForm) {
-                    filtersForm.classList.remove("hidden");
-                }
-                
-                // Actualizar el botón de toggle para reflejar que los filtros están visibles
-                const filtersToggleButton = document.querySelector("[data-filters-toggle]");
-                if (filtersToggleButton) {
-                    const label = filtersToggleButton.querySelector("[data-toggle-label]");
-                    if (label) {
-                        label.textContent = filtersToggleButton.getAttribute("data-label-hide") || "Ocultar filtros";
-                    }
-                    filtersToggleButton.setAttribute("aria-expanded", "true");
-                }
+                // NO mostrar los filtros automáticamente - deben iniciar ocultos
+                // Los filtros se mostrarán solo cuando el usuario haga clic en "Mostrar filtros"
             }
         }
         
@@ -2502,6 +2840,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (filters.fecha_inicio && filters.fecha_fin) activeCount++;
             if (filters.punto_venta && Array.isArray(filters.punto_venta) && filters.punto_venta.length > 0) activeCount++;
             if (filters.sucursales && Array.isArray(filters.sucursales) && filters.sucursales.length > 0) activeCount++;
+            if (filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos) && filters.clientes_excluidos.length > 0) activeCount++;
             
             // Contar filtros dinámicos del builder
             const reportConfigScriptForCount = document.getElementById('report-config-data');
@@ -3291,9 +3630,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // 3. Renderizar resumen (totales)
             renderDeclarativeSummary(queryResult, schema);
             
+            // Asegurar que el label del período esté actualizado con los valores actuales de los inputs
+            if (typeof updateSummaryPeriodLabel === 'function') {
+                updateSummaryPeriodLabel();
+            }
+            
             // 4. Renderizar dashboard
             if (window.WidgetEngine) {
-                window.WidgetEngine.init(dashboardRoot, schema, queryResult);
+                window.WidgetEngine.init(dashboardRoot, schema, queryResult, reportSlug);
                 
                 // Si es auto-refresh, aplicar efectos visuales antes de renderizar
                 if (isAutoRefresh) {
@@ -3384,19 +3728,69 @@ document.addEventListener('DOMContentLoaded', function() {
             summaryGrid.style.opacity = "0.8";
         }
         
-        // Actualizar período
-        if (summaryPeriod && queryResult.meta && queryResult.meta.applied_filters) {
-            const filters = queryResult.meta.applied_filters;
-            if (filters.fecha_inicio && filters.fecha_fin) {
-                const fechaInicio = new Date(filters.fecha_inicio);
-                const fechaFin = new Date(filters.fecha_fin);
-                const formatoFecha = (fecha) => {
-                    const dia = String(fecha.getDate()).padStart(2, '0');
-                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-                    const año = fecha.getFullYear();
-                    return `${dia}-${mes}-${año}`;
-                };
-                summaryPeriod.textContent = `Periodo ${formatoFecha(fechaInicio)} al ${formatoFecha(fechaFin)}`;
+        // Actualizar período usando los valores actuales de los inputs del formulario
+        // Esto asegura que el label muestre las fechas que realmente se están usando
+        if (summaryPeriod) {
+            // Intentar obtener fechas de los inputs del formulario primero (más confiable)
+            const fechaInicioInput = document.getElementById("fecha_inicio");
+            const fechaFinInput = document.getElementById("fecha_fin");
+            
+            let fechaInicio = null;
+            let fechaFin = null;
+            
+            // Buscar en inputs del formulario (puede haber múltiples si hay filtros dinámicos)
+            if (fechaInicioInput && fechaInicioInput.value) {
+                fechaInicio = fechaInicioInput.value;
+            }
+            if (fechaFinInput && fechaFinInput.value) {
+                fechaFin = fechaFinInput.value;
+            }
+            
+            // Si no se encontraron en los inputs principales, buscar en filtros dinámicos
+            if (!fechaInicio || !fechaFin) {
+                const periodContainers = document.querySelectorAll('.period-filter-container');
+                periodContainers.forEach(container => {
+                    const paramInicio = container.getAttribute('data-param-inicio') || 'fecha_inicio';
+                    const paramFin = container.getAttribute('data-param-fin') || 'fecha_fin';
+                    const inicioInput = container.querySelector(`input[name="${paramInicio}"], input[id*="${paramInicio}"]`);
+                    const finInput = container.querySelector(`input[name="${paramFin}"], input[id*="${paramFin}"]`);
+                    if (inicioInput && inicioInput.value && !fechaInicio) {
+                        fechaInicio = inicioInput.value;
+                    }
+                    if (finInput && finInput.value && !fechaFin) {
+                        fechaFin = finInput.value;
+                    }
+                });
+            }
+            
+            // Fallback: usar applied_filters del queryResult si no se encontraron en inputs
+            if ((!fechaInicio || !fechaFin) && queryResult.meta && queryResult.meta.applied_filters) {
+                const filters = queryResult.meta.applied_filters;
+                if (filters.fecha_inicio && !fechaInicio) {
+                    fechaInicio = filters.fecha_inicio;
+                }
+                if (filters.fecha_fin && !fechaFin) {
+                    fechaFin = filters.fecha_fin;
+                }
+            }
+            
+            // Si tenemos ambas fechas, formatear y mostrar
+            if (fechaInicio && fechaFin) {
+                try {
+                    const fechaInicioObj = new Date(fechaInicio + 'T00:00:00'); // Agregar hora para evitar problemas de timezone
+                    const fechaFinObj = new Date(fechaFin + 'T00:00:00');
+                    
+                    const formatoFecha = (fecha) => {
+                        const dia = String(fecha.getDate()).padStart(2, '0');
+                        const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                        const año = fecha.getFullYear();
+                        return `${dia}-${mes}-${año}`;
+                    };
+                    
+                    summaryPeriod.textContent = `Periodo ${formatoFecha(fechaInicioObj)} al ${formatoFecha(fechaFinObj)}`;
+                } catch (e) {
+                    console.error("Error formateando fechas para el label del período:", e);
+                }
             }
         }
         
@@ -3407,9 +3801,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const mainMetrics = schema.metrics || [];
         const totals = queryResult.totals || {};
         
+        // Filtrar métricas que deben mostrarse en KPI (show_in_kpi === true)
+        const metricsToShow = mainMetrics.filter(metric => metric.show_in_kpi !== false);
+        
         // Ordenar métricas: ventas_brutas, notas_credito, ventas_netas primero
         const metricOrder = ["ventas_brutas", "notas_credito", "ventas_netas"];
-        const orderedMetrics = [...mainMetrics].sort((a, b) => {
+        const orderedMetrics = [...metricsToShow].sort((a, b) => {
             const indexA = metricOrder.indexOf(a.name);
             const indexB = metricOrder.indexOf(b.name);
             if (indexA === -1 && indexB === -1) return 0;
@@ -3485,26 +3882,22 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 300);
         }
         
-        // Agregar información de última actualización
-        const lastUpdateContainer = document.createElement("div");
-        lastUpdateContainer.id = "last-update-time";
-        lastUpdateContainer.className = "flex flex-col items-end justify-center text-right";
-        const now = new Date();
-        const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-        const dayName = days[now.getDay()];
-        const day = now.getDate();
-        const month = months[now.getMonth()];
-        const year = now.getFullYear();
-        const time = now.toLocaleTimeString('es-AR');
-        lastUpdateContainer.innerHTML = `
-            <span class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Última actualización:
-            </span>
-            <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">${dayName}, ${day} de ${month} de ${year}</span>
-            <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">${time}</span>
-        `;
-        summaryGrid.appendChild(lastUpdateContainer);
+        // Actualizar "Última actualización" en la misma línea que el resumen (alineado a derecha)
+        const lastUpdateEl = document.getElementById("last-update-time");
+        if (lastUpdateEl) {
+            const now = new Date();
+            const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const dayName = days[now.getDay()];
+            const day = now.getDate();
+            const month = months[now.getMonth()];
+            const year = now.getFullYear();
+            const time = now.toLocaleTimeString('es-AR');
+            lastUpdateEl.innerHTML = `
+                <span class="font-medium text-slate-600 dark:text-slate-400">Última actualización:</span>
+                <span class="font-semibold text-slate-700 dark:text-slate-200"> ${dayName}, ${day} de ${month} de ${year} ${time}</span>
+            `;
+        }
     }
     
     // Función helper para formatear valores de métricas
@@ -3516,6 +3909,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const numValue = parseFloat(value);
         const format = metricSchema.format || "";
         const dataType = metricSchema.data_type || "currency";
+        
+        // Para ventas-netas, aplicar formateo en millones (solo visual) para valores de moneda
+        const currentReportSlug = dashboardRoot?.dataset?.reportSlug || reportSlug;
+        if (currentReportSlug === "ventas-netas" && window.WidgetEngine && window.WidgetEngine.formatMillions) {
+            if (format.startsWith("currency:") || dataType === "currency") {
+                return window.WidgetEngine.formatMillions(numValue);
+            }
+        }
         
         if (format.startsWith("currency:") || dataType === "currency") {
             return formatCurrency(numValue);
@@ -4015,7 +4416,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Guardar filtros
             saveFilters();
             
-            loadDeclarativeDashboard();
+            // Reportes legacy (Ventas Netas, Remitos no facturados): recargar con fetchDashboardData
+            if (reportSlug === 'ventas_netas' || reportSlug === 'ventas-netas' || reportSlug === 'uninvoiced_remitos') {
+                if (typeof window.fetchDashboardData === 'function') {
+                    window.fetchDashboardData();
+                }
+            } else {
+                loadDeclarativeDashboard();
+            }
         };
         
         // Mostrar dropdown
@@ -4158,7 +4566,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeRefreshIntervalButtons();
     
     // Inicializar tags filters
-    if (reportSlug === 'ventas_netas' || reportSlug === 'uninvoiced_remitos') {
+    if (reportSlug === 'ventas_netas' || reportSlug === 'ventas-netas' || reportSlug === 'uninvoiced_remitos') {
         initializeTagsFilter("punto_venta", "puntos_venta");
         initializeTagsFilter("sucursales", "sucursales");
     }
@@ -4234,6 +4642,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     setTimeout(() => {
                         sucSelect.dispatchEvent(new Event("change", { bubbles: true }));
+                    }, 150);
+                }
+            }
+            
+            // Aplicar clientes a excluir (Ventas Netas)
+            if (savedFilters.clientes_excluidos && Array.isArray(savedFilters.clientes_excluidos)) {
+                const clientesSelect = document.getElementById("clientes_excluidos");
+                if (clientesSelect) {
+                    savedFilters.clientes_excluidos.forEach((value) => {
+                        const option = clientesSelect.querySelector(`option[value="${value}"]`);
+                        if (option) {
+                            option.selected = true;
+                        }
+                    });
+                    setTimeout(() => {
+                        clientesSelect.dispatchEvent(new Event("change", { bubbles: true }));
                     }, 150);
                 }
             }
@@ -4346,6 +4770,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (filtersWrapper) {
                 if (visible) {
                     filtersWrapper.classList.remove("hidden");
+                    // Re-notificar para que dashboard.js enlace período (por si reportPeriodFiltersReady se disparó antes)
+                    window.dispatchEvent(new CustomEvent('reportPeriodFiltersReady'));
                 } else {
                     filtersWrapper.classList.add("hidden");
                 }
@@ -4357,27 +4783,12 @@ document.addEventListener('DOMContentLoaded', function() {
             setState(!isHidden);
         });
         
-        // Inicializar como oculto solo si no hay filtros dinámicos
-        // Verificar si hay filtros dinámicos antes de ocultar
-        const dynamicFiltersContainer = document.getElementById("dynamic-filters-container");
-        const hasDynamicFilters = dynamicFiltersContainer && 
-                                   dynamicFiltersContainer.innerHTML.trim() !== '' && 
-                                   !dynamicFiltersContainer.innerHTML.includes('No hay filtros');
-        
-        if (!hasDynamicFilters) {
+        // SIEMPRE inicializar los filtros como ocultos al cargar la página
         filtersContainer.classList.add("hidden");
         if (filtersWrapper) {
             filtersWrapper.classList.add("hidden");
         }
         setState(false);
-        } else {
-            // Si hay filtros dinámicos, mostrar por defecto
-            filtersContainer.classList.remove("hidden");
-            if (filtersWrapper) {
-                filtersWrapper.classList.remove("hidden");
-            }
-            setState(true);
-        }
     }
     
     // Inicializar toggle después de que se generen los filtros dinámicos
@@ -4512,7 +4923,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20250310"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260211"></script>
+{% if report.slug == 'bo-stock-facturacion' %}
+<script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
+{% endif %}
 {% endif %}
 {% endblock %}
 

@@ -191,62 +191,76 @@ class WorkspaceSelectionAPIView(APIView):
         )
         return workspace
 
+    @staticmethod
+    def _item_to_slug(item):
+        """item puede ser 'slug' (legacy) o 'slug::instance_id'. Devuelve slug."""
+        if not item or not isinstance(item, str):
+            return item
+        return item.split("::")[0] if "::" in item else item
+
+    @staticmethod
+    def _item_to_instance_id(item):
+        """item puede ser 'slug' o 'slug::instance_id'. Devuelve instance_id o None."""
+        if not item or not isinstance(item, str) or "::" not in item:
+            return None
+        return item.split("::", 1)[1]
+
     def get(self, request, *args, **kwargs):
         workspace = self._get_workspace(request)
-        slugs = list(workspace.items or [])
+        raw_items = list(workspace.items or [])
 
-        if not slugs:
+        if not raw_items:
             return Response({"slots": [], "count": 0})
 
+        slugs_seen = [self._item_to_slug(it) for it in raw_items]
         reports = (
-            ReportDefinition.objects.filter(slug__in=slugs, is_active=True)
+            ReportDefinition.objects.filter(slug__in=slugs_seen, is_active=True)
             .prefetch_related("widgets")
         )
         report_map = {report.slug: report for report in reports}
 
         slots = []
-        valid_slugs = []
-        for slug in slugs:
+        valid_items = []
+        for item in raw_items:
+            slug = self._item_to_slug(item)
             report = report_map.get(slug)
             if not report:
                 continue
-            # Para reportes declarativos, no requerir widget (se generan automáticamente)
             is_declarative = report.config.get("version") == "declarative-v1" if report.config else False
-            
             if not is_declarative:
                 widget = report.widgets.order_by("order", "id").first()
                 if not widget:
                     continue
             else:
-                # Para reportes declarativos, crear un widget mock para mantener compatibilidad
                 widget = type('MockWidget', (), {
-                    'id': None,
-                    'name': 'Auto',
-                    'widget_type': 'declarative',
-                    'configuration': {}
+                    'id': None, 'name': 'Auto', 'widget_type': 'declarative', 'configuration': {}
                 })()
-            
-            valid_slugs.append(slug)
-            # Detectar si el reporte es declarativo
-            is_declarative = report.config.get("version") == "declarative-v1" if report.config else False
-            
-            slots.append(
-                {
-                    "slug": report.slug,
-                    "name": report.name,
-                    "category": report.category,
-                    "is_declarative": is_declarative,
-                    "widget": {
-                        "id": widget.id,
-                        "name": widget.name,
-                        "widget_type": widget.widget_type,
-                        "configuration": widget.configuration or {},
-                    },
-                }
-            )
 
-        if valid_slugs != slugs:
-            workspace.items = valid_slugs
+            item_key = item if isinstance(item, str) else slug
+            instance_id = self._item_to_instance_id(item_key)
+            valid_items.append(item_key)
+            display_name = report.name
+            if instance_id:
+                display_name = f"{report.name} ({instance_id[:8]})"
+
+            slots.append({
+                "item_key": item_key,
+                "slug": report.slug,
+                "instance_id": instance_id,
+                "display_name": display_name,
+                "name": report.name,
+                "category": report.category,
+                "is_declarative": is_declarative,
+                "widget": {
+                    "id": getattr(widget, "id", None),
+                    "name": widget.name,
+                    "widget_type": widget.widget_type,
+                    "configuration": widget.configuration or {},
+                },
+            })
+
+        if valid_items != raw_items:
+            workspace.items = valid_items
             workspace.save(update_fields=["items", "updated_at"])
 
         return Response({"slots": slots, "count": len(slots)})
@@ -262,69 +276,93 @@ class WorkspaceSelectionAPIView(APIView):
 
         workspace = self._get_workspace(request)
         current = list(workspace.items or [])
-        if slug in current:
-            return Response({"status": "exists", "count": len(current)})
+        allow_duplicate = request.data.get("allow_duplicate") is True
+
+        if allow_duplicate:
+            import uuid
+            instance_id = str(uuid.uuid4())[:12]
+            item_key = f"{slug}::{instance_id}"
+        else:
+            # Sin duplicados: si ya existe cualquier item con este slug, devolver exists
+            existing = [it for it in current if self._item_to_slug(it) == slug]
+            if existing:
+                return Response({"status": "exists", "count": len(current)})
+            item_key = slug
 
         if len(current) >= self.MAX_ITEMS:
             return Response(
-                {
-                    "detail": "Se alcanzó el máximo de elementos en el workspace.",
-                    "count": len(current),
-                },
+                {"detail": "Se alcanzó el máximo de elementos en el workspace.", "count": len(current)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        current.append(slug)
+        current.append(item_key)
         workspace.items = current
         workspace.save(update_fields=["items", "updated_at"])
-        return Response({"status": "added", "count": len(current)})
+        return Response({
+            "status": "added",
+            "count": len(current),
+            "item_key": item_key,
+            "slug": slug,
+            "instance_id": self._item_to_instance_id(item_key),
+        })
 
     def delete(self, request, *args, **kwargs):
-        slug = request.data.get("slug")
-        if not slug:
-            return Response({"detail": "Slug requerido."}, status=status.HTTP_400_BAD_REQUEST)
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        item_key = request.data.get("item_key") or request.data.get("slug")
+        logger.info(f"[Workspace DELETE] request.data: {request.data}")
+        logger.info(f"[Workspace DELETE] item_key extraído: '{item_key}'")
+        
+        if not item_key:
+            return Response({"detail": "item_key o slug requerido."}, status=status.HTTP_400_BAD_REQUEST)
 
         workspace = self._get_workspace(request)
         current = list(workspace.items or [])
-        if slug not in current:
+        logger.info(f"[Workspace DELETE] Items actuales en workspace: {current}")
+        
+        if item_key not in current:
+            logger.warning(f"[Workspace DELETE] item_key '{item_key}' NO encontrado en workspace")
             return Response({"status": "missing", "count": len(current)})
 
-        current = [item for item in current if item != slug]
+        current = [item for item in current if item != item_key]
         workspace.items = current
         workspace.save(update_fields=["items", "updated_at"])
+        logger.info(f"[Workspace DELETE] Item '{item_key}' eliminado. Nuevos items: {current}")
         return Response({"status": "removed", "count": len(current)})
 
     def patch(self, request, *args, **kwargs):
-        """Actualiza el orden de los items en el workspace."""
-        items = request.data.get("items")
-        if not items or not isinstance(items, list):
+        """Actualiza el orden de los items en el workspace. items = lista de item_key (slug o slug::instance_id)."""
+        order = request.data.get("items") or request.data.get("order")
+        if not order or not isinstance(order, list):
             return Response(
-                {"detail": "Se requiere una lista de items."},
+                {"detail": "Se requiere una lista 'items' u 'order' de item_key."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if len(items) > self.MAX_ITEMS:
+        if len(order) > self.MAX_ITEMS:
             return Response(
                 {"detail": f"Se excedió el máximo de {self.MAX_ITEMS} elementos."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         workspace = self._get_workspace(request)
-        
-        # Validar que todos los slugs existan y estén activos
+        current = set(workspace.items or [])
+        slugs_in_order = [self._item_to_slug(it) for it in order]
         valid_reports = ReportDefinition.objects.filter(
-            slug__in=items,
-            is_active=True
+            slug__in=slugs_in_order, is_active=True
         ).values_list("slug", flat=True)
-        
-        valid_slugs = list(valid_reports)
-        if len(valid_slugs) != len(items):
-            # Filtrar solo los slugs válidos
-            items = [slug for slug in items if slug in valid_slugs]
+        valid_slugs = set(valid_reports)
+        # Mantener solo item_keys que existan en el workspace y cuyo slug sea válido
+        valid_order = [it for it in order if it in current and self._item_to_slug(it) in valid_slugs]
+        # Añadir al final los current que no estén en valid_order (retrocompatibilidad)
+        for it in (workspace.items or []):
+            if it not in valid_order:
+                valid_order.append(it)
 
-        workspace.items = items
+        workspace.items = valid_order
         workspace.save(update_fields=["items", "updated_at"])
-        return Response({"status": "updated", "count": len(items)})
+        return Response({"status": "updated", "count": len(valid_order)})
 
 
 class KPIAPIView(APIView):
@@ -466,6 +504,7 @@ class ReportSchemaAPIView(APIView):
                         "data_type": m.data_type,
                         "role": m.role,
                         "format": m.format,
+                        "show_in_kpi": getattr(m, "show_in_kpi", True),
                     }
                     for m in schema.metrics
                 ],
@@ -618,11 +657,33 @@ class ReportFiltersAPIView(APIView):
                 conn.close()
                 return Response({"cajas": results})
             
+            elif filter_type == "clientes":
+                # Clientes para filtro "excluir" (NOT IN) en Ventas Netas
+                cursor.execute("""
+                    SELECT Codigo, nombre_cliente
+                    FROM cliente
+                    ORDER BY nombre_cliente
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    codigo = row_dict.get("Codigo")
+                    nombre = (row_dict.get("nombre_cliente") or "").strip() or f"Cliente {codigo}"
+                    results.append({
+                        "id": codigo,
+                        "label": nombre,
+                        "value": codigo,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"clientes": results})
+            
             else:
                 cursor.close()
                 conn.close()
                 return Response(
-                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales' o 'cajas'."},
+                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas' o 'clientes'."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
@@ -1323,6 +1384,7 @@ class ReportBuilderPreviewAPIView(APIView):
                             "data_type": m.data_type,
                             "role": m.role,
                             "format": m.format,
+                            "show_in_kpi": getattr(m, "show_in_kpi", True),
                         }
                         for m in schema.metrics
                     ],
@@ -2870,16 +2932,95 @@ class DataMapAPIView(APIView):
 
 
 class ReportExportImportAPIView(APIView):
-    """API para importar reportes, relaciones aprendidas desde JSON."""
+    """API para exportar e importar reportes, relaciones aprendidas desde JSON."""
     
     permission_classes = [BuilderReportsPermission]
+    
+    def get(self, request, *args, **kwargs):
+        """Exporta reportes, relaciones o schema según type."""
+        export_type = request.GET.get("type", "reports")  # reports, relationships, schema, all
+        slugs_param = request.GET.get("slugs", "")
+        slugs_filter = [s.strip() for s in slugs_param.split(",") if s.strip()] if slugs_param else None
+        
+        empresa = getattr(request.user, "empresa_activa", None)
+        empresa_id = empresa.id if empresa else None
+        
+        if ExportImportService is None:
+            return Response(
+                {"detail": "ExportImportService no está disponible."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        try:
+            result = {}
+            
+            if export_type in ("reports", "all"):
+                from django.db.models import Q
+                filters = Q(is_active=True)
+                if empresa_id:
+                    filters &= Q(empresa_id=empresa_id) | Q(empresa_id__isnull=True)
+                else:
+                    filters &= Q(empresa_id__isnull=True)
+                
+                reports = list(ReportDefinition.objects.filter(filters))
+                if slugs_filter:
+                    reports = [r for r in reports if r.slug in slugs_filter]
+                
+                if export_type == "reports" and not reports:
+                    return Response(
+                        {"detail": "No hay reportes para exportar."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                reports_export = ExportImportService.export_reports(reports, include_widgets=True)
+                result["reports"] = reports_export.get("reports", [])
+                result["widgets"] = reports_export.get("widgets", {})
+            
+            if export_type in ("relationships", "all"):
+                rels_export = ExportImportService.export_learned_relationships(
+                    empresa_id=empresa_id, include_global=True
+                )
+                result["learned_relationships"] = rels_export.get("relationships", [])
+            
+            if export_type in ("schema", "all"):
+                base_empresa = None
+                if empresa and hasattr(empresa, "base_empresa"):
+                    base_empresa = empresa.base_empresa
+                if not base_empresa and hasattr(request.user, "base_empresa"):
+                    base_empresa = request.user.base_empresa
+                
+                if base_empresa:
+                    schema_export = ExportImportService.export_schema_metadata(base_empresa)
+                    result["schema_metadata"] = schema_export.get("tables", {})
+                    result["base_empresa"] = base_empresa
+                elif export_type == "schema":
+                    return Response(
+                        {"detail": "No se pudo determinar base_empresa para exportar schema."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            
+            from django.utils import timezone
+            result["version"] = getattr(ExportImportService, "VERSION", "1.0.0")
+            result["export_type"] = "full_export" if export_type == "all" else export_type
+            result["exported_at"] = timezone.now().isoformat()
+            
+            return Response(result)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error exportando {export_type}: {e}", exc_info=True)
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def post(self, request, *args, **kwargs):
         """Importa reportes, relaciones aprendidas desde JSON."""
         import_type = request.data.get("type", "reports")  # reports, relationships, all
         empresa_id = getattr(request.user, "empresa_activa", None)
         empresa_id = empresa_id.id if empresa_id else None
-        overwrite = request.data.get("overwrite", False)
+        overwrite_val = request.data.get("overwrite", False)
+        overwrite = overwrite_val in (True, "true", "1", 1, "yes")
         merge_strategy = request.data.get("merge_strategy", "merge")
         
         try:

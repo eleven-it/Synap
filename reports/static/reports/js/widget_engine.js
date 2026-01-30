@@ -124,7 +124,7 @@ const WidgetEngine = {
                         this.rootElement?.hasAttribute("data-workspace-mode") ||
                         container?.closest("[data-workspace-mode]") ||
                         document.querySelector("[data-workspace-mode]");
-    const isVentasNetas = this.reportSlug === "ventas_netas";
+    const isVentasNetas = this.reportSlug === "ventas-netas";
     // En workspace, SIEMPRE ocultar el header del widget (ya existe el header del workspace)
     const shouldHideTitle = isWorkspace;
     
@@ -960,7 +960,14 @@ const WidgetEngine = {
     const data = this.queryResult.data || [];
     const xDimension = widgetSchema.x_dimension;
     const yMetrics = widgetSchema.y_metrics || [];
-    const seriesDimension = widgetSchema.series_dimension;
+    let seriesDimension = widgetSchema.series_dimension;
+    // Normalizar serie "Sucursal" -> nombre_sucursal cuando los datos tienen esa columna (reportes legacy/ventas_netas)
+    if (seriesDimension && data.length > 0 && data[0].nombre_sucursal !== undefined) {
+      const s = String(seriesDimension).toLowerCase();
+      if (s === 'sucursal' || s === 'nombre_sucursal') {
+        seriesDimension = 'nombre_sucursal';
+      }
+    }
 
     if (!xDimension || yMetrics.length === 0) {
       container.innerHTML = `<p class="p-4 text-sm text-slate-500">Dimensiones o métricas no especificadas</p>`;
@@ -971,7 +978,7 @@ const WidgetEngine = {
     
     // Detectar si estamos en workspace y si es ventas_netas para aplicar restricciones de altura
     const isWorkspace = this.rootElement?.closest("[data-workspace-mode]");
-    const isVentasNetas = this.reportSlug === "ventas_netas";
+    const isVentasNetas = this.reportSlug === "ventas-netas";
     
     // Obtener dimensiones del contenedor - usar múltiples métodos para asegurar que tengamos dimensiones válidas
     let width = container.clientWidth || container.offsetWidth || container.getBoundingClientRect().width || 800;
@@ -1254,8 +1261,12 @@ const WidgetEngine = {
     xAxis.selectAll("path")
       .style("stroke", axisLineColor);
 
+    // Usar isVentasNetas ya declarada arriba (línea 974) para aplicar formateo en millones
     const yAxis = g.append("g")
-      .call(d3.axisLeft(yScale).tickFormat(d => this.formatNumber(d, 0)));
+      .call(d3.axisLeft(yScale).tickFormat(d => {
+        // Para ventas-netas, mostrar valores en millones con 2 decimales
+        return isVentasNetas ? this.formatMillions(d) : this.formatNumber(d, 0);
+      }));
     
     // Estilizar etiquetas del eje Y
     yAxis.selectAll("text")
@@ -1427,6 +1438,11 @@ const WidgetEngine = {
             
             d3.select(this).attr("opacity", 1).attr("stroke", "#ffffff").attr("stroke-width", 2);
             
+            // Para ventas-netas, mostrar valores en millones con 2 decimales (solo visual)
+            const isVentasNetas = widgetEngine.reportSlug === "ventas-netas";
+            const formattedValue = isVentasNetas ? widgetEngine.formatMillions(value) : widgetEngine.formatMetric(value, metricSchema);
+            const formattedTotal = isVentasNetas ? widgetEngine.formatMillions(totalValue) : widgetEngine.formatMetric(totalValue, totalMetricSchema);
+            
             tooltip
               .html(`
                 <div class="mb-2">
@@ -1435,14 +1451,14 @@ const WidgetEngine = {
                 </div>
                 <div class="py-2 border-t border-slate-700">
                   <div class="text-slate-400 text-[9px] uppercase tracking-wide mb-1">${metricName}</div>
-                  <div class="text-emerald-300 font-bold text-base mb-1">${widgetEngine.formatMetric(value, metricSchema)}</div>
+                  <div class="text-emerald-300 font-bold text-base mb-1">${formattedValue}</div>
                   <div class="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-700">
                     <div class="text-slate-400 text-[9px]">Porcentaje:</div>
                     <div class="text-white font-semibold text-xs">${percentage}%</div>
                   </div>
                   <div class="flex items-center justify-between gap-3 mt-1">
                     <div class="text-slate-400 text-[9px]">Total del mes:</div>
-                    <div class="text-sky-300 font-semibold text-xs">${widgetEngine.formatMetric(totalValue, totalMetricSchema)}</div>
+                    <div class="text-sky-300 font-semibold text-xs">${formattedTotal}</div>
                   </div>
                 </div>
               `)
@@ -1510,8 +1526,9 @@ const WidgetEngine = {
           .text(d => {
             const value = d[1] - d[0];
             if (value === 0 || value < 0) return "";
-            // Mostrar el valor real completo (no abreviado)
-            return this.formatMetric(value, metricSchema || { data_type: "currency" });
+            // Para ventas-netas, mostrar valores en millones con 2 decimales (solo visual)
+            const isVentasNetas = this.reportSlug === "ventas-netas";
+            return isVentasNetas ? this.formatMillions(value) : this.formatMetric(value, metricSchema || { data_type: "currency" });
           });
       });
       
@@ -1552,8 +1569,9 @@ const WidgetEngine = {
             // d[1] del último layer es el valor total acumulado del stack completo
             const totalValue = d[1];
             if (totalValue === 0 || totalValue < 0) return "";
-            // Usar formato completo para el total (no abreviado)
-            return this.formatMetric(totalValue, totalMetricSchema);
+            // Para ventas-netas, mostrar valores en millones con 2 decimales (solo visual)
+            const isVentasNetas = this.reportSlug === "ventas-netas";
+            return isVentasNetas ? this.formatMillions(totalValue) : this.formatMetric(totalValue, totalMetricSchema);
           });
       }
       
@@ -1762,7 +1780,7 @@ const WidgetEngine = {
     
     // Detectar si estamos en workspace y si es ventas_netas para aplicar restricciones de altura
     const isWorkspace = this.rootElement?.closest("[data-workspace-mode]");
-    const isVentasNetas = this.reportSlug === "ventas_netas";
+    const isVentasNetas = this.reportSlug === "ventas-netas";
     
     // Obtener dimensiones del contenedor - usar múltiples métodos para asegurar que tengamos dimensiones válidas
     let width = container.clientWidth || container.offsetWidth || container.getBoundingClientRect().width || 800;
@@ -1942,8 +1960,12 @@ const WidgetEngine = {
     xAxis.selectAll("path")
       .style("stroke", axisLineColor);
 
+    // Usar isVentasNetas ya declarada arriba (línea 1777) para aplicar formateo en millones
     const yAxis = g.append("g")
-      .call(d3.axisLeft(yScale).tickFormat(d => this.formatNumber(d, 0)));
+      .call(d3.axisLeft(yScale).tickFormat(d => {
+        // Para ventas-netas, mostrar valores en millones con 2 decimales
+        return isVentasNetas ? this.formatMillions(d) : this.formatNumber(d, 0);
+      }));
     
     // Estilizar etiquetas del eje Y
     yAxis.selectAll("text")
@@ -3360,6 +3382,11 @@ const WidgetEngine = {
 
     // Formato de moneda con decimales configurables
     if (format.startsWith("currency") || dataType === "currency") {
+      // Para ventas-netas, aplicar formateo en millones (solo visual)
+      if (this.reportSlug === "ventas-netas") {
+        return this.formatMillions(numValue);
+      }
+      
       // Si el formato es "currency:ARS:2" o similar, extraer decimales
       let decimals = 2; // Default para moneda
       if (format.includes(":")) {
@@ -3509,6 +3536,33 @@ const WidgetEngine = {
       const decimalPart = parts[1] || "0".repeat(decimals);
       return `$${integerPart},${decimalPart}`;
     }
+  },
+
+  /**
+   * Formatea un valor en millones con sufijo "M"
+   * - Siempre redondea a entero
+   * - Si el resultado es >= 1000: muestra con separadores de miles (ej: "8.951M", "73.124M")
+   * - Si el resultado es < 1000: muestra sin separadores (ej: "8M", "9M", "81M", "86M")
+   * SOLO para visualización en gráficos (no modifica datos internos)
+   * @param {number} value - Valor numérico a formatear
+   * @returns {string} Valor formateado en millones
+   */
+  formatMillions(value) {
+    if (typeof value !== "number" || isNaN(value)) {
+      return "0M";
+    }
+    
+    // Convertir a millones y redondear a entero
+    const millions = value / 1000000;
+    const rounded = Math.round(millions);
+    
+    // Si el resultado es >= 1000, mostrar con separadores de miles
+    if (rounded >= 1000) {
+      return rounded.toLocaleString("es-AR") + "M";
+    }
+    
+    // Si es < 1000, mostrar sin separadores
+    return rounded + "M";
   },
 
   /**

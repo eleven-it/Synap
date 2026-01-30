@@ -61,7 +61,42 @@ class QueryRunnerService:
         except (ValueError, AttributeError):
             # Si hay algún error, devolver la fecha original
             return date_str
-    
+
+    def _resolve_period_dates(self, filters: dict) -> tuple:
+        """
+        Resuelve fecha_inicio y fecha_fin desde filters. Prioriza las recibidas (UI).
+        Solo recalcula cuando falta alguna; las fechas mostradas se usan en las consultas SQL.
+        Returns:
+            (fecha_inicio, fecha_fin) en YYYY-MM-DD, o (None, None) si no se pueden resolver.
+        """
+        fecha_inicio = filters.get("fecha_inicio") or None
+        fecha_fin = filters.get("fecha_fin") or None
+        dia_actual = filters.get("dia_actual", False)
+        mes_actual = filters.get("mes_actual", False)
+        año_actual = filters.get("año_actual", False)
+        today = date.today()
+        if fecha_inicio and fecha_fin:
+            return fecha_inicio, fecha_fin
+        if dia_actual:
+            s = today.strftime("%Y-%m-%d")
+            return s, s
+        if año_actual:
+            return (
+                date(today.year, 1, 1).strftime("%Y-%m-%d"),
+                date(today.year, 12, 31).strftime("%Y-%m-%d"),
+            )
+        if mes_actual:
+            last = monthrange(today.year, today.month)[1]
+            return (
+                date(today.year, today.month, 1).strftime("%Y-%m-%d"),
+                date(today.year, today.month, last).strftime("%Y-%m-%d"),
+            )
+        last = monthrange(today.year, today.month)[1]
+        return (
+            date(today.year, today.month, 1).strftime("%Y-%m-%d"),
+            date(today.year, today.month, last).strftime("%Y-%m-%d"),
+        )
+
     def _get_tenant_id(self, payload: Dict) -> Optional[int]:
         """Obtiene el tenant_id del payload o del usuario."""
         # Intentar obtener desde payload
@@ -124,7 +159,7 @@ class QueryRunnerService:
             return 1800  # 30 minutos
         
         # Reportes de estado (frecuencia media)
-        status_reports = ['uninvoiced_remitos', 'pending_orders']
+        status_reports = ['uninvoiced_remitos', 'pending_orders', 'bo-stock-facturacion']
         if report_slug in status_reports:
             return 300  # 5 minutos
         
@@ -180,10 +215,11 @@ class QueryRunnerService:
         tenant_id = self._get_tenant_id(payload)
         filters = payload.get('filters', {})
         payload_hash = self._hash_payload(filters)
-        cache_key = build_cache_key(tenant_id, report.slug, payload_hash)
-        
+        # Cache buster para BO: OC cubre primero faltante reservado (evitar usar caché antiguo)
+        cache_payload_hash = f"{payload_hash}:oc_reservado_v1" if report.slug == "bo-stock-facturacion" else payload_hash
+
         # Intentar obtener del caché con protección contra stampeding
-        cached_result = self._get_cached_with_lock(tenant_id, report.slug, payload_hash)
+        cached_result = self._get_cached_with_lock(tenant_id, report.slug, cache_payload_hash)
         if cached_result:
             logger.info(f"✅ Cache HIT para {report.slug} (payload_hash: {payload_hash[:8]}...)")
             return cached_result
@@ -193,7 +229,7 @@ class QueryRunnerService:
         
         # Ejecutar consulta según el tipo de reporte (lógica legacy)
         result = None
-        if report.slug == "ventas_netas":
+        if report.slug in ("ventas_netas", "ventas-netas"):
             result = self._run_ventas_netas(report, payload)
         elif report.slug == "cash_flow_waterfall":
             result = self._run_cash_flow_waterfall(report, payload)
@@ -201,12 +237,16 @@ class QueryRunnerService:
             result = self._run_cash_flow_detailed_movements(report, payload)
         elif report.slug == "cash_flow_by_account":
             result = self._run_cash_flow_by_account(report, payload)
-        elif report.slug == "uninvoiced_remitos":
+        elif report.slug in ("uninvoiced_remitos", "remitos-no-facturados"):
             result = self._run_uninvoiced_remitos(report, payload)
-        elif report.slug == "pending_orders":
+        elif report.slug in ("pending_orders", "pedidos-pendientes"):
             result = self._run_pending_orders(report, payload)
         elif report.slug == "sales_summary":
             result = self._run_sales_summary(report, payload)
+        elif report.slug == "total-consolidado-operativo":
+            result = self._run_total_consolidado_operativo(report, payload)
+        elif report.slug == "bo-stock-facturacion":
+            result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
         else:
             # Para otros reportes, usar datos de muestra por ahora
             meta, data, totals, notes = get_sample_data(report.slug, payload)
@@ -234,7 +274,7 @@ class QueryRunnerService:
         # Calcular TTL inteligente y guardar en caché
         if result:
             ttl = self._get_cache_ttl(report.slug, filters)
-            set_cached_report(tenant_id, report.slug, payload_hash, result, ttl=ttl)
+            set_cached_report(tenant_id, report.slug, cache_payload_hash, result, ttl=ttl)
             logger.info(f"💾 Resultado cacheado para {report.slug} con TTL de {ttl}s")
         
         return result
@@ -279,36 +319,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
-            
-            # Obtener base_empresa del payload (pasado desde la API view)
             base_empresa = filters.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Si está marcado "día en curso", establecer fechas automáticamente
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            # Si está marcado "año en curso", establecer fechas automáticamente
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")  # 1 de enero del año actual
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")  # 31 de diciembre del año actual
-            # Si está marcado "mes en curso", establecer fechas automáticamente
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -321,7 +334,6 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
             # Si aún no tenemos base_empresa, intentar desde atributos del usuario
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
@@ -357,6 +369,13 @@ class QueryRunnerService:
                 sucursales = [sucursales] if sucursales else []
             elif not isinstance(sucursales, list):
                 sucursales = []
+            
+            # Clientes a excluir (NOT IN): excluir de la consulta los clientes seleccionados
+            clientes_excluidos = filters.get("clientes_excluidos", [])
+            if isinstance(clientes_excluidos, str):
+                clientes_excluidos = [clientes_excluidos] if clientes_excluidos else []
+            elif not isinstance(clientes_excluidos, list):
+                clientes_excluidos = []
             
             # Construir consulta SQL
             # Obtener pool de conexiones MySQL (reutiliza conexiones existentes)
@@ -401,6 +420,23 @@ class QueryRunnerService:
                     placeholders = ','.join(['%s'] * len(sucursales_ints))
                     where_conditions.append(f"cc.CodSucursal IN ({placeholders})")
                     params.extend(sucursales_ints)
+            
+            # Filtro NOT IN: excluir clientes seleccionados (cc.Codigo = cliente)
+            if clientes_excluidos:
+                clientes_vals = []
+                for c in clientes_excluidos:
+                    try:
+                        # Codigo en cliente puede ser int o string según base; normalizar a string para NOT IN
+                        c_str = str(c).strip()
+                        if c_str:
+                            clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                    except (ValueError, TypeError):
+                        continue
+                if clientes_vals:
+                    placeholders = ','.join(['%s'] * len(clientes_vals))
+                    where_conditions.append(f"cc.Codigo NOT IN ({placeholders})")
+                    params.extend(clientes_vals)
+                    logger.info(f"📋 Ventas Netas: aplicando exclusión de {len(clientes_vals)} cliente(s): {clientes_vals[:5]}{'...' if len(clientes_vals) > 5 else ''}")
             
             where_clause = " AND ".join(where_conditions)
             
@@ -560,36 +596,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
-            
-            # Obtener base_empresa del payload
             base_empresa = filters.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Si está marcado "día en curso", establecer fechas automáticamente
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            # Si está marcado "año en curso", establecer fechas automáticamente
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")  # 1 de enero del año actual
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")  # 31 de diciembre del año actual
-            # Si está marcado "mes en curso", establecer fechas automáticamente
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -602,13 +611,9 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Si aún no tenemos base_empresa, intentar desde atributos del usuario
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
-            
-            # Si aún no tenemos base_empresa, intentar obtenerla de la configuración
             if not base_empresa:
                 base_empresa = getattr(settings, 'DEFAULT_BASE_EMPRESA', None)
             
@@ -1336,32 +1341,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
             base_empresa = payload.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Ajustar fechas según filtros de período
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -1374,8 +1356,6 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Obtener base_empresa si no está en payload
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
@@ -1662,32 +1642,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
             base_empresa = payload.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Ajustar fechas según filtros de período
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -1700,8 +1657,6 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Obtener base_empresa si no está en payload
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
@@ -2172,36 +2127,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
-            
-            # Obtener base_empresa del payload
             base_empresa = filters.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Si está marcado "día en curso", establecer fechas automáticamente
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            # Si está marcado "año en curso", establecer fechas automáticamente
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")
-            # Si está marcado "mes en curso", establecer fechas automáticamente
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -2214,16 +2142,11 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Si aún no tenemos base_empresa, intentar desde atributos del usuario
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
-            
-            # Si aún no tenemos base_empresa, intentar obtenerla de la configuración
             if not base_empresa:
                 base_empresa = getattr(settings, 'DEFAULT_BASE_EMPRESA', None)
-            
             if not base_empresa:
                 return QueryResult(
                     meta={
@@ -2236,8 +2159,6 @@ class QueryRunnerService:
                     totals={},
                     notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
                 )
-            
-            # Obtener filtros opcionales
             puntos_venta = filters.get("punto_venta", [])
             if isinstance(puntos_venta, str):
                 puntos_venta = [puntos_venta] if puntos_venta else []
@@ -2402,36 +2323,9 @@ class QueryRunnerService:
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
-            
-            # Obtener base_empresa del payload
             base_empresa = filters.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Si está marcado "día en curso", establecer fechas automáticamente
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            # Si está marcado "año en curso", establecer fechas automáticamente
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")
-            # Si está marcado "mes en curso", establecer fechas automáticamente
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -2444,16 +2338,11 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Si aún no tenemos base_empresa, intentar desde atributos del usuario
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
-            
-            # Si aún no tenemos base_empresa, intentar obtenerla de la configuración
             if not base_empresa:
                 base_empresa = getattr(settings, 'DEFAULT_BASE_EMPRESA', None)
-            
             if not base_empresa:
                 return QueryResult(
                     meta={
@@ -2466,10 +2355,7 @@ class QueryRunnerService:
                     totals={},
                     notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
                 )
-            
-            # Conectar a la base de datos MySQL de administraNET
             mysql_config = settings.DATABASES['mysql']
-            
             import MySQLdb
             try:
                 conn = MySQLdb.connect(
@@ -2580,7 +2466,179 @@ class QueryRunnerService:
                 totals={},
                 notes=[f"Error al ejecutar la consulta: {str(e)}"],
             )
-    
+
+    def _parse_sucursales_pv(self, filters: Dict) -> Tuple[List[int], List[int]]:
+        """Normaliza sucursales y punto_venta desde filters a listas de enteros."""
+        sucursales = filters.get("sucursales", [])
+        if isinstance(sucursales, str):
+            sucursales = [sucursales] if sucursales else []
+        elif not isinstance(sucursales, list):
+            sucursales = []
+        puntos_venta = filters.get("punto_venta", [])
+        if isinstance(puntos_venta, str):
+            puntos_venta = [puntos_venta] if puntos_venta else []
+        elif not isinstance(puntos_venta, list):
+            puntos_venta = []
+        sucursales_ints = []
+        for s in sucursales:
+            try:
+                sucursales_ints.append(int(s))
+            except (ValueError, TypeError):
+                continue
+        puntos_venta_ints = []
+        for pv in puntos_venta:
+            try:
+                puntos_venta_ints.append(int(pv))
+            except (ValueError, TypeError):
+                continue
+        return sucursales_ints, puntos_venta_ints
+
+    def _parse_clientes_excluidos(self, filters: Dict) -> List:
+        """Normaliza clientes_excluidos desde filters para NOT IN en consultas."""
+        raw = filters.get("clientes_excluidos", [])
+        if isinstance(raw, str):
+            raw = [raw] if (raw and str(raw).strip()) else []
+        elif not isinstance(raw, list):
+            raw = []
+        out = []
+        for c in raw:
+            try:
+                c_str = str(c).strip()
+                if c_str:
+                    out.append(int(c_str) if c_str.isdigit() else c_str)
+            except (ValueError, TypeError):
+                continue
+        return out
+
+    def _get_ventas_netas_total(
+        self, cursor, fecha_inicio: str, fecha_fin: str,
+        sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
+        clientes_excluidos: Optional[List] = None,
+    ) -> float:
+        """Total ventas netas (Facturas - NC) para el período y filtros opcionales. Reutilizado por sales_summary y total_consolidado_operativo."""
+        where_conditions = [
+            "cc.Fecha >= %s", "cc.Fecha <= %s",
+            "cc.Anulado = 'No'", "cc.CodigoMovimiento <> 0",
+            "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
+        ]
+        params = [fecha_inicio, fecha_fin]
+        if puntos_venta:
+            placeholders = ",".join(["%s"] * len(puntos_venta))
+            where_conditions.append(f"cc.id_pv IN ({placeholders})")
+            params.extend(puntos_venta)
+        if sucursales:
+            placeholders = ",".join(["%s"] * len(sucursales))
+            where_conditions.append(f"cc.CodSucursal IN ({placeholders})")
+            params.extend(sucursales)
+        if clientes_excluidos:
+            clientes_vals = []
+            for c in clientes_excluidos:
+                try:
+                    c_str = str(c).strip()
+                    if c_str:
+                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                except (ValueError, TypeError):
+                    continue
+            if clientes_vals:
+                placeholders = ",".join(["%s"] * len(clientes_vals))
+                where_conditions.append(f"cc.Codigo NOT IN ({placeholders})")
+                params.extend(clientes_vals)
+        sql = f"""
+            SELECT SUM(CASE
+                WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') THEN COALESCE(cc.SubtotalDesc, 0)
+                WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') THEN -COALESCE(cc.SubtotalDesc, 0)
+                ELSE 0
+            END) AS ventas_netas
+            FROM cuentacliente cc
+            WHERE {" AND ".join(where_conditions)}
+        """
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        return float(row[0] or 0) if row else 0.0
+
+    def _get_remitos_no_facturados_total(
+        self, cursor, fecha_inicio: str, fecha_fin: str,
+        sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
+        clientes_excluidos: Optional[List] = None,
+    ) -> float:
+        """Total remitos no facturados (comp_ped REM, Pendiente). Reutilizado por sales_summary y total_consolidado_operativo."""
+        where_conditions = [
+            "cp.Fecha >= %s", "cp.Fecha <= %s",
+            "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'",
+        ]
+        params = [fecha_inicio, fecha_fin]
+        if puntos_venta:
+            placeholders = ",".join(["%s"] * len(puntos_venta))
+            where_conditions.append(f"cp.id_pv IN ({placeholders})")
+            params.extend(puntos_venta)
+        if sucursales:
+            placeholders = ",".join(["%s"] * len(sucursales))
+            where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
+            params.extend(sucursales)
+        if clientes_excluidos:
+            clientes_vals = []
+            for c in clientes_excluidos:
+                try:
+                    c_str = str(c).strip()
+                    if c_str:
+                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                except (ValueError, TypeError):
+                    continue
+            if clientes_vals:
+                placeholders = ",".join(["%s"] * len(clientes_vals))
+                where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
+                params.extend(clientes_vals)
+        sql = f"""
+            SELECT SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_remitos
+            FROM comp_ped cp
+            WHERE {" AND ".join(where_conditions)}
+        """
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        return float(row[0] or 0) if row else 0.0
+
+    def _get_pedidos_pendientes_total(
+        self, cursor, fecha_inicio: str, fecha_fin: str,
+        sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
+        clientes_excluidos: Optional[List] = None,
+    ) -> float:
+        """Total pedidos pendientes de entrega (comp_ped PED, En preparación/Preparado). Reutilizado por sales_summary y total_consolidado_operativo."""
+        where_conditions = [
+            "cp.Fecha >= %s", "cp.Fecha <= %s",
+            "cp.TipoComprobante = 'PED'", "cp.Anulado = 'No'",
+            "cp.Estado IN ('En preparación', 'Preparado')",
+        ]
+        params = [fecha_inicio, fecha_fin]
+        if puntos_venta:
+            placeholders = ",".join(["%s"] * len(puntos_venta))
+            where_conditions.append(f"cp.id_pv IN ({placeholders})")
+            params.extend(puntos_venta)
+        if sucursales:
+            placeholders = ",".join(["%s"] * len(sucursales))
+            where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
+            params.extend(sucursales)
+        if clientes_excluidos:
+            clientes_vals = []
+            for c in clientes_excluidos:
+                try:
+                    c_str = str(c).strip()
+                    if c_str:
+                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                except (ValueError, TypeError):
+                    continue
+            if clientes_vals:
+                placeholders = ",".join(["%s"] * len(clientes_vals))
+                where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
+                params.extend(clientes_vals)
+        sql = f"""
+            SELECT SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_pedidos
+            FROM comp_ped cp
+            WHERE {" AND ".join(where_conditions)}
+        """
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        return float(row[0] or 0) if row else 0.0
+
     def _run_sales_summary(self, report: ReportDefinition, payload: Dict) -> QueryResult:
         """
         Ejecuta la consulta SQL para el reporte consolidado de Resumen de Ventas.
@@ -2588,40 +2646,14 @@ class QueryRunnerService:
         - Ventas Netas (Facturas - Notas de Crédito)
         - Remitos no facturados
         - Pedidos pendientes
+        Reutiliza _get_ventas_netas_total, _get_remitos_no_facturados_total, _get_pedidos_pendientes_total.
         """
         started_at = timezone.now()
         
         try:
-            # Obtener filtros del payload
             filters = payload.get("filters", {})
-            
-            # Obtener base_empresa del payload
             base_empresa = filters.get("base_empresa")
-            
-            # Obtener fechas
-            fecha_inicio = filters.get("fecha_inicio")
-            fecha_fin = filters.get("fecha_fin")
-            dia_actual = filters.get("dia_actual", False)
-            mes_actual = filters.get("mes_actual", False)
-            año_actual = filters.get("año_actual", False)
-            
-            # Si está marcado "día en curso", establecer fechas automáticamente
-            if dia_actual:
-                today = date.today()
-                fecha_inicio = today.strftime("%Y-%m-%d")
-                fecha_fin = today.strftime("%Y-%m-%d")
-            # Si está marcado "año en curso", establecer fechas automáticamente
-            elif año_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, 1, 1).strftime("%Y-%m-%d")
-                fecha_fin = date(today.year, 12, 31).strftime("%Y-%m-%d")
-            # Si está marcado "mes en curso", establecer fechas automáticamente
-            elif mes_actual:
-                today = date.today()
-                fecha_inicio = date(today.year, today.month, 1).strftime("%Y-%m-%d")
-                last_day = monthrange(today.year, today.month)[1]
-                fecha_fin = date(today.year, today.month, last_day).strftime("%Y-%m-%d")
-            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
             if not fecha_inicio or not fecha_fin:
                 return QueryResult(
                     meta={
@@ -2634,16 +2666,11 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
-            
-            # Si aún no tenemos base_empresa, intentar desde atributos del usuario
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
-            
-            # Si aún no tenemos base_empresa, intentar obtenerla de la configuración
             if not base_empresa:
                 base_empresa = getattr(settings, 'DEFAULT_BASE_EMPRESA', None)
-            
             if not base_empresa:
                 return QueryResult(
                     meta={
@@ -2656,8 +2683,240 @@ class QueryRunnerService:
                     totals={},
                     notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
                 )
+            sucursales_ints, puntos_venta_ints = self._parse_sucursales_pv(filters)
+            clientes_excluidos = self._parse_clientes_excluidos(filters)
+            mysql_config = settings.DATABASES['mysql']
+            import MySQLdb
+            try:
+                conn = MySQLdb.connect(
+                    host=mysql_config['HOST'],
+                    port=int(mysql_config['PORT']),
+                    user=mysql_config['USER'],
+                    passwd=mysql_config['PASSWORD'],
+                    db=base_empresa,
+                    charset='latin1'
+                )
+                cursor = conn.cursor()
+            except Exception as conn_error:
+                logger.error(f"❌ Error conectando a MySQL ({base_empresa}): {conn_error}")
+                raise
+
+            ventas_netas = self._get_ventas_netas_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            remitos_no_facturados = self._get_remitos_no_facturados_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            pedidos_pendientes = self._get_pedidos_pendientes_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            total_consolidado = ventas_netas + remitos_no_facturados + pedidos_pendientes
+
+            data = [{
+                "ventas_netas": ventas_netas,
+                "remitos_no_facturados": remitos_no_facturados,
+                "pedidos_pendientes": pedidos_pendientes,
+                "total_consolidado": total_consolidado,
+            }]
+            totals = {
+                "ventas_netas": ventas_netas,
+                "remitos_no_facturados": remitos_no_facturados,
+                "pedidos_pendientes": pedidos_pendientes,
+                "total_consolidado": total_consolidado,
+            }
+            notes = [f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}"]
+
+            logger.info(f"✅ Consulta Resumen de Ventas completada")
+            logger.info(f"   Ventas Netas: ${ventas_netas:,.2f}")
+            logger.info(f"   Remitos no facturados: ${remitos_no_facturados:,.2f}")
+            logger.info(f"   Pedidos pendientes: ${pedidos_pendientes:,.2f}")
+            logger.info(f"   Total consolidado: ${total_consolidado:,.2f}")
+
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=data,
+                totals=totals,
+                notes=notes,
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Error ejecutando consulta Resumen de Ventas: {e}", exc_info=True)
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=[],
+                totals={},
+                notes=[f"Error al ejecutar la consulta: {str(e)}"],
+            )
+
+    def _run_total_consolidado_operativo(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """
+        Reporte legacy Total Consolidado Operativo: 4 KPIs en una columna vertical.
+        Ventas Netas, Remitos no facturados, Pedidos pendientes de entrega, Total consolidado.
+        Reutiliza _get_ventas_netas_total, _get_remitos_no_facturados_total, _get_pedidos_pendientes_total.
+        """
+        started_at = timezone.now()
+        try:
+            filters = payload.get("filters", {})
+            base_empresa = filters.get("base_empresa")
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
+            if not fecha_inicio or not fecha_fin:
+                return QueryResult(
+                    meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                    data=[], totals={}, notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
+                )
+            if not base_empresa:
+                base_empresa = getattr(self.user, "base_empresa", None) if hasattr(self.user, "base_empresa") else None
+            if not base_empresa:
+                base_empresa = getattr(settings, "DEFAULT_BASE_EMPRESA", None)
+            if not base_empresa:
+                return QueryResult(
+                    meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                    data=[], totals={}, notes=["No se pudo determinar la base de datos de la empresa."],
+                )
+            sucursales_ints, puntos_venta_ints = self._parse_sucursales_pv(filters)
+            clientes_excluidos = self._parse_clientes_excluidos(filters)
+            mysql_config = settings.DATABASES["mysql"]
+            import MySQLdb
+            conn = MySQLdb.connect(
+                host=mysql_config["HOST"], port=int(mysql_config["PORT"]),
+                user=mysql_config["USER"], passwd=mysql_config["PASSWORD"],
+                db=base_empresa, charset="latin1",
+            )
+            cursor = conn.cursor()
+            ventas_netas = self._get_ventas_netas_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            remitos_no_facturados = self._get_remitos_no_facturados_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            pedidos_pendientes = self._get_pedidos_pendientes_total(
+                cursor, fecha_inicio, fecha_fin,
+                sucursales_ints or None, puntos_venta_ints or None,
+                clientes_excluidos or None,
+            )
+            total_consolidado = ventas_netas + remitos_no_facturados + pedidos_pendientes
+            conn.close()
+
+            data = [
+                {"label": "VENTAS NETAS", "value": ventas_netas},
+                {"label": "REMITOS NO FACTURADOS", "value": remitos_no_facturados},
+                {"label": "PEDIDOS PENDIENTES DE ENTREGA", "value": pedidos_pendientes},
+                {"label": "TOTAL CONSOLIDADO", "value": total_consolidado},
+            ]
+            totals = {
+                "ventas_netas": ventas_netas,
+                "remitos_no_facturados": remitos_no_facturados,
+                "pedidos_pendientes": pedidos_pendientes,
+                "total_consolidado": total_consolidado,
+            }
+            notes = [
+                f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+            ]
+            if sucursales_ints or puntos_venta_ints:
+                notes.append("Filtros: sucursales y/o punto de venta aplicados.")
+            if clientes_excluidos:
+                notes.append(f"Clientes excluidos: {len(clientes_excluidos)} cliente(s) (NOT IN).")
+            logger.info(f"✅ Total consolidado operativo: VN=${ventas_netas:,.2f} REM=${remitos_no_facturados:,.2f} PED=${pedidos_pendientes:,.2f} TOTAL=${total_consolidado:,.2f}")
+            return QueryResult(meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version}, data=data, totals=totals, notes=notes)
+        except Exception as e:
+            logger.error(f"❌ Error Total consolidado operativo: {e}", exc_info=True)
+            return QueryResult(
+                meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                data=[], totals={}, notes=[f"Error al ejecutar la consulta: {str(e)}"],
+            )
+
+    def _run_backorder_vs_stock_vs_facturacion(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """
+        Ejecuta el reporte legacy BO vs Stock vs Facturación.
+        Emula el Excel 'BASE ANALISIS BO V2.xlsx'.
+        
+        Fuentes:
+        - Facturación: cuentacliente (FA/FB/FC/FE/FM menos NC*)
+        - Remitos no facturados: comp_ped (TipoComprobante='REM', Estado='Pendiente')
+        - Backorder: comp_ped (TipoComprobante='PED') + stockp (renglones definitivos)
+        - Stock: stock_deposito (saldo, saldo_pedido_cliente)
+        - Maestros: articulo + rubro
+        
+        RESPUESTAS OBLIGATORIAS (Backorder detalle row-level):
+        1) ID cliente: comp_ped.Codigo. Tabla maestra: cliente. Join: cliente cli ON cli.Codigo = cp.Codigo.
+        2) precio_x_renglon: stockp.PrecioVentaxR (total por renglón; no unitario).
+        3) cant_pend: stockp.cantidad_pendiente.
+        4) Subrubro: existe. Tabla subrubro, join articulo.IDSubRubro = subrubro.IDSubRubro. Vendedor: existe.
+           Tabla viajantes, join comp_ped.CodViajante = viajantes.CodViajante. Sin match -> ''.
+        5) Base prueba: 73 filas. Límite 1000, sin paginación server-side; note "mostrando primeros N (límite 1000)".
+        """
+        started_at = timezone.now()
+        
+        try:
+            # Obtener filtros del payload
+            filters = payload.get("filters", {})
             
-            # Conectar a la base de datos MySQL de administraNET
+            # Obtener base_empresa del payload
+            base_empresa = filters.get("base_empresa")
+            
+            fecha_inicio, fecha_fin = self._resolve_period_dates(filters)
+            if not fecha_inicio or not fecha_fin:
+                return QueryResult(
+                    meta={
+                        "slug": report.slug,
+                        "name": report.name,
+                        "category": report.category,
+                        "version": report.version,
+                    },
+                    data=[],
+                    totals={},
+                    notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
+                )
+            if not base_empresa:
+                if hasattr(self.user, 'base_empresa'):
+                    base_empresa = self.user.base_empresa
+            if not base_empresa:
+                base_empresa = getattr(settings, 'DEFAULT_BASE_EMPRESA', None)
+            if not base_empresa:
+                return QueryResult(
+                    meta={
+                        "slug": report.slug,
+                        "name": report.name,
+                        "category": report.category,
+                        "version": report.version,
+                    },
+                    data=[],
+                    totals={},
+                    notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
+                )
+            sucursales = filters.get("sucursales", [])
+            if isinstance(sucursales, str):
+                sucursales = [sucursales] if sucursales else []
+            elif not isinstance(sucursales, list):
+                sucursales = []
+            
+            puntos_venta = filters.get("punto_venta", [])
+            if isinstance(puntos_venta, str):
+                puntos_venta = [puntos_venta] if puntos_venta else []
+            elif not isinstance(puntos_venta, list):
+                puntos_venta = []
+            
+            # Conectar a MySQL
             mysql_config = settings.DATABASES['mysql']
             
             import MySQLdb
@@ -2675,91 +2934,600 @@ class QueryRunnerService:
                 logger.error(f"❌ Error conectando a MySQL ({base_empresa}): {conn_error}")
                 raise
             
-            # 1. Calcular Ventas Netas (Facturas - Notas de Crédito)
-            sql_ventas_netas = f"""
-                SELECT 
+            logger.info(f"🔍 Ejecutando reporte BO vs Stock vs Facturación: {fecha_inicio} a {fecha_fin}, base={base_empresa}")
+            try:
+                cursor.execute("SET SESSION max_execution_time = 90000")
+            except Exception:
+                pass  # MySQL < 8.0.3 o MariaDB: usar solo hints por consulta
+
+            # =========================================================
+            # 1. FACTURACIÓN (cuentacliente)
+            # =========================================================
+            # Error 3024 = timeout (MAX_EXECUTION_TIME), NO error de sintaxis.
+            # Si hay 3024: la consulta es válida pero tarda >90s (ej. full scan en cuentacliente).
+            # Índices recomendados en administranet89:
+            #   CREATE INDEX idx_cc_fecha ON cuentacliente (Fecha);
+            #   CREATE INDEX idx_cc_fecha_tipo_anul ON cuentacliente (Fecha, TipoComprobante, Anulado);
+            # Ver plan: EXPLAIN <query>; evitar type=ALL, asegurar key usado.
+            # MAX_EXECUTION_TIME (ms): evita colgarse con bases grandes. MySQL 5.7.8+.
+            sql_facturacion = """
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */
                     SUM(CASE 
-                        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') 
-                        THEN COALESCE(cc.SubtotalDesc, 0)
-                        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') 
-                        THEN -COALESCE(cc.SubtotalDesc, 0)
+                        WHEN TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') 
+                        THEN COALESCE(SubtotalDesc, 0)
                         ELSE 0 
-                    END) AS ventas_netas
+                    END) AS ventas,
+                    SUM(CASE 
+                        WHEN TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') 
+                        THEN COALESCE(SubtotalDesc, 0)
+                        ELSE 0 
+                    END) AS notas_credito
+                FROM cuentacliente
+                WHERE Fecha >= %s
+                    AND Fecha <= %s
+                    AND Anulado = 'No'
+                    AND TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+            """
+            try:
+                sql_facturacion_debug = (sql_facturacion.strip() % (fecha_inicio, fecha_fin)).replace("\n", " ")
+                logger.info("📊 [BO] Facturación SQL (para EXPLAIN): %s", sql_facturacion_debug)
+            except Exception:
+                pass
+            cursor.execute(sql_facturacion, [fecha_inicio, fecha_fin])
+            row_fact = cursor.fetchone()
+            ventas = float(row_fact[0] or 0) if row_fact else 0.0
+            notas_credito = float(row_fact[1] or 0) if row_fact else 0.0
+            facturacion_neta = ventas - notas_credito
+            facturacion_neta_total = facturacion_neta  # Para % ventas y notes
+            logger.info("📊 [BO] Facturación (cuentacliente) OK")
+
+            # Facturación por cliente (agregado, 1 fila = 1 cliente)
+            # MAPEO:
+            # - Tabla clientes: cliente. FK facturación→cliente: cuentacliente.Codigo = cliente.Codigo.
+            # - Vendedor: del cliente (cliente.CodViajante -> viajantes.Nombre). No del movimiento.
+            # - Zona: cliente.id_zona -> erp_zona.id_zona; erp_zona.nombre_zona.
+            # - Última compra: MAX(cc.Fecha) dentro del período filtrado (no global).
+            # - Sucursal/PV en facturación: cuentacliente.CodSucursal, id_pv. Filtros aplicados cuando se envían.
+            where_fac_cli = [
+                "cc.Fecha >= %s",
+                "cc.Fecha <= %s",
+                "cc.Anulado = 'No'",
+                "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
+            ]
+            params_fac_cli = [fecha_inicio, fecha_fin]
+            if sucursales:
+                suc_ints = [int(x) for x in sucursales if str(x).isdigit()]
+                if suc_ints:
+                    ph = ",".join(["%s"] * len(suc_ints))
+                    where_fac_cli.append(f"cc.CodSucursal IN ({ph})")
+                    params_fac_cli.extend(suc_ints)
+            if puntos_venta:
+                pv_ints = [int(x) for x in puntos_venta if str(x).isdigit()]
+                if pv_ints:
+                    ph = ",".join(["%s"] * len(pv_ints))
+                    where_fac_cli.append(f"cc.id_pv IN ({ph})")
+                    params_fac_cli.extend(pv_ints)
+            where_fac_cli_s = " AND ".join(where_fac_cli)
+            FAC_CLI_LIMIT = 1000
+            params_fac_cli.append(FAC_CLI_LIMIT)
+            
+            sql_fac_cli = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */
+                    cl.Codigo AS id_cliente,
+                    CONCAT(COALESCE(MAX(cl.nombre_cliente), ''), ' (Cod: ', cl.Codigo, ')') AS cliente,
+                    SUM(CASE WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') THEN COALESCE(cc.SubtotalDesc, 0) ELSE 0 END)
+                        - SUM(CASE WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') THEN COALESCE(cc.SubtotalDesc, 0) ELSE 0 END) AS sub_total,
+                    MAX(cc.Fecha) AS ultima_compra,
+                    COALESCE(MAX(v.Nombre), '') AS vendedor,
+                    COALESCE(MAX(z.nombre_zona), '') AS zona,
+                    COALESCE(MAX(cl.telefono), '') AS telefono,
+                    COALESCE(MAX(cl.Email), '') AS email,
+                    COALESCE(MAX(cl.CUIT), '') AS cuit
                 FROM cuentacliente cc
-                WHERE cc.Fecha >= %s
-                    AND cc.Fecha <= %s
-                    AND cc.Anulado = 'No'
-                    AND cc.CodigoMovimiento <> 0
-                    AND cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
+                LEFT JOIN viajantes v ON v.CodViajante = cl.CodViajante
+                LEFT JOIN erp_zona z ON z.id_zona = cl.id_zona AND (z.anulado IS NULL OR z.anulado = 'No')
+                WHERE {where_fac_cli_s}
+                GROUP BY cl.Codigo
+                ORDER BY sub_total DESC
+                LIMIT %s
             """
-            cursor.execute(sql_ventas_netas, [fecha_inicio, fecha_fin])
-            row_ventas = cursor.fetchone()
-            ventas_netas = float(row_ventas[0] or 0) if row_ventas else 0.0
+            cursor.execute(sql_fac_cli, params_fac_cli)
+            fac_cli_rows = cursor.fetchall()
             
-            # 2. Calcular Remitos no facturados
-            sql_remitos = f"""
-                SELECT 
-                    SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_remitos
+            facturacion_por_cliente = []
+            for i, r in enumerate(fac_cli_rows, 1):
+                sub = float(r[2] or 0)
+                porc = round((sub / facturacion_neta_total) * 100, 2) if facturacion_neta_total else 0
+                facturacion_por_cliente.append({
+                    "nro": i,
+                    "id_cliente": r[0],
+                    "cliente": (r[1] or "").strip(),
+                    "sub_total": sub,
+                    "porc_ventas": porc,
+                    "ultima_compra": r[3].strftime("%Y-%m-%d") if r[3] else "",
+                    "vendedor": (r[4] or "").strip(),
+                    "zona": (r[5] or "").strip(),
+                    "telefono": (r[6] or "").strip(),
+                    "email": (r[7] or "").strip(),
+                    "cuit": (r[8] or "").strip(),
+                })
+            logger.info("📊 [BO] Facturación por cliente OK (%d clientes)", len(facturacion_por_cliente))
+
+            # =========================================================
+            # 2. REMITOS NO FACTURADOS (comp_ped)
+            # =========================================================
+            where_remitos = ["cp.Fecha >= %s", "cp.Fecha <= %s", "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'"]
+            params_remitos = [fecha_inicio, fecha_fin]
+            
+            # Filtros opcionales
+            if sucursales:
+                sucursales_ints = [int(s) for s in sucursales if str(s).isdigit()]
+                if sucursales_ints:
+                    placeholders = ','.join(['%s'] * len(sucursales_ints))
+                    where_remitos.append(f"cp.CodSucursal IN ({placeholders})")
+                    params_remitos.extend(sucursales_ints)
+            
+            if puntos_venta:
+                pv_ints = [int(pv) for pv in puntos_venta if str(pv).isdigit()]
+                if pv_ints:
+                    placeholders = ','.join(['%s'] * len(pv_ints))
+                    where_remitos.append(f"cp.id_pv IN ({placeholders})")
+                    params_remitos.extend(pv_ints)
+            
+            where_remitos_clause = " AND ".join(where_remitos)
+            
+            # Total remitos
+            sql_remitos_total = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */ SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_remitos
                 FROM comp_ped cp
-                WHERE cp.Fecha >= %s
-                    AND cp.Fecha <= %s
-                    AND cp.TipoComprobante = 'REM'
-                    AND cp.Anulado = 'No'
-                    AND cp.Estado = 'Pendiente'
+                WHERE {where_remitos_clause}
             """
-            cursor.execute(sql_remitos, [fecha_inicio, fecha_fin])
-            row_remitos = cursor.fetchone()
-            remitos_no_facturados = float(row_remitos[0] or 0) if row_remitos else 0.0
-            
-            # 3. Calcular Pedidos pendientes
-            sql_pedidos = f"""
-                SELECT 
-                    SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_pedidos
+            cursor.execute(sql_remitos_total, params_remitos)
+            row_rem = cursor.fetchone()
+            remitos_no_facturados_total = float(row_rem[0] or 0) if row_rem else 0.0
+            logger.info("📊 [BO] Remitos total OK")
+
+            # Detalle remitos
+            sql_remitos_detalle = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */
+                    DATE_FORMAT(cp.Fecha, '%%d/%%m/%%Y') AS fecha,
+                    cp.NroComprobante AS nro_comprobante,
+                    cp.CodSucursal AS id_sucursal,
+                    COALESCE(s.nombre_sucursal, 'Sin Sucursal') AS sucursal,
+                    cp.id_pv AS id_punto_venta,
+                    COALESCE(CAST(pv.nro_punto_venta AS CHAR), CAST(cp.id_pv AS CHAR), 'Sin PV') AS punto_venta,
+                    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc
                 FROM comp_ped cp
-                WHERE cp.Fecha >= %s
-                    AND cp.Fecha <= %s
-                    AND cp.TipoComprobante = 'PED'
-                    AND cp.Anulado = 'No'
-                    AND cp.Estado IN ('En preparación', 'Preparado')
+                LEFT JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+                LEFT JOIN punto_venta pv ON pv.id_punto_venta = cp.id_pv
+                WHERE {where_remitos_clause}
+                ORDER BY cp.Fecha DESC, cp.NroComprobante ASC
             """
-            cursor.execute(sql_pedidos, [fecha_inicio, fecha_fin])
-            row_pedidos = cursor.fetchone()
-            pedidos_pendientes = float(row_pedidos[0] or 0) if row_pedidos else 0.0
+            cursor.execute(sql_remitos_detalle, params_remitos)
+            remitos_rows = cursor.fetchall()
+            remitos_detalle = [
+                {
+                    "fecha": row[0],
+                    "nro_comprobante": row[1],
+                    "id_sucursal": row[2],
+                    "sucursal": row[3],
+                    "id_punto_venta": row[4],
+                    "punto_venta": row[5],
+                    "subtotal_desc": float(row[6] or 0),
+                }
+                for row in remitos_rows
+            ]
+            logger.info("📊 [BO] Remitos detalle OK (%d filas)", len(remitos_detalle))
+
+            # =========================================================
+            # 3. BACKORDER (comp_ped + stockp + stock_deposito)
+            # =========================================================
+            # Renglones definitivos de PED en stockp (VB6); comp_ped para cabecera y estados.
+            bo_estados = "('Pendiente', 'En preparación', 'En Remito', 'Parcial')"
+
+            # Detalle BO por producto con cálculo de cobertura
+            # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.
+            # oc_pendiente = SUM(saldo_pedido_proveedor): OC aprobadas y pendientes de entrega (CON INGRESO).
+            sql_bo_detalle = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */
+                    sp.IDArt AS id_art,
+                    a.id_manual AS codigo,
+                    a.NombreArticulo AS articulo,
+                    COALESCE(r.NombreRubro, 'Sin Rubro') AS categoria,
+                    SUM(sp.Cantidad) AS bo_qty,
+                    SUM(sp.PrecioVentaxR) AS bo_importe,
+                    COALESCE(sd.stock_total, 0) AS stock_actual,
+                    COALESCE(sd.reservado, 0) AS stock_reservado,
+                    GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(sd.reservado, 0)) AS disponible,
+                    GREATEST(0, COALESCE(sd.oc_pendiente, 0)) AS oc_pendiente
+                FROM stockp sp
+                INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                LEFT JOIN rubro r ON r.CodigoRubro = a.CodigoRubro
+                LEFT JOIN (
+                    SELECT id_articulo,
+                        SUM(saldo) AS stock_total,
+                        SUM(COALESCE(saldo_pedido_cliente, 0)) AS reservado,
+                        SUM(COALESCE(saldo_pedido_proveedor, 0)) AS oc_pendiente
+                    FROM stock_deposito
+                    GROUP BY id_articulo
+                ) sd ON sd.id_articulo = sp.IDArt
+                WHERE cp.TipoComprobante = 'PED'
+                    AND cp.Anulado = 'No'
+                    AND sp.anulado = 'No'
+                    AND cp.Estado IN {bo_estados}
+                    AND sp.CodigoMovimiento IS NOT NULL
+                GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, sd.reservado, sd.oc_pendiente
+                HAVING bo_qty > 0
+                ORDER BY bo_importe DESC
+            """
+            cursor.execute(sql_bo_detalle)
+            bo_rows = cursor.fetchall()
+            logger.info("📊 [BO] Detalle BO (producto) OK (%d filas)", len(bo_rows))
+
+            # Procesar y calcular cobertura (bo_importe en row[5]; oc_pendiente en row[9])
+            backorder_detalle = []
+            bo_total_importe = 0.0
+            con_stock_total = 0.0
+            con_ingreso_total = 0.0
+            sin_stock_total = 0.0
             
-            # 4. Calcular total consolidado
-            total_consolidado = ventas_netas + remitos_no_facturados + pedidos_pendientes
+            for row in bo_rows:
+                id_art = row[0]
+                codigo = row[1] or ''
+                articulo = row[2] or ''
+                categoria = row[3] or 'Sin Rubro'
+                bo_qty = float(row[4] or 0)
+                bo_importe = float(row[5] or 0)
+                stock_actual = float(row[6] or 0)
+                stock_reservado = float(row[7] or 0)
+                disponible = float(row[8] or 0)
+                oc_pendiente = float(row[9] or 0)
+                
+                # Clasificación por qty:
+                # - Stock cubre primero reservado; disponible = max(0, stock - reservado).
+                # - CON STOCK: parte del BO cubierta por disponible.
+                # - OC pend. cubre primero el faltante de reservado; solo el resto se usa para BO.
+                # - CON INGRESO: parte restante del BO cubierta por ese OC restante (para BO).
+                # - SIN STOCK: resto del BO no cubierto.
+                faltante_reservado = max(0.0, stock_reservado - stock_actual)
+                oc_para_reservado = min(oc_pendiente, faltante_reservado)
+                oc_restante_bo = max(0.0, oc_pendiente - oc_para_reservado)
+                con_stock_qty = min(bo_qty, disponible)
+                rest = bo_qty - con_stock_qty
+                con_ingreso_qty = min(rest, oc_restante_bo)
+                sin_stock_qty = rest - con_ingreso_qty
+                
+                # Prorratear importes por qty
+                if bo_qty > 0:
+                    con_stock_importe = bo_importe * (con_stock_qty / bo_qty)
+                    con_ingreso_importe = bo_importe * (con_ingreso_qty / bo_qty)
+                    sin_stock_importe = bo_importe * (sin_stock_qty / bo_qty)
+                else:
+                    con_stock_importe = 0.0
+                    con_ingreso_importe = 0.0
+                    sin_stock_importe = 0.0
+                
+                # Acumular totales
+                bo_total_importe += bo_importe
+                con_stock_total += con_stock_importe
+                con_ingreso_total += con_ingreso_importe
+                sin_stock_total += sin_stock_importe
+                
+                backorder_detalle.append({
+                    "id_art": id_art,
+                    "codigo": codigo,
+                    "articulo": articulo,
+                    "categoria": categoria,
+                    "bo_qty": bo_qty,
+                    "bo_importe": bo_importe,
+                    "stock_actual": stock_actual,
+                    "stock_reservado": stock_reservado,
+                    "disponible": disponible,
+                    "oc_pendiente": oc_pendiente,
+                    "con_stock_qty": con_stock_qty,
+                    "con_stock_importe": con_stock_importe,
+                    "con_ingreso_qty": con_ingreso_qty,
+                    "con_ingreso_importe": con_ingreso_importe,
+                    "sin_stock_qty": sin_stock_qty,
+                    "sin_stock_importe": sin_stock_importe,
+                })
             
+            # Detalle OC pendientes (para tooltip en "OC pend. qty"): fecha, nro, vencimiento, proveedor por artículo
+            ids_oc = [r["id_art"] for r in backorder_detalle if (r.get("oc_pendiente") or 0) > 0]
+            oc_map = {}
+            if ids_oc:
+                try:
+                    ph = ",".join(["%s"] * len(ids_oc))
+                    sql_oc_detalle = f"""
+                        SELECT /*+ MAX_EXECUTION_TIME(15000) */
+                            sp.IDArt,
+                            cp.Fecha,
+                            COALESCE(cp.NroCompBusq, '') AS nro_comp_busq,
+                            COALESCE(cp.NroComprobante, '') AS nro_comprobante,
+                            cp.Vencimiento,
+                            COALESCE(prov.Nombre, '') AS proveedor,
+                            COALESCE(sp.cantidad_pendiente, sp.Cantidad - COALESCE(sp.cantidad_entregada, 0)) AS qty_pend
+                        FROM stockp sp
+                        INNER JOIN cuentaproveedor cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                        LEFT JOIN proveedor prov ON prov.Codigo = cp.Codigo
+                        WHERE cp.TipoComprobante = 'OC' AND cp.Estado = 'Pendiente' AND cp.Anulado = 'No'
+                            AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                            AND sp.IDArt IN ({ph})
+                            AND (COALESCE(sp.cantidad_pendiente, sp.Cantidad - COALESCE(sp.cantidad_entregada, 0)) > 0)
+                        ORDER BY sp.IDArt, cp.Fecha, cp.NroCompBusq
+                    """
+                    cursor.execute(sql_oc_detalle, ids_oc)
+                    oc_rows = cursor.fetchall()
+
+                    def _fmt_oc_date(d):
+                        if d is None:
+                            return ""
+                        return d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
+
+                    for orow in oc_rows:
+                        id_art = orow[0]
+                        fecha = orow[1]
+                        nro_busq = (orow[2] or "") if orow[2] is not None else ""
+                        nro_comp = (orow[3] or "") if orow[3] is not None else ""
+                        vto = orow[4]
+                        proveedor = (orow[5] or "") if orow[5] is not None else ""
+                        qty = float(orow[6] or 0)
+                        if id_art not in oc_map:
+                            oc_map[id_art] = []
+                        oc_map[id_art].append({
+                            "fecha": _fmt_oc_date(fecha),
+                            "nro_comp_busq": nro_busq,
+                            "nro_comprobante": nro_comp,
+                            "vencimiento": _fmt_oc_date(vto),
+                            "proveedor": proveedor,
+                            "qty_pend": qty,
+                        })
+                    logger.info("📊 [BO] OC detalle (tooltip) OK: %d artículos con OC pendientes", len(oc_map))
+                except Exception as ex:
+                    logger.warning("📊 [BO] No se pudo cargar detalle OC para tooltip: %s", ex)
+            for r in backorder_detalle:
+                r["oc_detalle"] = oc_map.get(r["id_art"], [])
             
-            # Crear un objeto de datos con los totales para que renderCards pueda mostrarlos
-            # renderCards espera un array con al menos un objeto que contenga los valores
-            data = [{
-                "ventas_netas": ventas_netas,
-                "remitos_no_facturados": remitos_no_facturados,
-                "pedidos_pendientes": pedidos_pendientes,
-                "total_consolidado": total_consolidado,
-            }]
+            # Código manual / IDArt: codigo = articulo.id_manual, id_art = stockp.IDArt (articulo.IDArt).
+            # Totales: sum(detalle_con_stock.con_stock_importe) == con_stock_total; idem con_ingreso. Se valida y loguea si difieren.
+            # Detalle con stock: filas con con_stock_qty > 0, orden por con_stock_importe DESC
+            detalle_con_stock = [
+                r for r in backorder_detalle
+                if (r.get("con_stock_qty") or 0) > 0
+            ]
+            detalle_con_stock.sort(key=lambda x: -(x.get("con_stock_importe") or 0))
             
-            # Calcular totales (también los ponemos aquí para el summary)
+            # Detalle con ingreso: filas con con_ingreso_qty > 0, orden por con_ingreso_importe DESC
+            detalle_con_ingreso = [
+                r for r in backorder_detalle
+                if (r.get("con_ingreso_qty") or 0) > 0
+            ]
+            detalle_con_ingreso.sort(key=lambda x: -(x.get("con_ingreso_importe") or 0))
+            
+            # Validar que sumas de detalle coincidan con totales del resumen
+            sum_con_stock = sum(r.get("con_stock_importe") or 0 for r in detalle_con_stock)
+            sum_con_ingreso = sum(r.get("con_ingreso_importe") or 0 for r in detalle_con_ingreso)
+            diff_stock = abs(sum_con_stock - con_stock_total)
+            diff_ingreso = abs(sum_con_ingreso - con_ingreso_total)
+            if diff_stock > 0.01:
+                logger.warning(
+                    "BO detalle_con_stock: suma(con_stock_importe)=%s != con_stock_total=%s (diff=%s)",
+                    sum_con_stock, con_stock_total, diff_stock,
+                )
+            if diff_ingreso > 0.01:
+                logger.warning(
+                    "BO detalle_con_ingreso: suma(con_ingreso_importe)=%s != con_ingreso_total=%s (diff=%s)",
+                    sum_con_ingreso, con_ingreso_total, diff_ingreso,
+                )
+            
+            # Detalle sin stock: filas con sin_stock_qty > 0, orden por sin_stock_importe DESC.
+            # Vista por categoría se obtiene en frontend agrupando por categoria.
+            detalle_sin_stock = [
+                r for r in backorder_detalle
+                if (r.get("sin_stock_qty") or 0) > 0
+            ]
+            detalle_sin_stock.sort(key=lambda x: -(x.get("sin_stock_importe") or 0))
+            sum_sin_stock = sum(r.get("sin_stock_importe") or 0 for r in detalle_sin_stock)
+            if abs(sum_sin_stock - sin_stock_total) > 0.01:
+                logger.warning(
+                    "BO detalle_sin_stock: suma(sin_stock_importe)=%s != sin_stock_total=%s",
+                    sum_sin_stock, sin_stock_total,
+                )
+            
+            # =========================================================
+            # 3b. BACKORDER DETALLE ROW-LEVEL (Excel-like, un renglón por fila)
+            # Cabecera: comp_ped | Renglones: stockp | Cliente: cliente.Codigo | Vendedor: viajantes
+            # precio_x_renglon: stockp.PrecioVentaxR. cant_pend: stockp.cantidad_pendiente.
+            # =========================================================
+            BO_ROWS_LIMIT = 1000
+            where_bo_rows = [
+                "cp.TipoComprobante = 'PED'",
+                "cp.Anulado = 'No'",
+                "spr.anulado = 'No'",
+                f"cp.Estado IN {bo_estados}",
+                "spr.CodigoMovimiento IS NOT NULL",
+            ]
+            params_bo_rows = []
+            if sucursales:
+                suc_ints = [int(x) for x in sucursales if str(x).isdigit()]
+                if suc_ints:
+                    ph = ",".join(["%s"] * len(suc_ints))
+                    where_bo_rows.append(f"cp.CodSucursal IN ({ph})")
+                    params_bo_rows.extend(suc_ints)
+            if puntos_venta:
+                pv_ints = [int(x) for x in puntos_venta if str(x).isdigit()]
+                if pv_ints:
+                    ph = ",".join(["%s"] * len(pv_ints))
+                    where_bo_rows.append(f"cp.id_pv IN ({ph})")
+                    params_bo_rows.extend(pv_ints)
+            where_bo_rows_clause = " AND ".join(where_bo_rows)
+            
+            sql_bo_rows = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(90000) */
+                    DATE_FORMAT(cp.Fecha, '%%d/%%m/%%y') AS fecha,
+                    cp.NroComprobante AS nro_comp,
+                    COALESCE(spr.Descripcion, a.NombreArticulo, '') AS descripcion,
+                    COALESCE(a.id_manual, spr.id_manual, '') AS cod_manual,
+                    spr.Cantidad AS cantidad,
+                    COALESCE(spr.cantidad_pendiente, 0) AS cant_pend,
+                    cp.Estado AS estado,
+                    COALESCE(cli.nombre_cliente, '') AS cliente,
+                    cp.Codigo AS id_cliente,
+                    COALESCE(spr.PrecioVentaxR, 0) AS precio_x_renglon,
+                    COALESCE(r.NombreRubro, '') AS nombre_rubro,
+                    COALESCE(sr.NombreSubRubro, '') AS nombre_sub_rubro,
+                    COALESCE(v.Nombre, '') AS nombre_vendedor
+                FROM comp_ped cp
+                INNER JOIN stockp spr ON spr.CodigoMovimiento = cp.CodigoMovimiento
+                LEFT JOIN articulo a ON a.IDArt = spr.IDArt
+                LEFT JOIN rubro r ON r.CodigoRubro = a.CodigoRubro
+                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+                LEFT JOIN cliente cli ON cli.Codigo = cp.Codigo
+                LEFT JOIN viajantes v ON v.CodViajante = cp.CodViajante
+                WHERE {where_bo_rows_clause}
+                ORDER BY cp.Fecha DESC, cp.NroComprobante ASC, COALESCE(spr.Descripcion, a.NombreArticulo, '') ASC
+                LIMIT %s
+            """
+            params_bo_rows.append(BO_ROWS_LIMIT)
+            cursor.execute(sql_bo_rows, params_bo_rows)
+            bo_row_rows = cursor.fetchall()
+            logger.info("📊 [BO] Backorder detalle (row-level) OK (%d filas)", len(bo_row_rows))
+
+            backorder_detalle_rows = []
+            for r in bo_row_rows:
+                backorder_detalle_rows.append({
+                    "fecha": r[0],
+                    "nro_comp": r[1],
+                    "descripcion": r[2] or "",
+                    "cod_manual": r[3] or "",
+                    "cantidad": float(r[4] or 0),
+                    "cant_pend": int(round(float(r[5] or 0))),
+                    "estado": r[6] or "",
+                    "cliente": r[7] or "",
+                    "id_cliente": r[8],
+                    "precio_x_renglon": float(r[9] or 0),
+                    "nombre_rubro": r[10] or "",
+                    "nombre_sub_rubro": r[11] or "",
+                    "nombre_vendedor": r[12] or "",
+                })
+            
+            if backorder_detalle_rows:
+                logger.info(
+                    "📋 [BO] backorder_detalle_rows sample (3 filas): %s",
+                    json.dumps(backorder_detalle_rows[:3], default=str, ensure_ascii=False),
+                )
+
+            # Detectar si hay más de un depósito (para definición sobre stock_deposito)
+            num_depositos = 0
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM deposito WHERE (anulado IS NULL OR anulado = 'No')
+                """)
+                r = cursor.fetchone()
+                if r:
+                    num_depositos = int(r[0] or 0)
+                if num_depositos > 1:
+                    logger.info("📊 [BO] Más de un depósito en la base (N=%d). Stock agregado por artículo.", num_depositos)
+            except Exception as ex:
+                logger.debug("📊 [BO] No se pudo contar depósitos: %s", ex)
+            
+            # Cerrar conexión
+            cursor.close()
+            conn.close()
+            
+            # =========================================================
+            # 4. CALCULAR TOTALES FINALES
+            # =========================================================
+            total_importe = facturacion_neta + remitos_no_facturados_total
+            
+            # =========================================================
+            # 5. CONSTRUIR RESULTADO
+            # =========================================================
+            # Data principal: Resumen estilo Excel
+            resumen_data = [
+                # Bloque Facturación
+                {"concepto": "FACTURACIÓN (neto)", "importe": facturacion_neta, "tipo": "facturacion"},
+                {"concepto": "REMITO (no facturados)", "importe": remitos_no_facturados_total, "tipo": "facturacion"},
+                {"concepto": "TOTAL FACTURACIÓN + REMITOS", "importe": total_importe, "tipo": "total_facturacion"},
+                # Bloque Backorder
+                {"concepto": "BACKORDER TOTAL", "importe": bo_total_importe, "tipo": "backorder"},
+                {"concepto": "CON STOCK", "importe": con_stock_total, "tipo": "backorder"},
+                {"concepto": "CON INGRESO", "importe": con_ingreso_total, "tipo": "backorder"},
+                {"concepto": "SIN STOCK", "importe": sin_stock_total, "tipo": "sin_stock"},
+            ]
+            
+            # Totals para KPIs y métricas
             totals = {
-                "ventas_netas": ventas_netas,
-                "remitos_no_facturados": remitos_no_facturados,
-                "pedidos_pendientes": pedidos_pendientes,
-                "total_consolidado": total_consolidado,
+                # Facturación
+                "ventas": ventas,
+                "notas_credito": notas_credito,
+                "facturacion_neta": facturacion_neta,
+                "facturacion_neta_total": facturacion_neta_total,
+                "remitos_no_facturados_total": remitos_no_facturados_total,
+                "total_importe": total_importe,
+                # Backorder
+                "bo_total_importe": bo_total_importe,
+                "con_stock_total": con_stock_total,
+                "con_ingreso_total": con_ingreso_total,
+                "sin_stock_total": sin_stock_total,
+                # Conteos
+                "total_productos_bo": len(backorder_detalle),
+                "total_productos_sin_stock": len(detalle_sin_stock),
+                "total_remitos": len(remitos_detalle),
+                "total_clientes_facturacion": len(facturacion_por_cliente),
             }
             
-            # Notas - Solo mostrar el período, el resto de la información es redundante (ya está en las tarjetas)
+            # Notes
             notes = [
                 f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+                f"Facturación neta: ${facturacion_neta:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
+                "⚠️ Stock reservado depende de saldo_pedido_cliente (puede estar desactualizado)",
+                "Backorder: renglones desde stockp + comp_ped. precio_x_renglon = PrecioVentaxR, cant_pend = cantidad_pendiente. CON INGRESO = OC aprobadas pend. entrega (saldo_pedido_proveedor); OC cubre primero faltante reservado, el resto cubre BO.",
+                f"Backorder detalle: mostrando primeros {len(backorder_detalle_rows)} renglones (límite {BO_ROWS_LIMIT}).",
+                "Facturación por cliente: % ventas = (sub_total_cliente / facturacion_neta_total) * 100. Última compra = MAX(fecha) dentro del período.",
+                "Facturación: filtros sucursal/punto_venta aplicados (cuentacliente.CodSucursal, id_pv). Tab mostrando primeros " + str(len(facturacion_por_cliente)) + f" clientes (límite {FAC_CLI_LIMIT}).",
             ]
+            if num_depositos > 1:
+                notes.append(
+                    f"Hay {num_depositos} depósitos en la base. Stock y reservado se muestran agregados por artículo (todos los depósitos). "
+                    "Definir si se requiere filtro o desglose por depósito."
+                )
+            if diff_stock > 0.01:
+                notes.append(
+                    f"⚠️ Detalle con stock: suma(con_stock_importe)={sum_con_stock:.2f} != con_stock_total={con_stock_total:.2f} (diff={diff_stock:.2f})"
+                )
+            if diff_ingreso > 0.01:
+                notes.append(
+                    f"⚠️ Detalle con ingreso: suma(con_ingreso_importe)={sum_con_ingreso:.2f} != con_ingreso_total={con_ingreso_total:.2f} (diff={diff_ingreso:.2f})"
+                )
+            
+            # Extra: datasets para tabs
+            extra = {
+                "tabs": {
+                    "resumen": resumen_data,
+                    "detalle_sin_stock": detalle_sin_stock,
+                    "detalle_con_stock": detalle_con_stock,
+                    "detalle_con_ingreso": detalle_con_ingreso,
+                    "facturacion": facturacion_por_cliente,
+                    "remitos": remitos_detalle,
+                    "backorder_detalle": backorder_detalle,
+                    "backorder_detalle_rows": backorder_detalle_rows,
+                },
+            }
             
             ended_at = timezone.now()
             duration = (ended_at - started_at).total_seconds()
             
-            logger.info(f"✅ Consulta Resumen de Ventas completada en {duration:.2f}s")
-            logger.info(f"   Ventas Netas: ${ventas_netas:,.2f}")
-            logger.info(f"   Remitos no facturados: ${remitos_no_facturados:,.2f}")
-            logger.info(f"   Pedidos pendientes: ${pedidos_pendientes:,.2f}")
-            logger.info(f"   Total consolidado: ${total_consolidado:,.2f}")
+            logger.info(f"✅ Reporte BO vs Stock vs Facturación completado en {duration:.2f}s")
+            logger.info(f"   Facturación neta: ${facturacion_neta:,.2f}")
+            logger.info(f"   Remitos no facturados: ${remitos_no_facturados_total:,.2f}")
+            logger.info(f"   Total importe: ${total_importe:,.2f}")
+            logger.info(f"   BO total: ${bo_total_importe:,.2f}")
+            logger.info(f"   Sin stock: ${sin_stock_total:,.2f}")
             
             return QueryResult(
                 meta={
@@ -2767,14 +3535,22 @@ class QueryRunnerService:
                     "name": report.name,
                     "category": report.category,
                     "version": report.version,
+                    "extra": extra,
                 },
-                data=data,
+                data=resumen_data,
                 totals=totals,
                 notes=notes,
             )
             
         except Exception as e:
-            logger.error(f"❌ Error ejecutando consulta Resumen de Ventas: {e}", exc_info=True)
+            logger.error(f"❌ Error ejecutando reporte BO vs Stock vs Facturación: {e}", exc_info=True)
+            err_msg = str(e)
+            notes_err = [f"Error al ejecutar la consulta: {err_msg}"]
+            if "max_execution_time" in err_msg.lower() or "3024" in err_msg or "interrupted" in err_msg.lower():
+                notes_err.append(
+                    "La consulta superó el tiempo máximo (90 s). Pruebe un período más corto o use filtros (sucursal/punto de venta). "
+                    "Si la base es muy grande, añada índices en cuentacliente.Fecha, comp_ped.Fecha, etc."
+                )
             return QueryResult(
                 meta={
                     "slug": report.slug,
@@ -2784,7 +3560,6 @@ class QueryRunnerService:
                 },
                 data=[],
                 totals={},
-                notes=[f"Error al ejecutar la consulta: {str(e)}"],
+                notes=notes_err,
             )
-
 

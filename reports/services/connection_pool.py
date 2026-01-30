@@ -81,12 +81,23 @@ class MySQLConnectionPool:
                 charset='latin1',
                 connect_timeout=10
             )
+            self._init_connection_session(conn)
             logger.debug(f"🔌 Nueva conexión creada para {database}")
             return conn
         except Exception as e:
             logger.error(f"❌ Error creando conexión MySQL: {e}")
             raise
     
+    def _init_connection_session(self, conn: MySQLdb.Connection) -> None:
+        """Inicializa la sesión MySQL para evitar OperationalError (2000, 'Unknown or undefined error code').
+        Suele ocurrir por incompatibilidad sql_mode o charset entre cliente y servidor."""
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SET SESSION sql_mode='STRICT_TRANS_TABLES'")
+            cursor.close()
+        except Exception as init_err:
+            logger.debug(f"⚠️ No se pudo ejecutar init en conexión: {init_err}")
+
     def _is_connection_alive(self, conn: MySQLdb.Connection) -> bool:
         """Verifica si una conexión está viva."""
         try:
@@ -131,6 +142,9 @@ class MySQLConnectionPool:
                         logger.warning(f"⚠️ Pool lleno, creando conexión temporal para {database}")
                         conn = self._create_connection(database)
                         self._in_use_connections.add(conn)
+            
+            # Inicializar sesión en cada uso (evita OperationalError 2000 en conexiones reutilizadas)
+            self._init_connection_session(conn)
             
             # Retornar conexión
             yield conn

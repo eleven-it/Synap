@@ -63,5 +63,5 @@ EXPOSE 8000
 # Comando por defecto optimizado
 # Usar el script de entrada para inicialización automática
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8002"]
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 

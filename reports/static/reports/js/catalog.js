@@ -33,17 +33,48 @@ const updateWorkspaceCount = (count) => {
   }
 };
 
-const markButtonSaved = (button) => {
-  button.dataset.loading = "true";
-  button.classList.remove("text-sky-500", "hover:text-sky-400");
-  button.classList.add("text-emerald-500", "hover:text-emerald-400", "opacity-100");
-  button.classList.remove("opacity-60", "pointer-events-none");
+const markButtonSaved = (button, isListStyle = false) => {
   button.dataset.saved = "true";
+  button.classList.remove("text-sky-500", "hover:text-sky-400", "opacity-60", "pointer-events-none");
+  button.classList.remove("hover:bg-sky-50", "dark:hover:bg-sky-900/20");
+  button.classList.add("text-emerald-500", "opacity-100");
+  button.classList.add("pointer-events-none", "cursor-default");
+  button.dataset.loading = "false";
   button.innerHTML = `
-    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M5 13l4 4L19 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M5 13l4 4L19 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Guardado
+  `;
+};
+
+const markButtonInWorkspace = (button) => {
+  button.dataset.inWorkspace = "true";
+  button.classList.remove("text-sky-500", "hover:text-sky-400");
+  button.classList.add("text-emerald-500", "hover:text-emerald-400");
+  button.dataset.loading = "false";
+  button.innerHTML = `
+    <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M5 5v14l7-4 7 4V5a2 2 0 00-2-2H7a2 2 0 00-2 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    En workspace
+  `;
+};
+
+const resetButtonToGuardar = (button, isListStyle = false) => {
+  button.dataset.saved = "false";
+  button.dataset.inWorkspace = "false";
+  button.classList.remove("text-emerald-500", "hover:text-emerald-400", "pointer-events-none", "cursor-default");
+  button.classList.add("text-sky-500", "hover:text-sky-400");
+  if (button.closest("table")) {
+    button.classList.add("hover:bg-sky-50", "dark:hover:bg-sky-900/20");
+  }
+  button.dataset.loading = "false";
+  button.innerHTML = `
+    <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M5 5v14l7-4 7 4V5a2 2 0 00-2-2H7a2 2 0 00-2 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    ${isListStyle ? "Guardar" : "Guardar en workspace"}
   `;
 };
 
@@ -61,15 +92,26 @@ const syncWorkspaceState = async () => {
       throw new Error("No se pudo cargar el estado del workspace");
     }
     const payload = await response.json();
-    const slugs = (payload.slots || []).map((slot) => slot.slug);
-    updateWorkspaceCount(payload.count ?? slugs.length);
+    const slots = payload.slots || [];
+    const slugsInWorkspace = new Set(slots.map((s) => s.slug));
+    updateWorkspaceCount(payload.count ?? slots.length);
 
     const buttons = document.querySelectorAll("[data-add-to-workspace]");
     buttons.forEach((button) => {
       const slug = button.dataset.reportSlug;
-      if (slug && slugs.includes(slug)) {
-        markButtonSaved(button);
-        button.classList.add("pointer-events-none");
+      if (!slug) return;
+      const allowDuplicate = slug === "total-consolidado-operativo";
+      const isInWorkspace = slugsInWorkspace.has(slug);
+      const isListStyle = !!button.closest("table");
+
+      if (isInWorkspace) {
+        if (!allowDuplicate) {
+          markButtonSaved(button, isListStyle);
+        } else {
+          markButtonInWorkspace(button);
+        }
+      } else {
+        resetButtonToGuardar(button, isListStyle);
       }
     });
   } catch (error) {
@@ -84,48 +126,47 @@ const attachWorkspaceHandlers = () => {
 
   syncWorkspaceState();
 
-  const buttons = document.querySelectorAll("[data-add-to-workspace]");
-  buttons.forEach((button) => {
-    const slug = button.dataset.reportSlug;
-    if (!slug) {
+  document.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-add-to-workspace]");
+    if (!button || button.dataset.saved === "true" || button.dataset.loading === "true") {
       return;
     }
-    button.addEventListener("click", async () => {
-      if (button.dataset.loading === "true") {
-        return;
+    const slug = button.dataset.reportSlug;
+    if (!slug) return;
+
+    button.dataset.loading = "true";
+    button.classList.add("opacity-60", "pointer-events-none");
+    try {
+      const response = await fetch(workspaceApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({
+          slug,
+          allow_duplicate: slug === "total-consolidado-operativo",
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || "No se pudo guardar el informe");
       }
-      button.dataset.loading = "true";
-      button.classList.add("opacity-60", "pointer-events-none");
-      try {
-        const response = await fetch(workspaceApiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Requested-With": "XMLHttpRequest",
-            "X-CSRFToken": getCsrfToken(),
-          },
-          body: JSON.stringify({ slug }),
-        });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail.detail || "No se pudo guardar el informe");
-        }
-        const payload = await response.json();
-        updateWorkspaceCount(payload.count ?? "-");
-        if (payload.status === "exists") {
-          showToast("Este informe ya está en el workspace", "error");
-        } else {
-          showToast("Informe guardado en tu workspace");
-        }
-        markButtonSaved(button);
-        button.classList.add("pointer-events-none");
-      } catch (error) {
-        showToast(error.message || "No se pudo guardar", "error");
-        button.classList.remove("opacity-60", "pointer-events-none");
-        button.dataset.loading = "false";
-        return;
+      const payload = await response.json();
+      updateWorkspaceCount(payload.count ?? payload.slots?.length ?? "-");
+      if (payload.status === "exists") {
+        showToast("Este informe ya está en el workspace", "error");
+      } else {
+        showToast("Informe guardado en tu workspace");
       }
-    });
+      await syncWorkspaceState();
+    } catch (error) {
+      showToast(error.message || "No se pudo guardar", "error");
+      button.classList.remove("opacity-60", "pointer-events-none");
+      button.dataset.loading = "false";
+      await syncWorkspaceState();
+    }
   });
 };
 

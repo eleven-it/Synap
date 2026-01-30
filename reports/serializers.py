@@ -126,6 +126,7 @@ class MetricSchemaSerializer(serializers.Serializer):
     data_type = serializers.ChoiceField(choices=["number", "currency", "percentage", "integer"])
     role = serializers.ChoiceField(choices=["value", "aux"], required=False, allow_null=True)
     format = serializers.CharField(required=False, allow_null=True)
+    show_in_kpi = serializers.BooleanField(required=False, default=True)
 
 
 class DimensionSchemaSerializer(serializers.Serializer):

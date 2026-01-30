@@ -52,6 +52,10 @@ class ExportService:
         except ReportDefinition.DoesNotExist:
             raise ValueError(f"Reporte no encontrado: {report_slug}")
         
+        # Asegurar base_empresa dentro de filters para reportes que lo usan (ventas_netas, etc.)
+        if payload.get("base_empresa"):
+            payload.setdefault("filters", {})["base_empresa"] = payload["base_empresa"]
+        
         # Ejecutar la consulta para obtener los datos
         query_service = QueryRunnerService(self.user)
         query_result = query_service.run(report, payload)
@@ -84,6 +88,9 @@ class ExportService:
             query_result: Resultado de la consulta (QueryResult)
             payload: Payload con filtros
         """
+        if report.slug == "bo-stock-facturacion":
+            self._generate_excel_bo(file_path, report, query_result)
+            return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
@@ -169,12 +176,16 @@ class ExportService:
                 ws.append(["Sin datos disponibles"])
                 row += 1
             else:
-                # Obtener headers desde las claves del primer registro
-                headers = list(query_result.data[0].keys())
-                
-                # Para "uninvoiced_remitos", excluir id_sucursal e id_punto_venta
-                if report.slug == "uninvoiced_remitos":
-                    headers = [h for h in headers if h not in ["id_sucursal", "id_punto_venta"]]
+                # Orden y columnas según tipo de reporte (alineado con la tabla del dashboard)
+                if report.slug in ("ventas_netas", "ventas-netas"):
+                    # Ventas Netas: MES, SUCURSAL, PUNTO DE VENTA, VENTAS NETAS, NOTAS CRÉDITO, VENTAS BRUTAS
+                    # Excluir id_sucursal e id_punto_venta; usar mes_formato como Mes
+                    headers = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"]
+                else:
+                    headers = list(query_result.data[0].keys())
+                    # Para "uninvoiced_remitos", excluir id_sucursal e id_punto_venta
+                    if report.slug == "uninvoiced_remitos":
+                        headers = [h for h in headers if h not in ["id_sucursal", "id_punto_venta"]]
                 
                 # Traducir headers al español si es necesario
                 header_translations = {
@@ -185,7 +196,7 @@ class ExportService:
                     "id_punto_venta": "ID Punto de Venta",
                     "nro_punto_venta": "Punto de Venta",
                     "ventas_brutas": "Ventas Brutas",
-                    "notas_credito": "Notas de Crédito",
+                    "notas_credito": "Notas Crédito",
                     "ventas_netas": "Ventas Netas",
                     "fecha": "Fecha",
                     "nro_comprobante": "N° Comprobante",
@@ -195,6 +206,9 @@ class ExportService:
                     "sucursal": "Sucursal",
                     "punto_venta": "Punto de Venta",
                 }
+                # Ventas Netas: etiqueta "Mes" para la primera columna (mes_formato)
+                if report.slug in ("ventas_netas", "ventas-netas"):
+                    header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
                 
@@ -250,8 +264,6 @@ class ExportService:
                 
                 # Agregar fila de totales si existe
                 if query_result.totals:
-                    row += 1
-                    
                     # Mapeo de headers a nombres de totales en query_result.totals
                     # Algunos reportes usan "total_<campo>" en lugar de solo "<campo>"
                     header_to_total_map = {
@@ -282,11 +294,12 @@ class ExportService:
                         else:
                             total_row.append("")
                     
-                    # Escribir la fila completa
+                    # Escribir la fila completa (row ya apunta a la siguiente fila libre)
                     ws.append(total_row)
                     
-                    # Aplicar estilo solo a las celdas de la fila de totales que tienen contenido
-                    # Limitar el rango a solo las columnas que realmente existen en la fila
+                    # Mismo criterio de columnas numéricas que en las filas de datos
+                    currency_headers_data = ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]
+                    # Aplicar estilo y formato a la fila de totales (la que acabamos de escribir en row)
                     for col_num in range(1, len(total_row) + 1):
                         if col_num <= len(total_row):
                             cell = ws.cell(row=row, column=col_num)
@@ -294,17 +307,14 @@ class ExportService:
                             cell.fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
                             cell.border = border
                             
-                            # Aplicar formato según el tipo de contenido
                             if col_num == 1:
-                                # Primera columna: "TOTALES"
                                 cell.alignment = Alignment(horizontal='center', vertical='center')
                             else:
-                                # Otras columnas: valores numéricos o vacíos
                                 header = headers[col_num - 1]
-                                total_key = header_to_total_map.get(header, header)
-                                if total_key in query_result.totals or header in query_result.totals:
-                                    total_value = query_result.totals.get(total_key) or query_result.totals.get(header)
-                                    if isinstance(total_value, (int, float)):
+                                # Mismo formato moneda que las filas de datos
+                                if header in currency_headers_data:
+                                    value = total_row[col_num - 1]
+                                    if isinstance(value, (int, float)):
                                         cell.number_format = '"$"#,##0.00'
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
                                     else:
@@ -330,7 +340,186 @@ class ExportService:
         # 5. Guardar archivo
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
-    
+
+    def _generate_excel_bo(self, file_path: Path, report: ReportDefinition, query_result):
+        """
+        Genera un archivo Excel multi-hoja para el reporte BO vs Stock vs Facturación.
+        Cada tab del reporte se exporta como una hoja.
+        """
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        extra = query_result.meta.get("extra") or {}
+        tabs = extra.get("tabs") or {}
+
+        # Orden y nombre de hojas (key en tabs, título en Excel, clave de datos si difiere)
+        sheets_config = [
+            ("resumen", "Resumen", None),
+            ("detalle_sin_stock", "Detalle sin stock", None),
+            ("detalle_con_stock", "Detalle con stock", None),
+            ("detalle_con_ingreso", "Detalle con ingreso", None),
+            ("facturacion", "Facturación", None),
+            ("remitos", "Remitos", None),
+            ("backorder_detalle_rows", "Backorder detalle", None),
+        ]
+
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        title_font = Font(bold=True, size=14, color="1E40AF")
+        border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin'),
+        )
+        currency_headers = {
+            "importe", "sub_total", "subtotal_desc", "bo_importe", "con_stock_importe",
+            "con_ingreso_importe", "sin_stock_importe", "precio_x_renglon",
+        }
+
+        def sanitize_sheet_name(name: str) -> str:
+            invalid = set('\\/*?:[]')
+            out = "".join(c if c not in invalid else " " for c in name)
+            return (out or "Hoja")[:31]
+
+        wb = openpyxl.Workbook()
+        first_sheet = True
+
+        for sheet_key, sheet_title, data_key in sheets_config:
+            data = tabs.get(data_key or sheet_key)
+            if data is None:
+                data = []
+            if not isinstance(data, list):
+                data = []
+
+            # Excluir columnas no exportables (listas/dicts)
+            if data and isinstance(data[0], dict):
+                all_keys = list(data[0].keys())
+                headers = [k for k in all_keys if not isinstance(data[0].get(k), (list, dict))]
+            elif sheet_key == "resumen":
+                headers = ["concepto", "importe", "tipo"]
+                if not data:
+                    data = []
+            else:
+                headers = []
+
+            if first_sheet:
+                ws = wb.active
+                first_sheet = False
+            else:
+                ws = wb.create_sheet()
+            ws.title = sanitize_sheet_name(sheet_title)
+
+            row = 1
+            # Título del reporte y período solo en la primera hoja
+            if ws == wb.active:
+                ws.merge_cells(f"A{row}:D{row}")
+                cell = ws[f"A{row}"]
+                cell.value = report.name
+                cell.font = title_font
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+                row += 1
+                if query_result.notes:
+                    ws.merge_cells(f"A{row}:D{row}")
+                    cell = ws[f"A{row}"]
+                    cell.value = query_result.notes[0] if query_result.notes else ""
+                    cell.font = Font(size=10, italic=True)
+                    row += 1
+                row += 1
+
+            if not headers:
+                ws.cell(row=row, column=1).value = "Sin datos"
+                row += 1
+            else:
+                header_labels = {
+                    "concepto": "Concepto",
+                    "importe": "Importe",
+                    "tipo": "Tipo",
+                    "codigo": "Código",
+                    "articulo": "Artículo",
+                    "categoria": "Categoría",
+                    "bo_qty": "BO Cant.",
+                    "bo_importe": "BO Importe",
+                    "stock_actual": "Stock actual",
+                    "stock_reservado": "Stock reservado",
+                    "disponible": "Disponible",
+                    "oc_pendiente": "OC pendiente",
+                    "con_stock_qty": "Con stock cant.",
+                    "con_stock_importe": "Con stock importe",
+                    "con_ingreso_qty": "Con ingreso cant.",
+                    "con_ingreso_importe": "Con ingreso importe",
+                    "sin_stock_qty": "Sin stock cant.",
+                    "sin_stock_importe": "Sin stock importe",
+                    "nro": "Nº",
+                    "id_cliente": "ID Cliente",
+                    "cliente": "Cliente",
+                    "sub_total": "Subtotal",
+                    "porc_ventas": "% Ventas",
+                    "ultima_compra": "Última compra",
+                    "vendedor": "Vendedor",
+                    "zona": "Zona",
+                    "telefono": "Teléfono",
+                    "email": "Email",
+                    "cuit": "CUIT",
+                    "fecha": "Fecha",
+                    "nro_comprobante": "N° Comprobante",
+                    "id_sucursal": "ID Sucursal",
+                    "sucursal": "Sucursal",
+                    "id_punto_venta": "ID Punto de venta",
+                    "punto_venta": "Punto de venta",
+                    "subtotal_desc": "Subtotal",
+                    "nro_comp": "N° Comp.",
+                    "descripcion": "Descripción",
+                    "cod_manual": "Cód. manual",
+                    "cantidad": "Cantidad",
+                    "cant_pend": "Cant. pend.",
+                    "estado": "Estado",
+                    "precio_x_renglon": "Precio x renglón",
+                    "nombre_rubro": "Rubro",
+                    "nombre_sub_rubro": "Subrubro",
+                    "nombre_vendedor": "Vendedor",
+                    "id_art": "ID Art.",
+                }
+                translated = [header_labels.get(h, h.replace("_", " ").title()) for h in headers]
+                ws.append(translated)
+                for col_num, _ in enumerate(translated, 1):
+                    c = ws.cell(row=row, column=col_num)
+                    c.fill = header_fill
+                    c.font = header_font
+                    c.alignment = Alignment(horizontal='center', vertical='center')
+                    c.border = border
+                row += 1
+
+                for data_row in data:
+                    row_vals = []
+                    for h in headers:
+                        val = data_row.get(h, "")
+                        if isinstance(val, (list, dict)):
+                            val = ""
+                        row_vals.append(val)
+                    ws.append(row_vals)
+                    for col_num, (header, value) in enumerate(zip(headers, row_vals), 1):
+                        cell = ws.cell(row=row, column=col_num)
+                        cell.border = border
+                        if header in currency_headers and isinstance(value, (int, float)):
+                            cell.number_format = '"$"#,##0.00'
+                            cell.alignment = Alignment(horizontal='right', vertical='center')
+                        else:
+                            cell.alignment = Alignment(horizontal='left', vertical='center')
+                    row += 1
+
+            for col_num in range(1, ws.max_column + 1):
+                col_letter = get_column_letter(col_num)
+                max_len = 0
+                for cell in ws[col_letter]:
+                    if cell.value is not None:
+                        max_len = max(max_len, len(str(cell.value)))
+                ws.column_dimensions[col_letter].width = min(max_len + 2, 50)
+
+        wb.save(file_path)
+        logger.info(f"✅ Archivo Excel BO generado con {len(sheets_config)} hojas: {file_path}")
+
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """
         Retorna una HttpResponse con el archivo para descarga.

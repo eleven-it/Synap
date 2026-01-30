@@ -176,13 +176,12 @@
                             <button type="button"
                                     data-realtime-toggle
                                     data-realtime-active="false"
-                                    class="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md text-slate-400 hover:text-slate-300 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
-                                <svg data-realtime-icon class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M12 6v6l4 2"/>
+                                    class="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30 border-rose-300 dark:border-rose-700">
+                                <svg data-realtime-icon class="w-4 h-4 text-rose-600 dark:text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                                 <span data-realtime-label>Tiempo real</span>
-                                <span data-realtime-indicator class="w-2 h-2 rounded-full bg-green-500 opacity-0 transition-opacity duration-200"></span>
+                                <span data-realtime-indicator class="w-2 h-2 rounded-full bg-rose-500 dark:bg-rose-400 opacity-0 transition-opacity duration-200"></span>
                             </button>
                         </div>
                         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Frecuencia de actualización automática en tiempo real</span>
@@ -219,8 +218,8 @@
     </div>
 </section>
 
-<script src="{% static 'reports/vendor/d3.min.js' %}?v=20250310"></script>
-<script src="{% static 'reports/js/widget_engine.js' %}?v=20250310"></script>
+<script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211"></script>
+<script src="{% static 'reports/js/widget_engine.js' %}?v=20260211"></script>
 <script>
   // Asegurar que WidgetEngine esté disponible antes de cargar dashboard.js
   // Esto es necesario porque dashboard.js se carga como módulo ES6 y puede ejecutarse
@@ -241,5 +240,5 @@
     }
   })();
 </script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20250310"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260211"></script>
 {% endblock %}

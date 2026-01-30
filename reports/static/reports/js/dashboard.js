@@ -28,11 +28,14 @@ function detectReportType() {
   // Lista de reportes legacy conocidos (hardcodeados)
   const legacyReports = [
     "ventas_netas",
+    "ventas-netas",
     "cash_flow_waterfall", 
     "cash_flow_by_account",
     "uninvoiced_remitos",
     "pending_orders",
-    "sales_summary"
+    "sales_summary",
+    "total-consolidado-operativo",
+    "bo-stock-facturacion"
   ];
   
   const isLegacyBySlug = legacyReports.includes(reportSlug);
@@ -49,6 +52,15 @@ function detectReportType() {
     reportConfig: reportConfig,
     isLegacy: !isDeclarative
   };
+}
+
+/**
+ * Indica si el slug corresponde al reporte Ventas Netas (DB puede usar "ventas-netas" o "ventas_netas").
+ * @param {string} slug - report.slug del DOM o API
+ * @returns {boolean}
+ */
+function isVentasNetasSlug(slug) {
+  return slug === "ventas_netas" || slug === "ventas-netas";
 }
 
 // ============================================
@@ -241,6 +253,7 @@ const initializeFiltersToggle = () => {
     if (filtersWrapper) {
       if (visible) {
         filtersWrapper.classList.remove("hidden");
+        window.dispatchEvent(new CustomEvent("reportPeriodFiltersReady"));
       } else {
         filtersWrapper.classList.add("hidden");
       }
@@ -304,6 +317,32 @@ const formatCurrency = (value) => {
     }
   }
   return value;
+};
+
+/**
+ * Formato compacto para KPIs: valores grandes en millones (8.878M), miles (500K), o completo si es pequeño
+ */
+const formatCurrencyCompact = (value) => {
+  if (typeof value !== "number" || isNaN(value)) return formatCurrency(value ?? 0);
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1e6) {
+    const millions = abs / 1e6;
+    const formatted = millions.toLocaleString("es-AR", {
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    });
+    return `${sign}${formatted}M`;
+  }
+  if (abs >= 1e3) {
+    const thousands = abs / 1e3;
+    const formatted = thousands.toLocaleString("es-AR", {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 0,
+    });
+    return `${sign}${formatted}K`;
+  }
+  return formatCurrency(value);
 };
 
 const isCurrencyField = (fieldName) => {
@@ -471,8 +510,9 @@ const showWorkspace = (index, options = { rerender: true }) => {
       widgets.forEach((widget) => {
         const cacheKey = widget.dataset.widgetId;
         const cached = widgetDataCache.get(cacheKey);
-        if (cached) {
-          renderChart(widget, cached.data, cached.config);
+        if (cached && cached.data) {
+          const config = cached.config || getWidgetConfig(widget);
+          renderWidgetChart(widget, cached.data, config, cached.meta || {});
         }
       });
     }
@@ -1109,17 +1149,27 @@ const renderStackedBarChart = (container, data, config) => {
     return;
   }
 
-  const xField = config.x_field || Object.keys(data[0])[0];
+  const first = data[0];
+  const xField = config.x_field || (first.mes_formato ? "mes_formato" : "mes") || Object.keys(first)[0];
   const valueField = config.y_field || config.value_field || discoverNumericFields(data)[0];
   if (!valueField) {
     container.innerHTML = "<p class=\"text-xs text-slate-200\">Sin métricas numéricas.</p>";
     return;
   }
 
-  const stackField =
-    config.stack_field || Object.keys(data[0]).find((key) => key !== xField && key !== valueField && typeof data[0][key] === "string");
+  const isCurrency = isCurrencyField(valueField) || config.unit === "ARS";
+  let stackField =
+    config.stack_field || (config.group_field === "sucursal" && first.nombre_sucursal ? "nombre_sucursal" : config.group_field) ||
+    Object.keys(first).find((key) => key !== xField && key !== valueField && typeof first[key] === "string");
+  // Forzar nombre_sucursal cuando los datos lo tienen y hay varias sucursales (evita "Total" si config trae "Sucursal" y no existe en filas)
+  if (first.nombre_sucursal !== undefined && first.nombre_sucursal !== null) {
+    const sucursalValues = Array.from(new Set(data.map((r) => r.nombre_sucursal ?? ""))).filter(Boolean);
+    if (sucursalValues.length > 1) {
+      stackField = "nombre_sucursal";
+    }
+  }
   const grouped = d3.group(data, (row) => row[xField] ?? "Sin categoría");
-  const keys = Array.from(new Set(Array.from(grouped.values()).flat().map((row) => row[stackField] ?? "Total")));
+  const keys = Array.from(new Set(Array.from(grouped.values()).flat().map((row) => row[stackField] ?? "Total"))).filter(Boolean);
 
   const stackedData = Array.from(grouped, ([key, rows]) => {
     const base = { x: key };
@@ -1131,8 +1181,24 @@ const renderStackedBarChart = (container, data, config) => {
     return base;
   });
 
+  // Ordenar cronológicamente si es mes (mes_formato MM/YYYY o mes YYYY-MM)
+  if (first.mes_formato || first.mes) {
+    stackedData.sort((a, b) => {
+      const parse = (str) => {
+        if (!str) return new Date(0);
+        if (str.indexOf("/") !== -1) {
+          const [m, y] = str.split("/");
+          return new Date(parseInt(y, 10), parseInt(m, 10) - 1);
+        }
+        const [y, m] = String(str).split("-");
+        return new Date(parseInt(y, 10), parseInt(m || 1, 10) - 1);
+      };
+      return parse(a.x) - parse(b.x);
+    });
+  }
+
   const { width, height } = getBounding(container);
-  const margin = { top: 24, right: 24, bottom: 40, left: 56 };
+  const margin = { top: 28, right: 160, bottom: 40, left: isCurrency ? 90 : 72 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
@@ -1168,7 +1234,6 @@ const renderStackedBarChart = (container, data, config) => {
   const yAxis = d3.axisLeft(yScale).ticks(5);
   if (isCurrency) {
     yAxis.tickFormat((d) => {
-      // Asegurar que el valor sea numérico antes de formatear
       if (typeof d === "number" && !isNaN(d) && isFinite(d)) {
         return formatCurrency(d);
       }
@@ -1180,10 +1245,8 @@ const renderStackedBarChart = (container, data, config) => {
     .attr("transform", `translate(${margin.left}, 0)`)
     .attr("class", "text-[10px] text-slate-300 font-medium")
     .call(yAxis);
-  
-  // Asegurar que los textos del eje Y se muestren correctamente y tengan suficiente espacio
   yAxisGroup.selectAll("text")
-    .style("fill", "rgb(203 213 225)") // text-slate-300
+    .style("fill", "rgb(203 213 225)")
     .style("font-size", "10px")
     .style("font-weight", "500")
     .style("text-anchor", "end")
@@ -1202,7 +1265,43 @@ const renderStackedBarChart = (container, data, config) => {
     .attr("y", (d) => yScale(d[1]))
     .attr("height", (d) => yScale(d[0]) - yScale(d[1]))
     .attr("width", xScale.bandwidth())
-    .attr("rx", 6);
+    .attr("rx", 4);
+
+  // Total sobre cada barra (como en el informe anterior)
+  stackedData.forEach((d) => {
+    const total = keys.reduce((sum, k) => sum + (d[k] || 0), 0);
+    if (total <= 0) return;
+    const x = xScale(d.x) + xScale.bandwidth() / 2;
+    const y = yScale(total) - 8;
+    svg
+      .append("text")
+      .attr("x", x)
+      .attr("y", y)
+      .attr("text-anchor", "middle")
+      .attr("class", "text-[11px] font-semibold fill-white")
+      .style("font-size", "11px")
+      .style("font-weight", "600")
+      .text(isCurrency ? formatCurrency(total) : formatNumber(total));
+  });
+
+  // Leyenda (esquina superior derecha)
+  const legend = svg
+    .append("g")
+    .attr("transform", `translate(${width - margin.right - 140}, ${margin.top})`);
+  keys.forEach((key, i) => {
+    const g = legend.append("g").attr("transform", `translate(0, ${i * 20})`);
+    g.append("rect")
+      .attr("width", 12)
+      .attr("height", 12)
+      .attr("rx", 2)
+      .attr("fill", COLORS[i % COLORS.length]);
+    g.append("text")
+      .attr("x", 16)
+      .attr("y", 9)
+      .attr("class", "text-[10px] fill-slate-300 font-medium")
+      .style("fill", "rgb(203 213 225)")
+      .text(key);
+  });
 };
 
 const renderHeatmap = (container, data, config) => {
@@ -2028,44 +2127,61 @@ const renderWaterfall = (container, data, config) => {
 const renderCards = (container, data, config) => {
   ensureVisible(container);
   console.log("[renderCards] Renderizando:", { dataLength: data?.length, config, data });
+  let reportSlug = dashboardRoot?.dataset?.reportSlug;
+  if (!reportSlug && container) {
+    const widgetElement = container.closest("section[data-report-slug]") || container.closest("[data-report-slug]");
+    if (widgetElement?.dataset?.reportSlug) reportSlug = widgetElement.dataset.reportSlug;
+  }
+  // total-consolidado-operativo: data es lista de {label, value} — renderizar 4 cards verticales
+  const isTotalConsolidadoOperativo = reportSlug === "total-consolidado-operativo";
+  const isKpiList = isTotalConsolidadoOperativo && Array.isArray(data) && data.length > 0 && data[0].label != null && data[0].value != null;
+  if (isKpiList) {
+    console.log(`[renderCards] Total Consolidado: renderizando ${data.length} KPIs:`, data.map(d => d.label));
+    const wrapper = d3.select(container).html("");
+    // Detectar si estamos en workspace (contenedor más pequeño)
+    const isInWorkspace = container.closest("[data-workspace-mode]") || container.closest("[data-widget-wrapper]");
+    // En workspace: gap más pequeño para que quepan los 4 KPIs
+    const gridClass = isInWorkspace ? "grid grid-cols-1 gap-2" : "grid grid-cols-1 gap-3 sm:gap-4 h-full";
+    const grid = wrapper.append("div").attr("class", gridClass);
+    const borderColors = ["#ea580c", "#2563eb", "#16a34a", "#7c3aed"];
+    data.forEach((item, index) => {
+      const isTotal = (item.label || "").toUpperCase().includes("TOTAL CONSOLIDADO");
+      // En workspace: padding y tamaños reducidos
+      const cardClasses = isInWorkspace
+        ? "flex flex-col justify-center rounded-lg px-2.5 py-2.5 bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700"
+        : "flex flex-col justify-center rounded-xl sm:rounded-2xl px-3 sm:px-4 py-4 sm:py-6 bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700";
+      const labelClass = isInWorkspace
+        ? "text-[10px] uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1 leading-tight"
+        : "text-xs sm:text-sm uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1.5";
+      const valueClass = isInWorkspace
+        ? "text-base font-semibold text-slate-900 dark:text-slate-100"
+        : "text-xl sm:text-2xl font-semibold text-slate-900 dark:text-slate-100";
+      const subtitleClass = isInWorkspace
+        ? "text-[9px] text-slate-500 dark:text-slate-400 mt-1 text-center font-medium"
+        : "text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center font-medium";
+      
+      grid.append("div").attr("class", cardClasses).style("border-left", `3px solid ${borderColors[index] || "#64748b"}`).html(`
+        <span class="${labelClass}">${(item.label || "").replace(/_/g, " ")}</span>
+        <span class="${valueClass}">${formatCurrency(Number(item.value) || 0)}</span>
+        ${isTotal ? `<p class="${subtitleClass}">VENTAS NETAS + REMITOS NO FACTURADOS + PEDIDOS PENDIENTES</p>` : ""}
+      `);
+    });
+    return;
+  }
+
   const numericFields = config.fields || discoverNumericFields(data);
-  console.log("[renderCards] Campos numéricos encontrados:", numericFields);
   if (!numericFields.length) {
-    console.warn("[renderCards] No se encontraron campos numéricos");
     container.innerHTML = "<p class=\"text-xs text-slate-200\">Sin métricas</p>";
     return;
   }
   const row = data[0] || {};
-  console.log("[renderCards] Fila de datos:", row);
-
   const wrapper = d3.select(container).html("");
-  
-  // Detectar si es sales_summary para usar un layout especial
-  // Buscar el reportSlug desde el widget o desde dashboardRoot
-  let reportSlug = dashboardRoot?.dataset?.reportSlug;
-  if (!reportSlug && container) {
-    // Buscar el widget padre que contiene el data-report-slug
-    // En workspace, el section tiene data-report-slug
-    // En dashboard detail, el widget tiene data-widget-id y el dashboardRoot tiene data-report-slug
-    const widgetElement = container.closest("section[data-report-slug]") || 
-                         container.closest("[data-report-slug]");
-    if (widgetElement && widgetElement.dataset && widgetElement.dataset.reportSlug) {
-      reportSlug = widgetElement.dataset.reportSlug;
-    }
-  }
   const isSalesSummary = reportSlug === "sales_summary";
-  
-  // Para sales_summary: grid de 2x2
-  // Para otros: grid normal
   const gridClass = isSalesSummary
     ? "grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 h-full"
     : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 h-full";
-  
-  const grid = wrapper
-    .append("div")
-    .attr("class", gridClass);
+  const grid = wrapper.append("div").attr("class", gridClass);
 
-  // Para sales_summary, ordenar las tarjetas: Ventas Netas, Remitos, Pedidos, Total Consolidado
   let orderedFields = [];
   if (isSalesSummary) {
     const order = ["ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"];
@@ -2465,12 +2581,80 @@ const renderUnsupportedChart = (container, type) => {
   `;
 };
 
+// Normaliza config declarativo (x_dimension, y_metrics, series_dimension) a formato legacy (x_field, y_field, stack_field)
+const normalizeBarConfig = (config, data) => {
+  if (!config || !data?.length) return config || {};
+  const first = data[0];
+  const hasSucursal = first && first.nombre_sucursal !== undefined && first.nombre_sucursal !== null;
+  const distinctSucursales = hasSucursal ? Array.from(new Set(data.map((r) => r.nombre_sucursal ?? ""))).filter(Boolean) : [];
+  const shouldStackBySucursal = hasSucursal && distinctSucursales.length > 1;
+  const stackField =
+    config.stack_field ||
+    config.series_dimension ||
+    (config.group_field === "sucursal" && hasSucursal ? "nombre_sucursal" : config.group_field) ||
+    (shouldStackBySucursal ? "nombre_sucursal" : undefined);
+  return {
+    ...config,
+    x_field: config.x_field || config.x_dimension || (first.mes_formato ? "mes_formato" : "mes") || Object.keys(first)[0],
+    y_field: config.y_field || config.value_field || (Array.isArray(config.y_metrics) ? config.y_metrics[0] : config.y_metrics) || "ventas_netas",
+    stack_field: stackField,
+    stacked: shouldStackBySucursal ? true : config.stacked,
+  };
+};
+
 const widgetRenderers = {
   "d3-line": (container, data, config) => renderLineChart(container, data, config),
   "d3-line-area": (container, data, config) => renderLineChart(container, data, config, true),
-  "d3-bar": (container, data, config) => renderBarChart(container, data, config),
-  "d3-bar-grouped": (container, data, config) => renderGroupedBarChart(container, data, config),
+  "d3-bar": (container, data, config) => {
+    const first = data?.[0];
+    const hasSucursal = first && first.nombre_sucursal !== undefined;
+    const distinctSucursales = hasSucursal ? Array.from(new Set((data || []).map((r) => r.nombre_sucursal ?? ""))).filter(Boolean) : [];
+    const useStackedBySucursal = hasSucursal && distinctSucursales.length > 1;
+    if (useStackedBySucursal) {
+      const normalized = {
+        ...config,
+        x_field: config.x_field || (first.mes_formato ? "mes_formato" : "mes"),
+        y_field: config.y_field || config.value_field || "ventas_netas",
+        stack_field: "nombre_sucursal",
+      };
+      renderStackedBarChart(container, data, normalized);
+    } else {
+      renderBarChart(container, data, config);
+    }
+  },
+  "d3-bar-grouped": (container, data, config) => {
+    const first = data?.[0];
+    const stackBySucursal =
+      (config.group_field === "sucursal" || config.group_field === "nombre_sucursal") &&
+      first &&
+      first.nombre_sucursal !== undefined &&
+      Array.from(new Set((data || []).map((r) => r.nombre_sucursal))).filter(Boolean).length > 1;
+    if (stackBySucursal) {
+      const normalized = {
+        ...config,
+        x_field: config.x_field || (first.mes_formato ? "mes_formato" : "mes"),
+        y_field: config.y_field || config.value_field || "ventas_netas",
+        stack_field: "nombre_sucursal",
+      };
+      renderStackedBarChart(container, data, normalized);
+    } else {
+      renderGroupedBarChart(container, data, config);
+    }
+  },
   "d3-bar-stacked": (container, data, config) => renderStackedBarChart(container, data, config),
+  "bar": (container, data, config) => {
+    const normalized = normalizeBarConfig(config, data);
+    const useStacked =
+      normalized.stack_field ||
+      config?.stacked === true ||
+      config?.series_dimension ||
+      (data?.length && data[0].nombre_sucursal !== undefined && Array.from(new Set(data.map((r) => r.nombre_sucursal))).length > 1);
+    if (useStacked) {
+      renderStackedBarChart(container, data, normalized);
+    } else {
+      renderBarChart(container, data, normalized);
+    }
+  },
   "d3-heatmap": (container, data, config) => renderHeatmap(container, data, config),
   "d3-gauge": (container, data, config) => renderGauge(container, data, config),
   "d3-waterfall": (container, data, config) => renderWaterfall(container, data, config),
@@ -2515,12 +2699,122 @@ const renderChart = (widget, data, configParam) => {
   }
 };
 
+/**
+ * Renderiza el gráfico de un widget, usando WidgetEngine para Ventas Netas bar
+ * o renderChart para el resto. Usar esto en lugar de renderChart directo para
+ * evitar que ResizeObserver/reRenderAllCharts sobrescriban el gráfico de WidgetEngine.
+ */
+const renderWidgetChart = (widget, data, config, meta = {}) => {
+  // En workspace el reportSlug está en el widget; en dashboard detail en dashboardRoot
+  const reportSlug = widget.dataset?.reportSlug || dashboardRoot?.dataset?.reportSlug;
+  const widgetType = widget.dataset?.widgetType;
+  const useWidgetEngine =
+    isVentasNetasSlug(reportSlug) &&
+    (widgetType === "d3-bar-grouped" || widgetType === "d3-bar" || widgetType === "d3-bar-stacked" || widgetType === "bar") &&
+    window.WidgetEngine &&
+    data?.length > 0;
+
+  if (useWidgetEngine) {
+    const chartContainer = widget.querySelector("[data-widget-content]");
+    if (chartContainer) {
+      const widgetEngine = Object.create(window.WidgetEngine);
+      widgetEngine.queryResult = { data, meta };
+      widgetEngine.reportSlug = reportSlug;
+      widgetEngine.rootElement = dashboardRoot;
+      widgetEngine.schema = {
+        metrics: [{ name: "ventas_netas", label: "Ventas Netas", data_type: "currency" }],
+        dimensions: [
+          { name: "mes", label: "Mes", data_type: "date" },
+          { name: "nombre_sucursal", label: "Sucursal", data_type: "string" }
+        ]
+      };
+      const widgetSchema = {
+        x_dimension: "mes",
+        y_metrics: ["ventas_netas"],
+        series_dimension: "nombre_sucursal",
+        options: { stacked: true, unit: "ARS" },
+        kind: "bar"
+      };
+      widgetEngine.renderBarChart(chartContainer, widgetSchema);
+      chartContainer.setAttribute("data-rendered-by", "widget-engine");
+      chartContainer.style.position = "relative";
+      if (!chartContainer.querySelector("[data-widget-engine-badge]")) {
+        const badge = document.createElement("div");
+        badge.className = "absolute bottom-1 right-2 text-[9px] text-slate-500 dark:text-slate-400 opacity-50 pointer-events-none";
+        badge.textContent = "WidgetEngine";
+        badge.setAttribute("data-widget-engine-badge", "true");
+        chartContainer.appendChild(badge);
+      }
+      // Botón Colores + panel de personalización (igual que reportes declarativos)
+      const actionsDiv = widget.querySelector("[data-toggle-table]")?.parentElement ||
+        widget.querySelector("header > div:last-child");
+      if (actionsDiv && !widget.querySelector("[data-customize-colors]")) {
+        const colorBtn = document.createElement("button");
+        colorBtn.type = "button";
+        colorBtn.dataset.customizeColors = "";
+        colorBtn.className = "inline-flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-semibold text-purple-500 hover:text-purple-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-400 rounded-full px-2.5 sm:px-3 py-1 transition";
+        colorBtn.innerHTML = `
+          <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M7 21a4 4 0 0 1-4-4V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v12a4 4 0 0 1-4 4Zm0 0h12a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 0 1 2.828 0l2.829 2.829a2 2 0 0 1 0 2.828l-8.486 8.485M7 17h.01" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="hidden sm:inline">Colores</span>
+        `;
+        colorBtn.title = "Personalizar colores de las series";
+        actionsDiv.insertBefore(colorBtn, actionsDiv.firstChild);
+        widgetEngine.attachColorCustomizer(widget, widgetSchema);
+      }
+    }
+  } else {
+    const chartContainer = widget.querySelector("[data-widget-content]");
+    if (chartContainer) chartContainer.removeAttribute("data-rendered-by");
+    renderChart(widget, data, config);
+  }
+};
+
 const renderTable = (widgetElement, data, options = {}) => {
   const show = options.show ?? false;
   const target = widgetElement.querySelector("[data-widget-table-wrapper]") || widgetElement;
 
   if (!show) {
     target.classList.add("hidden");
+    return;
+  }
+
+  target.classList.remove("hidden");
+
+  // Ventas Netas: usar WidgetEngine para tabla con agrupación (Agrupar por, filas expandibles)
+  const reportSlug = widgetElement.dataset?.reportSlug || dashboardRoot?.dataset?.reportSlug;
+  const isVentasNetas = isVentasNetasSlug(reportSlug) ||
+    (data?.[0] && data[0].mes_formato !== undefined && data[0].nombre_sucursal !== undefined && data[0].ventas_netas !== undefined);
+
+  if (isVentasNetas && window.WidgetEngine && data?.length > 0) {
+    target.innerHTML = "";
+    const cached = widgetElement.dataset?.widgetId ? widgetDataCache.get(widgetElement.dataset.widgetId) : null;
+    const meta = options.meta || cached?.meta || {};
+    const widgetEngine = Object.create(window.WidgetEngine);
+    widgetEngine.queryResult = { data, meta };
+    widgetEngine.rootElement = dashboardRoot;
+    widgetEngine.schema = {
+      dimensions: [
+        { name: "mes_formato", label: "MES", data_type: "string" },
+        { name: "nombre_sucursal", label: "SUCURSAL", data_type: "string" },
+        { name: "nro_punto_venta", label: "PUNTO DE VENTA", data_type: "string" }
+      ],
+      metrics: [
+        { name: "ventas_netas", label: "Ventas Netas", data_type: "currency" },
+        { name: "notas_credito", label: "Notas Crédito", data_type: "currency" },
+        { name: "ventas_brutas", label: "Ventas Brutas", data_type: "currency" }
+      ]
+    };
+    const widgetSchema = {
+      id: `ventas_netas_table_${widgetElement.dataset?.widgetId || "main"}`,
+      kind: "table",
+      options: {
+        table_dimensions: ["mes_formato", "nombre_sucursal", "nro_punto_venta"],
+        table_metrics: ["ventas_netas", "notas_credito", "ventas_brutas"]
+      }
+    };
+    widgetEngine.renderTable(target, widgetSchema);
     return;
   }
 
@@ -2549,14 +2843,36 @@ const renderTable = (widgetElement, data, options = {}) => {
 
   // Columnas a excluir
   const excludedColumns = ["id_sucursal", "id_punto_venta", "mes"];
-  
-  const fieldKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
-  
+  const allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
+
+  // Ventas Netas: orden de columnas y agrupación visual (MES, SUCURSAL, PUNTO DE VENTA, métricas)
+  const isVentasNetasTable = data[0].mes_formato !== undefined && data[0].nombre_sucursal !== undefined && data[0].ventas_netas !== undefined;
+  const ventasNetasColumnOrder = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"];
+  const fieldKeys = isVentasNetasTable
+    ? ventasNetasColumnOrder.filter((k) => allKeys.includes(k))
+    : allKeys;
+
+  // Ordenar datos para Ventas Netas: mes DESC, sucursal ASC, punto de venta ASC
+  const dataToRender = isVentasNetasTable
+    ? [...data].sort((a, b) => {
+        const mesCmp = (b.mes || "").localeCompare(a.mes || "");
+        if (mesCmp !== 0) return mesCmp;
+        const sucCmp = (a.nombre_sucursal || "").localeCompare(b.nombre_sucursal || "");
+        if (sucCmp !== 0) return sucCmp;
+        return String(a.nro_punto_venta || "").localeCompare(String(b.nro_punto_venta || ""));
+      })
+    : data;
+
   // Mapeo de términos en inglés a español
   const headerTranslations = {
     "period": "PERÍODO",
     "mes_formato": "MES",
     "mes": "MES",
+    "nombre_sucursal": "SUCURSAL",
+    "nro_punto_venta": "PUNTO DE VENTA",
+    "notas_credito": "NOTAS CRÉDITO",
+    "ventas_netas": "VENTAS NETAS",
+    "ventas_brutas": "VENTAS BRUTAS",
     "operating_flow": "FLUJO OPERATIVO",
     "investing_flow": "FLUJO DE INVERSIÓN",
     "financing_flow": "FLUJO DE FINANCIAMIENTO",
@@ -2612,16 +2928,34 @@ const renderTable = (widgetElement, data, options = {}) => {
 
   // Mostrar más registros para reportes de tabla (pivot-table)
   const maxRows = 1000;
-  data.slice(0, maxRows).forEach((row) => {
+  const rowsToRender = dataToRender.slice(0, maxRows);
+  let prevMes = null;
+  let prevSucursal = null;
+
+  rowsToRender.forEach((row) => {
     const tr = document.createElement("tr");
     tr.className =
       "hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors";
-    
+
+    // Agrupación visual para Ventas Netas: borde superior al cambiar mes o sucursal
+    if (isVentasNetasTable) {
+      const currMes = row.mes || row.mes_formato;
+      const currSucursal = row.nombre_sucursal;
+      const isNewMes = prevMes !== null && currMes !== prevMes;
+      const isNewSucursal = prevMes === currMes && prevSucursal !== null && currSucursal !== prevSucursal;
+      if (isNewMes || isNewSucursal) {
+        tr.classList.add("border-t", "border-slate-300", "dark:border-slate-600");
+        if (isNewMes) tr.classList.add("border-t-2");
+      }
+      prevMes = currMes;
+      prevSucursal = currSucursal;
+    }
+
     // Resaltar filas de saldo inicial y final
     if (isCashFlowWaterfall && (row.type === "starting" || row.type === "ending")) {
       tr.className += " bg-blue-50 dark:bg-blue-900/20";
     }
-    
+
     fieldKeys.forEach((key, index) => {
       const value = row[key];
       const td = document.createElement("td");
@@ -2663,10 +2997,8 @@ const renderTable = (widgetElement, data, options = {}) => {
   });
 
   // Agregar fila de totales solo si hay columnas monetarias y no es cash_flow_waterfall ni sales_summary
-  // Para cash_flow_waterfall, el Saldo Final ya es el resultado final, no tiene sentido sumar acumulados
-  // Para sales_summary, los totales ya se muestran en las tarjetas, no es necesario duplicarlos en la tabla
-  const reportSlug = dashboardRoot?.dataset?.reportSlug || widgetElement?.dataset?.reportSlug;
-  const shouldShowTotals = Object.keys(totals).length > 0 && !isCashFlowWaterfall && reportSlug !== "sales_summary";
+  const currentReportSlug = dashboardRoot?.dataset?.reportSlug || widgetElement?.dataset?.reportSlug;
+  const shouldShowTotals = Object.keys(totals).length > 0 && !isCashFlowWaterfall && currentReportSlug !== "sales_summary" && currentReportSlug !== "total-consolidado-operativo";
   
   if (shouldShowTotals) {
     const totalsRow = document.createElement("tr");
@@ -3669,41 +4001,42 @@ const renderSummary = (meta, totals) => {
 
   const reportSlug = dashboardRoot?.dataset?.reportSlug;
   const isSalesSummary = reportSlug === "sales_summary";
+  const isTotalConsolidadoOperativo = reportSlug === "total-consolidado-operativo";
+  const isBoStockFacturacion = reportSlug === "bo-stock-facturacion";
 
-  // Actualizar el período en el título
+  // Helper: formatear fecha YYYY-MM-DD -> DD-MM-YYYY
+  const formatDateForPeriod = (dateStr) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  };
+  const fechaInicio = document.getElementById("fecha_inicio")?.value;
+  const fechaFin = document.getElementById("fecha_fin")?.value;
+  const periodText = fechaInicio && fechaFin ? `Periodo ${formatDateForPeriod(fechaInicio)} al ${formatDateForPeriod(fechaFin)}` : "";
+
+  // bo-stock-facturacion: período y "Última actualización" en una línea (mismo criterio que pedidos-pendientes)
+  if (isBoStockFacturacion) {
+    const boPeriodEl = document.getElementById("bo-summary-period");
+    if (boPeriodEl) boPeriodEl.textContent = periodText;
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
+  // Actualizar el período en el título (otros reportes)
   const summaryPeriodElement = document.getElementById("summary-period");
-  if (summaryPeriodElement) {
-    const fechaInicio = document.getElementById("fecha_inicio")?.value;
-    const fechaFin = document.getElementById("fecha_fin")?.value;
-    if (fechaInicio && fechaFin) {
-      // Formatear fechas: de YYYY-MM-DD a DD-MM-YYYY
-      const formatDate = (dateStr) => {
-        const [year, month, day] = dateStr.split('-');
-        return `${day}-${month}-${year}`;
-      };
-      summaryPeriodElement.textContent = `Periodo ${formatDate(fechaInicio)} al ${formatDate(fechaFin)}`;
-    } else {
-      summaryPeriodElement.textContent = "";
-    }
+  if (summaryPeriodElement) summaryPeriodElement.textContent = periodText;
+  if (isVentasNetasSlug(reportSlug)) {
+    const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
+    if (vnPeriodEl) vnPeriodEl.textContent = periodText;
   }
 
   summaryGrid.innerHTML = "";
 
-  // Para sales_summary, no mostrar las tarjetas en el resumen superior
-  // Solo mostrar la información de última actualización
-  if (isSalesSummary) {
-    // Agregar solo la información de última actualización
-    const lastUpdateContainer = document.createElement("div");
-    lastUpdateContainer.id = "last-update-time";
-    lastUpdateContainer.className = "flex flex-col items-end justify-center text-right col-span-full";
-    lastUpdateContainer.innerHTML = `
-      <span class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        Última actualización:
-      </span>
-      <span data-update-date-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-      <span data-update-time-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-    `;
-    summaryGrid.appendChild(lastUpdateContainer);
+  // Para sales_summary y total-consolidado-operativo: solo header (Resumen + período + Última actualización), sin tarjetas en el resumen
+  // Los KPIs de total-consolidado-operativo se muestran solo en el widget (renderCards), para no duplicar
+  if (isSalesSummary || isTotalConsolidadoOperativo) {
     updateLastUpdateTime();
     summaryContainer.classList.remove("hidden");
     return;
@@ -3713,9 +4046,11 @@ const renderSummary = (meta, totals) => {
   // Excluir campos que ya se muestran en otras tarjetas (operating_ingresos, operating_egresos, cash_variation_sum_movements)
   const excludedKeys = ["operating_ingresos", "operating_egresos", "cash_variation_sum_movements"];
   
-  // Orden específico para ventas_netas: ventas_brutas, notas_credito, ventas_netas
-  const isVentasNetasReport = reportSlug === "ventas_netas";
-  const order = isVentasNetasReport
+  // Orden específico: total-consolidado-operativo (4 KPIs verticales), ventas_netas, otros
+  const isVentasNetasReport = isVentasNetasSlug(reportSlug);
+  const order = isTotalConsolidadoOperativo
+    ? ["ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
+    : isVentasNetasReport
     ? ["ventas_brutas", "notas_credito", "ventas_netas", "saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
     : ["saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "ventas_brutas", "notas_credito", "ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"];
   const totalKeys = Object.keys(totals || {})
@@ -3732,6 +4067,11 @@ const renderSummary = (meta, totals) => {
   if (!totalKeys.length) {
     summaryContainer.classList.add("hidden");
     return;
+  }
+
+  // total-consolidado-operativo: una sola columna (KPIs verticales)
+  if (isTotalConsolidadoOperativo) {
+    summaryGrid.className = "grid grid-cols-1 gap-4";
   }
 
   let ventasNetasCard = null;
@@ -3820,7 +4160,7 @@ const renderSummary = (meta, totals) => {
       // Mostrar ingresos y egresos para Flujo Operativo
       const ingresos = totals["operating_ingresos"] || 0;
       const egresos = totals["operating_egresos"] || 0;
-      subtitle = `<p class="text-[9px] ${textColorClass} opacity-75 mt-1 text-right">Ing: ${formatCurrency(ingresos)} | Egr: ${formatCurrency(egresos)}</p>`;
+      subtitle = `<p class="text-[9px] ${textColorClass} opacity-75 mt-1 text-right">Ing: ${formatCurrencyCompact(ingresos)} | Egr: ${formatCurrencyCompact(egresos)}</p>`;
     }
     
     // Formatear el label según la key
@@ -3836,14 +4176,14 @@ const renderSummary = (meta, totals) => {
     } else if (isRemitosNoFacturados) {
       displayLabel = "REMITOS NO FACTURADOS";
     } else if (isPedidosPendientes) {
-      displayLabel = "PEDIDOS PENDIENTES";
+      displayLabel = isTotalConsolidadoOperativo ? "PEDIDOS PENDIENTES DE ENTREGA" : "PEDIDOS PENDIENTES";
     } else if (isTotalConsolidado) {
       displayLabel = "TOTAL CONSOLIDADO";
     }
     
     card.innerHTML = `
         <p class="text-[10px] uppercase tracking-[0.25em] ${textColorClass} mb-2">${displayLabel}</p>
-        <p class="text-xl font-semibold text-right">${isCurrency ? formatCurrency(totals[key]) : formatNumber(totals[key])}</p>
+        <p class="text-xl font-semibold text-right">${isCurrency ? formatCurrencyCompact(totals[key]) : formatNumber(totals[key])}</p>
         ${subtitle}
       `;
     summaryGrid.appendChild(card);
@@ -3869,81 +4209,8 @@ const renderSummary = (meta, totals) => {
     }
   });
 
-  // Agregar hora de última actualización
-  if (isVentasNetasReport && ventasNetasCard) {
-    // Para ventas_netas: insertar después de VENTAS NETAS (4ta posición: VENTAS BRUTAS, NOTAS DE CRÉDITO, VENTAS NETAS, Última actualización)
-    const lastUpdateContainer = document.createElement("div");
-    lastUpdateContainer.id = "last-update-time";
-    lastUpdateContainer.className = "flex flex-col items-end justify-center text-right";
-    lastUpdateContainer.innerHTML = `
-      <span class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        Última actualización:
-      </span>
-      <span data-update-date-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-      <span data-update-time-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-    `;
-    
-    // Insertar después de la tarjeta de VENTAS NETAS (que es la 3ra tarjeta en el orden)
-    ventasNetasCard.parentNode.insertBefore(lastUpdateContainer, ventasNetasCard.nextSibling);
-    
-    // Actualizar hora de última actualización
-    updateLastUpdateTime();
-  } else if (ventasNetasCard && !isVentasNetasReport) {
-    // Para otros reportes que tengan ventas_netas: alineada verticalmente con VENTAS NETAS
-    const lastUpdateContainer = document.createElement("div");
-    lastUpdateContainer.id = "last-update-time";
-    lastUpdateContainer.className = "flex flex-col items-end justify-center text-right";
-    lastUpdateContainer.innerHTML = `
-      <span class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        Última actualización:
-      </span>
-      <span data-update-date-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-      <span data-update-time-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-    `;
-    
-    // Insertar después de la tarjeta de VENTAS NETAS
-    ventasNetasCard.parentNode.insertBefore(lastUpdateContainer, ventasNetasCard.nextSibling);
-    
-    // Actualizar hora de última actualización
-    updateLastUpdateTime();
-  } else if (saldoFinalCard) {
-    // Para cash_flow_waterfall: ubicar en el octavo cuadrante (posición 8 del grid)
-    // El grid tiene 4 columnas, así que el octavo cuadrante es la 4ta columna de la 2da fila
-    
-    // Primero, insertar un elemento vacío en la posición 7 (si no existe) para dejar espacio
-    const currentChildren = Array.from(summaryGrid.children);
-    const currentCount = currentChildren.length;
-    
-    // Si hay menos de 7 elementos, agregar elementos vacíos hasta llegar a 7
-    while (currentChildren.length < 7) {
-      const emptyDiv = document.createElement("div");
-      emptyDiv.className = "hidden"; // Oculto pero ocupa espacio en el grid
-      summaryGrid.appendChild(emptyDiv);
-      currentChildren.push(emptyDiv);
-    }
-    
-    // Ahora insertar la última actualización en la posición 8 (octavo cuadrante)
-    const lastUpdateContainer = document.createElement("div");
-    lastUpdateContainer.id = "last-update-time";
-    lastUpdateContainer.className = "flex flex-col items-end justify-center text-right";
-    lastUpdateContainer.innerHTML = `
-      <span class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-        Última actualización:
-      </span>
-      <span data-update-date-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-      <span data-update-time-text class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
-    `;
-    
-    // Insertar en la posición 8 del grid (después del 7mo elemento)
-    if (summaryGrid.children.length >= 7) {
-      summaryGrid.insertBefore(lastUpdateContainer, summaryGrid.children[7]);
-    } else {
-      summaryGrid.appendChild(lastUpdateContainer);
-    }
-    
-    // Actualizar hora de última actualización
-    updateLastUpdateTime();
-  }
+  // "Última actualización" en la misma línea que Resumen (header #last-update-time), igual que pedidos-pendientes
+  updateLastUpdateTime();
 
   summaryContainer.classList.remove("hidden");
 };
@@ -3953,37 +4220,36 @@ const updateLastUpdateTime = () => {
   if (!lastUpdateElement) {
     return;
   }
-  
-  const updateDateText = lastUpdateElement.querySelector("[data-update-date-text]");
-  const updateTimeText = lastUpdateElement.querySelector("[data-update-time-text]");
-  
-  if (!updateDateText || !updateTimeText) {
-    return;
-  }
 
   const now = new Date();
-  
-  // Formatear fecha: "Jueves, 20 de noviembre de 2025"
-  const dateOptions = {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  };
-  const dateString = now.toLocaleDateString("es-AR", dateOptions);
-  // Capitalizar primera letra del día y mes
-  const formattedDate = dateString.charAt(0).toUpperCase() + dateString.slice(1);
-  
-  // Formatear hora: "15:01:45" (con segundos)
-  const timeString = now.toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false, // Formato 24 horas
-  });
-  
-  updateDateText.textContent = formattedDate;
-  updateTimeText.textContent = timeString;
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  const months = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+  const dayName = days[now.getDay()];
+  const day = now.getDate();
+  const month = months[now.getMonth()];
+  const year = now.getFullYear();
+  const time = now.toLocaleTimeString("es-AR");
+
+  // Mismo criterio que pedidos-pendientes: una sola línea en el header (Resumen | Última actualización)
+  const updateDateText = lastUpdateElement.querySelector("[data-update-date-text]");
+  const updateTimeText = lastUpdateElement.querySelector("[data-update-time-text]");
+  if (updateDateText && updateTimeText) {
+    const dateOptions = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+    const dateString = now.toLocaleDateString("es-AR", dateOptions);
+    const formattedDate = dateString.charAt(0).toUpperCase() + dateString.slice(1);
+    const timeString = now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+    updateDateText.textContent = formattedDate;
+    updateTimeText.textContent = timeString;
+  } else {
+    const oneLineHtml = `
+      <span class="font-medium text-slate-600 dark:text-slate-400">Última actualización:</span>
+      <span class="font-semibold text-slate-700 dark:text-slate-200"> ${dayName}, ${day} de ${month} de ${year} ${time}</span>
+    `;
+    lastUpdateElement.innerHTML = oneLineHtml;
+    // BO tiene su propio contenedor en la misma línea (periodo | última actualización)
+    const boLastUpdate = document.getElementById("bo-last-update-time");
+    if (boLastUpdate) boLastUpdate.innerHTML = oneLineHtml;
+  }
 };
 
 const renderWidgets = (payload) => {
@@ -3997,12 +4263,24 @@ const renderWidgets = (payload) => {
   widgets.forEach((widget) => {
     const config = getWidgetConfig(widget);
     const cacheKey = widget.dataset.widgetId;
-    widgetDataCache.set(cacheKey, { data: payload.data, config });
+    widgetDataCache.set(cacheKey, { data: payload.data, config, meta: payload.meta || {} });
 
     const widgetType = widget.dataset.widgetType;
+    const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
     
-    // Si es pivot-table, solo mostrar tabla (sin gráfico)
-    if (widgetType === "pivot-table") {
+    // HÍBRIDO: Para Ventas Netas, usar WidgetEngine para el gráfico de barras (tooltips, valores por serie, etc.)
+    const isVentasNetasBarChart = isVentasNetasSlug(currentReportSlug) &&
+      (widgetType === "d3-bar-grouped" || widgetType === "d3-bar" || widgetType === "d3-bar-stacked" || widgetType === "bar") &&
+      window.WidgetEngine &&
+      payload.data?.length > 0;
+    
+    if (isVentasNetasBarChart) {
+      renderWidgetChart(widget, payload.data, config, payload.meta || {});
+      console.log("[Ventas Netas] Gráfico de barras renderizado con WidgetEngine (dashboard)");
+      renderTable(widget, payload.data, { show: false });
+      attachTableToggle(widget, payload.data);
+    } else if (widgetType === "pivot-table") {
+      // Si es pivot-table, solo mostrar tabla (sin gráfico)
       // Ocultar el contenedor del gráfico
       const chartContainer = widget.querySelector("[data-widget-content]");
       if (chartContainer) {
@@ -4025,9 +4303,17 @@ const renderWidgets = (payload) => {
       renderTable(widget, payload.data, { show: false }); // No mostrar tabla
       attachTableToggle(widget, payload.data);
     } else {
-    renderChart(widget, payload.data, config);
-    renderTable(widget, payload.data, { show: false });
-    attachTableToggle(widget, payload.data);
+      const chartContainer = widget.querySelector("[data-widget-content]");
+      if (chartContainer) chartContainer.removeAttribute("data-rendered-by");
+      if (isVentasNetasSlug(currentReportSlug) &&
+          (widgetType === "d3-bar-grouped" || widgetType === "d3-bar" || widgetType === "d3-bar-stacked" || widgetType === "bar") &&
+          payload.data?.length > 0) {
+        console.warn("[Ventas Netas] Gráfico con render legacy (WidgetEngine no disponible o condición no cumplida). reportSlug=%s widgetType=%s WidgetEngine=%s",
+          currentReportSlug, widgetType, !!window.WidgetEngine);
+      }
+      renderChart(widget, payload.data, config);
+      renderTable(widget, payload.data, { show: false });
+      attachTableToggle(widget, payload.data);
     }
 
     widget.querySelectorAll("[data-widget-note]").forEach((note) => note.remove());
@@ -4053,8 +4339,8 @@ const renderWidgets = (payload) => {
         if (!cacheKey || !widgetDataCache.has(cacheKey)) {
           return;
         }
-        const { data, config } = widgetDataCache.get(cacheKey);
-        renderChart(widget, data, config);
+        const { data, config, meta } = widgetDataCache.get(cacheKey) || {};
+        renderWidgetChart(widget, data || [], config, meta || {});
       });
     });
   }
@@ -4182,9 +4468,9 @@ const saveWorkspaceOrder = async () => {
   }
   
   const wrappers = Array.from(dashboardRoot.querySelectorAll("[data-widget-wrapper]"));
-  const slugs = wrappers.map(w => w.dataset.widgetSlug).filter(Boolean);
+  const itemKeys = wrappers.map(w => w.dataset.widgetItemKey || w.dataset.widgetSlug).filter(Boolean);
   
-  if (slugs.length === 0) {
+  if (itemKeys.length === 0) {
     return;
   }
   
@@ -4196,7 +4482,7 @@ const saveWorkspaceOrder = async () => {
         "X-Requested-With": "XMLHttpRequest",
         "X-CSRFToken": getCsrfToken(),
       },
-      body: JSON.stringify({ items: slugs }),
+      body: JSON.stringify({ items: itemKeys }),
     });
     
     if (!response.ok) {
@@ -4235,10 +4521,12 @@ const buildWorkspaceDOM = (slots) => {
   const fragment = document.createDocumentFragment();
 
   slots.forEach((slot, index) => {
+    const itemKey = slot.item_key != null ? slot.item_key : slot.slug;
     const wrapper = document.createElement("div");
     wrapper.dataset.widgetWrapper = "true";
     wrapper.dataset.widgetIndex = String(index);
     wrapper.dataset.widgetSlug = slot.slug;
+    wrapper.dataset.widgetItemKey = itemKey;
     wrapper.className = "flex flex-col gap-0";
     // Agregar drag and drop para reordenar widgets
     wrapper.draggable = true;
@@ -4271,25 +4559,39 @@ const buildWorkspaceDOM = (slots) => {
     section.dataset.noteLabel = "Notas";
     section.dataset.emptyLabel = "No hay datos disponibles.";
     section.dataset.reportSlug = slot.slug;
+    section.dataset.itemKey = itemKey;
 
+    const displayTitle = slot.display_name || slot.name;
+    const allowDuplicateSlugs = ["total-consolidado-operativo"];
+    const showDuplicate = allowDuplicateSlugs.includes(slot.slug);
+    const showFilters = allowDuplicateSlugs.includes(slot.slug);
+    // Crear un ID seguro para los elementos (sin caracteres especiales)
+    const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+    
     section.innerHTML = `
       <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
-        <div class="flex items-center gap-2 flex-1">
-          <!-- Handler visual para drag & drop -->
+        <div class="flex items-center gap-2 flex-1 min-w-0">
           <button type="button"
-                  class="cursor-move text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+                  class="cursor-move text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 flex-shrink-0"
                   title="Arrastrar para reordenar"
                   style="pointer-events: none;">
             ⠿
           </button>
-          <div class="flex flex-col gap-1">
-            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">${slot.name}</h2>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
+          <div class="flex flex-col gap-1 flex-1 min-w-0">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white truncate" data-widget-title>${displayTitle}</h2>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate" data-widget-subtitle>
               Última actualización: <span data-workspace-last-update>—</span>
             </span>
           </div>
         </div>
-        <div class="flex items-center gap-2 text-[11px]">
+        <div class="flex items-center gap-2 text-[11px] flex-shrink-0">
+          ${showFilters ? `<button type="button" data-toggle-filters data-item-key="${itemKey}"
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition border border-slate-200 dark:border-slate-700" title="Mostrar/ocultar filtros">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Filtros
+          </button>` : ""}
           <a href="/reports/dashboard/${slot.slug}/" target="_blank" rel="noopener"
              class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -4297,7 +4599,12 @@ const buildWorkspaceDOM = (slots) => {
             </svg>
             Abrir
           </a>
-          <button type="button" data-remove-from-workspace data-report-slug="${slot.slug}"
+          ${showDuplicate ? `<button type="button" data-duplicate-workspace data-item-key="${itemKey}" data-report-slug="${slot.slug}"
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sky-500 hover:text-sky-400 transition" title="Duplicar con filtros independientes">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Duplicar
+          </button>` : ""}
+          <button type="button" data-remove-from-workspace data-item-key="${itemKey}" data-report-slug="${slot.slug}"
                   class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-rose-500 hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-rose-400 transition">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M6 6l12 12M6 18L18 6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4306,6 +4613,97 @@ const buildWorkspaceDOM = (slots) => {
           </button>
         </div>
       </header>
+      ${showFilters ? `
+      <div class="workspace-filters-panel hidden border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50" data-filters-panel data-item-key="${itemKey}">
+        <div class="px-6 py-4 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Fecha Inicio
+              </span>
+              <input type="date" id="fecha_inicio_${safeItemKey}" name="fecha_inicio" class="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400" data-item-key="${itemKey}">
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Fecha Fin
+              </span>
+              <input type="date" id="fecha_fin_${safeItemKey}" name="fecha_fin" class="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400" data-item-key="${itemKey}">
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                Sucursal
+              </span>
+              <div class="relative">
+                <select name="sucursales" id="sucursales_${safeItemKey}" multiple class="hidden" data-tags-field="sucursales" data-item-key="${itemKey}">
+                  <option value="">Cargando...</option>
+                </select>
+                <div id="sucursales_${safeItemKey}_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="sucursales_${safeItemKey}_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar sucursales..." autocomplete="off">
+                  <div id="sucursales_${safeItemKey}_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+                Punto de venta
+              </span>
+              <div class="relative">
+                <select name="punto_venta" id="punto_venta_${safeItemKey}" multiple class="hidden" data-tags-field="punto_venta" data-item-key="${itemKey}">
+                  <option value="">Cargando...</option>
+                </select>
+                <div id="punto_venta_${safeItemKey}_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="punto_venta_${safeItemKey}_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar punto de venta..." autocomplete="off">
+                  <div id="punto_venta_${safeItemKey}_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+            </label>
+          </div>
+          <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+              </svg>
+              Clientes a excluir
+            </span>
+            <div class="relative">
+              <select name="clientes_excluidos" id="clientes_excluidos_${safeItemKey}" multiple class="hidden" data-tags-field="clientes_excluidos" data-item-key="${itemKey}">
+                <option value="">Cargando...</option>
+              </select>
+              <div id="clientes_excluidos_${safeItemKey}_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                <input type="text" id="clientes_excluidos_${safeItemKey}_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar clientes..." autocomplete="off">
+                <div id="clientes_excluidos_${safeItemKey}_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+              </div>
+            </div>
+          </label>
+          <div class="flex justify-end">
+            <button type="button" data-apply-workspace-filters data-item-key="${itemKey}" data-report-slug="${slot.slug}"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg transition">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M5 13l4 4L19 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Aplicar Filtros
+            </button>
+          </div>
+        </div>
+      </div>
+      ` : ""}
       <div class="relative" style="min-height: 350px;">
         <div class="aspect-[16/7] w-full bg-white dark:bg-slate-950 p-6" data-widget-content>
           <div class="h-full w-full grid place-content-center text-xs text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase">
@@ -4329,48 +4727,554 @@ const buildWorkspaceDOM = (slots) => {
   dashboardRoot.appendChild(fragment);
 };
 
+// Variable global para controlar si ya se adjuntó el event delegation
+let workspaceRemovalDelegationAttached = false;
+
 const attachWorkspaceRemovalHandlers = () => {
   if (!workspaceApiUrl) {
     return;
   }
-  const buttons = dashboardRoot.querySelectorAll("[data-remove-from-workspace]");
-  buttons.forEach((button) => {
-    const slug = button.dataset.reportSlug;
-    if (!slug) {
+  
+  // Si ya se adjuntó el event delegation, no hacer nada
+  if (workspaceRemovalDelegationAttached) {
+    console.log("[Workspace] Event delegation ya está activo");
+    return;
+  }
+  
+  console.log("[Workspace] Adjuntando event delegation para botones 'Quitar'");
+  
+  // Usar event delegation en el dashboardRoot
+  dashboardRoot.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-remove-from-workspace]");
+    if (!button) {
       return;
     }
-    button.addEventListener("click", async () => {
-      if (button.dataset.loading === "true") {
-        return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const itemKey = button.dataset.itemKey || button.dataset.reportSlug;
+    console.log(`[Workspace] Click en "Quitar" - itemKey: "${itemKey}", reportSlug: "${button.dataset.reportSlug}"`);
+    
+    if (!itemKey) {
+      console.warn("[Workspace] Botón sin itemKey ni reportSlug, ignorando");
+      return;
+    }
+    
+    if (button.dataset.loading === "true") {
+      console.log("[Workspace] Botón ya en estado loading, ignorando click");
+      return;
+    }
+    
+    button.dataset.loading = "true";
+    button.classList.add("opacity-60", "pointer-events-none");
+    
+    try {
+      console.log(`[Workspace] Enviando DELETE a ${workspaceApiUrl} con item_key: "${itemKey}"`);
+      const response = await fetch(workspaceApiUrl, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({ item_key: itemKey }),
+      });
+      console.log(`[Workspace] Respuesta DELETE: status=${response.status}`);
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        console.error("[Workspace] Error en DELETE:", detail);
+        throw new Error(detail.detail || "No se pudo quitar el informe");
       }
-      button.dataset.loading = "true";
-      button.classList.add("opacity-60", "pointer-events-none");
-      try {
-        const response = await fetch(workspaceApiUrl, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Requested-With": "XMLHttpRequest",
-            "X-CSRFToken": getCsrfToken(),
-          },
-          body: JSON.stringify({ slug }),
-        });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail.detail || "No se pudo quitar el informe");
-        }
-        const payload = await response.json();
-        setWorkspaceCount(payload.count ?? "-");
-        toast("Informe eliminado del workspace");
-        fetchWorkspaceData();
-      } catch (error) {
-        console.error(error);
-        toast(error.message || "No se pudo quitar", "error");
-        button.classList.remove("opacity-60", "pointer-events-none");
-        button.dataset.loading = "false";
-      }
-    });
+      const payload = await response.json();
+      console.log("[Workspace] DELETE exitoso:", payload);
+      setWorkspaceCount(payload.count ?? "-");
+      toast("Informe eliminado del workspace");
+      await fetchWorkspaceData();
+    } catch (error) {
+      console.error("[Workspace] Error al quitar informe:", error);
+      toast(error.message || "No se pudo quitar", "error");
+      button.classList.remove("opacity-60", "pointer-events-none");
+      button.dataset.loading = "false";
+    }
   });
+  
+  workspaceRemovalDelegationAttached = true;
+};
+
+// Función para inicializar los filtros tags en el workspace
+const initializeWorkspaceFilters = async (itemKey, slug) => {
+  console.log(`[initializeWorkspaceFilters] Inicializando filtros para ${itemKey}`);
+  const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+  console.log(`[initializeWorkspaceFilters] safeItemKey: ${safeItemKey}`);
+  
+  // Establecer fechas por defecto (mes anterior completo hasta hoy)
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const lastDay = new Date(today);
+  
+  const fechaInicioInput = document.getElementById(`fecha_inicio_${safeItemKey}`);
+  const fechaFinInput = document.getElementById(`fecha_fin_${safeItemKey}`);
+  
+  if (fechaInicioInput && !fechaInicioInput.value) {
+    fechaInicioInput.value = firstDay.toISOString().split('T')[0];
+  }
+  if (fechaFinInput && !fechaFinInput.value) {
+    fechaFinInput.value = lastDay.toISOString().split('T')[0];
+  }
+  
+  // Cargar opciones de filtros
+  try {
+    // Sucursales
+    console.log(`[initializeWorkspaceFilters] Cargando sucursales...`);
+    const sucursalesResponse = await fetch(`/api/reports/filters/?type=sucursales`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+    console.log(`[initializeWorkspaceFilters] Respuesta sucursales:`, sucursalesResponse.status);
+    if (sucursalesResponse.ok) {
+      const data = await sucursalesResponse.json();
+      console.log(`[initializeWorkspaceFilters] Data sucursales:`, data);
+      const sucursalesSelect = document.getElementById(`sucursales_${safeItemKey}`);
+      console.log(`[initializeWorkspaceFilters] Select sucursales encontrado:`, !!sucursalesSelect);
+      if (sucursalesSelect && data.sucursales) {
+        console.log(`[initializeWorkspaceFilters] Poblando ${data.sucursales.length} sucursales`);
+        sucursalesSelect.innerHTML = data.sucursales.map(s => 
+          `<option value="${s.value}">${s.label}</option>`
+        ).join("");
+        console.log(`[initializeWorkspaceFilters] Inicializando tags filter para sucursales_${safeItemKey}`);
+        initializeTagsFilter(`sucursales_${safeItemKey}`, 'sucursales');
+      }
+    }
+    
+    // Punto de venta
+    const puntoVentaResponse = await fetch(`/api/reports/filters/?type=puntos_venta`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+    if (puntoVentaResponse.ok) {
+      const data = await puntoVentaResponse.json();
+      const puntoVentaSelect = document.getElementById(`punto_venta_${safeItemKey}`);
+      if (puntoVentaSelect && data.puntos_venta) {
+        puntoVentaSelect.innerHTML = data.puntos_venta.map(pv => 
+          `<option value="${pv.value}">${pv.label}</option>`
+        ).join("");
+        initializeTagsFilter(`punto_venta_${safeItemKey}`, 'punto_venta');
+      }
+    }
+    
+    // Clientes
+    const clientesResponse = await fetch(`/api/reports/filters/?type=clientes`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" },
+    });
+    if (clientesResponse.ok) {
+      const data = await clientesResponse.json();
+      const clientesSelect = document.getElementById(`clientes_excluidos_${safeItemKey}`);
+      if (clientesSelect && data.clientes) {
+        clientesSelect.innerHTML = data.clientes.map(c => 
+          `<option value="${c.value}">${c.label}</option>`
+        ).join("");
+        initializeTagsFilter(`clientes_excluidos_${safeItemKey}`, 'clientes_excluidos');
+      }
+    }
+    
+    // Restaurar filtros guardados
+    try {
+      const saved = localStorage.getItem(`report_filters_${itemKey}`);
+      if (saved) {
+        const filters = JSON.parse(saved);
+        
+        // Restaurar fechas
+        if (filters.fecha_inicio && fechaInicioInput) {
+          fechaInicioInput.value = filters.fecha_inicio;
+        }
+        if (filters.fecha_fin && fechaFinInput) {
+          fechaFinInput.value = filters.fecha_fin;
+        }
+        
+        // Restaurar sucursales
+        if (filters.sucursales && Array.isArray(filters.sucursales)) {
+          const sucursalesSelect = document.getElementById(`sucursales_${safeItemKey}`);
+          if (sucursalesSelect) {
+            filters.sucursales.forEach(val => {
+              const option = sucursalesSelect.querySelector(`option[value="${val}"]`);
+              if (option) option.selected = true;
+            });
+            // Trigger change para actualizar los tags
+            sucursalesSelect.dispatchEvent(new Event('change'));
+          }
+        }
+        
+        // Restaurar punto de venta
+        if (filters.punto_venta && Array.isArray(filters.punto_venta)) {
+          const puntoVentaSelect = document.getElementById(`punto_venta_${safeItemKey}`);
+          if (puntoVentaSelect) {
+            filters.punto_venta.forEach(val => {
+              const option = puntoVentaSelect.querySelector(`option[value="${val}"]`);
+              if (option) option.selected = true;
+            });
+            puntoVentaSelect.dispatchEvent(new Event('change'));
+          }
+        }
+        
+        // Restaurar clientes excluidos
+        if (filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
+          const clientesSelect = document.getElementById(`clientes_excluidos_${safeItemKey}`);
+          if (clientesSelect) {
+            filters.clientes_excluidos.forEach(val => {
+              const option = clientesSelect.querySelector(`option[value="${String(val).trim()}"]`);
+              if (option) option.selected = true;
+            });
+            clientesSelect.dispatchEvent(new Event('change'));
+          }
+        }
+        
+        // Actualizar título con filtros
+        updateWorkspaceWidgetTitle(itemKey, filters);
+      } else {
+        // Si no hay filtros guardados, establecer fechas por defecto
+        const fechaInicioInput = document.getElementById(`fecha_inicio_${safeItemKey}`);
+        const fechaFinInput = document.getElementById(`fecha_fin_${safeItemKey}`);
+        
+        if (fechaInicioInput && fechaFinInput) {
+          const today = new Date();
+          const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastDay = new Date(today);
+          
+          fechaInicioInput.value = firstDay.toISOString().split('T')[0];
+          fechaFinInput.value = lastDay.toISOString().split('T')[0];
+        }
+      }
+    } catch (e) {
+      console.warn("Error restaurando filtros guardados:", e);
+    }
+  } catch (error) {
+    console.error("Error inicializando filtros del workspace:", error);
+  }
+};
+
+// Función para actualizar el título del widget con los filtros seleccionados
+const updateWorkspaceWidgetTitle = (itemKey, filters) => {
+  const widget = dashboardRoot.querySelector(`[data-widget-id][data-item-key="${itemKey}"]`);
+  if (!widget) return;
+  
+  const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+  const titleElement = widget.querySelector("[data-widget-title]");
+  const subtitleElement = widget.querySelector("[data-widget-subtitle]");
+  if (!titleElement) return;
+  
+  // Construir el título con sucursales
+  let titleText = "Total Consolidado";
+  const sucursalesNames = [];
+  
+  // Sucursales - agregar al título
+  if (filters.sucursales && filters.sucursales.length > 0) {
+    // Primero intentar usar los nombres guardados
+    if (filters._sucursales_names && filters._sucursales_names.length > 0) {
+      sucursalesNames.push(...filters._sucursales_names);
+    } else {
+      // Fallback: buscar en el select si está disponible
+      const sucursalesSelect = document.getElementById(`sucursales_${safeItemKey}`);
+      if (sucursalesSelect) {
+        filters.sucursales.forEach(val => {
+          const option = sucursalesSelect.querySelector(`option[value="${val}"]`);
+          if (option) {
+            sucursalesNames.push(option.textContent);
+          }
+        });
+      }
+    }
+  }
+  
+  // Si hay sucursales, agregarlas al título separadas por |
+  if (sucursalesNames.length > 0) {
+    titleElement.innerHTML = `Total Consolidado <span class="font-bold text-sky-600 dark:text-sky-400">${sucursalesNames.join(' | ')}</span>`;
+  } else {
+    titleElement.textContent = titleText;
+  }
+  
+  // Construir el subtítulo con período y otros filtros
+  const subtitleParts = [];
+  
+  // Período
+  if (filters.fecha_inicio && filters.fecha_fin) {
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    };
+    subtitleParts.push(`${formatDate(filters.fecha_inicio)} - ${formatDate(filters.fecha_fin)}`);
+  }
+  
+  // Punto de venta
+  if (filters.punto_venta && filters.punto_venta.length > 0) {
+    let nombres = [];
+    // Primero intentar usar los nombres guardados
+    if (filters._punto_venta_names && filters._punto_venta_names.length > 0) {
+      nombres = filters._punto_venta_names;
+    } else {
+      // Fallback: buscar en el select si está disponible
+      const pvSelect = document.getElementById(`punto_venta_${safeItemKey}`);
+      if (pvSelect) {
+        nombres = filters.punto_venta.map(val => {
+          const option = pvSelect.querySelector(`option[value="${val}"]`);
+          return option ? option.textContent : val;
+        });
+      }
+    }
+    
+    if (nombres.length > 0) {
+      if (nombres.length <= 2) {
+        subtitleParts.push(`PV: ${nombres.join(", ")}`);
+      } else {
+        subtitleParts.push(`PV: ${nombres[0]} +${nombres.length - 1}`);
+      }
+    }
+  }
+  
+  // Clientes excluidos
+  if (filters.clientes_excluidos && filters.clientes_excluidos.length > 0) {
+    subtitleParts.push(`Excl. ${filters.clientes_excluidos.length} cliente(s)`);
+  }
+  
+  // Actualizar subtítulo
+  if (subtitleElement) {
+    const lastUpdateSpan = subtitleElement.querySelector("[data-workspace-last-update]");
+    const lastUpdateText = lastUpdateSpan ? lastUpdateSpan.textContent : "—";
+    
+    if (subtitleParts.length > 0) {
+      subtitleElement.innerHTML = `<span class="font-bold text-sky-600 dark:text-sky-400">${subtitleParts.join(' • ')}</span> • Últ. act.: <span data-workspace-last-update>${lastUpdateText}</span>`;
+    } else {
+      subtitleElement.innerHTML = `Última actualización: <span data-workspace-last-update>${lastUpdateText}</span>`;
+    }
+  }
+};
+
+// Variable global para controlar si ya se adjuntó el event delegation para toggle filtros
+let workspaceFilterToggleDelegationAttached = false;
+
+const attachWorkspaceFilterToggleHandlers = () => {
+  if (!workspaceApiUrl) return;
+  
+  if (workspaceFilterToggleDelegationAttached) {
+    return;
+  }
+  
+  // Event delegation para botón "Filtros"
+  dashboardRoot.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-toggle-filters]");
+    if (!button) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const itemKey = button.dataset.itemKey;
+    if (!itemKey) return;
+    
+    const panel = dashboardRoot.querySelector(`[data-filters-panel][data-item-key="${itemKey}"]`);
+    if (!panel) return;
+    
+    const isHidden = panel.classList.contains("hidden");
+    
+    if (isHidden) {
+      // Mostrar panel
+      panel.classList.remove("hidden");
+      button.classList.add("bg-sky-100", "dark:bg-sky-900/30", "text-sky-600", "dark:text-sky-400");
+      
+      // Inicializar filtros si es la primera vez que se abre
+      if (!panel.dataset.initialized) {
+        console.log(`[toggleFilters] Primera apertura, inicializando filtros para ${itemKey}`);
+        // Pequeño delay para asegurar que el DOM se haya actualizado
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const slug = button.closest('[data-report-slug]')?.dataset.reportSlug || 'total-consolidado-operativo';
+        await initializeWorkspaceFilters(itemKey, slug);
+        panel.dataset.initialized = "true";
+      }
+    } else {
+      // Ocultar panel
+      panel.classList.add("hidden");
+      button.classList.remove("bg-sky-100", "dark:bg-sky-900/30", "text-sky-600", "dark:text-sky-400");
+    }
+  });
+  
+  workspaceFilterToggleDelegationAttached = true;
+};
+
+// Variable global para controlar si ya se adjuntó el event delegation para aplicar filtros
+let workspaceApplyFiltersDelegationAttached = false;
+
+const attachWorkspaceApplyFiltersHandlers = () => {
+  if (!workspaceApiUrl) return;
+  
+  if (workspaceApplyFiltersDelegationAttached) {
+    return;
+  }
+  
+  // Event delegation para botón "Aplicar Filtros"
+  dashboardRoot.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-apply-workspace-filters]");
+    if (!button) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const itemKey = button.dataset.itemKey;
+    const slug = button.dataset.reportSlug;
+    if (!itemKey || !slug) return;
+    
+    if (button.dataset.loading === "true") return;
+    button.dataset.loading = "true";
+    button.classList.add("opacity-60", "pointer-events-none");
+    
+    try {
+      const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
+      
+      // Recolectar filtros del panel específico
+      const filters = {};
+      
+      // Fechas
+      const fechaInicioInput = document.getElementById(`fecha_inicio_${safeItemKey}`);
+      const fechaFinInput = document.getElementById(`fecha_fin_${safeItemKey}`);
+      if (fechaInicioInput && fechaInicioInput.value) {
+        filters.fecha_inicio = fechaInicioInput.value;
+      }
+      if (fechaFinInput && fechaFinInput.value) {
+        filters.fecha_fin = fechaFinInput.value;
+      }
+      
+      // Sucursales
+      const sucursalesSelect = document.getElementById(`sucursales_${safeItemKey}`);
+      if (sucursalesSelect) {
+        const selectedSucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value).filter(v => v);
+        filters.sucursales = selectedSucursales;
+        // Guardar también los nombres para mostrar en el título
+        filters._sucursales_names = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.textContent).filter(v => v);
+      }
+      
+      // Punto de venta
+      const puntoVentaSelect = document.getElementById(`punto_venta_${safeItemKey}`);
+      if (puntoVentaSelect) {
+        const selectedPuntoVenta = Array.from(puntoVentaSelect.selectedOptions).map(opt => opt.value).filter(v => v);
+        filters.punto_venta = selectedPuntoVenta;
+        // Guardar también los nombres
+        filters._punto_venta_names = Array.from(puntoVentaSelect.selectedOptions).map(opt => opt.textContent).filter(v => v);
+      }
+      
+      // Clientes excluidos
+      const clientesExcluidosSelect = document.getElementById(`clientes_excluidos_${safeItemKey}`);
+      if (clientesExcluidosSelect) {
+        const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+        filters.clientes_excluidos = selectedClientes;
+      }
+      
+      // Guardar filtros en localStorage con el item_key
+      try {
+        localStorage.setItem(`report_filters_${itemKey}`, JSON.stringify(filters));
+      } catch (e) {
+        console.warn("No se pudieron guardar filtros:", e);
+      }
+      
+      // Actualizar el título con los filtros seleccionados
+      updateWorkspaceWidgetTitle(itemKey, filters);
+      
+      // Recargar solo este widget
+      const widget = dashboardRoot.querySelector(`[data-widget-id][data-item-key="${itemKey}"]`);
+      if (widget) {
+        const widgetId = widget.dataset.widgetId;
+        const index = parseInt(widgetId.replace("workspace-", ""), 10);
+        
+        // Buscar el slot correspondiente
+        const response = await fetch(workspaceApiUrl, {
+          headers: { "X-Requested-With": "XMLHttpRequest" },
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          const slot = (payload.slots || []).find(s => (s.item_key || s.slug) === itemKey);
+          if (slot) {
+            await loadWorkspaceSlot(slot, index, false);
+          }
+        }
+      }
+      
+      toast("Filtros aplicados correctamente");
+    } catch (error) {
+      console.error("Error al aplicar filtros:", error);
+      toast(error.message || "No se pudieron aplicar los filtros", "error");
+    } finally {
+      button.classList.remove("opacity-60", "pointer-events-none");
+      button.dataset.loading = "false";
+    }
+  });
+  
+  workspaceApplyFiltersDelegationAttached = true;
+};
+
+// Variable global para controlar si ya se adjuntó el event delegation para duplicar
+let workspaceDuplicateDelegationAttached = false;
+
+const attachWorkspaceDuplicateHandlers = () => {
+  if (!workspaceApiUrl) return;
+  
+  // Si ya se adjuntó el event delegation, no hacer nada
+  if (workspaceDuplicateDelegationAttached) {
+    return;
+  }
+  
+  // Usar event delegation en el dashboardRoot
+  dashboardRoot.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-duplicate-workspace]");
+    if (!button) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const itemKey = button.dataset.itemKey;
+    const slug = button.dataset.reportSlug;
+    if (!slug) return;
+    
+    if (button.dataset.loading === "true") return;
+    button.dataset.loading = "true";
+    button.classList.add("opacity-60", "pointer-events-none");
+    
+    try {
+      const response = await fetch(workspaceApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({ slug, allow_duplicate: true }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || "No se pudo duplicar");
+      }
+      const payload = await response.json();
+      const newItemKey = payload.item_key;
+      if (newItemKey && itemKey && newItemKey !== itemKey) {
+        try {
+          const saved = localStorage.getItem(`report_filters_${itemKey}`);
+          if (saved) {
+            localStorage.setItem(`report_filters_${newItemKey}`, saved);
+          }
+        } catch (e) {
+          console.warn("No se pudieron copiar filtros al duplicado:", e);
+        }
+      }
+      setWorkspaceCount(payload.count ?? "-");
+      toast("Duplicado agregado al workspace");
+      await fetchWorkspaceData();
+    } catch (error) {
+      console.error(error);
+      toast(error.message || "No se pudo duplicar", "error");
+    } finally {
+      button.classList.remove("opacity-60", "pointer-events-none");
+      button.dataset.loading = "false";
+    }
+  });
+  
+  workspaceDuplicateDelegationAttached = true;
 };
 
 // Función para mostrar animación de carga en un widget específico del workspace
@@ -4453,11 +5357,11 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     const limit = isTableReport ? 1000 : 200;
     const requestBody = { slug: slot.slug, limit: limit };
     
-    // Intentar cargar filtros guardados desde localStorage usando el slug del reporte
-    // Esto aplica tanto para reportes declarativos como legacy
+    // Filtros por instancia: report_filters_<item_key> (item_key = slug o slug::instance_id)
     let savedFilters = null;
+    const itemKey = slot.item_key != null ? slot.item_key : slot.slug;
     try {
-      const storageKey = `report_filters_${slot.slug}`;
+      const storageKey = `report_filters_${itemKey}`;
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         savedFilters = JSON.parse(saved);
@@ -4513,7 +5417,8 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
           "cash_flow_by_account",
           "uninvoiced_remitos",
           "pending_orders",
-          "sales_summary"
+          "sales_summary",
+          "total-consolidado-operativo"
         ];
         
         if (reportsWithDateFilters.includes(slot.slug)) {
@@ -4639,7 +5544,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     // Para reportes no declarativos, usar el sistema antiguo
     const data = payload.data || [];
     console.log(`[loadWorkspaceSlot] ${slot.slug}:`, { dataLength: data.length, payload, config });
-    widgetDataCache.set(widgetId, { data, config });
+    widgetDataCache.set(widgetId, { data, config, meta: payload.meta || {} });
     
     // Actualizar el título con el conteo para reportes específicos
     const reportSlug = slot.slug;
@@ -4653,6 +5558,33 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     }
     
     const widgetType = widget.dataset.widgetType;
+    
+    // HÍBRIDO: Ventas Netas bar → WidgetEngine
+    const isVentasNetasBar = isVentasNetasSlug(reportSlug) &&
+      (widgetType === "d3-bar-grouped" || widgetType === "d3-bar" || widgetType === "d3-bar-stacked" || widgetType === "bar") &&
+      window.WidgetEngine &&
+      data?.length > 0;
+
+    if (isVentasNetasBar) {
+      renderWidgetChart(widget, data, config, payload.meta || {});
+      console.log("[Ventas Netas] Gráfico de barras renderizado con WidgetEngine (workspace)");
+      renderTable(widget, data, { show: false });
+      const wrapper = widget.closest("[data-widget-wrapper]");
+      if (wrapper) {
+        wrapper.querySelectorAll("[data-widget-note]").forEach((n) => { n.style.display = "none"; n.remove(); });
+        if (payload.notes && payload.notes.length) {
+          const info = document.createElement("div");
+          info.className = "px-6 py-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400";
+          info.dataset.widgetNote = "true";
+          info.style.margin = "0";
+          info.style.flexShrink = "0";
+          info.innerHTML = `<strong>${widget.dataset.noteLabel || "Notas"}:</strong> ${payload.notes.join(" · ")}`;
+          wrapper.appendChild(info);
+        }
+      }
+      hideWorkspaceWidgetLoading(widget);
+      return;
+    }
     
     // Manejar diferentes tipos de widgets en workspace
     if (widgetType === "pivot-table") {
@@ -4690,7 +5622,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
         chartContainer.style.display = "";
       }
       console.log(`[loadWorkspaceSlot] Renderizando d3-cards para ${reportSlug}:`, { data, config });
-    renderChart(widget, data, config);
+      renderChart(widget, data, config);
       renderTable(widget, data, { show: false });
     } else {
       // Para otros tipos de widgets (gráficos)
@@ -4717,6 +5649,34 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
         info.innerHTML = `<strong>${widget.dataset.noteLabel || "Notas"}:</strong> ${payload.notes.join(" · ")}`;
         wrapper.appendChild(info);
       }
+    }
+    
+    // Restaurar el título con los filtros guardados (si existen)
+    if (savedFilters && Object.keys(savedFilters).length > 0) {
+      const itemKey = slot.item_key != null ? slot.item_key : slot.slug;
+      
+      // Si hay sucursales pero no tienen nombres guardados, obtenerlos del API
+      if (savedFilters.sucursales && savedFilters.sucursales.length > 0 && !savedFilters._sucursales_names) {
+        try {
+          const sucursalesResponse = await fetch("/api/reports/filters/?type=sucursales");
+          if (sucursalesResponse.ok) {
+            const sucursalesData = await sucursalesResponse.json();
+            const sucursalesList = sucursalesData.sucursales || [];
+            savedFilters._sucursales_names = savedFilters.sucursales.map(id => {
+              const found = sucursalesList.find(s => String(s.id) === String(id) || s.codigo === id);
+              return found ? (found.nombre || found.codigo) : id;
+            });
+            // Guardar los nombres para la próxima vez
+            try {
+              localStorage.setItem(`report_filters_${itemKey}`, JSON.stringify(savedFilters));
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) {
+          console.warn("No se pudieron obtener nombres de sucursales:", e);
+        }
+      }
+      
+      updateWorkspaceWidgetTitle(itemKey, savedFilters);
     }
     
     // Ocultar animación de carga después de renderizar
@@ -4751,6 +5711,9 @@ const fetchWorkspaceData = async (isAutoRefresh = false) => {
     widgetDataCache.clear();
     buildWorkspaceDOM(slots);
     attachWorkspaceRemovalHandlers();
+    attachWorkspaceDuplicateHandlers();
+    attachWorkspaceFilterToggleHandlers();
+    attachWorkspaceApplyFiltersHandlers();
     // Re-attach drag and drop después de reconstruir el DOM
     attachWorkspaceDragAndDrop(dashboardRoot);
     setupWorkspaces(true);
@@ -4856,11 +5819,20 @@ if (dashboardRoot) {
 
 // Función para inicializar componentes de tags (debe estar en scope global antes del bloque if)
   const initializeTagsFilter = (fieldId, fieldType) => {
+    console.log(`[initializeTagsFilter] Inicializando ${fieldId} (tipo: ${fieldType})`);
     const select = document.getElementById(fieldId);
     const container = document.getElementById(`${fieldId}_tags_container`);
     const chipsContainer = container?.querySelector(".tags-chips");
     const input = document.getElementById(`${fieldId}_search`);
     const dropdown = document.getElementById(`${fieldId}_dropdown`);
+    
+    console.log(`[initializeTagsFilter] Elementos encontrados:`, {
+      select: !!select,
+      container: !!container,
+      chipsContainer: !!chipsContainer,
+      input: !!input,
+      dropdown: !!dropdown
+    });
     
     if (!select || !container || !chipsContainer || !input || !dropdown) {
       return;
@@ -5176,32 +6148,38 @@ const initializeWorkspaceRealtime = () => {
     }
   };
 
+  // Mismo comportamiento que pedidos-pendientes: emerald cuando activo, rose cuando parado, "Detener tiempo real" / "Tiempo real", icono stop/refresh
   const updateWorkspaceRealtimeUI = (active) => {
     const label = realtimeButton.querySelector("[data-realtime-label]");
     const indicator = realtimeButton.querySelector("[data-realtime-indicator]");
     const icon = realtimeButton.querySelector("[data-realtime-icon]");
-    
     if (active) {
-      realtimeButton.classList.remove("text-slate-400", "hover:text-slate-300", "border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800");
-      realtimeButton.classList.add("text-green-500", "hover:text-green-400", "bg-green-500/10", "border-green-500");
-      if (label) label.textContent = "Tiempo real";
+      realtimeButton.classList.remove("text-slate-600", "dark:text-slate-400", "bg-slate-100", "dark:bg-slate-800", "hover:bg-slate-200", "dark:hover:bg-slate-700", "border-slate-300", "dark:border-slate-600", "text-rose-600", "dark:text-rose-400", "bg-rose-50", "dark:bg-rose-900/20", "hover:bg-rose-100", "dark:hover:bg-rose-900/30", "border-rose-300", "dark:border-rose-700");
+      realtimeButton.classList.add("text-emerald-700", "dark:text-emerald-400", "bg-emerald-50", "dark:bg-emerald-900/20", "hover:bg-emerald-100", "dark:hover:bg-emerald-900/30", "border-emerald-300", "dark:border-emerald-700", "border");
       if (indicator) {
         indicator.classList.remove("opacity-0");
-        indicator.classList.add("opacity-100", "animate-pulse");
+        indicator.classList.add("bg-emerald-500", "dark:bg-emerald-400");
+        indicator.classList.remove("bg-rose-500", "dark:bg-rose-400");
       }
+      if (label) label.textContent = "Detener tiempo real";
       if (icon) {
-        icon.setAttribute("stroke", "currentColor");
+        icon.innerHTML = '<path d="M6 6h12v12H6z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+        icon.classList.remove("text-rose-600", "dark:text-rose-400");
+        icon.classList.add("text-emerald-600", "dark:text-emerald-400");
       }
     } else {
-      realtimeButton.classList.remove("text-green-500", "hover:text-green-400", "bg-green-500/10", "border-green-500");
-      realtimeButton.classList.add("text-slate-400", "hover:text-slate-300", "border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800");
-      if (label) label.textContent = "Tiempo real";
+      realtimeButton.classList.remove("text-emerald-700", "dark:text-emerald-400", "bg-emerald-50", "dark:bg-emerald-900/20", "hover:bg-emerald-100", "dark:hover:bg-emerald-900/30", "border-emerald-300", "dark:border-emerald-700", "text-slate-600", "dark:text-slate-400", "bg-slate-100", "dark:bg-slate-800", "hover:bg-slate-200", "dark:hover:bg-slate-700", "border-slate-300", "dark:border-slate-600");
+      realtimeButton.classList.add("text-rose-600", "dark:text-rose-400", "bg-rose-50", "dark:bg-rose-900/20", "hover:bg-rose-100", "dark:hover:bg-rose-900/30", "border-rose-300", "dark:border-rose-700", "border");
       if (indicator) {
         indicator.classList.add("opacity-0");
-        indicator.classList.remove("opacity-100", "animate-pulse");
+        indicator.classList.add("bg-rose-500", "dark:bg-rose-400");
+        indicator.classList.remove("bg-emerald-500", "dark:bg-emerald-400");
       }
+      if (label) label.textContent = "Tiempo real";
       if (icon) {
-        icon.setAttribute("stroke", "currentColor");
+        icon.innerHTML = '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+        icon.classList.remove("text-emerald-600", "dark:text-emerald-400");
+        icon.classList.add("text-rose-600", "dark:text-rose-400");
       }
     }
     realtimeButton.setAttribute("data-realtime-active", String(active));
@@ -5365,7 +6343,7 @@ if (dashboardRoot) {
     const apiUrl = dashboardRoot.dataset.dashboardUrl;
     const reportSlug = dashboardRoot.dataset.reportSlug;
     
-    if (reportSlug !== "ventas_netas" && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "bo-stock-facturacion" && reportSlug !== "total-consolidado-operativo") {
       return;
     }
     
@@ -5426,6 +6404,35 @@ if (dashboardRoot) {
           });
           // Inicializar componente de tags (ya con las selecciones aplicadas)
           initializeTagsFilter("sucursales", "sucursales");
+        }
+      }
+      
+      // Cargar clientes para "Clientes a excluir" (se muestra en Ventas Netas, Remitos no facturados, Total Consolidado)
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo";
+      if (reportShowsClientesExcluir) {
+        const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        if (clientesResponse.ok) {
+          const clientesData = await clientesResponse.json();
+          const clientesSelect = document.getElementById("clientes_excluidos");
+          if (clientesSelect) {
+            clientesSelect.innerHTML = "";
+            (clientesData.clientes || []).forEach((cli) => {
+              const option = document.createElement("option");
+              option.value = cli.value;
+              option.textContent = cli.label;
+              if (savedFilters && savedFilters.clientes_excluidos && Array.isArray(savedFilters.clientes_excluidos)) {
+                if (savedFilters.clientes_excluidos.includes(String(cli.value))) {
+                  option.selected = true;
+                }
+              }
+              clientesSelect.appendChild(option);
+            });
+            initializeTagsFilter("clientes_excluidos", "clientes");
+          }
         }
       }
       
@@ -5619,15 +6626,18 @@ if (dashboardRoot) {
     const fechaInicioInput = document.getElementById("fecha_inicio");
     const fechaFinInput = document.getElementById("fecha_fin");
     
-    // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_waterfall, cash_flow_by_account, uninvoiced_remitos o pending_orders)
+    // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pending_orders, sales_summary, bo-stock-facturacion)
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (reportSlug !== "ventas_netas" && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "pending_orders" && reportSlug !== "sales_summary") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "pending_orders" && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
       return;
     }
     if (!buttons.length || !periodoTipoSelect || !fechaInicioInput || !fechaFinInput) {
       return;
     }
-    
+
+    const periodContainer = document.getElementById("period-filters-container");
+    const alreadySetup = periodContainer && periodContainer.getAttribute("data-periodo-setup") === "true";
+
     // Función para actualizar el estado visual de los botones
     const updateButtonStates = (selectedValue) => {
       buttons.forEach((btn) => {
@@ -5684,13 +6694,20 @@ if (dashboardRoot) {
       
       // Actualizar el período en el título del resumen
       const summaryPeriodElement = document.getElementById("summary-period");
-      if (summaryPeriodElement && fechaInicioInput.value && fechaFinInput.value) {
-        const formatDate = (dateStr) => {
-          const [year, month, day] = dateStr.split('-');
-          return `${day}-${month}-${year}`;
-        };
-        summaryPeriodElement.textContent = `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
-      }
+      const periodTextFromInputs = fechaInicioInput.value && fechaFinInput.value
+        ? (() => {
+            const formatDate = (dateStr) => {
+              const [year, month, day] = dateStr.split('-');
+              return `${day}-${month}-${year}`;
+            };
+            return `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
+          })()
+        : "";
+      if (summaryPeriodElement) summaryPeriodElement.textContent = periodTextFromInputs;
+      const boPeriodEl = document.getElementById("bo-summary-period");
+      if (boPeriodEl && dashboardRoot?.dataset?.reportSlug === "bo-stock-facturacion") boPeriodEl.textContent = periodTextFromInputs;
+      const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
+      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = periodTextFromInputs;
       
       // Guardar filtros cuando cambia
       saveFilters();
@@ -5702,8 +6719,8 @@ if (dashboardRoot) {
         if (savedViewType === "por_caja") {
           fetchByAccountData();
         }
-      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary") {
-        // Para cash_flow_by_account y sales_summary, recargar datos directamente
+      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+        // Para estos reportes, recargar datos al cambiar período
         fetchDashboardData();
       }
     };
@@ -5735,6 +6752,11 @@ if (dashboardRoot) {
     
     updateButtonStates(periodoTipoSelect.value);
     setPeriodo(periodoTipoSelect.value);
+
+    if (alreadySetup) {
+      return;
+    }
+    if (periodContainer) periodContainer.setAttribute("data-periodo-setup", "true");
     
     // Agregar event listeners a los botones
     buttons.forEach((btn) => {
@@ -5756,26 +6778,31 @@ if (dashboardRoot) {
     });
     
     // Agregar listeners para guardar filtros cuando cambian las fechas (solo en modo personalizado)
+    const syncPeriodLabel = () => {
+      if (!fechaInicioInput.value || !fechaFinInput.value) return;
+      const formatDate = (dateStr) => {
+        const [y, m, d] = dateStr.split('-');
+        return `${d}-${m}-${y}`;
+      };
+      const text = `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
+      const summaryPeriodElement = document.getElementById("summary-period");
+      if (summaryPeriodElement) summaryPeriodElement.textContent = text;
+      const boPeriodEl = document.getElementById("bo-summary-period");
+      if (boPeriodEl && dashboardRoot?.dataset?.reportSlug === "bo-stock-facturacion") boPeriodEl.textContent = text;
+      const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
+      if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = text;
+    };
     fechaInicioInput.addEventListener("change", () => {
       if (periodoTipoSelect.value === "personalizado") {
       saveFilters();
-        // Actualizar período en el título
-        const summaryPeriodElement = document.getElementById("summary-period");
-        if (summaryPeriodElement && fechaInicioInput.value && fechaFinInput.value) {
-          const formatDate = (dateStr) => {
-            const [year, month, day] = dateStr.split('-');
-            return `${day}-${month}-${year}`;
-          };
-          summaryPeriodElement.textContent = `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
-        }
-        // Si estamos en vista por caja, recargar datos
+        syncPeriodLabel();
         const reportSlug = dashboardRoot?.dataset?.reportSlug;
         if (reportSlug === "cash_flow_waterfall") {
           const savedViewType = localStorage.getItem(`view_type_${reportSlug}`) || "consolidada";
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
           fetchDashboardData();
         }
       }
@@ -5783,28 +6810,24 @@ if (dashboardRoot) {
     fechaFinInput.addEventListener("change", () => {
       if (periodoTipoSelect.value === "personalizado") {
       saveFilters();
-        // Actualizar período en el título
-        const summaryPeriodElement = document.getElementById("summary-period");
-        if (summaryPeriodElement && fechaInicioInput.value && fechaFinInput.value) {
-          const formatDate = (dateStr) => {
-            const [year, month, day] = dateStr.split('-');
-            return `${day}-${month}-${year}`;
-          };
-          summaryPeriodElement.textContent = `Periodo ${formatDate(fechaInicioInput.value)} al ${formatDate(fechaFinInput.value)}`;
-        }
-        // Si estamos en vista por caja, recargar datos
+        syncPeriodLabel();
         const reportSlug = dashboardRoot?.dataset?.reportSlug;
         if (reportSlug === "cash_flow_waterfall") {
           const savedViewType = localStorage.getItem(`view_type_${reportSlug}`) || "consolidada";
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
           fetchDashboardData();
         }
       }
     });
   };
+
+  // Cuando el template genera los controles de período (ej. ventas_netas con config.filters como objeto), enlazar recarga y guardado
+  window.addEventListener("reportPeriodFiltersReady", () => {
+    setupPeriodoTipo();
+  });
 
   const setupCashFlowFilters = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
@@ -6183,7 +7206,17 @@ if (dashboardRoot) {
 
   const applyFilters = (filters) => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (!filters || !reportSlug || (reportSlug !== "ventas_netas" && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account")) return;
+    if (!filters || !reportSlug) return;
+    const allowed =
+      isVentasNetasSlug(reportSlug) ||
+      reportSlug === "cash_flow_waterfall" ||
+      reportSlug === "cash_flow_by_account" ||
+      reportSlug === "uninvoiced_remitos" ||
+      reportSlug === "pending_orders" ||
+      reportSlug === "sales_summary" ||
+      reportSlug === "total-consolidado-operativo" ||
+      reportSlug === "bo-stock-facturacion";
+    if (!allowed) return;
 
     // Aplicar tipo de período y fechas
     const periodoTipoSelect = document.getElementById("periodo_tipo");
@@ -6238,10 +7271,8 @@ if (dashboardRoot) {
       }
     }
 
-    // Aplicar filtros específicos de ventas_netas
-    if (reportSlug === "ventas_netas") {
-      // Los puntos de venta y sucursales ya se aplicaron al crear las opciones
-      // Solo necesitamos disparar eventos para actualizar los tags visuales si ya están inicializados
+    // Aplicar filtros específicos de ventas_netas, uninvoiced_remitos, bo-stock-facturacion (punto_venta, sucursales)
+    if (isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion") {
       if (filters.punto_venta && Array.isArray(filters.punto_venta)) {
         const pvSelect = document.getElementById("punto_venta");
         if (pvSelect) {
@@ -6272,6 +7303,24 @@ if (dashboardRoot) {
           // Disparar evento para actualizar tags visuales
           setTimeout(() => {
             sucSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+
+      // Clientes a excluir (NOT IN) - Ventas Netas, Total Consolidado Operativo, Remitos no facturados
+      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos") && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
+        const clientesSelect = document.getElementById("clientes_excluidos");
+        if (clientesSelect) {
+          filters.clientes_excluidos.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = clientesSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            clientesSelect.dispatchEvent(new Event("change", { bubbles: true }));
           }, 150);
         }
       }
@@ -6307,50 +7356,57 @@ if (dashboardRoot) {
     }
   };
 
+  // Helper: prioriza fechas de los inputs (lo que ve el usuario). Solo recalcula si faltan.
+  const setPeriodDatesFromForm = (filters, periodoTipo, fechaInicio, fechaFin) => {
+    const today = new Date();
+    const fallbackMes = () => {
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      return [first.toISOString().split("T")[0], last.toISOString().split("T")[0]];
+    };
+    if (fechaInicio && fechaFin) {
+      filters.fecha_inicio = fechaInicio;
+      filters.fecha_fin = fechaFin;
+      if (periodoTipo === "dia_actual") filters.dia_actual = true;
+      else if (periodoTipo === "mes_actual") filters.mes_actual = true;
+      else if (periodoTipo === "año_actual") filters.año_actual = true;
+      return;
+    }
+    if (periodoTipo === "dia_actual") {
+      const s = today.toISOString().split("T")[0];
+      filters.fecha_inicio = s;
+      filters.fecha_fin = s;
+      filters.dia_actual = true;
+    } else if (periodoTipo === "mes_actual") {
+      const [a, b] = fallbackMes();
+      filters.fecha_inicio = a;
+      filters.fecha_fin = b;
+      filters.mes_actual = true;
+    } else if (periodoTipo === "año_actual") {
+      const first = new Date(today.getFullYear(), 0, 1);
+      const last = new Date(today.getFullYear(), 11, 31);
+      filters.fecha_inicio = first.toISOString().split("T")[0];
+      filters.fecha_fin = last.toISOString().split("T")[0];
+      filters.año_actual = true;
+    } else {
+      const [a, b] = fallbackMes();
+      filters.fecha_inicio = a;
+      filters.fecha_fin = b;
+    }
+  };
+
   // Declarar getFilters en el scope global para que esté disponible en fetchDetailedMovements
   window.getFilters = () => {
     const filters = {};
     const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
     
-    if (currentReportSlug === "ventas_netas") {
+    if (isVentasNetasSlug(currentReportSlug)) {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
       const puntoVentaSelect = document.getElementById("punto_venta");
       const sucursalesSelect = document.getElementById("sucursales");
-      
-      // Establecer fechas según el tipo de período seleccionado
-      const today = new Date();
-      if (periodoTipo === "dia_actual") {
-        const todayStr = today.toISOString().split('T')[0];
-        filters.fecha_inicio = todayStr;
-        filters.fecha_fin = todayStr;
-        filters.dia_actual = true;
-      } else if (periodoTipo === "mes_actual") {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.mes_actual = true;
-      } else if (periodoTipo === "año_actual") {
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        const lastDay = new Date(today.getFullYear(), 11, 31);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.año_actual = true;
-      } else {
-        // Personalizado: usar las fechas ingresadas manualmente
-      if (fechaInicio && fechaFin) {
-        filters.fecha_inicio = fechaInicio;
-        filters.fecha_fin = fechaFin;
-        } else {
-          // Si no hay fechas, usar mes actual por defecto
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        }
-      }
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       
       // Obtener refresh_interval del filtro
       const refreshIntervalSelect = document.getElementById("refresh_interval");
@@ -6371,202 +7427,75 @@ if (dashboardRoot) {
           filters.sucursales = selectedSucursales;
         }
       }
-    } else if (currentReportSlug === "uninvoiced_remitos") {
+      const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
+      if (clientesExcluidosSelect) {
+        const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+        filters.clientes_excluidos = selectedClientes;
+      }
+    } else if (currentReportSlug === "uninvoiced_remitos" || currentReportSlug === "total-consolidado-operativo") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
       const puntoVentaSelect = document.getElementById("punto_venta");
       const sucursalesSelect = document.getElementById("sucursales");
-      
-      // Establecer fechas según el tipo de período seleccionado
-      const today = new Date();
-      if (periodoTipo === "dia_actual") {
-        const todayStr = today.toISOString().split('T')[0];
-        filters.fecha_inicio = todayStr;
-        filters.fecha_fin = todayStr;
-        filters.dia_actual = true;
-      } else if (periodoTipo === "mes_actual") {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.mes_actual = true;
-      } else if (periodoTipo === "año_actual") {
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        const lastDay = new Date(today.getFullYear(), 11, 31);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.año_actual = true;
-      } else {
-        // Personalizado: usar las fechas ingresadas manualmente
-      if (fechaInicio && fechaFin) {
-        filters.fecha_inicio = fechaInicio;
-        filters.fecha_fin = fechaFin;
-        } else {
-          // Si no hay fechas, usar mes actual por defecto
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        }
-      }
-      
-      // Obtener refresh_interval del filtro
+      const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
-      if (refreshIntervalSelect) {
-        filters.refresh_interval = refreshIntervalSelect.value;
-      }
-      
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
       if (puntoVentaSelect) {
         const selectedPVs = Array.from(puntoVentaSelect.selectedOptions).map(opt => opt.value).filter(v => v);
-        if (selectedPVs.length > 0) {
-          filters.punto_venta = selectedPVs;
-        }
+        if (selectedPVs.length > 0) filters.punto_venta = selectedPVs;
       }
-      
       if (sucursalesSelect) {
         const selectedSucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value).filter(v => v);
-        if (selectedSucursales.length > 0) {
-          filters.sucursales = selectedSucursales;
-        }
+        if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
+      }
+      if (clientesExcluidosSelect) {
+        const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+        filters.clientes_excluidos = selectedClientes;
       }
     } else if (currentReportSlug === "pending_orders") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
-      
-      // Establecer fechas según el tipo de período seleccionado
-        const today = new Date();
-      if (periodoTipo === "dia_actual") {
-        const todayStr = today.toISOString().split('T')[0];
-        filters.fecha_inicio = todayStr;
-        filters.fecha_fin = todayStr;
-        filters.dia_actual = true;
-      } else if (periodoTipo === "mes_actual") {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.mes_actual = true;
-      } else if (periodoTipo === "año_actual") {
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        const lastDay = new Date(today.getFullYear(), 11, 31);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.año_actual = true;
-      } else {
-        // Personalizado: usar las fechas ingresadas manualmente
-        if (fechaInicio && fechaFin) {
-          filters.fecha_inicio = fechaInicio;
-          filters.fecha_fin = fechaFin;
-        } else {
-          // Si no hay fechas, usar mes actual por defecto
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        }
-      }
-      
-      // Obtener refresh_interval del filtro
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
-      if (refreshIntervalSelect) {
-        filters.refresh_interval = refreshIntervalSelect.value;
-      }
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
     } else if (currentReportSlug === "sales_summary") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
-      
-      // Establecer fechas según el tipo de período seleccionado
-      const today = new Date();
-      if (periodoTipo === "dia_actual") {
-        const todayStr = today.toISOString().split('T')[0];
-        filters.fecha_inicio = todayStr;
-        filters.fecha_fin = todayStr;
-        filters.dia_actual = true;
-      } else if (periodoTipo === "mes_actual") {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.mes_actual = true;
-      } else if (periodoTipo === "año_actual") {
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        const lastDay = new Date(today.getFullYear(), 11, 31);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.año_actual = true;
-      } else {
-        // Personalizado: usar las fechas ingresadas manualmente
-        if (fechaInicio && fechaFin) {
-          filters.fecha_inicio = fechaInicio;
-          filters.fecha_fin = fechaFin;
-        } else {
-          // Si no hay fechas, usar mes actual por defecto
-          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-          filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        }
-      }
-      
-      // Obtener refresh_interval del filtro
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
-      if (refreshIntervalSelect) {
-        filters.refresh_interval = refreshIntervalSelect.value;
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+    } else if (currentReportSlug === "bo-stock-facturacion") {
+      const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
+      const fechaInicio = document.getElementById("fecha_inicio")?.value;
+      const fechaFin = document.getElementById("fecha_fin")?.value;
+      const puntoVentaSelect = document.getElementById("punto_venta");
+      const sucursalesSelect = document.getElementById("sucursales");
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
+      const refreshIntervalSelect = document.getElementById("refresh_interval");
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+      if (puntoVentaSelect) {
+        const selectedPVs = Array.from(puntoVentaSelect.selectedOptions).map((opt) => opt.value).filter((v) => v);
+        if (selectedPVs.length > 0) filters.punto_venta = selectedPVs;
+      }
+      if (sucursalesSelect) {
+        const selectedSucursales = Array.from(sucursalesSelect.selectedOptions).map((opt) => opt.value).filter((v) => v);
+        if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
       }
     } else if (currentReportSlug === "cash_flow_waterfall" || currentReportSlug === "cash_flow_by_account") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
       const idCajaSelect = document.getElementById("id_caja");
-      
-      // Establecer fechas según el tipo de período seleccionado
-      const today = new Date();
-      if (periodoTipo === "dia_actual") {
-        const todayStr = today.toISOString().split('T')[0];
-        filters.fecha_inicio = todayStr;
-        filters.fecha_fin = todayStr;
-        filters.dia_actual = true;
-      } else if (periodoTipo === "mes_actual") {
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.mes_actual = true;
-      } else if (periodoTipo === "año_actual") {
-        const firstDay = new Date(today.getFullYear(), 0, 1);
-        const lastDay = new Date(today.getFullYear(), 11, 31);
-        filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-        filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        filters.año_actual = true;
-      } else {
-        // Personalizado: usar las fechas ingresadas manualmente
-        if (fechaInicio && fechaFin) {
-          filters.fecha_inicio = fechaInicio;
-          filters.fecha_fin = fechaFin;
-        } else {
-          // Si no hay fechas, usar mes actual por defecto
-          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-          filters.fecha_inicio = firstDay.toISOString().split('T')[0];
-          filters.fecha_fin = lastDay.toISOString().split('T')[0];
-        }
-      }
-      
-      // Obtener refresh_interval del filtro
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
-      if (refreshIntervalSelect) {
-        filters.refresh_interval = refreshIntervalSelect.value;
-      }
-      
-      // Caja (opcional) - puede ser array si se seleccionan múltiples
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
       if (idCajaSelect) {
         const selectedCajas = Array.from(idCajaSelect.selectedOptions).map(opt => opt.value).filter(v => v);
-        if (selectedCajas.length > 0) {
-          filters.id_caja = selectedCajas;
-        }
+        if (selectedCajas.length > 0) filters.id_caja = selectedCajas;
       }
     } else {
       // Filtros genéricos para otros reportes
@@ -6608,12 +7537,22 @@ if (dashboardRoot) {
     });
   };
 
+  let fetchDashboardDataInFlight = false;
+  const FETCH_TIMEOUT_MS = 120000; // 2 min para reportes pesados (ej. BO con administranet89)
+
   const fetchDashboardData = async (isAutoRefresh = false) => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
     const apiUrl = dashboardRoot?.dataset?.dashboardUrl;
     if (!reportSlug || !apiUrl) {
       return;
     }
+    if (fetchDashboardDataInFlight) {
+      console.warn("[dashboard.js] fetchDashboardData ya en curso, omitiendo petición duplicada.");
+      return;
+    }
+    fetchDashboardDataInFlight = true;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
       // Solo mostrar animación de carga si no es una actualización automática
       if (!isAutoRefresh) {
@@ -6634,6 +7573,7 @@ if (dashboardRoot) {
           limit: 200,
           filters: filters,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -6666,25 +7606,40 @@ if (dashboardRoot) {
         renderSummary(payload.meta || {}, payload.totals || {});
         
         const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
+        let hasErrorNote = false;
         
-        // Para cash_flow_by_account, renderizar tabla directamente en lugar de widgets
         if (currentReportSlug === "cash_flow_by_account") {
           const tableContent = document.getElementById("by-account-table-content");
           if (tableContent) {
             renderByAccountTable(payload.data || [], payload.totals || {}, tableContent);
           }
+        } else if (currentReportSlug === "bo-stock-facturacion") {
+          console.log("[dashboard.js] Procesando respuesta para bo-stock-facturacion:", payload);
+          const boResponse = {
+            data: payload.data || [],
+            totals: payload.totals || {},
+            meta: payload.meta || {},
+            notes: payload.notes || []
+          };
+          if (window.boStockFacturacionHandler && typeof window.boStockFacturacionHandler.processData === 'function') {
+            window.boStockFacturacionHandler.processData(boResponse);
+          }
+          document.dispatchEvent(new CustomEvent('reportDataLoaded', {
+            detail: { slug: 'bo-stock-facturacion', response: boResponse }
+          }));
+          const errNote = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
+          if (errNote) {
+            hasErrorNote = true;
+            if (!isAutoRefresh) toast(errNote, "error");
+          }
         } else {
-          // Para otros reportes, usar widgets normales
-        renderWidgets(payload);
-          
-          // Cargar movimientos detallados si es cash_flow_waterfall
+          renderWidgets(payload);
           if (currentReportSlug === "cash_flow_waterfall") {
             fetchDetailedMovements();
           }
         }
         
-        // Solo mostrar toast si no es una actualización automática
-        if (!isAutoRefresh) {
+        if (!isAutoRefresh && !hasErrorNote) {
           toast("Datos del dashboard actualizados");
         }
       }, 100);
@@ -6693,13 +7648,21 @@ if (dashboardRoot) {
         hideLoadingAnimation();
       }
       console.error("Error en fetchDashboardData:", error);
-      const errorMsg = error.message || "Error al sincronizar datos";
-      // Solo mostrar error si no es auto-refresh o si es un error crítico
+      let errorMsg = error.message || "Error al sincronizar datos";
+      if (error.name === "AbortError") {
+        errorMsg = "Tiempo de espera agotado. El reporte tarda demasiado (base de datos grande o consultas lentas). Pruebe un período más corto o filtros.";
+      }
       if (!isAutoRefresh) {
         toast(errorMsg, "error");
       }
+    } finally {
+      clearTimeout(timeoutId);
+      fetchDashboardDataInFlight = false;
     }
   };
+
+  // Exponer para que el template (tags filter) pueda recargar datos en reportes legacy
+  window.fetchDashboardData = fetchDashboardData;
 
   window.addEventListener("orientationchange", () => {
     showWorkspace(workspaceState.current);
@@ -6775,69 +7738,72 @@ if (dashboardRoot) {
       }
     };
 
+    // Mismo comportamiento y estilo que pedidos-pendientes (declarativos): emerald cuando activo, rose cuando inactivo, "Detener tiempo real" / "Tiempo real"
     const updateRealtimeUI = (active) => {
       const label = realtimeButton.querySelector("[data-realtime-label]");
       const indicator = realtimeButton.querySelector("[data-realtime-indicator]");
       const icon = realtimeButton.querySelector("[data-realtime-icon]");
-      
       if (active) {
-        realtimeButton.classList.remove("text-slate-400", "hover:text-slate-300");
-        realtimeButton.classList.add("text-green-500", "hover:text-green-400", "bg-green-500/10");
-        if (label) label.textContent = "Tiempo real";
+        realtimeButton.classList.remove("text-slate-600", "dark:text-slate-400", "bg-slate-100", "dark:bg-slate-800", "hover:bg-slate-200", "dark:hover:bg-slate-700", "border-slate-300", "dark:border-slate-600", "text-rose-600", "dark:text-rose-400", "bg-rose-50", "dark:bg-rose-900/20", "hover:bg-rose-100", "dark:hover:bg-rose-900/30", "border-rose-300", "dark:border-rose-700");
+        realtimeButton.classList.add("text-emerald-700", "dark:text-emerald-400", "bg-emerald-50", "dark:bg-emerald-900/20", "hover:bg-emerald-100", "dark:hover:bg-emerald-900/30", "border-emerald-300", "dark:border-emerald-700", "border");
         if (indicator) {
           indicator.classList.remove("opacity-0");
-          indicator.classList.add("opacity-100", "animate-pulse");
+          indicator.classList.add("bg-emerald-500", "dark:bg-emerald-400");
+          indicator.classList.remove("bg-rose-500", "dark:bg-rose-400");
         }
+        if (label) label.textContent = "Detener tiempo real";
         if (icon) {
-          icon.setAttribute("stroke", "currentColor");
+          icon.innerHTML = '<path d="M6 6h12v12H6z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+          icon.classList.remove("text-rose-600", "dark:text-rose-400");
+          icon.classList.add("text-emerald-600", "dark:text-emerald-400");
         }
       } else {
-        realtimeButton.classList.remove("text-green-500", "hover:text-green-400", "bg-green-500/10");
-        realtimeButton.classList.add("text-white", "hover:text-white/90");
-        if (label) label.textContent = "Tiempo real";
+        realtimeButton.classList.remove("text-emerald-700", "dark:text-emerald-400", "bg-emerald-50", "dark:bg-emerald-900/20", "hover:bg-emerald-100", "dark:hover:bg-emerald-900/30", "border-emerald-300", "dark:border-emerald-700", "text-slate-600", "dark:text-slate-400", "bg-slate-100", "dark:bg-slate-800", "hover:bg-slate-200", "dark:hover:bg-slate-700", "border-slate-300", "dark:border-slate-600");
+        realtimeButton.classList.add("text-rose-600", "dark:text-rose-400", "bg-rose-50", "dark:bg-rose-900/20", "hover:bg-rose-100", "dark:hover:bg-rose-900/30", "border-rose-300", "dark:border-rose-700", "border");
         if (indicator) {
           indicator.classList.add("opacity-0");
-          indicator.classList.remove("opacity-100", "animate-pulse");
+          indicator.classList.add("bg-rose-500", "dark:bg-rose-400");
+          indicator.classList.remove("bg-emerald-500", "dark:bg-emerald-400");
         }
+        if (label) label.textContent = "Tiempo real";
         if (icon) {
-          icon.setAttribute("stroke", "currentColor");
+          icon.innerHTML = '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+          icon.classList.remove("text-emerald-600", "dark:text-emerald-400");
+          icon.classList.add("text-rose-600", "dark:text-rose-400");
         }
       }
       realtimeButton.setAttribute("data-realtime-active", String(active));
     };
 
-    // Cargar estado guardado
+    // Cargar estado guardado (misma clave que pedidos-pendientes/declarativos: workspace_realtime_${reportSlug})
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    const realtimeStorageKey = reportSlug ? `workspace_realtime_${reportSlug}` : null;
     if (reportSlug) {
-      const savedRealtimeState = localStorage.getItem(`realtime_${reportSlug}`);
+      const savedRealtimeState = realtimeStorageKey ? localStorage.getItem(realtimeStorageKey) : null;
       if (savedRealtimeState === "true") {
         realtimeActive = true;
         updateRealtimeUI(true);
         const currentInterval = getCurrentRefreshInterval();
         startRealtime((typeof getRefreshIntervalMs === 'function' ? getRefreshIntervalMs : getRefreshIntervalMsLocal)(currentInterval));
       } else {
-        // Inicializar como inactivo con color blanco
         realtimeActive = false;
         updateRealtimeUI(false);
       }
     } else {
-      // Si no hay reportSlug, inicializar como inactivo
       realtimeActive = false;
       updateRealtimeUI(false);
     }
 
     const toggleRealtime = () => {
       realtimeActive = !realtimeActive;
-      
       if (realtimeActive) {
         const currentInterval = getCurrentRefreshInterval();
         startRealtime((typeof getRefreshIntervalMs === 'function' ? getRefreshIntervalMs : getRefreshIntervalMsLocal)(currentInterval));
-        localStorage.setItem(`realtime_${reportSlug}`, "true");
+        if (realtimeStorageKey) localStorage.setItem(realtimeStorageKey, "true");
       } else {
         stopRealtime();
-        localStorage.setItem(`realtime_${reportSlug}`, "false");
+        if (realtimeStorageKey) localStorage.setItem(realtimeStorageKey, "false");
       }
-      
       updateRealtimeUI(realtimeActive);
     };
 
@@ -6920,7 +7886,7 @@ if (dashboardRoot) {
           }
           
           // Obtener otros filtros según el reporte
-          if (reportSlug === 'ventas_netas' || reportSlug === 'uninvoiced_remitos') {
+          if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || reportSlug === 'bo-stock-facturacion') {
             const puntoVentaSelect = filtersContainer.querySelector('select[name="punto_venta"]');
             const sucursalesSelect = filtersContainer.querySelector('select[name="sucursales"]');
             
@@ -7051,41 +8017,36 @@ const updateThemeBasedOnTime = () => {
 
 // Función para re-renderizar todos los gráficos cuando cambia el tema
 const reRenderAllCharts = () => {
-  // Buscar todos los widgets y re-renderizarlos
   const widgets = document.querySelectorAll('[data-widget-id]');
   widgets.forEach((widget) => {
     const widgetId = widget.dataset.widgetId;
-    const cachedData = widgetDataCache.get(widgetId);
-    if (cachedData && cachedData.data) {
+    const cached = widgetDataCache.get(widgetId);
+    if (cached && cached.data) {
       try {
-        const config = getWidgetConfig(widget);
+        const config = cached.config || getWidgetConfig(widget);
         if (config) {
-          renderChart(widget, cachedData.data, config);
+          renderWidgetChart(widget, cached.data, config, cached.meta || {});
         }
       } catch (error) {
         console.warn('Error re-rendering chart for widget', widgetId, error);
       }
     }
   });
-  
-  // También re-renderizar widgets en modo workspace si están activos
+
   if (isWorkspaceMode && workspaceState.initialized) {
-    // Los widgets en workspace se actualizan automáticamente cuando se recarga el workspace
-    // pero podemos forzar una actualización si es necesario
     const workspaceWidgets = document.querySelectorAll('[data-widget-wrapper]');
     workspaceWidgets.forEach((wrapper) => {
       const widget = wrapper.querySelector('[data-widget-id]');
       if (widget) {
-        const widgetId = widget.dataset.widgetId;
-        const cachedData = widgetDataCache.get(widgetId);
-        if (cachedData && cachedData.data) {
+        const cached = widgetDataCache.get(widget.dataset.widgetId);
+        if (cached && cached.data) {
           try {
-            const config = getWidgetConfig(widget);
+            const config = cached.config || getWidgetConfig(widget);
             if (config) {
-              renderChart(widget, cachedData.data, config);
+              renderWidgetChart(widget, cached.data, config, cached.meta || {});
             }
           } catch (error) {
-            console.warn('Error re-rendering workspace chart for widget', widgetId, error);
+            console.warn('Error re-rendering workspace chart for widget', widget.dataset.widgetId, error);
           }
         }
       }
