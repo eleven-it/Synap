@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 # Clave de encriptación AES (debe coincidir con administraNET Gestión)
 AES_KEY = b'a7v8xx2'  # Clave usada en administraNET para AES_DECRYPT
 
+# Timeout de conexión MySQL (segundos) - evita que requests se cuelguen si MySQL es inaccesible
+MYSQL_CONNECT_TIMEOUT = 5
+
 
 class AdministraNETAuth:
     """Servicio para autenticación con administraNET Gestión"""
@@ -77,7 +80,8 @@ class AdministraNETAuth:
                 user=self.user,
                 passwd=self.password,
                 db='empresas',  # Base de datos donde están las empresas
-                charset='latin1'
+                charset='latin1',
+                connect_timeout=MYSQL_CONNECT_TIMEOUT,
             )
             
             cursor = conn.cursor()
@@ -134,7 +138,8 @@ class AdministraNETAuth:
                 user=self.user,
                 passwd=self.password,
                 db=base_empresa,  # Base de datos específica de la empresa
-                charset='latin1'
+                charset='latin1',
+                connect_timeout=MYSQL_CONNECT_TIMEOUT,
             )
             
             cursor = conn.cursor()
@@ -293,7 +298,8 @@ class AdministraNETAuth:
                 user=self.user,
                 passwd=self.password,
                 db=base_empresa,
-                charset='latin1'
+                charset='latin1',
+                connect_timeout=MYSQL_CONNECT_TIMEOUT,
             )
             
             ip_address = ip_address or '127.0.0.1'
