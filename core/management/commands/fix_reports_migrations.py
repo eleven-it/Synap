@@ -331,41 +331,79 @@ class Command(BaseCommand):
         
         self.stdout.write("")
         
-        # Aplicar migraciones desde cero
+        # Aplicar migraciones desde cero (con reintentos si tablas ya existen)
         self.stdout.write("📦 Aplicando migraciones de reports...")
-        try:
-            call_command('migrate', 'reports', verbosity=1, interactive=False)
-            self.stdout.write(self.style.SUCCESS("   ✅ Migraciones aplicadas correctamente"))
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"   ❌ Error al aplicar migraciones: {e}"))
-            # Si el error es sobre una columna duplicada, intentar limpiar y reintentar
-            if "already exists" in str(e) or "DuplicateColumn" in str(e):
-                self.stdout.write("")
-                self.stdout.write(self.style.WARNING("   ⚠️  Error de columna duplicada detectado"))
-                self.stdout.write("   🔍 Verificando migraciones pendientes nuevamente...")
-                # Intentar eliminar cualquier migración que intente agregar columnas que ya existen
-                with connection.cursor() as cursor:
-                    cursor.execute("""
-                        SELECT name FROM django_migrations 
-                        WHERE app = 'reports' 
-                        AND name NOT IN %s
-                    """, [tuple(existing_migration_files)])
-                    remaining_orphans = [row[0] for row in cursor.fetchall()]
+        max_fake_retries = 10
+        migrated_ok = False
+        for attempt in range(max_fake_retries + 1):
+            try:
+                call_command('migrate', 'reports', verbosity=1, interactive=False)
+                self.stdout.write(self.style.SUCCESS("   ✅ Migraciones aplicadas correctamente"))
+                migrated_ok = True
+                break
+            except Exception as e:
+                err_str = str(e)
+                # Tabla/relación ya existe: marcar migración pendiente con --fake y reintentar
+                if "already exists" in err_str and ("relation" in err_str or "DuplicateTable" in err_str):
+                    self.stdout.write("")
+                    self.stdout.write(self.style.WARNING("   ⚠️  Error de tabla duplicada detectado (relation already exists)"))
+                    self.stdout.write("   🔍 Buscando migración pendiente para marcar como aplicada (--fake)...")
+                    # Obtener migraciones pendientes
+                    from io import StringIO
+                    old_stdout = sys.stdout
+                    sys.stdout = StringIO()
+                    try:
+                        call_command('showmigrations', 'reports', verbosity=0, no_color=True)
+                        output = sys.stdout.getvalue()
+                    finally:
+                        sys.stdout = old_stdout
+                    pending = []
+                    for line in output.split('\n'):
+                        line = line.strip()
+                        if line.startswith('[ ]'):
+                            mig_name = line[3:].strip()
+                            if mig_name in existing_migration_files:
+                                pending.append(mig_name)
+                    if not pending:
+                        self.stdout.write(self.style.ERROR("   ❌ No hay migraciones pendientes para marcar con --fake"))
+                        sys.exit(1)
+                    mig_name = pending[0]
+                    self.stdout.write(f"   📌 Marcando {mig_name} como aplicada (--fake)...")
+                    try:
+                        call_command('migrate', 'reports', mig_name, '--fake', verbosity=1, interactive=False)
+                        self.stdout.write(self.style.SUCCESS(f"   ✅ {mig_name} marcada como aplicada"))
+                        self.stdout.write("   🔄 Reintentando aplicar migraciones...")
+                        continue  # siguiente iteración del loop
+                    except Exception as e_fake:
+                        self.stdout.write(self.style.ERROR(f"   ❌ Error al hacer --fake: {e_fake}"))
+                        sys.exit(1)
+                # Columna duplicada: intentar limpiar huérfanas y reintentar (solo en último intento del loop)
+                elif "already exists" in err_str or "DuplicateColumn" in err_str:
+                    self.stdout.write("")
+                    self.stdout.write(self.style.WARNING("   ⚠️  Error de columna duplicada detectado"))
+                    self.stdout.write("   🔍 Verificando migraciones pendientes nuevamente...")
+                    with connection.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT name FROM django_migrations 
+                            WHERE app = 'reports' 
+                            AND name NOT IN %s
+                        """, [tuple(existing_migration_files)])
+                        remaining_orphans = [row[0] for row in cursor.fetchall()]
                     if remaining_orphans:
                         self.stdout.write(f"   🗑️  Eliminando {len(remaining_orphans)} migraciones huérfanas restantes...")
-                        for name in remaining_orphans:
-                            cursor.execute("DELETE FROM django_migrations WHERE app = 'reports' AND name = %s", [name])
+                        with connection.cursor() as cursor:
+                            for name in remaining_orphans:
+                                cursor.execute("DELETE FROM django_migrations WHERE app = 'reports' AND name = %s", [name])
                         self.stdout.write("   🔄 Reintentando aplicar migraciones...")
-                        try:
-                            call_command('migrate', 'reports', verbosity=1, interactive=False)
-                            self.stdout.write(self.style.SUCCESS("   ✅ Migraciones aplicadas correctamente después de limpieza"))
-                        except Exception as e2:
-                            self.stdout.write(self.style.ERROR(f"   ❌ Error persistente: {e2}"))
-                            sys.exit(1)
+                        continue
                     else:
+                        self.stdout.write(self.style.ERROR(f"   ❌ Error al aplicar migraciones: {e}"))
                         sys.exit(1)
-            else:
-                sys.exit(1)
+                else:
+                    self.stdout.write(self.style.ERROR(f"   ❌ Error al aplicar migraciones: {e}"))
+                    sys.exit(1)
+        if not migrated_ok:
+            sys.exit(1)
         
         self.stdout.write("")
         
