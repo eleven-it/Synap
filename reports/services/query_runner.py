@@ -218,14 +218,13 @@ class QueryRunnerService:
         # Cache buster para BO: OC cubre primero faltante reservado (evitar usar caché antiguo)
         cache_payload_hash = f"{payload_hash}:oc_reservado_v1" if report.slug == "bo-stock-facturacion" else payload_hash
 
-        # Intentar obtener del caché con protección contra stampeding
-        cached_result = self._get_cached_with_lock(tenant_id, report.slug, cache_payload_hash)
-        if cached_result:
-            logger.info(f"✅ Cache HIT para {report.slug} (payload_hash: {payload_hash[:8]}...)")
-            return cached_result
-        
-        # Cache MISS - ejecutar consulta
-        logger.info(f"❌ Cache MISS para {report.slug} (payload_hash: {payload_hash[:8]}...), ejecutando consulta...")
+        # Intentar obtener del caché con protección contra stampeding (solo si está habilitado)
+        if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+            cached_result = self._get_cached_with_lock(tenant_id, report.slug, cache_payload_hash)
+            if cached_result:
+                logger.info(f"✅ Cache HIT para {report.slug} (payload_hash: {payload_hash[:8]}...)")
+                return cached_result
+            logger.info(f"❌ Cache MISS para {report.slug} (payload_hash: {payload_hash[:8]}...), ejecutando consulta...")
         
         # Ejecutar consulta según el tipo de reporte (lógica legacy)
         result = None
@@ -271,8 +270,8 @@ class QueryRunnerService:
                 )
             result = QueryResult(meta=meta, data=data, totals=totals, notes=notes)
         
-        # Calcular TTL inteligente y guardar en caché
-        if result:
+        # Calcular TTL inteligente y guardar en caché (solo si está habilitado)
+        if result and getattr(settings, 'REPORTS_CACHE_ENABLED', False):
             ttl = self._get_cache_ttl(report.slug, filters)
             set_cached_report(tenant_id, report.slug, cache_payload_hash, result, ttl=ttl)
             logger.info(f"💾 Resultado cacheado para {report.slug} con TTL de {ttl}s")
@@ -3124,7 +3123,7 @@ class QueryRunnerService:
             # 3. BACKORDER (comp_ped + stockp + stock_deposito)
             # =========================================================
             # Renglones definitivos de PED en stockp (VB6); comp_ped para cabecera y estados.
-            bo_estados = "('Pendiente', 'En preparación', 'En Remito', 'Parcial')"
+            bo_estados = "('Pendiente')"
 
             # Detalle BO por producto con cálculo de cobertura
             # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.

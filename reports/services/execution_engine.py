@@ -1322,15 +1322,13 @@ class ReportExecutionEngine:
             if user and hasattr(user, 'id'):
                 tenant_id = user.id
             
-            # Intentar obtener del caché solo si no se bypass
-            if not bypass_cache:
+            # Intentar obtener del caché solo si está habilitado y no se bypass
+            if not bypass_cache and getattr(settings, 'REPORTS_CACHE_ENABLED', False):
                 cached_result = get_cached_report(tenant_id, report.slug, payload_hash)
                 if cached_result:
                     logger.info(f"✅ Cache HIT para {report.slug} (preview)")
                     return cached_result
-            
-            # Cache MISS o bypass - ejecutar consulta
-            logger.info(f"❌ Cache MISS o bypass para {report.slug} (preview), ejecutando consulta...")
+            logger.info(f"❌ Cache MISS, bypass o cache desactivado para {report.slug} (preview), ejecutando consulta...")
             
             # Construir SQL usando el config temporal
             builder = SqlQueryBuilder(config)
@@ -1401,10 +1399,9 @@ class ReportExecutionEngine:
                 notes=notes
             )
             
-            # No guardar en caché para preview (o usar TTL muy corto)
-            if not bypass_cache:
-                # Usar TTL muy corto para preview
-                ttl = 10  # 10 segundos
+            # Guardar en caché para preview solo si está habilitado y no se bypass
+            if not bypass_cache and getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+                ttl = 10  # 10 segundos para preview
                 set_cached_report(tenant_id, report.slug, payload_hash, result, ttl=ttl)
                 logger.info(f"💾 Resultado preview cacheado con TTL: {ttl}s")
             
@@ -1481,14 +1478,13 @@ class ReportExecutionEngine:
             if user and hasattr(user, 'id'):
                 tenant_id = user.id
             
-            # Intentar obtener del caché
-            cached_result = get_cached_report(tenant_id, report.slug, payload_hash)
-            if cached_result:
-                logger.info(f"✅ Cache HIT para {report.slug} (declarativo)")
-                return cached_result
-            
-            # Cache MISS - ejecutar consulta
-            logger.info(f"❌ Cache MISS para {report.slug} (declarativo), ejecutando consulta...")
+            # Intentar obtener del caché (solo si está habilitado)
+            if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+                cached_result = get_cached_report(tenant_id, report.slug, payload_hash)
+                if cached_result:
+                    logger.info(f"✅ Cache HIT para {report.slug} (declarativo)")
+                    return cached_result
+            logger.info(f"❌ Cache MISS o cache desactivado para {report.slug} (declarativo), ejecutando consulta...")
             
             # Construir SQL
             builder = SqlQueryBuilder(config)
@@ -1559,10 +1555,11 @@ class ReportExecutionEngine:
                 notes=notes
             )
             
-            # Guardar en caché con hash de filtros normalizados
-            ttl = self._calculate_ttl(normalized_filters)
-            set_cached_report(tenant_id, report.slug, payload_hash, result, ttl=ttl)
-            logger.info(f"💾 Resultado cacheado para {report.slug} (declarativo) con TTL de {ttl}s")
+            # Guardar en caché con hash de filtros normalizados (solo si está habilitado)
+            if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
+                ttl = self._calculate_ttl(normalized_filters)
+                set_cached_report(tenant_id, report.slug, payload_hash, result, ttl=ttl)
+                logger.info(f"💾 Resultado cacheado para {report.slug} (declarativo) con TTL de {ttl}s")
             
             # Registrar log de ejecución
             duration = (timezone.now() - started_at).total_seconds() * 1000

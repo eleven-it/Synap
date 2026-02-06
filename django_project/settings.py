@@ -321,6 +321,9 @@ CDN_CACHE_HEADERS = {
 }
 
 
+# Reports cache - desactivado para que los datos se refresquen inmediatamente
+REPORTS_CACHE_ENABLED = config('REPORTS_CACHE_ENABLED', default=False, cast=bool)
+
 # Celery Configuration - ELIMINADO (No necesario para Reportes básico)
 # CELERY_BROKER_URL = "redis://localhost:6379/0"
 # CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
