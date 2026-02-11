@@ -12,6 +12,7 @@ from django.views.generic import TemplateView
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission, BuilderReportsPermission
+from .services.reconciliation_saldo_stock import run_reconciliation as run_reconciliation_saldo_stock
 
 
 class ReportsLoginRequiredMixin(LoginRequiredMixin):
@@ -230,6 +231,42 @@ class ReportBuilderListView(ReportsLoginRequiredMixin, TemplateView):
             }
         )
         return context
+
+
+class ValidacionSaldoStockView(ReportsLoginRequiredMixin, TemplateView):
+    """Vista de análisis: reconciliación Saldo stock_deposito vs teórico desde stock."""
+
+    template_name = "reports/validacion_saldo_stock.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        base_empresa = self._get_base_empresa()
+        reconciliation = {"error": "No se pudo determinar la base de datos de la empresa."}
+
+        if base_empresa:
+            reconciliation = run_reconciliation_saldo_stock(base_empresa)
+
+        context.update(
+            {
+                "page_title": _("Reconciliación Saldo de Stock"),
+                "reconciliation": reconciliation,
+                "base_empresa": base_empresa or "—",
+            }
+        )
+        return context
+
+    def _get_base_empresa(self):
+        base_empresa = None
+        if hasattr(self.request, "session") and self.request.session:
+            session_user = self.request.session.get("user", {})
+            if session_user and "base_empresa" in session_user:
+                base_empresa = session_user["base_empresa"]
+        if not base_empresa and hasattr(self.request.user, "base_empresa"):
+            base_empresa = self.request.user.base_empresa
+        if not base_empresa:
+            from django.conf import settings
+            base_empresa = getattr(settings, "DEFAULT_BASE_EMPRESA", None)
+        return base_empresa
 
 
 class DataMapView(ReportsLoginRequiredMixin, TemplateView):

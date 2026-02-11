@@ -1,0 +1,104 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Agregar talonario · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-10">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold">Self-Checkout</p>
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+        Agregar talonario
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+        Crear un talonario para un tipo de comprobante que aún no tenga (ej. FC para Monotributo).
+      </p>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if not tipos_faltantes and id_punto_venta %}
+    <div class="rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-6 text-amber-800 dark:text-amber-200">
+      <p class="text-sm">Este punto de venta ya tiene todos los tipos de comprobante. No hay nada que agregar.</p>
+      <a href="{% url 'self_checkout:talonarios_list' %}?id_punto_venta={{ id_punto_venta }}" class="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-semibold text-amber-700 dark:text-amber-300 hover:underline">Volver al listado</a>
+    </div>
+    {% else %}
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-8">
+      <div class="space-y-4">
+        <div>
+          <label for="pv" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Punto de venta</label>
+          <form method="get" action="{% url 'self_checkout:talonarios_create' %}" id="form-pv">
+            <select name="id_punto_venta" id="pv" required onchange="document.getElementById('form-pv').submit()"
+                    class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+              <option value="">Seleccionar PV</option>
+              {% for p in puntos_venta %}
+              <option value="{{ p.id_punto_venta }}" {% if id_punto_venta == p.id_punto_venta %}selected{% endif %}>
+                PV {{ p.nro_punto_venta }} (id {{ p.id_punto_venta }})
+              </option>
+              {% endfor %}
+            </select>
+          </form>
+        </div>
+        {% if id_punto_venta %}
+        <form method="post" action="">
+          {% csrf_token %}
+          <input type="hidden" name="id_punto_venta" value="{{ id_punto_venta }}">
+          <div>
+            <label for="TipoComprobante" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tipo de comprobante</label>
+            <select name="TipoComprobante" id="TipoComprobante" required
+                    class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+              {% for t in tipos_faltantes %}
+              <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Solo se muestran tipos que aún no tienen talonario para este PV.</p>
+          </div>
+          <div>
+            <label for="NroInic" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro inicial</label>
+            <input type="number" name="NroInic" id="NroInic" value="1" min="1"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="NroFinal" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro final</label>
+            <input type="number" name="NroFinal" id="NroFinal" value="5000" min="1"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="NroCAI" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro CAI</label>
+            <input type="text" name="NroCAI" id="NroCAI" value="00000000000000" maxlength="20"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 font-mono">
+          </div>
+          <div>
+            <label for="FechaCAI" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha CAI</label>
+            <input type="date" name="FechaCAI" id="FechaCAI" value=""
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Opcional; por defecto hoy.</p>
+          </div>
+          {% if tipos_faltantes %}
+          <div class="mt-8 flex gap-3">
+            <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 focus:ring-2 focus:ring-sky-500">
+              Crear talonario
+            </button>
+            <a href="{% url 'self_checkout:talonarios_list' %}?id_punto_venta={{ id_punto_venta }}"
+               class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800">
+              Cancelar
+            </a>
+          </div>
+          {% endif %}
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

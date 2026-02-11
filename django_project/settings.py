@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'dashboard',
     'reports',
     'sia',  # Strategic Insights & Alignment
+    'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
     # 'administraNET_integration',  # No necesario
@@ -150,6 +151,9 @@ DATABASES = {
         },
     }
 }
+
+# Base MySQL por defecto para reportes (BO, ventas, etc.) cuando no viene en sesión/filtros
+DEFAULT_BASE_EMPRESA = config('DB_NAME', default='administranet')
 
 # Configuración regional
 LANGUAGE_CODE = 'es-ar'

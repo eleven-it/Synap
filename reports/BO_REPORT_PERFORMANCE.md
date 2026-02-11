@@ -93,4 +93,4 @@ Luego volver a ejecutar `EXPLAIN` y comprobar que se use el índice (`key` no nu
 
 **Definición:** Cantidades en **órdenes de compra aprobadas y pendientes de entrega**.
 
-**Origen:** `stock_deposito.saldo_pedido_proveedor` agregado por artículo (`oc_pendiente`). **Prioridad:** (1) Stock cubre primero reservado; disponible = max(0, stock − reservado). (2) OC pend. cubre primero el faltante de reservado (max(0, reservado − stock)); solo el resto se usa para BO. (3) Clasificación BO: con stock = min(BO, disponible); con ingreso = min(resto BO, OC restante para BO); sin stock = resto.
+**Origen:** `oc_pendiente` **calculado** desde stockp+cuentaproveedor (OC Estado=Pendiente). **No** usar stock_deposito.saldo_pedido_proveedor (no fiel). **Prioridad:** (1) Stock cubre primero reservado; disponible = max(0, stock − reservado). (2) OC pend. cubre primero el faltante de reservado (max(0, reservado − stock)); solo el resto se usa para BO. (3) Clasificación BO: con stock = min(BO, disponible); con ingreso = min(resto BO, OC restante para BO); sin stock = resto.

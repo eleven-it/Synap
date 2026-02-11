@@ -15,6 +15,11 @@ MENU_CONFIG = {
             "icon": "dashboard_customize",
             "url_name": "reports:workspace",
         },
+        {
+            "label": "Análisis Saldo de Stock",
+            "icon": "inventory",
+            "url_name": "reports:validacion_saldo_stock",
+        },
     ],
 }
 

@@ -63,9 +63,148 @@
     }
 
     /**
+     * Filtra filas por búsqueda predictiva (mín. 2 caracteres). keys = array de nombres de propiedades a buscar.
+     */
+    function filterBoDataBySearch(data, query, keys) {
+        if (!data || !Array.isArray(data)) return data;
+        var q = (query && String(query).trim()) || '';
+        if (q.length < 2) return data;
+        q = q.toLowerCase();
+        return data.filter(function (row) {
+            return keys.some(function (k) {
+                var val = row[k];
+                if (val == null) return false;
+                return String(val).toLowerCase().indexOf(q) !== -1;
+            });
+        });
+    }
+
+    /** Escapa string para uso en atributo HTML value. */
+    function boSearchEscAttr(s) {
+        if (s == null || s === '') return '';
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    /** HTML del input de búsqueda para un tab (id, placeholder, valor actual opcional). Misma estructura que Agrupar por: label arriba, campo abajo; altura coherente con el campo de agrupación. */
+    function boSearchInputHtml(id, placeholder, currentValue) {
+        var valAttr = (currentValue != null && currentValue !== '') ? ' value="' + boSearchEscAttr(currentValue) + '"' : '';
+        return '<div class="w-full min-w-0">' +
+            '<label for="' + id + '" class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Buscar</label>' +
+            '<input type="text" id="' + id + '" placeholder="' + (placeholder || 'Escriba al menos 2 caracteres...') + '"' + valAttr + ' ' +
+            'class="w-full min-w-0 min-h-[2.5rem] py-2 px-3 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-400 focus:border-sky-400" autocomplete="off">' +
+            '</div>';
+    }
+
+    var boSearchTimeout = null;
+    /** Debounce en ms para no re-renderizar en cada tecla y no perder foco. */
+    var BO_SEARCH_DEBOUNCE_MS = 400;
+    function attachBoSearchListener(inputId, onFilter) {
+        var el = document.getElementById(inputId);
+        if (!el || !onFilter) return;
+        el.removeEventListener('input', el._boSearchHandler);
+        el._boSearchHandler = function () {
+            if (boSearchTimeout) clearTimeout(boSearchTimeout);
+            boSearchTimeout = setTimeout(function () { onFilter(); }, BO_SEARCH_DEBOUNCE_MS);
+        };
+        el.addEventListener('input', el._boSearchHandler);
+    }
+
+    /**
+     * Escribe el HTML del buscador en el slot (70/30) y el contenido de la tabla en el container.
+     * Usar cuando se hace render completo (primera carga o sin content-only).
+     */
+    function boSetSearchAndContent(container, searchInputId, placeholder, searchQuery, tablePartHtml) {
+        var searchSlot = document.getElementById(container.id.replace('-content', '-search-slot'));
+        if (searchSlot) searchSlot.innerHTML = boSearchInputHtml(searchInputId, placeholder, searchQuery);
+        container.innerHTML = '<div class="bo-tab-content-area">' + tablePartHtml + '</div>';
+    }
+
+    /**
+     * Actualiza solo el área de contenido del tab (tabla/leyenda), sin tocar el input de búsqueda,
+     * para no destruir el input y no perder el foco al filtrar.
+     * Si el input ya existe (en el slot) y hay .bo-tab-content-area, pone tablePartHtml ahí y ejecuta onUpdated(container).
+     * Retorna true si se hizo solo actualización de contenido; false si hay que hacer innerHTML completo.
+     */
+    function boUpdateContentOnly(container, searchInputId, tablePartHtml, onUpdated) {
+        var inputEl = document.getElementById(searchInputId);
+        var contentArea = container.querySelector('.bo-tab-content-area');
+        if (inputEl && contentArea) {
+            contentArea.innerHTML = tablePartHtml;
+            if (onUpdated) onUpdated(container);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Construye HTML para tooltip de OC pendientes (estilo ventas-netas).
      * Estructura: header (OC pendientes / N órdenes), separador, filas Fecha / Nro / Vto / Proveedor / Qty por OC.
      */
+    function buildBoDetalleTooltipHtml(bo_detalle) {
+        if (!bo_detalle || bo_detalle.length === 0) {
+            return '<div class="font-bold text-sm text-white mb-0.5">BO por comprobante</div>' +
+                '<div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
+        }
+        var n = bo_detalle.length;
+        var header = '<div class="font-bold text-sm text-white mb-1">BO por comprobante</div>' +
+            '<div class="text-sky-300 text-[10px] font-medium mb-1">' + n + ' comprobante' + (n !== 1 ? 's' : '') + '</div>';
+        var lines = bo_detalle.map(function (d) {
+            var fecha = escHtml(d.fecha || '-');
+            var nro = escHtml(d.nro_comprobante || '-');
+            var cliente = escHtml(d.cliente || '-');
+            var qty = formatNumber(d.cantidad);
+            var nroRaw = (d.nro_comprobante || '').replace(/"/g, '&quot;');
+            return '<div class="py-1 border-b border-slate-700/50 last:border-0">' +
+                '<div class="flex items-center justify-between gap-2 text-xs">' +
+                '<span class="text-slate-400 shrink-0">' + fecha + '</span>' +
+                '<span class="bo-comp-link text-sky-300 truncate min-w-0 cursor-pointer hover:text-sky-200 hover:underline" data-nro-comprobante="' + nroRaw + '" title="Ir al comprobante (próximamente)">' + nro + '</span>' +
+                '<span class="text-emerald-300 font-semibold shrink-0">' + qty + '</span></div>' +
+                '<div class="text-slate-300 text-[10px] mt-0.5 truncate" title="' + (d.cliente || '') + '">' + cliente + '</div>' +
+                '</div>';
+        });
+        return header + '<div class="border-t border-slate-700 pt-1 mt-1" style="max-height: 260px; overflow-y: auto; overflow-x: hidden;">' + lines.join('') + '</div>';
+    }
+
+    function buildReservadoDetalleTooltipHtml(reservado_detalle) {
+        if (!reservado_detalle || reservado_detalle.length === 0) {
+            return '<div class="font-bold text-sm text-white mb-0.5">Reservado (PED En preparación/Preparado/Parcial)</div>' +
+                '<div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
+        }
+        var n = reservado_detalle.length;
+        var header = '<div class="font-bold text-sm text-white mb-1">Reservado por comprobante</div>' +
+            '<div class="text-sky-300 text-[10px] font-medium mb-1">' + n + ' comprobante' + (n !== 1 ? 's' : '') + ' (PED En preparación/Preparado/Parcial)</div>';
+        var lines = reservado_detalle.map(function (d) {
+            var fecha = escHtml(d.fecha || '-');
+            var nro = escHtml(d.nro_comprobante || '-');
+            var cliente = escHtml(d.cliente || '-');
+            var estado = escHtml(d.estado || '-');
+            var qty = formatNumber(d.cantidad);
+            return '<div class="py-1 border-b border-slate-700/50 last:border-0">' +
+                '<div class="flex items-center justify-between gap-2 text-xs">' +
+                '<span class="text-slate-400 shrink-0">' + fecha + '</span>' +
+                '<span class="text-sky-300 truncate min-w-0" title="' + nro + '">' + nro + '</span>' +
+                '<span class="text-amber-400 text-[9px] shrink-0">' + estado + '</span>' +
+                '<span class="text-amber-300 font-semibold shrink-0">' + qty + '</span></div>' +
+                '<div class="text-slate-300 text-[10px] mt-0.5 truncate" title="' + (d.cliente || '') + '">' + cliente + '</div>' +
+                '</div>';
+        });
+        return header + '<div class="border-t border-slate-700 pt-1 mt-1" style="max-height: 260px; overflow-y: auto; overflow-x: hidden;">' + lines.join('') + '</div>';
+    }
+
+    function buildStockPorDepositoTooltipHtml(stock_por_deposito) {
+        if (!stock_por_deposito || stock_por_deposito.length === 0) {
+            return '<div class="font-bold text-sm text-white mb-0.5">Stock por depósito</div>' +
+                '<div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
+        }
+        var lines = stock_por_deposito.map(function (d) {
+            var qty = formatNumber(d.saldo);
+            var nom = escHtml(d.deposito || 'Sin nombre');
+            return '<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs">' + nom + '</span><span class="text-emerald-300 font-semibold text-xs">' + qty + '</span></div>';
+        });
+        return '<div class="font-bold text-sm text-white mb-1">Stock por depósito</div>' +
+            '<div class="space-y-0.5 border-t border-slate-700 pt-1 mt-1">' + lines.join('') + '</div>';
+    }
+
     function buildOcTooltipHtml(oc_detalle) {
         if (!oc_detalle || oc_detalle.length === 0) {
             return '<div class="font-bold text-sm text-white mb-0.5">OC pendientes</div>' +
@@ -103,18 +242,170 @@
     }
 
     var _ocTooltipEl = null;
+    var _stickyHideTimeout = null;
 
     function getOcTooltipEl() {
         if (_ocTooltipEl) return _ocTooltipEl;
         _ocTooltipEl = document.createElement('div');
-        _ocTooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none opacity-0 z-[9999] border border-slate-700 overflow-y-auto');
+        _ocTooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl opacity-0 z-[9999] border border-slate-700 overflow-y-auto');
         _ocTooltipEl.style.fontFamily = 'system-ui, sans-serif';
         _ocTooltipEl.style.minWidth = '180px';
         _ocTooltipEl.style.maxWidth = '280px';
         _ocTooltipEl.style.maxHeight = '400px';
         _ocTooltipEl.style.transition = 'opacity 0.2s ease-in-out';
+        _ocTooltipEl.style.pointerEvents = 'none';
+        _ocTooltipEl._mouseInside = false;
+        _ocTooltipEl._showingBo = false;
         document.body.appendChild(_ocTooltipEl);
         return _ocTooltipEl;
+    }
+
+    function hideStickyTooltip() {
+        if (_stickyHideTimeout) clearTimeout(_stickyHideTimeout);
+        _stickyHideTimeout = null;
+        var t = getOcTooltipEl();
+        t._showingBo = false;
+        t._mouseInside = false;
+        t.style.opacity = '0';
+        t.style.pointerEvents = 'none';
+    }
+    function scheduleHideSticky() {
+        if (_stickyHideTimeout) clearTimeout(_stickyHideTimeout);
+        _stickyHideTimeout = setTimeout(hideStickyTooltip, 350);
+    }
+    function cancelHideSticky() {
+        if (_stickyHideTimeout) { clearTimeout(_stickyHideTimeout); _stickyHideTimeout = null; }
+    }
+
+    function setupBoDetalleTooltips(container) {
+        if (!container) return;
+        var cells = container.querySelectorAll('.bo-qty-cell');
+        var tooltip = getOcTooltipEl();
+        var padding = 10;
+
+        if (!tooltip._boDetalleListeners) {
+            tooltip._boDetalleListeners = true;
+            tooltip.addEventListener('mouseenter', function () {
+                tooltip._mouseInside = true;
+                cancelHideSticky();
+            });
+            tooltip.addEventListener('mouseleave', function () {
+                hideStickyTooltip();
+            });
+        }
+
+        cells.forEach(function (cell) {
+            cell.addEventListener('mouseover', function (e) {
+                cancelHideSticky();
+                tooltip._showingBo = true;
+                tooltip._mouseInside = false;
+                var raw = cell.getAttribute('data-bo-detalle');
+                var data = [];
+                try { data = raw ? JSON.parse(raw) : []; } catch (_) { }
+                tooltip.innerHTML = buildBoDetalleTooltipHtml(data);
+                tooltip.style.opacity = '1';
+                tooltip.style.pointerEvents = 'auto';
+                var left = e.pageX + padding;
+                var top = e.pageY - padding;
+                if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
+                if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
+                if (top < padding) top = padding;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            });
+            cell.addEventListener('mouseout', function (e) {
+                var to = e.relatedTarget;
+                if (to && tooltip.contains && tooltip.contains(to)) {
+                    cancelHideSticky();
+                    return;
+                }
+                scheduleHideSticky();
+            });
+        });
+    }
+
+    function setupReservadoDetalleTooltips(container) {
+        if (!container) return;
+        var cells = container.querySelectorAll('.reservado-cell');
+        var tooltip = getOcTooltipEl();
+        var padding = 10;
+
+        if (!tooltip._boDetalleListeners) {
+            tooltip._boDetalleListeners = true;
+            tooltip.addEventListener('mouseenter', function () {
+                tooltip._mouseInside = true;
+                cancelHideSticky();
+            });
+            tooltip.addEventListener('mouseleave', function () {
+                hideStickyTooltip();
+            });
+        }
+
+        cells.forEach(function (cell) {
+            cell.addEventListener('mouseover', function (e) {
+                cancelHideSticky();
+                tooltip._showingBo = true;
+                tooltip._mouseInside = false;
+                var raw = cell.getAttribute('data-reservado-detalle');
+                var data = [];
+                try { data = raw ? JSON.parse(raw) : []; } catch (_) { }
+                tooltip.innerHTML = buildReservadoDetalleTooltipHtml(data);
+                tooltip.style.opacity = '1';
+                tooltip.style.pointerEvents = 'auto';
+                var left = e.pageX + padding;
+                var top = e.pageY - padding;
+                if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
+                if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
+                if (top < padding) top = padding;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            });
+            cell.addEventListener('mouseout', function (e) {
+                var to = e.relatedTarget;
+                if (to && tooltip.contains && tooltip.contains(to)) {
+                    cancelHideSticky();
+                    return;
+                }
+                scheduleHideSticky();
+            });
+        });
+    }
+
+    function setupStockPorDepositoTooltips(container) {
+        if (!container) return;
+        var cells = container.querySelectorAll('.stock-cell');
+        var tooltip = getOcTooltipEl();
+        var padding = 10;
+        cells.forEach(function (cell) {
+            cell.addEventListener('mouseover', function (e) {
+                if (tooltip._showingBo) return;
+                var raw = cell.getAttribute('data-stock-deposito');
+                var data = [];
+                try { data = raw ? JSON.parse(raw) : []; } catch (_) { }
+                tooltip.innerHTML = buildStockPorDepositoTooltipHtml(data);
+                tooltip.style.opacity = '1';
+                tooltip.style.pointerEvents = 'none';
+                var left = e.pageX + padding;
+                var top = e.pageY - padding;
+                if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
+                if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
+                if (top < padding) top = padding;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            });
+            cell.addEventListener('mousemove', function (e) {
+                var left = e.pageX + padding;
+                var top = e.pageY - padding;
+                if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
+                if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
+                if (top < padding) top = padding;
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            });
+            cell.addEventListener('mouseout', function () {
+                tooltip.style.opacity = '0';
+            });
+        });
     }
 
     function setupOcPendTooltips(container) {
@@ -122,13 +413,29 @@
         var cells = container.querySelectorAll('.oc-pend-cell');
         var tooltip = getOcTooltipEl();
         var padding = 10;
-        cells.forEach(function(cell) {
-            cell.addEventListener('mouseover', function(e) {
+
+        if (!tooltip._boDetalleListeners) {
+            tooltip._boDetalleListeners = true;
+            tooltip.addEventListener('mouseenter', function () {
+                tooltip._mouseInside = true;
+                cancelHideSticky();
+            });
+            tooltip.addEventListener('mouseleave', function () {
+                hideStickyTooltip();
+            });
+        }
+
+        cells.forEach(function (cell) {
+            cell.addEventListener('mouseover', function (e) {
+                cancelHideSticky();
+                tooltip._showingBo = true;
+                tooltip._mouseInside = false;
                 var raw = cell.getAttribute('data-oc-detalle');
                 var oc = [];
                 try { oc = raw ? JSON.parse(raw) : []; } catch (_) { }
                 tooltip.innerHTML = buildOcTooltipHtml(oc);
                 tooltip.style.opacity = '1';
+                tooltip.style.pointerEvents = 'auto';
                 var left = e.pageX + padding;
                 var top = e.pageY - padding;
                 if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
@@ -137,17 +444,13 @@
                 tooltip.style.left = left + 'px';
                 tooltip.style.top = top + 'px';
             });
-            cell.addEventListener('mousemove', function(e) {
-                var left = e.pageX + padding;
-                var top = e.pageY - padding;
-                if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
-                if (top + 300 > window.innerHeight) top = e.pageY - 300 - padding;
-                if (top < padding) top = padding;
-                tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
-            });
-            cell.addEventListener('mouseout', function() {
-                tooltip.style.opacity = '0';
+            cell.addEventListener('mouseout', function (e) {
+                var to = e.relatedTarget;
+                if (to && tooltip.contains && tooltip.contains(to)) {
+                    cancelHideSticky();
+                    return;
+                }
+                scheduleHideSticky();
             });
         });
     }
@@ -394,14 +697,27 @@
         if (!container) return;
         BO_LAST_CON_STOCK_DATA = data || [];
         data = BO_LAST_CON_STOCK_DATA;
+        var searchQuery = (document.getElementById('bo-con-stock-search') && document.getElementById('bo-con-stock-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['codigo', 'articulo', 'categoria']);
         var config = BO_TAB_CONFIGS.con_stock;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-con-stock-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-con-stock-group-by');
+        }
+        var tablePartHtml;
+        var contentOnly = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-con-stock-search', html, onUpdated);
+        };
+        function setupConStockTooltips() {
+            setupStockPorDepositoTooltips(container);
+            setupBoDetalleTooltips(container);
+            setupReservadoDetalleTooltips(container);
         }
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay datos de con stock para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay datos de con stock para mostrar.') + '</div></div>';
+            if (contentOnly(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-con-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-con-stock-search', function () { renderDetalleConStockTable(BO_LAST_CON_STOCK_DATA); });
             return;
         }
         if (!container.dataset.boConStockGroupByInit) {
@@ -419,37 +735,56 @@
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
             var total = data.reduce(function (s, r) { return s + (r.con_stock_importe || 0); }, 0);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Con stock. Agrupado por: ' + groupByFields.join(' → ') + '. Total: ' + formatCurrency(total) + '</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_CON_STOCK_DATA ? BO_LAST_CON_STOCK_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems. ' : '';
+            var pieAgrupado = 'Con stock. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + ' · Total: ' + formatCurrency(total);
+            tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnly(tablePartHtml, function () { attachGroupToggleListenersBO(container); setupConStockTooltips(); })) return;
+            boSetSearchAndContent(container, 'bo-con-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-con-stock-search', function () { renderDetalleConStockTable(BO_LAST_CON_STOCK_DATA); });
             attachGroupToggleListenersBO(container);
-            console.log('📊 [BO-Stock-Facturacion] Tabla Detalle con stock (agrupada) renderizada:', data.length, 'filas');
+            setupConStockTooltips();
             return;
         }
         var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
         var td = 'px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800';
-        var rows = data.map(function (r) {
+        function attrEsc(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        var sortedData = sortByArticulo(data);
+        var rows = sortedData.map(function (r) {
+            var stockDepJson = attrEsc(JSON.stringify(r.stock_por_deposito || []));
+            var boDetalleJson = attrEsc(JSON.stringify(r.bo_detalle || []));
             return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30">' +
                 '<td class="' + td + ' font-mono text-slate-600 dark:text-slate-400">' + (r.codigo || '') + '</td>' +
                 '<td class="' + td + ' text-slate-700 dark:text-slate-300">' + (r.articulo || '').toString().substring(0, 50) + '</td>' +
                 '<td class="' + td + ' text-slate-600 dark:text-slate-400">' + (r.categoria || '') + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(r.bo_qty) + '</td>' +
+                '<td class="' + td + ' bo-qty-cell cursor-help text-right font-mono text-slate-900 dark:text-white" data-bo-detalle="' + boDetalleJson + '">' + formatNumber(r.bo_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(r.bo_importe) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_actual) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.disponible) + '</td>' +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.stock_actual) + '</td>' +
+                (r.stock_reservado > 0 ? '<td class="' + td + ' reservado-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-reservado-detalle="' + attrEsc(JSON.stringify(r.reservado_detalle || [])) + '">' + formatNumber(r.stock_reservado) + '</td>' : '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>') +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.disponible) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-green-600 dark:text-green-400">' + formatNumber(r.con_stock_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-green-600 dark:text-green-400">' + formatCurrency(r.con_stock_importe) + '</td>' +
                 '</tr>';
         }).join('');
         var total = data.reduce(function (s, r) { return s + (r.con_stock_importe || 0); }, 0);
-        container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
+        var totalRows = BO_LAST_CON_STOCK_DATA ? BO_LAST_CON_STOCK_DATA.length : data.length;
+        var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems' : data.length + ' ítems';
+        tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
             '<th class="' + th + ' text-right">BO qty</th><th class="' + th + ' text-right">BO importe</th>' +
             '<th class="' + th + ' text-right">Stock</th><th class="' + th + ' text-right">Reservado</th><th class="' + th + ' text-right">Disponible</th>' +
             '<th class="' + th + ' text-right">Con stock qty</th><th class="' + th + ' text-right">Con stock importe</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + data.length + ' ítems · Total con stock: ' + formatCurrency(total) + '</p>';
-        console.log('📊 [BO-Stock-Facturacion] Tabla Detalle con stock renderizada:', data.length, 'filas');
+            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyendaFilas + ' · Total con stock: ' + formatCurrency(total) + '</p>';
+        if (contentOnly(tablePartHtml, setupConStockTooltips)) return;
+        boSetSearchAndContent(container, 'bo-con-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-con-stock-search', function () { renderDetalleConStockTable(BO_LAST_CON_STOCK_DATA); });
+        setupConStockTooltips();
     }
 
     /**
@@ -461,14 +796,28 @@
         if (!container) return;
         BO_LAST_CON_INGRESO_DATA = data || [];
         data = BO_LAST_CON_INGRESO_DATA;
+        var searchQuery = (document.getElementById('bo-con-ingreso-search') && document.getElementById('bo-con-ingreso-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['codigo', 'articulo', 'categoria']);
         var config = BO_TAB_CONFIGS.con_ingreso;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-con-ingreso-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-con-ingreso-group-by');
+        }
+        var tablePartHtml;
+        var contentOnlyIngreso = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-con-ingreso-search', html, onUpdated);
+        };
+        function setupConIngresoTooltips() {
+            setupOcPendTooltips(container);
+            setupStockPorDepositoTooltips(container);
+            setupBoDetalleTooltips(container);
+            setupReservadoDetalleTooltips(container);
         }
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay datos de con ingreso para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay datos de con ingreso para mostrar.') + '</div></div>';
+            if (contentOnlyIngreso(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-con-ingreso-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-con-ingreso-search', function () { renderDetalleConIngresoTable(BO_LAST_CON_INGRESO_DATA); });
             return;
         }
         if (!container.dataset.boConIngresoGroupByInit) {
@@ -486,9 +835,16 @@
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
             var total = data.reduce(function (s, r) { return s + (r.con_ingreso_importe || 0); }, 0);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Con ingreso (OC pend.). Agrupado por: ' + groupByFields.join(' → ') + '. Total: ' + formatCurrency(total) + '</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_CON_INGRESO_DATA ? BO_LAST_CON_INGRESO_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems. ' : '';
+            var pieAgrupado = 'Con ingreso (OC pend.). Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + ' · Total: ' + formatCurrency(total);
+            tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnlyIngreso(tablePartHtml, function () { attachGroupToggleListenersBO(container); setupConIngresoTooltips(); })) return;
+            boSetSearchAndContent(container, 'bo-con-ingreso-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-con-ingreso-search', function () { renderDetalleConIngresoTable(BO_LAST_CON_INGRESO_DATA); });
             attachGroupToggleListenersBO(container);
-            console.log('📊 [BO-Stock-Facturacion] Tabla Detalle con ingreso (agrupada) renderizada:', data.length, 'filas');
+            setupConIngresoTooltips();
             return;
         }
         var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
@@ -497,24 +853,29 @@
             if (s == null) return '';
             return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
-        var rows = data.map(function (r) {
+        var sortedData = sortByArticulo(data);
+        var rows = sortedData.map(function (r) {
             var ocJson = attrEsc(JSON.stringify(r.oc_detalle || []));
+            var stockDepJson = attrEsc(JSON.stringify(r.stock_por_deposito || []));
+            var boDetalleJson = attrEsc(JSON.stringify(r.bo_detalle || []));
             return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30">' +
                 '<td class="' + td + ' font-mono text-slate-600 dark:text-slate-400">' + (r.codigo || '') + '</td>' +
                 '<td class="' + td + ' text-slate-700 dark:text-slate-300">' + (r.articulo || '').toString().substring(0, 50) + '</td>' +
                 '<td class="' + td + ' text-slate-600 dark:text-slate-400">' + (r.categoria || '') + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(r.bo_qty) + '</td>' +
+                '<td class="' + td + ' bo-qty-cell cursor-help text-right font-mono text-slate-900 dark:text-white" data-bo-detalle="' + boDetalleJson + '">' + formatNumber(r.bo_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(r.bo_importe) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_actual) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.disponible) + '</td>' +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.stock_actual) + '</td>' +
+                (r.stock_reservado > 0 ? '<td class="' + td + ' reservado-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-reservado-detalle="' + attrEsc(JSON.stringify(r.reservado_detalle || [])) + '">' + formatNumber(r.stock_reservado) + '</td>' : '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>') +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.disponible) + '</td>' +
                 '<td class="' + td + ' oc-pend-cell text-right font-mono text-slate-500 dark:text-slate-400 cursor-help" data-oc-detalle="' + ocJson + '">' + formatNumber(r.oc_pendiente) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-amber-600 dark:text-amber-400">' + formatNumber(r.con_ingreso_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-amber-600 dark:text-amber-400">' + formatCurrency(r.con_ingreso_importe) + '</td>' +
                 '</tr>';
         }).join('');
         var total = data.reduce(function (s, r) { return s + (r.con_ingreso_importe || 0); }, 0);
-        container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto bo-con-ingreso-scroll">' +
+        var totalRows = BO_LAST_CON_INGRESO_DATA ? BO_LAST_CON_INGRESO_DATA.length : data.length;
+        var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems' : data.length + ' ítems';
+        tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto bo-con-ingreso-scroll">' +
             '<table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
@@ -523,9 +884,11 @@
             '<th class="' + th + ' text-right" title="OC aprobadas pend. entrega">OC pend. qty</th>' +
             '<th class="' + th + ' text-right">Con ingreso qty</th><th class="' + th + ' text-right">Con ingreso importe</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + data.length + ' ítems · Total con ingreso (OC pend.): ' + formatCurrency(total) + '</p>';
-        setupOcPendTooltips(container);
-        console.log('📊 [BO-Stock-Facturacion] Tabla Detalle con ingreso renderizada:', data.length, 'filas');
+            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyendaFilas + ' · Total con ingreso (OC pend.): ' + formatCurrency(total) + '</p>';
+        if (contentOnlyIngreso(tablePartHtml, setupConIngresoTooltips)) return;
+        boSetSearchAndContent(container, 'bo-con-ingreso-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-con-ingreso-search', function () { renderDetalleConIngresoTable(BO_LAST_CON_INGRESO_DATA); });
+        setupConIngresoTooltips();
     }
 
     /**
@@ -537,14 +900,27 @@
         if (!container) return;
         BO_LAST_SIN_STOCK_DATA = data || [];
         data = BO_LAST_SIN_STOCK_DATA;
+        var searchQuery = (document.getElementById('bo-sin-stock-search') && document.getElementById('bo-sin-stock-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['codigo', 'articulo', 'categoria']);
         var config = BO_TAB_CONFIGS.sin_stock;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-sin-stock-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-sin-stock-group-by');
+        }
+        var tablePartHtml;
+        var contentOnlySinStock = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-sin-stock-search', html, onUpdated);
+        };
+        function setupSinStockTooltips() {
+            setupStockPorDepositoTooltips(container);
+            setupBoDetalleTooltips(container);
+            setupReservadoDetalleTooltips(container);
         }
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay datos de sin stock para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay datos de sin stock para mostrar.') + '</div></div>';
+            if (contentOnlySinStock(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-sin-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-sin-stock-search', function () { renderDetalleSinStockTable(BO_LAST_SIN_STOCK_DATA); });
             return;
         }
         if (!container.dataset.boSinStockGroupByInit) {
@@ -562,38 +938,57 @@
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
             var total = data.reduce(function (s, r) { return s + (r.sin_stock_importe || 0); }, 0);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Sin stock. Agrupado por: ' + groupByFields.join(' → ') + '. Total: ' + formatCurrency(total) + '</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_SIN_STOCK_DATA ? BO_LAST_SIN_STOCK_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems. ' : '';
+            var pieAgrupado = 'Sin stock. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + ' · Total: ' + formatCurrency(total);
+            tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnlySinStock(tablePartHtml, function () { attachGroupToggleListenersBO(container); setupSinStockTooltips(); })) return;
+            boSetSearchAndContent(container, 'bo-sin-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-sin-stock-search', function () { renderDetalleSinStockTable(BO_LAST_SIN_STOCK_DATA); });
             attachGroupToggleListenersBO(container);
-            console.log('📊 [BO-Stock-Facturacion] Tabla Detalle sin stock (agrupada) renderizada:', data.length, 'filas');
+            setupSinStockTooltips();
             return;
         }
         var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
         var td = 'px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800';
-        var rows = data.map(function (r) {
+        function attrEsc(s) {
+            if (s == null) return '';
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        var sortedData = sortByArticulo(data);
+        var rows = sortedData.map(function (r) {
+            var stockDepJson = attrEsc(JSON.stringify(r.stock_por_deposito || []));
+            var boDetalleJson = attrEsc(JSON.stringify(r.bo_detalle || []));
             return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30">' +
                 '<td class="' + td + ' font-mono text-slate-600 dark:text-slate-400">' + (r.codigo || '') + '</td>' +
                 '<td class="' + td + ' text-slate-700 dark:text-slate-300">' + (r.articulo || '').toString().substring(0, 50) + '</td>' +
                 '<td class="' + td + ' text-slate-600 dark:text-slate-400">' + (r.categoria || '') + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(r.bo_qty) + '</td>' +
+                '<td class="' + td + ' bo-qty-cell cursor-help text-right font-mono text-slate-900 dark:text-white" data-bo-detalle="' + boDetalleJson + '">' + formatNumber(r.bo_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(r.bo_importe) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_actual) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>' +
-                '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.disponible) + '</td>' +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.stock_actual) + '</td>' +
+                (r.stock_reservado > 0 ? '<td class="' + td + ' reservado-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-reservado-detalle="' + attrEsc(JSON.stringify(r.reservado_detalle || [])) + '">' + formatNumber(r.stock_reservado) + '</td>' : '<td class="' + td + ' text-right font-mono text-slate-600 dark:text-slate-400">' + formatNumber(r.stock_reservado) + '</td>') +
+                '<td class="' + td + ' stock-cell cursor-help text-right font-mono text-slate-600 dark:text-slate-400" data-stock-deposito="' + stockDepJson + '">' + formatNumber(r.disponible) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-slate-500 dark:text-slate-400">' + formatNumber(r.oc_pendiente) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-rose-600 dark:text-rose-400">' + formatNumber(r.sin_stock_qty) + '</td>' +
                 '<td class="' + td + ' text-right font-mono text-rose-600 dark:text-rose-400">' + formatCurrency(r.sin_stock_importe) + '</td>' +
                 '</tr>';
         }).join('');
         var total = data.reduce(function (s, r) { return s + (r.sin_stock_importe || 0); }, 0);
-        container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
+        var totalRows = BO_LAST_SIN_STOCK_DATA ? BO_LAST_SIN_STOCK_DATA.length : data.length;
+        var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' ítems' : data.length + ' ítems';
+        tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
             '<th class="' + th + ' text-right">BO qty</th><th class="' + th + ' text-right">BO importe</th>' +
             '<th class="' + th + ' text-right">Stock</th><th class="' + th + ' text-right">Reservado</th><th class="' + th + ' text-right">Disponible</th><th class="' + th + ' text-right">OC pend. qty</th>' +
             '<th class="' + th + ' text-right">Sin stock qty</th><th class="' + th + ' text-right">Sin stock importe</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + data.length + ' ítems · Total sin stock: ' + formatCurrency(total) + '</p>';
-        console.log('📊 [BO-Stock-Facturacion] Tabla Detalle sin stock renderizada:', data.length, 'filas');
+            '<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyendaFilas + ' · Total sin stock: ' + formatCurrency(total) + '</p>';
+        if (contentOnlySinStock(tablePartHtml, setupSinStockTooltips)) return;
+        boSetSearchAndContent(container, 'bo-sin-stock-search', 'Buscar por código, artículo, categoría...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-sin-stock-search', function () { renderDetalleSinStockTable(BO_LAST_SIN_STOCK_DATA); });
+        setupSinStockTooltips();
     }
     
     /**
@@ -687,31 +1082,62 @@
         },
         backorder: {
             dimensions: [
+                { key: 'descripcion', label: 'Descripción' },
                 { key: 'cliente', label: 'Cliente' },
                 { key: 'nro_comp', label: 'Nro. comp' },
                 { key: 'nombre_rubro', label: 'Rubro' },
                 { key: 'nombre_vendedor', label: 'Vendedor' },
-                { key: 'estado', label: 'Estado' },
                 { key: 'fecha', label: 'Fecha' }
             ],
             metrics: [
                 { key: 'precio_x_renglon', label: 'Precio x renglón', format: 'currency' },
-                { key: 'cantidad', label: 'Cantidad', format: 'number' }
+                { key: 'cant_pend', label: 'Cant. pend', format: 'number' }
             ],
-            metricKeys: ['precio_x_renglon', 'cantidad'],
-            columns: ['fecha', 'nro_comp', 'descripcion', 'cod_manual', 'cantidad', 'cant_pend', 'estado', 'cliente', 'id_cliente', 'precio_x_renglon', 'nombre_rubro', 'nombre_sub_rubro', 'nombre_vendedor']
+            metricKeys: ['precio_x_renglon', 'cant_pend'],
+            columns: ['fecha', 'nro_comp', 'descripcion', 'cod_manual', 'cant_pend', 'cliente', 'precio_x_renglon', 'nombre_rubro', 'nombre_sub_rubro', 'nombre_vendedor']
         }
     };
 
     /**
+     * Ordena filas por nombre de artículo (articulo o descripcion).
+     */
+    function sortByArticulo(items) {
+        if (!items || !items.length) return items;
+        return items.slice().sort(function (a, b) {
+            var va = (a.articulo != null ? a.articulo : a.descripcion || '').toString().toLowerCase();
+            var vb = (b.articulo != null ? b.articulo : b.descripcion || '').toString().toLowerCase();
+            return va.localeCompare(vb, 'es');
+        });
+    }
+
+    /**
+     * Obtiene los campos de agrupación en orden de selección del usuario (chips = orden de selección).
+     * El primer elemento seleccionado es el nivel más externo, el último el más interno.
+     */
+    function getGroupByFieldsInSelectionOrder(selectId) {
+        var tagsContainer = document.getElementById(selectId + '_tags_container');
+        var chipsContainer = tagsContainer && tagsContainer.querySelector('.tags-chips');
+        if (chipsContainer) {
+            var chips = chipsContainer.querySelectorAll('[data-group-value]');
+            if (chips.length > 0) {
+                return Array.from(chips).map(function (c) { return c.getAttribute('data-group-value'); });
+            }
+        }
+        var sel = document.getElementById(selectId);
+        return sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+    }
+
+    /**
      * Agrupa datos recursivamente por múltiples campos. Retorna árbol { type: 'group'|'item', data, children }.
+     * groupByFields[0] = nivel más externo, groupByFields[n] = nivel más interno.
      */
     function groupTableDataGeneric(data, groupByFields, metricKeys) {
         if (!groupByFields || !groupByFields.length || !data || !data.length) return data;
         var level = 0;
         function groupByLevels(items, fields, lev) {
             if (lev >= fields.length) {
-                return items.map(function (item) { return { type: 'item', data: item, children: [] }; });
+                var sorted = sortByArticulo(items);
+                return sorted.map(function (item) { return { type: 'item', data: item, children: [] }; });
             }
             var currentField = fields[lev];
             var grouped = {};
@@ -793,7 +1219,30 @@
                     if (formatted === '' && (val === 0 || val === '0')) formatted = formatCellValueBO(0, colKey, config);
                     if (formatted === '' && val !== undefined && val !== null) formatted = String(val).substring(0, 60);
                     var align = metrics.some(function (m) { return m.key === colKey; }) ? ' text-right font-mono' : '';
-                    rowsHTML += '<td class="' + td + ' text-slate-700 dark:text-slate-300' + align + '">' + formatted + '</td>';
+                    var cellClass = td + ' text-slate-700 dark:text-slate-300' + align;
+                    var dataAttr = '';
+                    if (colKey === 'stock_actual' && row.stock_por_deposito) {
+                        cellClass += ' stock-cell cursor-help';
+                        var stockDepJson = String(JSON.stringify(row.stock_por_deposito)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        dataAttr = ' data-stock-deposito="' + stockDepJson + '"';
+                    } else if (colKey === 'bo_qty' && row.bo_detalle) {
+                        cellClass += ' bo-qty-cell cursor-help';
+                        var boDepJson = String(JSON.stringify(row.bo_detalle)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        dataAttr = ' data-bo-detalle="' + boDepJson + '"';
+                    } else if (colKey === 'stock_reservado' && (row.stock_reservado > 0)) {
+                        cellClass += ' reservado-cell cursor-help';
+                        var resDepJson = String(JSON.stringify(row.reservado_detalle || [])).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        dataAttr = ' data-reservado-detalle="' + resDepJson + '"';
+                    } else if ((colKey === 'disponible') && row.stock_por_deposito) {
+                        cellClass += ' stock-cell cursor-help';
+                        var dispDepJson = String(JSON.stringify(row.stock_por_deposito)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        dataAttr = ' data-stock-deposito="' + dispDepJson + '"';
+                    } else if (colKey === 'oc_pendiente' && row.oc_detalle) {
+                        cellClass += ' oc-pend-cell cursor-help';
+                        var ocDetJson = String(JSON.stringify(row.oc_detalle || [])).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        dataAttr = ' data-oc-detalle="' + ocDetJson + '"';
+                    }
+                    rowsHTML += '<td class="' + cellClass + '"' + dataAttr + '>' + formatted + '</td>';
                 });
                 rowsHTML += '</tr>';
             }
@@ -849,6 +1298,7 @@
                 var label = dim ? dim.label : value;
                 var chip = document.createElement('div');
                 chip.className = 'inline-flex items-center gap-1 px-2 py-1 bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200 rounded-full text-xs font-medium';
+                chip.setAttribute('data-group-value', value);
                 chip.innerHTML = '<span>' + label + '</span><button type="button" class="ml-1 hover:text-sky-600 dark:hover:text-sky-300 focus:outline-none" data-remove="' + value + '">×</button>';
                 chipsContainer.appendChild(chip);
                 chip.querySelector('button').addEventListener('click', function () {
@@ -856,7 +1306,7 @@
                     selectedValues = selectedValues.filter(function (x) { return x !== v; });
                     Array.from(select.options).forEach(function (o) { o.selected = selectedValues.indexOf(o.value) !== -1; });
                     renderChips();
-                    renderTableFn(getDataFn(), getSelected());
+                    renderTableFn(getDataFn(), selectedValues.slice());
                 });
             });
         }
@@ -869,7 +1319,7 @@
                 dropdown.classList.add('hidden');
                 dropdown.style.display = '';
                 input.value = '';
-                renderTableFn(getDataFn(), getSelected());
+                renderTableFn(getDataFn(), selectedValues.slice());
             }
         }
         function showDropdown() {
@@ -903,7 +1353,7 @@
         select.addEventListener('change', function () {
             selectedValues = getSelected();
             renderChips();
-            renderTableFn(getDataFn(), getSelected());
+            renderTableFn(getDataFn(), selectedValues.slice());
         });
     }
 
@@ -915,14 +1365,22 @@
         if (!container) return;
         BO_LAST_FACTURACION_DATA = data || [];
         data = BO_LAST_FACTURACION_DATA;
+        var searchQuery = (document.getElementById('bo-facturacion-search') && document.getElementById('bo-facturacion-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['cliente', 'vendedor', 'zona', 'telefono', 'email', 'cuit']);
         var config = BO_TAB_CONFIGS.facturacion;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-facturacion-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-facturacion-group-by');
         }
+        var tablePartHtml;
+        var contentOnlyFac = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-facturacion-search', html, onUpdated);
+        };
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay datos de facturación por cliente para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay datos de facturación por cliente para mostrar.') + '</div></div>';
+            if (contentOnlyFac(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-facturacion-search', 'Buscar por cliente, vendedor, zona...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-facturacion-search', function () { renderFacturacionTable(BO_LAST_FACTURACION_DATA); });
             return;
         }
         if (!container.dataset.boFacGroupByInit) {
@@ -939,7 +1397,14 @@
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Facturación por cliente. Agrupado por: ' + groupByFields.join(' → ') + '.</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_FACTURACION_DATA ? BO_LAST_FACTURACION_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' clientes. ' : '';
+            var pieAgrupado = 'Facturación por cliente. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + '.';
+            tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnlyFac(tablePartHtml, function () { attachGroupToggleListenersBO(container); })) return;
+            boSetSearchAndContent(container, 'bo-facturacion-search', 'Buscar por cliente, vendedor, zona...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-facturacion-search', function () { renderFacturacionTable(BO_LAST_FACTURACION_DATA); });
             attachGroupToggleListenersBO(container);
             return;
         }
@@ -983,12 +1448,19 @@
             if (prevBtn) prevBtn.addEventListener('click', function () { if (currentPage > 1) { currentPage--; render(); } });
             if (nextBtn) nextBtn.addEventListener('click', function () { if (currentPage < totalPages) { currentPage++; render(); } });
         }
-        container.innerHTML = '<div data-fac-table>' + buildTable(1) + '</div><div data-fac-pagination class="fac-pagination">' + buildPagination() + '</div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Facturación por cliente (ordenado por Sub Total DESC). % ventas = (sub_total / facturacion_neta_total) × 100.</p>';
-        var prevBtn = container.querySelector('[data-fac-prev]');
-        var nextBtn = container.querySelector('[data-fac-next]');
-        if (prevBtn) prevBtn.addEventListener('click', function () { if (currentPage > 1) { currentPage--; render(); } });
-        if (nextBtn) nextBtn.addEventListener('click', function () { if (currentPage < totalPages) { currentPage++; render(); } });
-        console.log('📊 [BO-Stock-Facturacion] Tabla Facturación por cliente renderizada:', data.length, 'filas');
+        var totalRows = BO_LAST_FACTURACION_DATA ? BO_LAST_FACTURACION_DATA.length : data.length;
+        var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' clientes. ' : '';
+        tablePartHtml = '<div data-fac-table>' + buildTable(1) + '</div><div data-fac-pagination class="fac-pagination">' + buildPagination() + '</div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyendaFilas + 'Facturación por cliente (ordenado por Sub Total DESC). % ventas = (sub_total / facturacion_neta_total) × 100.</p>';
+        function attachFacPagination() {
+            var prevBtn = container.querySelector('[data-fac-prev]');
+            var nextBtn = container.querySelector('[data-fac-next]');
+            if (prevBtn) prevBtn.addEventListener('click', function () { if (currentPage > 1) { currentPage--; render(); } });
+            if (nextBtn) nextBtn.addEventListener('click', function () { if (currentPage < totalPages) { currentPage++; render(); } });
+        }
+        if (contentOnlyFac(tablePartHtml, attachFacPagination)) return;
+        boSetSearchAndContent(container, 'bo-facturacion-search', 'Buscar por cliente, vendedor, zona...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-facturacion-search', function () { renderFacturacionTable(BO_LAST_FACTURACION_DATA); });
+        attachFacPagination();
     }
     
     /**
@@ -999,14 +1471,22 @@
         if (!container) return;
         BO_LAST_REMITOS_DATA = data || [];
         data = BO_LAST_REMITOS_DATA;
+        var searchQuery = (document.getElementById('bo-remitos-search') && document.getElementById('bo-remitos-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['fecha', 'nro_comprobante', 'sucursal', 'punto_venta']);
         var config = BO_TAB_CONFIGS.remitos;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-remitos-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-remitos-group-by');
         }
+        var tablePartHtml;
+        var contentOnlyRem = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-remitos-search', html, onUpdated);
+        };
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay remitos no facturados para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay remitos no facturados para mostrar.') + '</div></div>';
+            if (contentOnlyRem(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-remitos-search', 'Buscar por fecha, nro comprobante, sucursal...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-remitos-search', function () { renderRemitosTable(BO_LAST_REMITOS_DATA); });
             return;
         }
         if (!container.dataset.boRemGroupByInit) {
@@ -1023,7 +1503,14 @@
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Remitos no facturados. Agrupado por: ' + groupByFields.join(' → ') + '.</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_REMITOS_DATA ? BO_LAST_REMITOS_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' remitos. ' : '';
+            var pieAgrupado = 'Remitos no facturados. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + '.';
+            tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnlyRem(tablePartHtml, function () { attachGroupToggleListenersBO(container); })) return;
+            boSetSearchAndContent(container, 'bo-remitos-search', 'Buscar por fecha, nro comprobante, sucursal...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-remitos-search', function () { renderRemitosTable(BO_LAST_REMITOS_DATA); });
             attachGroupToggleListenersBO(container);
             return;
         }
@@ -1031,8 +1518,12 @@
         var rowsHtml = data.map(function (row) {
             return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30"><td class="' + td + ' text-center">' + (row.fecha || '') + '</td><td class="' + td + ' font-mono">' + (row.nro_comprobante || '') + '</td><td class="' + td + '">' + (row.sucursal || '') + '</td><td class="' + td + ' text-center">' + (row.punto_venta || '') + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(row.subtotal_desc) + '</td></tr>';
         }).join('');
-        container.innerHTML = '<div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Fecha</th><th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Nro. Comprobante</th><th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Sucursal</th><th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Punto Venta</th><th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Subtotal</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ' + data.length + ' remitos no facturados</p>';
-        console.log('📊 [BO-Stock-Facturacion] Tabla de remitos renderizada:', data.length, 'filas');
+        var totalRows = BO_LAST_REMITOS_DATA ? BO_LAST_REMITOS_DATA.length : data.length;
+        var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' remitos' : 'Mostrando ' + data.length + ' remitos no facturados';
+        tablePartHtml = '<div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Fecha</th><th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Nro. Comprobante</th><th class="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Sucursal</th><th class="px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Punto Venta</th><th class="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">Subtotal</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyendaFilas + '</p>';
+        if (contentOnlyRem(tablePartHtml)) return;
+        boSetSearchAndContent(container, 'bo-remitos-search', 'Buscar por fecha, nro comprobante, sucursal...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-remitos-search', function () { renderRemitosTable(BO_LAST_REMITOS_DATA); });
     }
     
     /**
@@ -1043,14 +1534,22 @@
         if (!container) return;
         BO_LAST_BACKORDER_DATA = data || [];
         data = BO_LAST_BACKORDER_DATA;
+        var searchQuery = (document.getElementById('bo-backorder-search') && document.getElementById('bo-backorder-search').value) || '';
+        data = filterBoDataBySearch(data, searchQuery, ['descripcion', 'cod_manual', 'cliente', 'nombre_rubro', 'nombre_sub_rubro', 'nombre_vendedor', 'nro_comp', 'estado']);
         var config = BO_TAB_CONFIGS.backorder;
         var groupByFields = groupByFieldsOptional;
         if (groupByFields === undefined) {
-            var sel = document.getElementById('bo-backorder-group-by');
-            groupByFields = sel ? Array.from(sel.selectedOptions).map(function (o) { return o.value; }) : [];
+            groupByFields = getGroupByFieldsInSelectionOrder('bo-backorder-group-by');
         }
+        var tablePartHtml;
+        var contentOnlyBo = function (html, onUpdated) {
+            return boUpdateContentOnly(container, 'bo-backorder-search', html, onUpdated);
+        };
         if (!data || data.length === 0) {
-            container.innerHTML = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">No hay backorder para mostrar.</div></div>';
+            tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay backorder para mostrar.') + '</div></div>';
+            if (contentOnlyBo(tablePartHtml)) return;
+            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
             return;
         }
         if (!container.dataset.boBoGroupByInit) {
@@ -1067,17 +1566,29 @@
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
             var bodyRows = renderGroupedTableRowsBO(grouped, config, 0, true);
-            container.innerHTML = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Backorder detalle. Agrupado por: ' + groupByFields.join(' → ') + '.</p>';
+            var numAgrupaciones = grouped.length;
+            var totalRows = BO_LAST_BACKORDER_DATA ? BO_LAST_BACKORDER_DATA.length : data.length;
+            var leyendaFilas = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' renglones. ' : '';
+            var pieAgrupado = 'Backorder detalle. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + '.';
+            tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
+            if (contentOnlyBo(tablePartHtml, function () { attachGroupToggleListenersBO(container); })) return;
+            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+            attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
             attachGroupToggleListenersBO(container);
             return;
         }
         var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
         var td = 'px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800';
-        var rowsHtml = data.map(function (row) {
-            return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30"><td class="' + td + ' text-slate-700 dark:text-slate-300 text-center">' + (row.fecha || '') + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400 font-mono">' + (row.nro_comp || '') + '</td><td class="' + td + ' text-slate-700 dark:text-slate-300">' + (row.descripcion || '').toString().substring(0, 80) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400 font-mono">' + (row.cod_manual || '') + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(row.cantidad) + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(row.cant_pend) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400">' + (row.estado || '') + '</td><td class="' + td + ' text-slate-700 dark:text-slate-300">' + (row.cliente || '').toString().substring(0, 40) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400 font-mono">' + (row.id_cliente != null ? row.id_cliente : '') + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(row.precio_x_renglon) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400">' + (row.nombre_rubro || '') + '</td><td class="' + td + ' text-slate-500 dark:text-slate-500">' + (row.nombre_sub_rubro || '') + '</td><td class="' + td + ' text-slate-500 dark:text-slate-500">' + (row.nombre_vendedor || '') + '</td></tr>';
+        var sortedData = sortByArticulo(data);
+        var rowsHtml = sortedData.map(function (row) {
+            return '<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30"><td class="' + td + ' text-slate-700 dark:text-slate-300 text-center">' + (row.fecha || '') + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400 font-mono">' + (row.nro_comp || '') + '</td><td class="' + td + ' text-slate-700 dark:text-slate-300">' + (row.descripcion || '').toString().substring(0, 80) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400 font-mono">' + (row.cod_manual || '') + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatNumber(row.cant_pend) + '</td><td class="' + td + ' text-slate-700 dark:text-slate-300">' + (row.cliente || '').toString().substring(0, 40) + '</td><td class="' + td + ' text-right font-mono text-slate-900 dark:text-white">' + formatCurrency(row.precio_x_renglon) + '</td><td class="' + td + ' text-slate-600 dark:text-slate-400">' + (row.nombre_rubro || '') + '</td><td class="' + td + ' text-slate-500 dark:text-slate-500">' + (row.nombre_sub_rubro || '') + '</td><td class="' + td + ' text-slate-500 dark:text-slate-500">' + (row.nombre_vendedor || '') + '</td></tr>';
         }).join('');
-        container.innerHTML = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="' + th + ' text-center">Fecha</th><th class="' + th + ' text-left">Nro comp</th><th class="' + th + ' text-left">Descripción</th><th class="' + th + ' text-left">Cod. manual</th><th class="' + th + ' text-right">Cantidad</th><th class="' + th + ' text-right">Cant. pend</th><th class="' + th + ' text-left">Estado</th><th class="' + th + ' text-left">Cliente</th><th class="' + th + ' text-left">Id cliente</th><th class="' + th + ' text-right">Precio x renglón</th><th class="' + th + ' text-left">Rubro</th><th class="' + th + ' text-left">Subrubro</th><th class="' + th + ' text-left">Vendedor</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ' + data.length + ' renglones de backorder</p>';
-        console.log('📊 [BO-Stock-Facturacion] Tabla Backorder detalle renderizada:', data.length, 'filas');
+        var totalRows = BO_LAST_BACKORDER_DATA ? BO_LAST_BACKORDER_DATA.length : data.length;
+        var leyenda = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' renglones de backorder' : 'Mostrando ' + data.length + ' renglones de backorder';
+        tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="' + th + ' text-center">Fecha</th><th class="' + th + ' text-left">Nro comp</th><th class="' + th + ' text-left">Descripción</th><th class="' + th + ' text-left">Cod. manual</th><th class="' + th + ' text-right">Cant. pend</th><th class="' + th + ' text-left">Cliente</th><th class="' + th + ' text-right">Precio x renglón</th><th class="' + th + ' text-left">Rubro</th><th class="' + th + ' text-left">Subrubro</th><th class="' + th + ' text-left">Vendedor</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyenda + '</p>';
+        if (contentOnlyBo(tablePartHtml)) return;
+        boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+        attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
     }
     
     // =========================================================

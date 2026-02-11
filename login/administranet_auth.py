@@ -112,10 +112,28 @@ class AdministraNETAuth:
             
         except MySQLdb.Error as e:
             logger.error(f"Error MySQL al obtener empresas del servidor {self.server}: {e}")
-            return []
+            # Fallback para entorno local: si no existe la base 'empresas', ofrecer la base del .env
+            # (ej. solo se restauró 'administranet' y no existe la base empresas)
+            try:
+                base_default = settings.DATABASES['mysql'].get('NAME', 'administranet')
+                return [{
+                    'id_empresa': 1,
+                    'nombre_empresa': f'Local ({base_default})',
+                    'base_empresa': base_default,
+                }]
+            except Exception:
+                return []
         except Exception as e:
             logger.error(f"Error inesperado al obtener empresas: {e}", exc_info=True)
-            return []
+            try:
+                base_default = settings.DATABASES['mysql'].get('NAME', 'administranet')
+                return [{
+                    'id_empresa': 1,
+                    'nombre_empresa': f'Local ({base_default})',
+                    'base_empresa': base_default,
+                }]
+            except Exception:
+                return []
     
     def validate_user(self, cod_usuario: str, password: str, base_empresa: str) -> Optional[Dict]:
         """

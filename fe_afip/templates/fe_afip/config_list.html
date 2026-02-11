@@ -1,0 +1,122 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Facturación Electrónica AFIP · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500" x-data="{ openCertModal: false }">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold">Facturación Electrónica</p>
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+          Configuración AFIP
+        </h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          Credenciales y modo Homologación/Producción. <strong>Homologación</strong> para todas las pruebas; <strong>Producción</strong> solo cuando esté validado.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        {% if can_manage_certs %}
+        <button type="button" x-on:click="openCertModal = true"
+                class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all">
+          Gestionar certificados
+        </button>
+        {% endif %}
+        {% if config %}
+        <a href="{% url 'fe_afip:config_edit' pk=config.pk %}"
+           class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+          Editar configuración
+        </a>
+        {% endif %}
+        <!-- Modal: elegir flujo de certificados -->
+        <div class="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="openCertModal" x-cloak x-transition
+             x-on:keydown.escape.window="openCertModal = false">
+          <div class="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden"
+               x-on:click.outside="openCertModal = false">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">¿Qué querés hacer?</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Elegí cómo gestionar los certificados de Facturación Electrónica AFIP.</p>
+            </div>
+            <div class="p-6 grid gap-4 sm:grid-cols-2">
+              <a href="{% if config %}{% url 'fe_afip:config_edit' pk=config.pk %}{% else %}{% url 'fe_afip:config_form' %}{% endif %}"
+                 class="flex flex-col rounded-xl border-2 border-slate-200 dark:border-slate-600 p-5 hover:border-sky-400 dark:hover:border-sky-500 hover:bg-sky-50/50 dark:hover:bg-sky-900/20 transition-all group">
+                <span class="text-2xl mb-2" aria-hidden="true">📁</span>
+                <span class="font-semibold text-slate-900 dark:text-white group-hover:text-sky-700 dark:group-hover:text-sky-300">Importar o modificar existentes</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400 mt-1">Ya tengo certificado y clave privada. Indicar rutas en el servidor.</span>
+              </a>
+              <a href="{% url 'fe_afip:cert_wizard' %}"
+                 class="flex flex-col rounded-xl border-2 border-slate-200 dark:border-slate-600 p-5 hover:border-emerald-400 dark:hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-all group">
+                <span class="text-2xl mb-2" aria-hidden="true">🆕</span>
+                <span class="font-semibold text-slate-900 dark:text-white group-hover:text-emerald-700 dark:group-hover:text-emerald-300">Generar certificados nuevos</span>
+                <span class="text-sm text-slate-500 dark:text-slate-400 mt-1">Generar CSR en Synap, subirlo a AFIP (ARCA) e importar el .crt.</span>
+              </a>
+            </div>
+            <div class="px-6 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+              <button type="button" x-on:click="openCertModal = false"
+                      class="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+      {% if config %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nombre</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Base empresa</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Modo</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">CUIT</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+              <td class="px-6 py-4 font-medium text-slate-900 dark:text-white">{{ config.name }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 font-mono">{{ config.base_empresa }}</td>
+              <td class="px-6 py-4">
+                {% if config.modo_homologacion %}
+                <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">Homologación</span>
+                {% else %}
+                <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">Producción</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 font-mono">***{{ config.cuit|slice:"-4:" }}</td>
+              <td class="px-6 py-4">
+                <a href="{% url 'fe_afip:config_edit' pk=config.pk %}"
+                   class="text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline">Editar</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-12 text-center text-slate-500 dark:text-slate-400">
+        <p class="text-sm">No hay configuración de Facturación Electrónica AFIP para esta empresa.</p>
+        {% if can_manage_certs %}
+        <button type="button" x-on:click="openCertModal = true" class="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline">Gestionar certificados</button>
+        {% else %}
+        <a href="{% url 'fe_afip:config_form' %}" class="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline">Configurar AFIP</a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

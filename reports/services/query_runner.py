@@ -2853,7 +2853,7 @@ class QueryRunnerService:
         - Facturación: cuentacliente (FA/FB/FC/FE/FM menos NC*)
         - Remitos no facturados: comp_ped (TipoComprobante='REM', Estado='Pendiente')
         - Backorder: comp_ped (TipoComprobante='PED') + stockp (renglones definitivos)
-        - Stock: stock_deposito (saldo, saldo_pedido_cliente)
+        - Stock: stock_deposito (saldo, oc_pendiente); Reservado: stockp+comp_ped (Estado En preparación/Preparado)
         - Maestros: articulo + rubro
         
         RESPUESTAS OBLIGATORIAS (Backorder detalle row-level):
@@ -2915,6 +2915,15 @@ class QueryRunnerService:
             elif not isinstance(puntos_venta, list):
                 puntos_venta = []
             
+            depositos_excluidos = filters.get("depositos_excluidos", [])
+            if isinstance(depositos_excluidos, str):
+                depositos_excluidos = [depositos_excluidos] if depositos_excluidos else []
+            elif not isinstance(depositos_excluidos, list):
+                depositos_excluidos = []
+            depositos_excluidos = [int(x) for x in depositos_excluidos if str(x).strip() and str(x).replace("-", "").isdigit()]
+            
+            clientes_excluidos = self._parse_clientes_excluidos(filters)
+            
             # Conectar a MySQL
             mysql_config = settings.DATABASES['mysql']
             
@@ -2949,7 +2958,18 @@ class QueryRunnerService:
             #   CREATE INDEX idx_cc_fecha_tipo_anul ON cuentacliente (Fecha, TipoComprobante, Anulado);
             # Ver plan: EXPLAIN <query>; evitar type=ALL, asegurar key usado.
             # MAX_EXECUTION_TIME (ms): evita colgarse con bases grandes. MySQL 5.7.8+.
-            sql_facturacion = """
+            params_facturacion = [fecha_inicio, fecha_fin]
+            where_fact = [
+                "Fecha >= %s", "Fecha <= %s",
+                "Anulado = 'No'",
+                "TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
+            ]
+            if clientes_excluidos:
+                ph = ",".join(["%s"] * len(clientes_excluidos))
+                where_fact.append(f"Codigo NOT IN ({ph})")
+                params_facturacion.extend(clientes_excluidos)
+            where_fact_s = " AND ".join(where_fact)
+            sql_facturacion = f"""
                 SELECT /*+ MAX_EXECUTION_TIME(90000) */
                     SUM(CASE 
                         WHEN TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') 
@@ -2962,17 +2982,9 @@ class QueryRunnerService:
                         ELSE 0 
                     END) AS notas_credito
                 FROM cuentacliente
-                WHERE Fecha >= %s
-                    AND Fecha <= %s
-                    AND Anulado = 'No'
-                    AND TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                WHERE {where_fact_s}
             """
-            try:
-                sql_facturacion_debug = (sql_facturacion.strip() % (fecha_inicio, fecha_fin)).replace("\n", " ")
-                logger.info("📊 [BO] Facturación SQL (para EXPLAIN): %s", sql_facturacion_debug)
-            except Exception:
-                pass
-            cursor.execute(sql_facturacion, [fecha_inicio, fecha_fin])
+            cursor.execute(sql_facturacion, params_facturacion)
             row_fact = cursor.fetchone()
             ventas = float(row_fact[0] or 0) if row_fact else 0.0
             notas_credito = float(row_fact[1] or 0) if row_fact else 0.0
@@ -2994,18 +3006,11 @@ class QueryRunnerService:
                 "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
             ]
             params_fac_cli = [fecha_inicio, fecha_fin]
-            if sucursales:
-                suc_ints = [int(x) for x in sucursales if str(x).isdigit()]
-                if suc_ints:
-                    ph = ",".join(["%s"] * len(suc_ints))
-                    where_fac_cli.append(f"cc.CodSucursal IN ({ph})")
-                    params_fac_cli.extend(suc_ints)
-            if puntos_venta:
-                pv_ints = [int(x) for x in puntos_venta if str(x).isdigit()]
-                if pv_ints:
-                    ph = ",".join(["%s"] * len(pv_ints))
-                    where_fac_cli.append(f"cc.id_pv IN ({ph})")
-                    params_fac_cli.extend(pv_ints)
+            # BO reporte consolidado: no filtrar por sucursal ni punto de venta
+            if clientes_excluidos:
+                ph = ",".join(["%s"] * len(clientes_excluidos))
+                where_fac_cli.append(f"cc.Codigo NOT IN ({ph})")
+                params_fac_cli.extend(clientes_excluidos)
             where_fac_cli_s = " AND ".join(where_fac_cli)
             FAC_CLI_LIMIT = 1000
             params_fac_cli.append(FAC_CLI_LIMIT)
@@ -3058,21 +3063,11 @@ class QueryRunnerService:
             # =========================================================
             where_remitos = ["cp.Fecha >= %s", "cp.Fecha <= %s", "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'"]
             params_remitos = [fecha_inicio, fecha_fin]
-            
-            # Filtros opcionales
-            if sucursales:
-                sucursales_ints = [int(s) for s in sucursales if str(s).isdigit()]
-                if sucursales_ints:
-                    placeholders = ','.join(['%s'] * len(sucursales_ints))
-                    where_remitos.append(f"cp.CodSucursal IN ({placeholders})")
-                    params_remitos.extend(sucursales_ints)
-            
-            if puntos_venta:
-                pv_ints = [int(pv) for pv in puntos_venta if str(pv).isdigit()]
-                if pv_ints:
-                    placeholders = ','.join(['%s'] * len(pv_ints))
-                    where_remitos.append(f"cp.id_pv IN ({placeholders})")
-                    params_remitos.extend(pv_ints)
+            # BO reporte consolidado: no filtrar por sucursal ni punto de venta
+            if clientes_excluidos:
+                placeholders = ','.join(['%s'] * len(clientes_excluidos))
+                where_remitos.append(f"cp.Codigo NOT IN ({placeholders})")
+                params_remitos.extend(clientes_excluidos)
             
             where_remitos_clause = " AND ".join(where_remitos)
             
@@ -3125,9 +3120,20 @@ class QueryRunnerService:
             # Renglones definitivos de PED en stockp (VB6); comp_ped para cabecera y estados.
             bo_estados = "('Pendiente')"
 
+            # Depósitos excluidos: no sumar su saldo en stock_actual/disponible
+            sd_where_excl = ""
+            if depositos_excluidos:
+                sd_where_excl = " WHERE id_deposito NOT IN (" + ",".join(str(d) for d in depositos_excluidos) + ")"
+            clientes_excl_bo = ""
+            reservado_excl_clause = ""
+            if clientes_excluidos:
+                clientes_excl_bo = " AND cp.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
+                reservado_excl_clause = " AND cp_res.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
+
             # Detalle BO por producto con cálculo de cobertura
             # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.
-            # oc_pendiente = SUM(saldo_pedido_proveedor): OC aprobadas y pendientes de entrega (CON INGRESO).
+            # oc_pendiente = CALCULADO desde stockp+cuentaproveedor (OC Estado=Pendiente). NO usar stock_deposito.saldo_pedido_proveedor.
+            # stock_reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). NO usar stock_deposito.saldo_pedido_cliente.
             sql_bo_detalle = f"""
                 SELECT /*+ MAX_EXECUTION_TIME(90000) */
                     sp.IDArt AS id_art,
@@ -3137,27 +3143,51 @@ class QueryRunnerService:
                     SUM(sp.Cantidad) AS bo_qty,
                     SUM(sp.PrecioVentaxR) AS bo_importe,
                     COALESCE(sd.stock_total, 0) AS stock_actual,
-                    COALESCE(sd.reservado, 0) AS stock_reservado,
-                    GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(sd.reservado, 0)) AS disponible,
-                    GREATEST(0, COALESCE(sd.oc_pendiente, 0)) AS oc_pendiente
+                    COALESCE(reservado_sub.reservado, 0) AS stock_reservado,
+                    GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(reservado_sub.reservado, 0)) AS disponible,
+                    GREATEST(0, COALESCE(oc_pendiente_sub.oc_pendiente, 0)) AS oc_pendiente
                 FROM stockp sp
                 INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                 LEFT JOIN articulo a ON a.IDArt = sp.IDArt
                 LEFT JOIN rubro r ON r.CodigoRubro = a.CodigoRubro
                 LEFT JOIN (
-                    SELECT id_articulo,
-                        SUM(saldo) AS stock_total,
-                        SUM(COALESCE(saldo_pedido_cliente, 0)) AS reservado,
-                        SUM(COALESCE(saldo_pedido_proveedor, 0)) AS oc_pendiente
-                    FROM stock_deposito
+                    SELECT id_articulo, SUM(saldo) AS stock_total
+                    FROM stock_deposito{sd_where_excl}
                     GROUP BY id_articulo
                 ) sd ON sd.id_articulo = sp.IDArt
+                LEFT JOIN (
+                    SELECT sp_oc.IDArt AS id_articulo,
+                        SUM(COALESCE(sp_oc.cantidad_pendiente, sp_oc.Cantidad - COALESCE(sp_oc.cantidad_entregada, 0))) AS oc_pendiente
+                    FROM stockp sp_oc
+                    INNER JOIN cuentaproveedor cp_oc ON cp_oc.CodigoMovimiento = sp_oc.CodigoMovimiento
+                    WHERE cp_oc.TipoComprobante = 'OC'
+                        AND (sp_oc.Comprobante = 'OC' OR sp_oc.Comprobante IS NULL)
+                        AND cp_oc.Estado = 'Pendiente'
+                        AND cp_oc.Anulado = 'No'
+                        AND (sp_oc.anulado IS NULL OR sp_oc.anulado = 'No')
+                        AND (COALESCE(sp_oc.cantidad_pendiente, sp_oc.Cantidad - COALESCE(sp_oc.cantidad_entregada, 0)) > 0)
+                    GROUP BY sp_oc.IDArt
+                ) oc_pendiente_sub ON oc_pendiente_sub.id_articulo = sp.IDArt
+                LEFT JOIN (
+                    SELECT sp_res.IDArt AS id_articulo,
+                        SUM(COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0))) AS reservado
+                    FROM stockp sp_res
+                    INNER JOIN comp_ped cp_res ON cp_res.CodigoMovimiento = sp_res.CodigoMovimiento
+                    WHERE cp_res.TipoComprobante = 'PED'
+                        AND (sp_res.Comprobante = 'PED' OR sp_res.Comprobante IS NULL)
+                        AND cp_res.Anulado = 'No'
+                        AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
+                        AND cp_res.Estado IN ('En preparación', 'Preparado', 'Parcial')
+                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){reservado_excl_clause}
+                    GROUP BY sp_res.IDArt
+                ) reservado_sub ON reservado_sub.id_articulo = sp.IDArt
                 WHERE cp.TipoComprobante = 'PED'
+                    AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)
                     AND cp.Anulado = 'No'
-                    AND sp.anulado = 'No'
+                    AND (sp.anulado IS NULL OR sp.anulado = 'No')
                     AND cp.Estado IN {bo_estados}
-                    AND sp.CodigoMovimiento IS NOT NULL
-                GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, sd.reservado, sd.oc_pendiente
+                    AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
             """
@@ -3251,7 +3281,8 @@ class QueryRunnerService:
                         FROM stockp sp
                         INNER JOIN cuentaproveedor cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                         LEFT JOIN proveedor prov ON prov.Codigo = cp.Codigo
-                        WHERE cp.TipoComprobante = 'OC' AND cp.Estado = 'Pendiente' AND cp.Anulado = 'No'
+                        WHERE cp.TipoComprobante = 'OC' AND (sp.Comprobante = 'OC' OR sp.Comprobante IS NULL)
+                            AND cp.Estado = 'Pendiente' AND cp.Anulado = 'No'
                             AND (sp.anulado IS NULL OR sp.anulado = 'No')
                             AND sp.IDArt IN ({ph})
                             AND (COALESCE(sp.cantidad_pendiente, sp.Cantidad - COALESCE(sp.cantidad_entregada, 0)) > 0)
@@ -3288,7 +3319,155 @@ class QueryRunnerService:
                     logger.warning("📊 [BO] No se pudo cargar detalle OC para tooltip: %s", ex)
             for r in backorder_detalle:
                 r["oc_detalle"] = oc_map.get(r["id_art"], [])
-            
+
+            # BO detalle (para tooltip en columna BO QTY): fecha, nro_comprobante, cliente, cantidad por comprobante
+            try:
+                sql_bo_comp_detalle = f"""
+                    SELECT /*+ MAX_EXECUTION_TIME(15000) */
+                        sp.IDArt,
+                        cp.Fecha,
+                        COALESCE(NULLIF(TRIM(cp.NroComprobante), ''), cp.NroCompBusq, '') AS nro_comprobante,
+                        COALESCE(NULLIF(TRIM(cli.nombre_cliente), ''), '—') AS cliente,
+                        sp.Cantidad
+                    FROM stockp sp
+                    INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                    LEFT JOIN cliente cli ON cli.Codigo = cp.Codigo
+                    WHERE cp.TipoComprobante = 'PED'
+                        AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)
+                        AND cp.Anulado = 'No'
+                        AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                        AND cp.Estado IN {bo_estados}
+                        AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                    ORDER BY sp.IDArt, cp.Fecha, cp.NroComprobante
+                """
+                cursor.execute(sql_bo_comp_detalle)
+                bo_comp_rows = cursor.fetchall()
+
+                def _fmt_bo_date(d):
+                    if d is None:
+                        return ""
+                    return d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
+
+                bo_detalle_map: Dict[int, List[Dict]] = {}
+                for brow in bo_comp_rows:
+                    id_art = brow[0]
+                    fecha = brow[1]
+                    nro_comp = (brow[2] or "").strip() if brow[2] is not None else ""
+                    cliente = (brow[3] or "").strip() if brow[3] is not None else "—"
+                    qty = float(brow[4] or 0)
+                    if id_art not in bo_detalle_map:
+                        bo_detalle_map[id_art] = []
+                    bo_detalle_map[id_art].append({
+                        "fecha": _fmt_bo_date(fecha),
+                        "nro_comprobante": nro_comp or "—",
+                        "cliente": cliente or "—",
+                        "cantidad": qty,
+                    })
+                for r in backorder_detalle:
+                    r["bo_detalle"] = bo_detalle_map.get(r["id_art"], [])
+                logger.info("📊 [BO] BO detalle (tooltip) OK: %d artículos con comprobantes", len(bo_detalle_map))
+            except Exception as ex:
+                logger.warning("📊 [BO] No se pudo cargar BO detalle para tooltip: %s", ex)
+                for r in backorder_detalle:
+                    r["bo_detalle"] = []
+
+            # Reservado detalle (para tooltip en columna Reservado): PED En preparación/Preparado/Parcial (NO Pendiente), fecha, nro, cliente, estado, cantidad
+            reservado_estados = "('En preparación', 'Preparado', 'Parcial')"
+            try:
+                sql_reservado_detalle = f"""
+                    SELECT /*+ MAX_EXECUTION_TIME(15000) */
+                        sp_res.IDArt,
+                        cp_res.Fecha,
+                        COALESCE(NULLIF(TRIM(cp_res.NroComprobante), ''), cp_res.NroCompBusq, '') AS nro_comprobante,
+                        COALESCE(NULLIF(TRIM(cli.nombre_cliente), ''), '—') AS cliente,
+                        COALESCE(NULLIF(TRIM(cp_res.Estado), ''), '—') AS estado,
+                        COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) AS cantidad
+                    FROM stockp sp_res
+                    INNER JOIN comp_ped cp_res ON cp_res.CodigoMovimiento = sp_res.CodigoMovimiento
+                    LEFT JOIN cliente cli ON cli.Codigo = cp_res.Codigo
+                    WHERE cp_res.TipoComprobante = 'PED'
+                        AND (sp_res.Comprobante = 'PED' OR sp_res.Comprobante IS NULL)
+                        AND cp_res.Anulado = 'No'
+                        AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
+                        AND cp_res.Estado IN {reservado_estados}
+                        AND sp_res.CodigoMovimiento IS NOT NULL
+                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){reservado_excl_clause}
+                    ORDER BY sp_res.IDArt, cp_res.Fecha, cp_res.NroComprobante
+                """
+                cursor.execute(sql_reservado_detalle)
+                res_rows = cursor.fetchall()
+
+                def _fmt_res_date(d):
+                    if d is None:
+                        return ""
+                    return d.strftime("%d/%m/%Y") if hasattr(d, "strftime") else str(d)
+
+                reservado_detalle_map: Dict[int, List[Dict]] = {}
+                for rrow in res_rows:
+                    id_art = rrow[0]
+                    fecha = rrow[1]
+                    nro_comp = (rrow[2] or "").strip() if rrow[2] is not None else ""
+                    cliente = (rrow[3] or "").strip() if rrow[3] is not None else "—"
+                    estado = (rrow[4] or "").strip() if rrow[4] is not None else "—"
+                    qty = float(rrow[5] or 0)
+                    if id_art not in reservado_detalle_map:
+                        reservado_detalle_map[id_art] = []
+                    reservado_detalle_map[id_art].append({
+                        "fecha": _fmt_res_date(fecha),
+                        "nro_comprobante": nro_comp or "—",
+                        "cliente": cliente or "—",
+                        "estado": estado or "—",
+                        "cantidad": qty,
+                    })
+                for r in backorder_detalle:
+                    r["reservado_detalle"] = reservado_detalle_map.get(r["id_art"], [])
+                logger.info("📊 [BO] Reservado detalle (tooltip) OK: %d artículos con reserva", len(reservado_detalle_map))
+            except Exception as ex:
+                logger.warning("📊 [BO] No se pudo cargar reservado detalle para tooltip: %s", ex)
+                for r in backorder_detalle:
+                    r["reservado_detalle"] = []
+
+            # Stock por depósito (para tooltip en columna Stock): cantidad por NombreDeposito (excl. depósitos excluidos)
+            ids_art = [r["id_art"] for r in backorder_detalle]
+            stock_por_dep_map = {}
+            if ids_art:
+                try:
+                    ph = ",".join(["%s"] * len(ids_art))
+                    cursor.execute(f"""
+                        SELECT d.CodDeposito, COALESCE(NULLIF(TRIM(d.NombreDeposito), ''), 'Sin nombre') AS nombre_deposito
+                        FROM deposito d
+                        WHERE (d.anulado IS NULL OR d.anulado = 'No')
+                        ORDER BY d.CodDeposito
+                    """)
+                    depositos_all = cursor.fetchall()
+                    depositos = [(cod, nom) for cod, nom in depositos_all if cod not in depositos_excluidos] if depositos_excluidos else depositos_all
+                    sd_where_excl = " AND sd.id_deposito NOT IN (" + ",".join(str(d) for d in depositos_excluidos) + ")" if depositos_excluidos else ""
+                    cursor.execute(f"""
+                        SELECT sd.id_articulo, sd.id_deposito, COALESCE(sd.saldo, 0)
+                        FROM stock_deposito sd
+                        WHERE sd.id_articulo IN ({ph}){sd_where_excl}
+                    """, ids_art)
+                    sd_rows = cursor.fetchall()
+                    # Map: (id_art, id_deposito) -> saldo
+                    saldo_map = {}
+                    for row in sd_rows:
+                        saldo_map[(row[0], row[1])] = float(row[2] or 0)
+                    for r in backorder_detalle:
+                        id_art = r["id_art"]
+                        stock_por_dep = []
+                        for cod_dep, nom_dep in depositos:
+                            saldo = saldo_map.get((id_art, cod_dep), 0.0)
+                            stock_por_dep.append({"deposito": nom_dep, "saldo": saldo})
+                        r["stock_por_deposito"] = stock_por_dep
+                    logger.info("📊 [BO] Stock por depósito (tooltip) OK: %d artículos", len(ids_art))
+                except Exception as ex:
+                    logger.warning("📊 [BO] No se pudo cargar stock por depósito para tooltip: %s", ex)
+                    for r in backorder_detalle:
+                        r["stock_por_deposito"] = []
+            else:
+                for r in backorder_detalle:
+                    r["stock_por_deposito"] = []
+
             # Código manual / IDArt: codigo = articulo.id_manual, id_art = stockp.IDArt (articulo.IDArt).
             # Totales: sum(detalle_con_stock.con_stock_importe) == con_stock_total; idem con_ingreso. Se valida y loguea si difieren.
             # Detalle con stock: filas con con_stock_qty > 0, orden por con_stock_importe DESC
@@ -3339,28 +3518,22 @@ class QueryRunnerService:
             # 3b. BACKORDER DETALLE ROW-LEVEL (Excel-like, un renglón por fila)
             # Cabecera: comp_ped | Renglones: stockp | Cliente: cliente.Codigo | Vendedor: viajantes
             # precio_x_renglon: stockp.PrecioVentaxR. cant_pend: stockp.cantidad_pendiente.
+            # Sin límite: se devuelve la cantidad real de renglones.
             # =========================================================
-            BO_ROWS_LIMIT = 1000
             where_bo_rows = [
                 "cp.TipoComprobante = 'PED'",
+                "(spr.Comprobante = 'PED' OR spr.Comprobante IS NULL)",
                 "cp.Anulado = 'No'",
-                "spr.anulado = 'No'",
+                "(spr.anulado IS NULL OR spr.anulado = 'No')",
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
             ]
             params_bo_rows = []
-            if sucursales:
-                suc_ints = [int(x) for x in sucursales if str(x).isdigit()]
-                if suc_ints:
-                    ph = ",".join(["%s"] * len(suc_ints))
-                    where_bo_rows.append(f"cp.CodSucursal IN ({ph})")
-                    params_bo_rows.extend(suc_ints)
-            if puntos_venta:
-                pv_ints = [int(x) for x in puntos_venta if str(x).isdigit()]
-                if pv_ints:
-                    ph = ",".join(["%s"] * len(pv_ints))
-                    where_bo_rows.append(f"cp.id_pv IN ({ph})")
-                    params_bo_rows.extend(pv_ints)
+            # BO reporte consolidado: no filtrar por sucursal ni punto de venta
+            if clientes_excluidos:
+                ph = ",".join(["%s"] * len(clientes_excluidos))
+                where_bo_rows.append(f"cp.Codigo NOT IN ({ph})")
+                params_bo_rows.extend(clientes_excluidos)
             where_bo_rows_clause = " AND ".join(where_bo_rows)
             
             sql_bo_rows = f"""
@@ -3387,9 +3560,7 @@ class QueryRunnerService:
                 LEFT JOIN viajantes v ON v.CodViajante = cp.CodViajante
                 WHERE {where_bo_rows_clause}
                 ORDER BY cp.Fecha DESC, cp.NroComprobante ASC, COALESCE(spr.Descripcion, a.NombreArticulo, '') ASC
-                LIMIT %s
             """
-            params_bo_rows.append(BO_ROWS_LIMIT)
             cursor.execute(sql_bo_rows, params_bo_rows)
             bo_row_rows = cursor.fetchall()
             logger.info("📊 [BO] Backorder detalle (row-level) OK (%d filas)", len(bo_row_rows))
@@ -3484,12 +3655,16 @@ class QueryRunnerService:
                 f"Facturación neta: ${facturacion_neta:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
-                "⚠️ Stock reservado depende de saldo_pedido_cliente (puede estar desactualizado)",
-                "Backorder: renglones desde stockp + comp_ped. precio_x_renglon = PrecioVentaxR, cant_pend = cantidad_pendiente. CON INGRESO = OC aprobadas pend. entrega (saldo_pedido_proveedor); OC cubre primero faltante reservado, el resto cubre BO.",
-                f"Backorder detalle: mostrando primeros {len(backorder_detalle_rows)} renglones (límite {BO_ROWS_LIMIT}).",
+                "Reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). No usar stock_deposito.saldo_pedido_cliente.",
+                "Backorder: renglones desde stockp + comp_ped. CON INGRESO = OC pendientes (calculado desde stockp+cuentaproveedor). OC cubre primero faltante reservado, el resto cubre BO. No usar stock_deposito.saldo_pedido_proveedor.",
+                f"Backorder detalle: {len(backorder_detalle_rows)} renglones.",
                 "Facturación por cliente: % ventas = (sub_total_cliente / facturacion_neta_total) * 100. Última compra = MAX(fecha) dentro del período.",
-                "Facturación: filtros sucursal/punto_venta aplicados (cuentacliente.CodSucursal, id_pv). Tab mostrando primeros " + str(len(facturacion_por_cliente)) + f" clientes (límite {FAC_CLI_LIMIT}).",
+                "Facturación: reporte consolidado (todos los depósitos/clientes salvo exclusiones). Tab mostrando primeros " + str(len(facturacion_por_cliente)) + f" clientes (límite {FAC_CLI_LIMIT}).",
             ]
+            if depositos_excluidos:
+                notes.append(f"Depósitos excluidos: {len(depositos_excluidos)} depósito(s) (stock y disponible sin estos depósitos).")
+            if clientes_excluidos:
+                notes.append(f"Clientes excluidos: {len(clientes_excluidos)} cliente(s) (facturación, remitos y backorder NOT IN).")
             if num_depositos > 1:
                 notes.append(
                     f"Hay {num_depositos} depósitos en la base. Stock y reservado se muestran agregados por artículo (todos los depósitos). "
@@ -3504,7 +3679,7 @@ class QueryRunnerService:
                     f"⚠️ Detalle con ingreso: suma(con_ingreso_importe)={sum_con_ingreso:.2f} != con_ingreso_total={con_ingreso_total:.2f} (diff={diff_ingreso:.2f})"
                 )
             
-            # Extra: datasets para tabs
+            # Extra: datasets para tabs y flags para la UI
             extra = {
                 "tabs": {
                     "resumen": resumen_data,

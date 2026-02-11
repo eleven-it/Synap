@@ -1,0 +1,210 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Certificados AFIP (ARCA) · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-8">
+      <a href="{% url 'fe_afip:config_list' %}" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">← Volver a configuración AFIP</a>
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mt-2">
+        Obtener certificado de Factura Electrónica (ARCA)
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+        <strong class="text-slate-700 dark:text-slate-200">Homologación</strong> = entornos de prueba AFIP (todas las pruebas).<br>
+        <strong class="text-slate-700 dark:text-slate-200">Producción</strong> = ambiente real (solo cuando esté validado).
+      </p>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+      <!-- Indicador de pasos -->
+      <div class="flex border-b border-slate-200 dark:border-slate-700">
+        <div class="flex-1 px-6 py-3 text-center {% if step == 1 %}bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 font-medium{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-full border-2 {% if step == 1 %}border-sky-500 bg-sky-500 text-white{% else %}border-slate-300 dark:border-slate-600{% endif %} text-sm">1</span>
+          <span class="ml-2 hidden sm:inline">Generar CSR</span>
+        </div>
+        <div class="flex-1 px-6 py-3 text-center {% if step == 2 %}bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 font-medium{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+          <span class="inline-flex items-center justify-center w-8 h-8 rounded-full border-2 {% if step == 2 %}border-sky-500 bg-sky-500 text-white{% else %}border-slate-300 dark:border-slate-600{% endif %} text-sm">2</span>
+          <span class="ml-2 hidden sm:inline">Subir certificado</span>
+        </div>
+      </div>
+
+      <div class="p-6 md:p-8">
+        {% if step == 1 %}
+        {% if mysql_connection_error %}
+        <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+          <p class="text-sm font-medium text-red-800 dark:text-red-200">Error de conexión a MySQL (administraNET)</p>
+          <p class="text-sm text-red-700 dark:text-red-300 mt-1 font-mono break-all">{{ mysql_connection_error }}</p>
+          <p class="text-sm text-red-600 dark:text-red-400 mt-2">Revisá en el servidor: <strong>DB_HOST</strong>, <strong>DB_PORT</strong>, <strong>DB_USER</strong> y <strong>DB_PASSWORD</strong> en <code class="text-xs">.env</code>. La base <code class="text-xs">{{ base_empresa }}</code> debe existir en MySQL.</p>
+        </div>
+        {% elif cuit_no_disponible %}
+        <div class="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+          {% if nombre_empresa %}<p class="text-sm font-medium text-slate-700 dark:text-slate-300">Empresa: <strong>{{ nombre_empresa }}</strong></p>{% endif %}
+          <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mt-2">CUIT no disponible</p>
+          <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">El CUIT de la empresa debe estar configurado en <strong>administraNET</strong> (Datos de empresa / DatosEmpresa) para poder generar el CSR. Configurá el CUIT allí y volvé a esta pantalla.</p>
+        </div>
+        {% else %}
+        <form method="post" action="{% url 'fe_afip:cert_wizard' %}">
+          {% csrf_token %}
+          <input type="hidden" name="step" value="1">
+          <div class="space-y-5">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre de la empresa</label>
+              <input type="text" value="{{ nombre_empresa|default:base_empresa }}" readonly
+                     class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/70 px-4 py-2.5 text-slate-700 dark:text-slate-300 cursor-not-allowed">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Obtenido de administraNET (DatosEmpresa). No editable.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">CUIT con el que se generará el request</label>
+              <input type="text" value="{{ cuit_formateado }}" readonly
+                     class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/70 px-4 py-2.5 text-slate-700 dark:text-slate-300 font-mono cursor-not-allowed">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Obtenido de administraNET (DatosEmpresa) para la empresa activa. No editable.</p>
+            </div>
+            <div>
+              <label for="alias" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Alias (para AFIP)</label>
+              <input type="text" name="alias" id="alias" maxlength="64" value="FACTELEC"
+                     placeholder="ej: FACTELEC"
+                     class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Nombre con el que identificarás el certificado en el portal de AFIP (ej. FACTELEC).</p>
+            </div>
+            <div class="pt-2">
+              <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-colors">
+                Generar CSR
+              </button>
+            </div>
+          </div>
+        </form>
+        {% endif %}
+        {% endif %}
+
+        {% if step == 2 %}
+        {% if csr_pem %}
+        <div class="space-y-6">
+          <div>
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Copiá el siguiente CSR y subilo en AFIP (ARCA):</p>
+            <div class="relative">
+              <textarea id="csr-text" readonly rows="12" class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 font-mono text-xs text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-sky-500">{{ csr_pem }}</textarea>
+              <div class="absolute top-2 right-2 flex gap-2">
+                <button type="button" id="download-csr" class="rounded-lg px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500">
+                  Descargar .csr
+                </button>
+                <button type="button" id="copy-csr" class="rounded-lg px-3 py-1.5 text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 focus:ring-2 focus:ring-sky-500">
+                  Copiar
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+            <p class="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">Pasos en AFIP:</p>
+            <ol class="text-sm text-amber-700 dark:text-amber-300 list-decimal list-inside space-y-1">
+              <li>Entrá a <strong>Clave Fiscal</strong> → <strong>Administración de Certificados Digitales</strong> (ARCA).</li>
+              <li>Hacé clic en <strong>Agregar alias</strong>.</li>
+              <li>Ingresá el alias (ej. FACTELEC), subí el archivo CSR (usá <strong>Descargar .csr</strong> arriba) en formato PKCS#10.</li>
+              <li>Descargá el certificado (.crt) que genera AFIP.</li>
+              <li>Volvé acá y subí ese archivo en el formulario de abajo.</li>
+            </ol>
+            {% if arca_url %}
+            <a href="{{ arca_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 mt-3 text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline">
+              Abrir ARCA en una nueva pestaña →
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% else %}
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          Si ya subiste el CSR en AFIP y descargaste el certificado, subilo abajo.
+        </p>
+        {% endif %}
+
+        <form method="post" action="{% url 'fe_afip:cert_upload' %}" enctype="multipart/form-data" class="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
+          {% csrf_token %}
+          <div class="space-y-4">
+            <div>
+              <label for="cert_file" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Archivo del certificado (.crt o .pem) <span class="text-red-500">*</span></label>
+              <input type="file" name="cert_file" id="cert_file" accept=".crt,.pem,.cer"
+                     class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white file:mr-3 file:rounded-lg file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-sky-700 dark:file:bg-sky-900/30 dark:file:text-sky-300">
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Archivo descargado de AFIP después de agregar el alias con tu CSR.</p>
+            </div>
+            <div>
+              <p class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">¿Este certificado es para Homologación o Producción?</p>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="modo_homologacion" value="1" checked
+                         class="rounded-full border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+                  <span class="text-sm text-slate-700 dark:text-slate-300">Homologación</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="modo_homologacion" value="0"
+                         class="rounded-full border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+                  <span class="text-sm text-slate-700 dark:text-slate-300">Producción</span>
+                </label>
+              </div>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Homologación = pruebas AFIP. Producción = facturación real. Debe coincidir con el ambiente en el que pediste el certificado en AFIP.</p>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-5">
+            <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-colors">
+              Importar certificado
+            </button>
+            <a href="{% url 'fe_afip:cert_wizard' %}?reset=1" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              Volver al paso 1
+            </a>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if step == 2 and csr_pem %}
+<script>
+(function() {
+  var ta = document.getElementById('csr-text');
+  var copyBtn = document.getElementById('copy-csr');
+  var downloadBtn = document.getElementById('download-csr');
+  if (ta) {
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        ta.select();
+        ta.setSelectionRange(0, 99999);
+        try {
+          document.execCommand('copy');
+          copyBtn.textContent = 'Copiado';
+          setTimeout(function() { copyBtn.textContent = 'Copiar'; }, 2000);
+        } catch (e) {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ta.value).then(function() {
+              copyBtn.textContent = 'Copiado';
+              setTimeout(function() { copyBtn.textContent = 'Copiar'; }, 2000);
+            });
+          }
+        }
+      });
+    }
+    if (downloadBtn) {
+      downloadBtn.addEventListener('click', function() {
+        var blob = new Blob([ta.value], { type: 'application/x-pem-file' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'request_csr.csr';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    }
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

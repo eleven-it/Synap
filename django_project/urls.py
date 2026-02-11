@@ -106,6 +106,7 @@ urlpatterns.extend([
     # path('api/finance/', include('finance.api_urls')),
     path('api/reports/', include('reports.api_urls', namespace='reports-api')),
     path('api/sia/', include('sia.api.urls', namespace='sia-api')),
+    path('api/self-checkout/', include('self_checkout.api_urls')),
 ])
 
 # Reports AI - ELIMINADO (No necesario para instalación mínima)

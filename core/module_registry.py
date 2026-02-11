@@ -715,5 +715,28 @@ MODULE_CONFIGS = {
             'sia.response_submitted',
             'sia.came_action_created',
         ]
+    },
+
+    'self_checkout': {
+        'name': 'self_checkout',
+        'display_name': 'Self-Checkout / TPV',
+        'description': 'Autoservicio y TPV: kioscos, carritos, factura electrónica, pagos (Mercado Pago, efectivo, tarjeta). Modo TPV con grilla extendida y más medios de pago.',
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'login'],
+        'optional_dependencies': [],
+        'settings': {
+            'enable_tpv_mode': True,
+            'enable_mercadopago': True,
+        },
+        'permissions': [
+            'self_checkout.ver',
+            'self_checkout.admin',
+            'self_checkout.kiosk',
+            'self_checkout.supervisor',
+        ],
+        'hooks': [],
     }
 } 

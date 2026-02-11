@@ -1,6 +1,6 @@
 # Validación BO vs Stock vs Facturación – Campos y tablas
 
-Revisión del reporte frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios VB6. **No se aplicaron cambios**; solo se listan discrepancias y validaciones sugeridas.
+Revisión del reporte frente a `CONTEXTO_TABLAS_VB6_INFORMES.md`, formularios VB6 y documentación `STOCK_VB6_PROCEDIMIENTOS_GUARDADO.md` / `STOCKP_VB6_PROCEDIMIENTOS_GUARDADO.md`. Se aplicaron ajustes de filtros (stockp.Comprobante) según la revisión con la documentación de procedimientos VB6.
 
 ---
 
@@ -32,9 +32,9 @@ Revisión del reporte frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios V
 | Campo reporte | Origen actual | Contexto | Observación |
 |---------------|---------------|----------|-------------|
 | **stock_actual** | `SUM(stock_deposito.saldo)` por `id_articulo` | stock_deposito.saldo, id_articulo | Correcto. Join `sd.id_articulo = sp.IDArt`. |
-| **stock_reservado** | `SUM(stock_deposito.saldo_pedido_cliente)` por `id_articulo` | stock_deposito.saldo_pedido_cliente | Correcto. |
+| **stock_reservado** | **CALCULADO** desde stockp+comp_ped (PED En preparación/Preparado/Parcial; **NO** Pendiente). **NO** usar stock_deposito.saldo_pedido_cliente (no fiel). | stockp, comp_ped | Correcto. |
 | **disponible** | `GREATEST(0, stock_actual - stock_reservado)` | Coincide con “disponible” en contexto | Correcto. |
-| **oc_pendiente / CON INGRESO** | `SUM(stock_deposito.saldo_pedido_proveedor)` por `id_articulo` | OC aprobadas pend. entrega; VB6 actualiza saldo_pedido_proveedor en OC/recepción | Correcto. OC pend. cubre primero faltante reservado; el resto cubre BO. CON INGRESO = parte del BO cubierta por ese OC restante (tras disponible). |
+| **oc_pendiente / CON INGRESO** | **CALCULADO** desde stockp+cuentaproveedor (OC Estado=Pendiente). **NO** usar stock_deposito.saldo_pedido_proveedor (no fiel). | stockp, cuentaproveedor | Correcto. OC pend. cubre primero faltante reservado; el resto cubre BO. CON INGRESO = parte del BO cubierta por ese OC restante (tras disponible). |
 | **Agregación por depósito** | Se agrupa solo por `id_articulo` (todos los depósitos) | stock_deposito tiene `id_deposito` | El reporte no filtra por depósito. Si en el futuro se exige “stock por depósito” para BO, habría que agregar filtro por depósito. |
 
 ---
@@ -93,15 +93,44 @@ Revisión del reporte frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios V
 ## 8. Lo que está alineado (sin cambios sugeridos)
 
 - **Backorder:** Renglones desde **stockp** + **comp_ped**; `cant_pend` = `stockp.cantidad_pendiente`; `bo_importe` = `SUM(PrecioVentaxR)` sin fallback (si es 0 es correcto).
-- **CON INGRESO:** Cantidades en OC aprobadas y pendientes de entrega (`stock_deposito.saldo_pedido_proveedor`). OC pend. cubre primero faltante de reservado; el resto cubre BO. Clasificación BO: disponible → oc_restante_bo → sin stock.
+- **CON INGRESO:** Cantidades en OC aprobadas y pendientes de entrega (**calculado** desde stockp+cuentaproveedor, no stock_deposito.saldo_pedido_proveedor). OC pend. cubre primero faltante de reservado; el resto cubre BO. Clasificación BO: disponible → oc_restante_bo → sin stock.
 - Facturación (cuentacliente, tipos de comprobante, SubtotalDesc, filtros por fecha).
 - Facturación por cliente (cliente, vendedor desde cliente, zona desde cliente).
 - Remitos no facturados (comp_ped REM, Estado Pendiente, SubtotalDesc, sucursal/PV).
-- Stock y cobertura (stock_deposito por id_articulo, saldo, saldo_pedido_cliente, disponible).
+- Stock y cobertura (stock_deposito.saldo para stock_actual; reservado y oc_pendiente **calculados** desde stockp+comp_ped y stockp+cuentaproveedor; disponible = stock − reservado).
 - Cabecera BO (comp_ped, estados, TipoComprobante PED, Anulado).
 - Maestros: articulo, rubro, subrubro, cliente, viajantes, erp_zona.
 - Joins y filtros de sucursal/PV (CodSucursal, id_pv) en comp_ped y cuentacliente.
 
 ---
 
-*Validación sin modificación de código. Antes de cambiar tablas o campos, confirmar esquema real de la base y reglas de negocio.*
+## 9. Revisión con documentación STOCK_VB6 y STOCKP_VB6
+
+Tras documentar en **STOCK_VB6_PROCEDIMIENTOS_GUARDADO.md** y **STOCKP_VB6_PROCEDIMIENTOS_GUARDADO.md** qué escribe cada formulario VB6 en `stock` y `stockp`, se verificó el informe BO y se aplicaron estos criterios:
+
+### 9.1 Tabla `stock` (movimientos) — no usada en el informe BO
+
+- El informe BO **no consulta la tabla `stock`** (movimientos de entrada/salida). Solo usa:
+  - **stock_deposito:** `SUM(saldo)` por artículo para `stock_actual`.
+  - **stockp:** renglones de PED y OC para backorder, reservado y oc_pendiente.
+- Por tanto, las reglas de **doble cuenta** (REM+FA, NCB+REM “Anul Remito”) descritas en STOCK_VB6 **no aplican al BO**: el BO no calcula saldo desde movimientos, solo usa el saldo persistido en `stock_deposito`.
+- Si en el futuro se añadiera un cálculo “saldo según movimientos” en el BO, habría que aplicar la misma lógica que en el reporte de reconciliación (salida solo REM “Remito Salida” o FA/FB/FC con `codmov_remito` nulo; entrada excluyendo REM “Anul Remito”).
+
+### 9.2 Tabla `stockp` — filtros alineados con VB6
+
+- **Backorder (PED):** En VB6 solo los **pedidos cliente** (Pedido.frm) guardan en stockp con `Comprobante = 'PED'`. Pedido_Interno guarda con `Comprobante = 'PEDI'`, Presupuesto con tipo presupuesto, OC con `Comprobante = 'OC'`. Para que el BO solo considere renglones de **pedidos cliente**, en todas las consultas que arman backorder y reservado se añadió el filtro **`(sp.Comprobante = 'PED' OR sp.Comprobante IS NULL)`** (el `OR ... IS NULL` cubre datos legacy sin el campo).
+- **OC pendiente (CON INGRESO):** Para el subconjunto de stockp que corresponde a **órdenes de compra**, se añadió **`(sp_oc.Comprobante = 'OC' OR sp_oc.Comprobante IS NULL)`** en la subconsulta de `oc_pendiente`, de modo que solo se sumen renglones de OC y no de PED/PEDI/PRE.
+- **Anulado:** Se sigue filtrando `(sp.anulado IS NULL OR sp.anulado = 'No')` en todas las lecturas de stockp, coherente con STOCKP_VB6 (anulaciones marcan `anulado = 'Si'`).
+
+### 9.3 Campos cantidad_pendiente y cantidad_entregada
+
+- Según STOCKP_VB6, **cantidad_pendiente** en PED se actualiza al emitir Remito y al anular REM (ConsultaComprobante). Si por error no se encuentra la fila en stockp en esos flujos, el campo puede quedar desactualizado.
+- En el BO se usa el fallback **`COALESCE(sp.cantidad_pendiente, sp.Cantidad - COALESCE(sp.cantidad_entregada, 0))`** para reservado y oc_pendiente, de modo que incluso con `cantidad_pendiente` null o desactualizado se obtenga una cantidad coherente para cálculo de cobertura.
+
+### 9.4 stock_deposito.saldo
+
+- El BO usa **stock_deposito.saldo** como “stock actual”. Según STOCK_VB6 y STOCKP_VB6, ese saldo es el que persiste VB6; en casos edge (REM sin fila en stock_deposito, servicio con CodDeposito=0, etc.) puede haber diferencias frente a un “saldo según movimientos”. El reporte de **validación saldo stock** compara justamente `SUM(stock_deposito.saldo)` con el saldo según movimientos en `stock`; el BO no replica ese cálculo, solo usa el saldo persistido.
+
+---
+
+*Validación actualizada con documentación STOCK_VB6 y STOCKP_VB6. Antes de cambiar tablas o campos, confirmar esquema real de la base y reglas de negocio.*

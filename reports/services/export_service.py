@@ -397,6 +397,9 @@ class ExportService:
             if data and isinstance(data[0], dict):
                 all_keys = list(data[0].keys())
                 headers = [k for k in all_keys if not isinstance(data[0].get(k), (list, dict))]
+                # Backorder detalle: no exportar cantidad, estado, id_cliente (alineado con la UI)
+                if sheet_key == "backorder_detalle_rows":
+                    headers = [h for h in headers if h not in ("cantidad", "estado", "id_cliente")]
             elif sheet_key == "resumen":
                 headers = ["concepto", "importe", "tipo"]
                 if not data:

@@ -1,0 +1,227 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{% if config %}Editar configuración AFIP{% else %}Configurar Facturación Electrónica AFIP{% endif %} · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-8">
+      <a href="{% url 'fe_afip:config_list' %}" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">← Volver a configuración AFIP</a>
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mt-2">
+        {% if config %}Editar {{ config.name }}{% else %}Configurar Facturación Electrónica AFIP{% endif %}
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+        <strong class="text-slate-700 dark:text-slate-200">Homologación</strong> = entornos de prueba AFIP (todas las pruebas).<br>
+        <strong class="text-slate-700 dark:text-slate-200">Producción</strong> = ambiente real (solo cuando esté validado).
+      </p>
+    </header>
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 md:p-8" x-data="feAfipBrowser()">
+      <form method="post" class="space-y-6">
+        {% csrf_token %}
+        {% if messages %}
+        <div class="space-y-2">
+          {% for message in messages %}
+          <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+            {{ message }}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div>
+          <label for="name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
+          <input type="text" name="name" id="name" maxlength="64"
+                 value="{% if name %}{{ name }}{% elif config %}{{ config.name }}{% else %}Default{% endif %}"
+                 placeholder="ej: Config principal"
+                 class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Etiqueta para identificar esta configuración.</p>
+        </div>
+
+        {% if mysql_connection_error %}
+        <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
+          <p class="text-sm font-medium text-red-800 dark:text-red-200">Error de conexión a MySQL (administraNET)</p>
+          <p class="text-sm text-red-700 dark:text-red-300 mt-1 font-mono break-all">{{ mysql_connection_error }}</p>
+          <p class="text-sm text-red-600 dark:text-red-400 mt-2">Revisá en el servidor: <strong>DB_HOST</strong>, <strong>DB_PORT</strong>, <strong>DB_USER</strong> y <strong>DB_PASSWORD</strong> en el archivo <code class="text-xs">.env</code>. La base de datos de la empresa (<code class="text-xs">{{ base_empresa }}</code>) debe existir en el servidor MySQL.</p>
+        </div>
+        {% elif cuit_no_disponible %}
+        <div class="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+          <p class="text-sm font-medium text-amber-800 dark:text-amber-200">CUIT no disponible</p>
+          <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">El CUIT de la empresa debe estar configurado en <strong>administraNET</strong> (Datos de empresa / DatosEmpresa) para poder guardar. Configurá el CUIT allí y volvé a esta pantalla.</p>
+        </div>
+        {% else %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre de la empresa</label>
+          <input type="text" value="{{ nombre_empresa|default:base_empresa }}" readonly
+                 class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/70 px-4 py-2.5 text-slate-700 dark:text-slate-300 cursor-not-allowed">
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Obtenido de administraNET (DatosEmpresa). No editable.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">CUIT contribuyente (11 dígitos)</label>
+          <input type="text" value="{{ cuit_formateado }}" readonly
+                 class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800/70 px-4 py-2.5 text-slate-700 dark:text-slate-300 font-mono cursor-not-allowed">
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Obtenido de administraNET (DatosEmpresa). Al guardar se valida que el certificado corresponda a este CUIT.</p>
+        </div>
+        {% endif %}
+
+        <div>
+          <label for="cert_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta certificado <span class="text-red-500">*</span></label>
+          <div class="flex gap-2 mt-1">
+            <input type="text" name="cert_path" id="cert_path" maxlength="512"
+                   value="{% if cert_path %}{{ cert_path }}{% elif config %}{{ config.cert_path }}{% endif %}"
+                   placeholder="/ruta/al/certificado.crt"
+                   class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm">
+            <button type="button" class="rounded-xl px-4 py-2.5 text-sm font-medium text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
+                    x-on:click="openBrowser('cert_path', 'file')">Examinar</button>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ruta absoluta al archivo .crt o .pem del certificado AFIP en el servidor.</p>
+        </div>
+
+        <div>
+          <label for="key_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta clave privada <span class="text-red-500">*</span></label>
+          <div class="flex gap-2 mt-1">
+            <input type="text" name="key_path" id="key_path" maxlength="512"
+                   value="{% if key_path %}{{ key_path }}{% elif config %}{{ config.key_path }}{% endif %}"
+                   placeholder="/ruta/a/clave.key"
+                   class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm">
+            <button type="button" class="rounded-xl px-4 py-2.5 text-sm font-medium text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
+                    x-on:click="openBrowser('key_path', 'file')">Examinar</button>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ruta absoluta al archivo .key o .pem de la clave privada en el servidor.</p>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="modo_homologacion" value="on" {% if modo_homologacion == False %}{% elif modo_homologacion == True %}checked{% elif config %}{% if config.modo_homologacion %}checked{% endif %}{% else %}checked{% endif %}
+                   class="rounded border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Modo Homologación</span>
+          </label>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Activado: usa entornos de prueba AFIP (wsaahomo, wswhomo) para todas las pruebas. Desactivado: Producción (ambiente real; solo cuando esté validado).</p>
+        </div>
+
+        <div>
+          <label for="cache_dir" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Directorio caché</label>
+          <div class="flex gap-2 mt-1">
+            <input type="text" name="cache_dir" id="cache_dir" maxlength="512"
+                   value="{% if cache_dir %}{{ cache_dir }}{% elif config %}{{ config.cache_dir }}{% else %}/tmp/pyafipws_cache{% endif %}"
+                   placeholder="/tmp/pyafipws_cache"
+                   class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm">
+            <button type="button" class="rounded-xl px-4 py-2.5 text-sm font-medium text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
+                    x-on:click="openBrowser('cache_dir', 'dir')">Examinar</button>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Directorio para caché de tickets WSAA (opcional).</p>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 transition-colors" {% if cuit_no_disponible %}disabled{% endif %}>
+            {% if config %}Guardar cambios{% else %}Crear configuración{% endif %}
+          </button>
+          <a href="{% url 'fe_afip:config_list' %}" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+            Cancelar
+          </a>
+        </div>
+      </form>
+
+      <!-- Modal explorador de archivos/directorios -->
+      <div class="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="showBrowser" x-cloak x-transition>
+        <div class="w-full max-w-lg max-h-[80vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="browserMode === 'file' ? 'Seleccionar archivo' : 'Seleccionar directorio'"></h3>
+            <button type="button" class="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500" x-on:click="showBrowser = false">✕</button>
+          </div>
+          <p class="px-4 py-1.5 text-xs font-mono text-slate-500 dark:text-slate-400 truncate" x-text="currentPath || '/'"></p>
+          <div class="px-4 py-2 border-t border-slate-100 dark:border-slate-800" x-show="browserMode === 'dir'">
+            <button type="button" class="w-full rounded-xl py-2 text-sm font-medium text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 hover:bg-sky-100 dark:hover:bg-sky-900/50 focus:ring-2 focus:ring-sky-500 transition-colors"
+                    x-on:click="selectPath(currentPath)">Seleccionar este directorio</button>
+          </div>
+          <div class="flex-1 overflow-y-auto px-4 py-2 min-h-[200px]">
+            <p class="text-sm text-slate-500 dark:text-slate-400" x-show="loading">Cargando…</p>
+            <p class="text-sm text-red-600 dark:text-red-400" x-show="browserError" x-text="browserError"></p>
+            <ul class="space-y-0.5" x-show="!loading && !browserError && entries.length">
+              <template x-for="entry in entries" :key="entry.path">
+                <li>
+                  <button type="button" class="w-full text-left rounded-lg px-3 py-2 text-sm font-mono flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
+                          x-on:click="entry.is_dir ? (browserMode === 'dir' ? selectPath(entry.path) : navigate(entry.path)) : selectPath(entry.path)">
+                    <span x-text="entry.is_dir ? '📁' : '📄'"></span>
+                    <span x-text="entry.name"></span>
+                  </button>
+                </li>
+              </template>
+            </ul>
+            <p class="text-sm text-slate-500 dark:text-slate-400" x-show="!loading && !browserError && entries.length === 0">Directorio vacío o sin permisos.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('alpine:init', function() {
+  Alpine.data('feAfipBrowser', function() {
+    const browseUrl = '{% url "fe_afip:browse_path" %}';
+    return {
+      showBrowser: false,
+      browserMode: 'file',
+      targetInputId: null,
+      currentPath: '/',
+      entries: [],
+      loading: false,
+      browserError: '',
+      openBrowser(inputId, mode) {
+        this.targetInputId = inputId;
+        this.browserMode = mode;
+        this.browserError = '';
+        const input = document.getElementById(inputId);
+        const val = (input && input.value) ? input.value.trim() : '';
+        if (mode === 'dir') {
+          this.currentPath = val || '/tmp';
+        } else {
+          if (val) {
+            const parts = val.replace(/\\/g, '/').split('/').filter(Boolean);
+            this.currentPath = parts.length > 1 ? '/' + parts.slice(0, -1).join('/') : '/';
+          } else {
+            this.currentPath = '/';
+          }
+        }
+        this.showBrowser = true;
+        this.$nextTick(() => this.loadEntries());
+      },
+      loadEntries() {
+        if (!this.showBrowser) return;
+        this.loading = true;
+        this.browserError = '';
+        fetch(browseUrl + '?path=' + encodeURIComponent(this.currentPath || '/'))
+          .then(r => r.json())
+          .then(data => {
+            this.loading = false;
+            if (data.ok) {
+              this.currentPath = data.current_path || '/';
+              this.entries = data.entries || [];
+            } else {
+              this.browserError = data.error || 'Error al listar';
+            }
+          })
+          .catch(() => {
+            this.loading = false;
+            this.browserError = 'Error de conexión';
+          });
+      },
+      navigate(path) {
+        this.currentPath = path;
+        this.loadEntries();
+      },
+      selectPath(path) {
+        const input = document.getElementById(this.targetInputId);
+        if (input) {
+          input.value = path || '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        this.showBrowser = false;
+      }
+    };
+  });
+});
+</script>
+{% endblock %}

@@ -6351,14 +6351,18 @@ if (dashboardRoot) {
     }
     
     try {
+      // Cargar filtros guardados ANTES de cargar las opciones
+      const savedFilters = loadFilters();
+
+      // BO es reporte consolidado: no cargar punto de venta ni sucursales
+      const isBoReport = reportSlug === "bo-stock-facturacion";
+      if (!isBoReport) {
       // Cargar puntos de venta
       const pvResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=puntos_venta`, {
         headers: {
           "X-Requested-With": "XMLHttpRequest",
         },
       });
-      // Cargar filtros guardados ANTES de cargar las opciones
-      const savedFilters = loadFilters();
       
       if (pvResponse.ok) {
         const pvData = await pvResponse.json();
@@ -6409,9 +6413,10 @@ if (dashboardRoot) {
           initializeTagsFilter("sucursales", "sucursales");
         }
       }
+      }
       
-      // Cargar clientes para "Clientes a excluir" (se muestra en Ventas Netas, Remitos no facturados, Total Consolidado)
-      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo";
+      // Cargar clientes para "Clientes a excluir" (Ventas Netas, Remitos, Total Consolidado, BO Stock Facturación)
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion";
       if (reportShowsClientesExcluir) {
         const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
           headers: {
@@ -6435,6 +6440,34 @@ if (dashboardRoot) {
               clientesSelect.appendChild(option);
             });
             initializeTagsFilter("clientes_excluidos", "clientes");
+          }
+        }
+      }
+
+      // Cargar depósitos para "Depósitos a excluir" (solo BO Stock Facturación)
+      if (reportSlug === "bo-stock-facturacion") {
+        const depositosResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=depositos`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        if (depositosResponse.ok) {
+          const depositosData = await depositosResponse.json();
+          const depositosSelect = document.getElementById("depositos_excluidos");
+          if (depositosSelect) {
+            depositosSelect.innerHTML = "";
+            (depositosData.depositos || []).forEach((dep) => {
+              const option = document.createElement("option");
+              option.value = dep.value;
+              option.textContent = dep.label;
+              if (savedFilters && savedFilters.depositos_excluidos && Array.isArray(savedFilters.depositos_excluidos)) {
+                if (savedFilters.depositos_excluidos.includes(String(dep.value))) {
+                  option.selected = true;
+                }
+              }
+              depositosSelect.appendChild(option);
+            });
+            initializeTagsFilter("depositos_excluidos", "depositos");
           }
         }
       }
@@ -7310,8 +7343,8 @@ if (dashboardRoot) {
         }
       }
 
-      // Clientes a excluir (NOT IN) - Ventas Netas, Total Consolidado Operativo, Remitos no facturados
-      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos") && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
+      // Clientes a excluir (NOT IN) - Ventas Netas, Total Consolidado, Remitos, BO Stock Facturación
+      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos" || reportSlug === "bo-stock-facturacion") && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
         const clientesSelect = document.getElementById("clientes_excluidos");
         if (clientesSelect) {
           filters.clientes_excluidos.forEach((value) => {
@@ -7324,6 +7357,24 @@ if (dashboardRoot) {
           });
           setTimeout(() => {
             clientesSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+
+      // Depósitos a excluir (solo BO Stock Facturación)
+      if (reportSlug === "bo-stock-facturacion" && filters.depositos_excluidos && Array.isArray(filters.depositos_excluidos)) {
+        const depositosSelect = document.getElementById("depositos_excluidos");
+        if (depositosSelect) {
+          filters.depositos_excluidos.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = depositosSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            depositosSelect.dispatchEvent(new Event("change", { bubbles: true }));
           }, 150);
         }
       }
@@ -7477,6 +7528,8 @@ if (dashboardRoot) {
       const fechaFin = document.getElementById("fecha_fin")?.value;
       const puntoVentaSelect = document.getElementById("punto_venta");
       const sucursalesSelect = document.getElementById("sucursales");
+      const depositosExcluidosSelect = document.getElementById("depositos_excluidos");
+      const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
@@ -7487,6 +7540,14 @@ if (dashboardRoot) {
       if (sucursalesSelect) {
         const selectedSucursales = Array.from(sucursalesSelect.selectedOptions).map((opt) => opt.value).filter((v) => v);
         if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
+      }
+      if (depositosExcluidosSelect) {
+        const selectedDepositos = Array.from(depositosExcluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
+        filters.depositos_excluidos = selectedDepositos;
+      }
+      if (clientesExcluidosSelect) {
+        const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
+        filters.clientes_excluidos = selectedClientes;
       }
     } else if (currentReportSlug === "cash_flow_waterfall" || currentReportSlug === "cash_flow_by_account") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
@@ -7898,6 +7959,16 @@ if (dashboardRoot) {
             }
             if (sucursalesSelect && sucursalesSelect.value) {
               filters.sucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value);
+            }
+            if (reportSlug === 'bo-stock-facturacion') {
+              const depositosExcluidosSelect = filtersContainer.querySelector('select[name="depositos_excluidos"]');
+              const clientesExcluidosSelect = filtersContainer.querySelector('select[name="clientes_excluidos"]');
+              if (depositosExcluidosSelect && depositosExcluidosSelect.selectedOptions.length) {
+                filters.depositos_excluidos = Array.from(depositosExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+              }
+              if (clientesExcluidosSelect && clientesExcluidosSelect.selectedOptions.length) {
+                filters.clientes_excluidos = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+              }
             }
           }
         }

@@ -244,6 +244,13 @@ class ModuleConfig(models.Model):
                 {'label': 'Order Mappings', 'url': '/tiendanube_administranet/order-mappings/'},
                 {'label': 'Sync History', 'url': '/tiendanube_administranet/sync-history/'},
             ]
+        elif self.name == 'self_checkout':
+            return [
+                {'label': 'Selector de kiosco', 'url': '/self_checkout/'},
+                {'label': 'Configuración autoservicios', 'url': '/self_checkout/config/'},
+                {'label': 'Carritos pendientes', 'url': '/self_checkout/config/carritos-pendientes/'},
+                {'label': 'Talonarios', 'url': '/self_checkout/talonarios/'},
+            ]
         # Por defecto, un solo item principal
         return [{
             'label': self.display_name,

@@ -2,6 +2,9 @@ services:
   app:
     build: .
     container_name: Synap_app
+    networks:
+      - default
+      - synap_net
     ports:
       - "8000:8000"
     volumes:
@@ -62,3 +65,9 @@ volumes:
   static_volume:
   # media_volume: Eliminado - usar bind mount (.:/app) para media/
   # qdrant_data: Eliminado (no necesario)
+
+networks:
+  # Red compartida con MySQL local (docker-compose.mysql.yml) para desarrollo.
+  # En producción no se levanta MySQL local; DB_HOST apunta al servidor productivo.
+  synap_net:
+    name: synap_net

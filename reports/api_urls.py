@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .api_views import (
+    ReconciliacionMovimientoDetalleAPIView,
     ReportCatalogAPIView,
     ReportQueryAPIView,
     KPIAPIView,
@@ -35,6 +36,7 @@ from .api_views import (
 app_name = "reports-api"
 
 urlpatterns = [
+    path("reconciliacion-movimiento-detalle/", ReconciliacionMovimientoDetalleAPIView.as_view(), name="reports-reconciliacion-movimiento-detalle"),
     path("catalog/", ReportCatalogAPIView.as_view(), name="reports-catalog"),
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),
     path("kpi/", KPIAPIView.as_view(), name="reports-kpi"),

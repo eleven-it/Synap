@@ -1,0 +1,77 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Modificar talonario {{ tipo_comprobante }} · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-10">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold">Self-Checkout</p>
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+        Modificar numeración · PV {{ id_punto_venta }} · {{ tipo_comprobante }}
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+        Actualizar Nro actual, inicial, final, CAI y fecha (como CargaTalonarios en administraNET).
+      </p>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-8">
+      <form method="post" action="">
+        {% csrf_token %}
+        <div class="space-y-4">
+          <div>
+            <label for="Nro" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro actual</label>
+            <input type="number" name="Nro" id="Nro" value="{{ talon.Nro }}" min="0" required
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="NroInic" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro inicial</label>
+            <input type="number" name="NroInic" id="NroInic" value="{{ talon.NroInic }}" min="0"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="NroFinal" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro final</label>
+            <input type="number" name="NroFinal" id="NroFinal" value="{{ talon.NroFinal }}" min="0"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="NroCAI" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro CAI</label>
+            <input type="text" name="NroCAI" id="NroCAI" value="{{ talon.NroCAI|default:'' }}" maxlength="20"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 font-mono">
+          </div>
+          <div>
+            <label for="FechaCAI" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fecha CAI</label>
+            <input type="date" name="FechaCAI" id="FechaCAI" value="{{ talon.FechaCAI|date:'Y-m-d'|default:'' }}"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+          <div>
+            <label for="Nro_Credito" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nro actual crédito</label>
+            <input type="number" name="Nro_Credito" id="Nro_Credito" value="{{ talon.Nro_Credito }}" min="0"
+                   class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+          </div>
+        </div>
+        <div class="mt-8 flex gap-3">
+          <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 focus:ring-2 focus:ring-sky-500">
+            Guardar
+          </button>
+          <a href="{% url 'self_checkout:talonarios_list' %}?id_punto_venta={{ id_punto_venta }}"
+             class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

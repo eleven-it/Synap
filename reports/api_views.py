@@ -679,11 +679,34 @@ class ReportFiltersAPIView(APIView):
                 conn.close()
                 return Response({"clientes": results})
             
+            elif filter_type == "depositos":
+                # Depósitos para filtro "excluir" en BO (stock disponible)
+                cursor.execute("""
+                    SELECT CodDeposito, NombreDeposito
+                    FROM deposito
+                    WHERE (anulado IS NULL OR anulado = 'No')
+                    ORDER BY NombreDeposito
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    cod = row_dict.get("CodDeposito")
+                    nombre = (row_dict.get("NombreDeposito") or "").strip() or f"Depósito {cod}"
+                    results.append({
+                        "id": cod,
+                        "label": nombre,
+                        "value": cod,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"depositos": results})
+            
             else:
                 cursor.close()
                 conn.close()
                 return Response(
-                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas' o 'clientes'."},
+                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas', 'clientes' o 'depositos'."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 
@@ -3755,4 +3778,62 @@ class ReferenceValuesAPIView(APIView):
                 {"detail": f"Error al obtener valores de referencia: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class ReconciliacionMovimientoDetalleAPIView(APIView):
+    """
+    API para obtener el detalle de movimientos (OC, Rem, FactOC, Anul) por artículo.
+    Usado en validación OC pendiente para mostrar nro_comprobante, fecha, cantidad al hacer clic en un chip.
+    """
+    permission_classes = [OperationalReportsPermission | ManagerialReportsPermission]
+
+    def get(self, request, *args, **kwargs):
+        id_art = request.query_params.get("id_art")
+        tipo = request.query_params.get("tipo", "").lower()
+        fecha_desde = request.query_params.get("fecha_desde") or None
+        fecha_hasta = request.query_params.get("fecha_hasta") or None
+
+        if not id_art:
+            return Response(
+                {"detail": "El parámetro 'id_art' es requerido"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            id_art = int(id_art)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "id_art debe ser un número entero"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if tipo not in ("oc", "rem", "factoc", "anul"):
+            return Response(
+                {"detail": "El parámetro 'tipo' debe ser: oc, rem, factoc o anul"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        base_empresa = None
+        if hasattr(request, "session") and request.session:
+            session_user = request.session.get("user", {})
+            if session_user and "base_empresa" in session_user:
+                base_empresa = session_user["base_empresa"]
+        if not base_empresa and hasattr(request.user, "base_empresa"):
+            base_empresa = request.user.base_empresa
+
+        if not base_empresa:
+            return Response(
+                {"detail": "No se pudo determinar la base de datos de la empresa."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .services.reconciliation_saldo_pedido_proveedor import get_movimiento_detalle
+
+        items = get_movimiento_detalle(
+            base_empresa=base_empresa,
+            id_art=id_art,
+            tipo=tipo,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
+        return Response({"items": items, "tipo": tipo, "id_art": id_art})
 

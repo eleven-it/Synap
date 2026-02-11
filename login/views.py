@@ -98,19 +98,24 @@ def login_view(request):
     empresas = auth_service.get_empresas()
     servidores = auth_service.get_servidores()
     
-    # Servidor por defecto (del .env)
-    server_default = servidores[0] if servidores else {
-        'host': settings.DATABASES['mysql']['HOST'],
-        'port': settings.DATABASES['mysql']['PORT'],
-        'descripcion': 'Servidor principal'
+    # Servidor por defecto: siempre desde DB_HOST/DB_PORT del .env (settings)
+    mysql_config = settings.DATABASES['mysql']
+    db_host = mysql_config.get('HOST', '')
+    db_port = str(mysql_config.get('PORT', '3306'))
+    server_default = {
+        'host': db_host,
+        'port': db_port,
+        'descripcion': f'Servidor {db_host}'
     }
     
-    logger.info(f"📋 Mostrando login con {len(empresas)} empresas disponibles")
+    logger.info(f"📋 Mostrando login con {len(empresas)} empresas disponibles (servidor={db_host})")
     
     return render(request, "login/login_administranet.html", {
         'empresas': empresas,
         'servidores': servidores,
-        'server_default': server_default
+        'server_default': server_default,
+        'db_host': db_host,
+        'db_port': db_port,
     })
 
 

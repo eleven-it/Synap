@@ -657,6 +657,26 @@ APPS_MENU = [
         ]
     },
     {
+        "id": "self_checkout",
+        "nombre": _("Self-Checkout / TPV"),
+        "permiso": "self_checkout.ver",
+        "url": "self_checkout:index",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'/></svg>""",
+        "orden": 7,
+        "color": "purple",
+        "submenus": [
+            {
+                "seccion": _("Autoservicio / TPV"),
+                "items": [
+                    {"label": _("Selector de kiosco"), "url": "self_checkout:index", "icon": "storefront", "permission": "self_checkout.ver"},
+                    {"label": _("Configuración autoservicios"), "url": "self_checkout:config_list", "icon": "settings", "permission": "self_checkout.admin"},
+                    {"label": _("Carritos pendientes"), "url": "self_checkout:carritos_pendientes", "icon": "shopping_cart", "permission": "self_checkout.ver"},
+                    {"label": _("Talonarios"), "url": "self_checkout:talonarios_list", "icon": "receipt", "permission": "self_checkout.admin"}
+                ]
+            }
+        ]
+    },
+    {
         "id": "module_management",
         "nombre": _("Module Management"),
         "permiso": "core.change_moduleconfig",
@@ -689,6 +709,17 @@ APPS_MENU = [
                         "label": _("Workspace"),
                         "url": "reports:workspace",
                         "icon": "dashboard_customize",
+                        "permission": "reports.ver"
+                    }
+                ]
+            },
+            {
+                "seccion": _("Análisis"),
+                "items": [
+                    {
+                        "label": _("Análisis Saldo de Stock"),
+                        "url": "reports:validacion_saldo_stock",
+                        "icon": "inventory",
                         "permission": "reports.ver"
                     }
                 ]
