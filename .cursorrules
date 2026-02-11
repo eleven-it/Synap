@@ -1,0 +1,5 @@
+# Regla de proyecto Synap
+
+- **Plan de referencia:** Todo el desarrollo relacionado con shell, sesión, login, TPV, caja, reportes y migración desde Principal.frm (VB6) debe ajustarse al plan oficial del repositorio: **docs/PLAN_PRINCIPAL_FODA_BRECHAS_SYNAP.md** (y al flujo de ramas en **docs/FLUJO_RAMAS_Y_PLAN.md**).
+- Consultar ese plan antes de proponer o implementar cambios en: context_processors, logout, session store, barra de estado, fecha servidor, auth-cashier, cierre de caja, base_empresa, permisos y seguridad (cookies, ENVIRONMENT=production).
+- Las medidas de seguridad descritas en el plan deben activarse cuando **ENVIRONMENT=production** (o produccion).

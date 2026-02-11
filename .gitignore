@@ -50,6 +50,8 @@ ultimo_usuario_creado.txt
     !README_REPORTS.md
     !README.md
     !README_INSTALLATION.md
+    !docs/FLUJO_RAMAS_Y_PLAN.md
+    !docs/PLAN_PRINCIPAL_FODA_BRECHAS_SYNAP.md
 
 # Scripts de fix y test
 misc/fix/
