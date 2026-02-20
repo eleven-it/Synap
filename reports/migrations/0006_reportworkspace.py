@@ -8,8 +8,10 @@ import django.utils.timezone
 def create_reportworkspace_table(apps, schema_editor):
     """Crea la tabla ReportWorkspace si no existe."""
     from django.db import connection
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user_table = User._meta.db_table  # AUTH_USER_MODEL (core_usuarioextendido), no auth_user
     cursor = connection.cursor()
-    
     try:
         # Verificar si la tabla existe
         cursor.execute("""
@@ -25,8 +27,8 @@ def create_reportworkspace_table(apps, schema_editor):
             print("⚠️  Tabla reports_reportworkspace ya existe, saltando creación")
             return
         
-        # Crear la tabla usando SQL directo
-        cursor.execute("""
+        # Crear la tabla usando SQL directo (FK a la tabla real de AUTH_USER_MODEL, no auth_user)
+        cursor.execute(f"""
             CREATE TABLE reports_reportworkspace (
                 id BIGSERIAL NOT NULL PRIMARY KEY,
                 name VARCHAR(128) NOT NULL DEFAULT 'Workspace',
@@ -38,7 +40,7 @@ def create_reportworkspace_table(apps, schema_editor):
                 CONSTRAINT reports_reportworkspace_empresa_id_fkey 
                     FOREIGN KEY (empresa_id) REFERENCES core_empresa(id) ON DELETE CASCADE,
                 CONSTRAINT reports_reportworkspace_owner_id_fkey 
-                    FOREIGN KEY (owner_id) REFERENCES auth_user(id) ON DELETE CASCADE,
+                    FOREIGN KEY (owner_id) REFERENCES {user_table}(id) ON DELETE CASCADE,
                 CONSTRAINT reports_reportworkspace_owner_id_empresa_id_uniq 
                     UNIQUE (owner_id, empresa_id)
             );
