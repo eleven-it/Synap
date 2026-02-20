@@ -198,7 +198,7 @@ class AdministraNETUserService:
             conn = self._get_connection(base_empresa)
             cursor = conn.cursor()
             
-            # Query mejorado con manejo de NULLs y verificación de anulado
+            # Query alineado con CargaUsuario.frm: incluye pv, pvc, tipo_busq y cajas de cobranza/rendición
             cursor.execute("""
                 SELECT 
                     usuarios.id_usuario,
@@ -211,6 +211,15 @@ class AdministraNETUserService:
                     usuarios.id_punto_venta,
                     usuarios.id_deposito,
                     usuarios.id_caja,
+                    usuarios.pv,
+                    usuarios.pvc,
+                    usuarios.tipo_busq,
+                    usuarios.id_caja_cheque,
+                    usuarios.id_caja_tarjeta,
+                    usuarios.id_punto_ventac,
+                    usuarios.id_caja_cheque_deposito,
+                    usuarios.id_caja_deposito,
+                    usuarios.id_caja_tarjeta_deposito,
                     usuarios.baja_usuario,
                     usuarios.tipo_busqueda_defecto,
                     usuarios.permiso_supervisor_venta,
@@ -230,12 +239,14 @@ class AdministraNETUserService:
                     usuarios.fuente_tamano,
                     COALESCE(NULLIF(puestos.puesto, ''), '') AS nombre_puesto,
                     COALESCE(NULLIF(sucursales.nombre_sucursal, ''), '') AS nombre_sucursal,
+                    COALESCE(NULLIF(viajantes.Nombre, ''), '') AS nombre_viajante,
                     COALESCE(NULLIF(datosempresa.Nombre, ''), '') AS nombre_empresa
                 FROM usuarios
-                LEFT JOIN puestos ON puestos.idpuesto = usuarios.id_puesto 
+                LEFT JOIN puestos ON puestos.idpuesto = usuarios.id_puesto
                     AND (puestos.anulado IS NULL OR puestos.anulado <> 'Si')
-                LEFT JOIN sucursales ON sucursales.id_sucursal = usuarios.id_sucursal 
+                LEFT JOIN sucursales ON sucursales.id_sucursal = usuarios.id_sucursal
                     AND (sucursales.anulado IS NULL OR sucursales.anulado <> 'Si')
+                LEFT JOIN viajantes ON viajantes.CodViajante = usuarios.CodViajante
                 LEFT JOIN datosempresa ON datosempresa.id_empresa = usuarios.id_empresa
                 WHERE usuarios.id_usuario = %s
             """, [id_usuario])
@@ -243,18 +254,6 @@ class AdministraNETUserService:
             row = cursor.fetchone()
             
             if row:
-                # Log detallado para debug
-                logger.info(f"=== DEBUG obtener_usuario ===")
-                logger.info(f"Total columnas: {len(row)}")
-                logger.info(f"Row completo: {row}")
-                logger.info(f"nombre_empresa (índice 29): {row[29] if len(row) > 29 else 'N/A'}")
-                logger.info(f"nombre_sucursal (índice 28): {row[28] if len(row) > 28 else 'N/A'}")
-                logger.info(f"nombre_puesto (índice 27): {row[27] if len(row) > 27 else 'N/A'}")
-                logger.info(f"baja_usuario (índice 10): {row[10] if len(row) > 10 else 'N/A'}")
-                logger.info(f"id_empresa (índice 6): {row[6] if len(row) > 6 else 'N/A'}")
-                logger.info(f"id_sucursal (índice 5): {row[5] if len(row) > 5 else 'N/A'}")
-                logger.info(f"id_puesto (índice 4): {row[4] if len(row) > 4 else 'N/A'}")
-                
                 usuario_dict = {
                     'id_usuario': row[0],
                     'cod_usuario': row[1] or '',
@@ -266,30 +265,37 @@ class AdministraNETUserService:
                     'id_punto_venta': row[7],
                     'id_deposito': row[8],
                     'id_caja': row[9],
-                    'baja_usuario': row[10] if row[10] else 'No',
-                    'tipo_busqueda_defecto': row[11],
-                    'permiso_supervisor_venta': row[12] or 'No',
-                    'vendedor_web': row[13] or 'No',
-                    'zoom_reportes': row[14],
-                    'color_formulario': row[15] or '',
-                    'tipo_boton': row[16] or '',
-                    'CodViajante': row[17],
-                    'resol_principal': row[18] or '',
-                    'entrega_defecto': row[19] or '',
-                    'utiliza_reporte_local': row[20] or 'No',
-                    'utiliza_certificado_local': row[21] or 'No',
-                    'ruta_reporte_local': row[22] or '',
-                    'ruta_certificado_local': row[23] or '',
-                    'carpeta_documentos': row[24] or '',
-                    'fuente_nombre': row[25] or '',
-                    'fuente_tamano': row[26],
-                    'nombre_puesto': (row[27] or '').strip() if row[27] else '',
-                    'nombre_sucursal': (row[28] or '').strip() if row[28] else '',
-                    'nombre_empresa': (row[29] or '').strip() if row[29] else '',
+                    'pv': row[10],
+                    'pvc': row[11],
+                    'tipo_busq': (row[12] or '').strip() if row[12] else '',
+                    'id_caja_cheque': row[13],
+                    'id_caja_tarjeta': row[14],
+                    'id_punto_ventac': row[15],
+                    'id_caja_cheque_deposito': row[16],
+                    'id_caja_deposito': row[17],
+                    'id_caja_tarjeta_deposito': row[18],
+                    'baja_usuario': row[19] if row[19] else 'No',
+                    'tipo_busqueda_defecto': row[20],
+                    'permiso_supervisor_venta': row[21] or 'No',
+                    'vendedor_web': row[22] or 'No',
+                    'zoom_reportes': row[23],
+                    'color_formulario': row[24] or '',
+                    'tipo_boton': row[25] or '',
+                    'CodViajante': row[26],
+                    'resol_principal': row[27] or '',
+                    'entrega_defecto': row[28] or '',
+                    'utiliza_reporte_local': row[29] or 'No',
+                    'utiliza_certificado_local': row[30] or 'No',
+                    'ruta_reporte_local': row[31] or '',
+                    'ruta_certificado_local': row[32] or '',
+                    'carpeta_documentos': row[33] or '',
+                    'fuente_nombre': row[34] or '',
+                    'fuente_tamano': row[35],
+                    'nombre_puesto': (row[36] or '').strip() if row[36] else '',
+                    'nombre_sucursal': (row[37] or '').strip() if row[37] else '',
+                    'nombre_viajante': (row[38] or '').strip() if row[38] else '',
+                    'nombre_empresa': (row[39] or '').strip() if row[39] else '',
                 }
-                
-                logger.info(f"Usuario dict creado: nombre_empresa='{usuario_dict['nombre_empresa']}', nombre_sucursal='{usuario_dict['nombre_sucursal']}', nombre_puesto='{usuario_dict['nombre_puesto']}'")
-                
                 cursor.close()
                 conn.close()
                 return usuario_dict
@@ -329,10 +335,27 @@ class AdministraNETUserService:
             # Asegurar que id_empresa esté en los datos
             datos_usuario['id_empresa'] = id_empresa
             
+            # id_sucursal es NOT NULL en tabla usuarios (paridad CargaUsuario.frm): si no viene, usar primera sucursal activa
+            id_sucursal = datos_usuario.get('id_sucursal')
+            if id_sucursal is None:
+                cursor.execute("""
+                    SELECT id_sucursal FROM sucursales
+                    WHERE (anulado IS NULL OR anulado <> 'Si')
+                    ORDER BY id_sucursal LIMIT 1
+                """)
+                row_suc = cursor.fetchone()
+                id_sucursal = row_suc[0] if row_suc else None
+                datos_usuario['id_sucursal'] = id_sucursal
+            if id_sucursal is None:
+                logger.error("No hay sucursales activas en la base; no se puede crear usuario sin id_sucursal.")
+                cursor.close()
+                conn.close()
+                return None
+            
             # Encriptar contraseña con AES_ENCRYPT (igual que administraNET Gestión)
             password = datos_usuario.get('password', '')
             
-            # Insertar usuario
+            # Insertar usuario (columnas alineadas con CargaUsuario.frm)
             cursor.execute("""
                 INSERT INTO usuarios (
                     id_usuario,
@@ -346,6 +369,15 @@ class AdministraNETUserService:
                     id_punto_venta,
                     id_deposito,
                     id_caja,
+                    pv,
+                    pvc,
+                    tipo_busq,
+                    id_caja_cheque,
+                    id_caja_tarjeta,
+                    id_punto_ventac,
+                    id_caja_cheque_deposito,
+                    id_caja_deposito,
+                    id_caja_tarjeta_deposito,
                     baja_usuario,
                     tipo_busqueda_defecto,
                     permiso_supervisor_venta,
@@ -365,7 +397,8 @@ class AdministraNETUserService:
                     fuente_tamano
                 ) VALUES (
                     %s, %s, AES_ENCRYPT(%s, %s), %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
             """, [
                 nuevo_id,
@@ -375,11 +408,20 @@ class AdministraNETUserService:
                 datos_usuario.get('nombre_usuario', '').strip(),
                 datos_usuario.get('apellido_usuario', '').strip(),
                 datos_usuario.get('id_puesto'),
-                datos_usuario.get('id_sucursal'),
+                datos_usuario.get('id_sucursal') or id_sucursal,
                 id_empresa,
                 datos_usuario.get('id_punto_venta'),
                 datos_usuario.get('id_deposito'),
                 datos_usuario.get('id_caja'),
+                datos_usuario.get('pv'),
+                datos_usuario.get('pvc'),
+                (datos_usuario.get('tipo_busq') or '').strip() or None,
+                datos_usuario.get('id_caja_cheque'),
+                datos_usuario.get('id_caja_tarjeta'),
+                datos_usuario.get('id_punto_ventac'),
+                datos_usuario.get('id_caja_cheque_deposito'),
+                datos_usuario.get('id_caja_deposito'),
+                datos_usuario.get('id_caja_tarjeta_deposito'),
                 datos_usuario.get('baja_usuario', 'No'),
                 datos_usuario.get('tipo_busqueda_defecto', 0),
                 datos_usuario.get('permiso_supervisor_venta', 'No'),
@@ -433,11 +475,14 @@ class AdministraNETUserService:
             campos = []
             valores = []
             
-            # Campos que siempre se pueden actualizar
+            # Campos actualizables (alineados con CargaUsuario.frm)
             campos_actualizables = [
                 'cod_usuario', 'nombre_usuario', 'apellido_usuario',
                 'id_puesto', 'id_sucursal', 'id_punto_venta', 'id_deposito',
-                'id_caja', 'baja_usuario', 'tipo_busqueda_defecto',
+                'id_caja', 'pv', 'pvc', 'tipo_busq',
+                'id_caja_cheque', 'id_caja_tarjeta', 'id_punto_ventac',
+                'id_caja_cheque_deposito', 'id_caja_deposito', 'id_caja_tarjeta_deposito',
+                'baja_usuario', 'tipo_busqueda_defecto',
                 'permiso_supervisor_venta', 'vendedor_web', 'zoom_reportes',
                 'color_formulario', 'tipo_boton', 'CodViajante',
                 'resol_principal', 'entrega_defecto', 'utiliza_reporte_local',
@@ -532,7 +577,12 @@ class AdministraNETUserService:
             conn = self._get_connection(base_empresa)
             cursor = conn.cursor()
             
-            cursor.execute("SELECT idpuesto, puesto FROM puestos ORDER BY puesto")
+            # Solo puestos no anulados (paridad AdministraNET: listados activos)
+            cursor.execute("""
+                SELECT idpuesto, puesto FROM puestos
+                WHERE (anulado IS NULL OR anulado <> 'Si')
+                ORDER BY puesto
+            """)
             
             puestos = []
             for row in cursor.fetchall():
@@ -555,7 +605,12 @@ class AdministraNETUserService:
             conn = self._get_connection(base_empresa)
             cursor = conn.cursor()
             
-            cursor.execute("SELECT id_sucursal, nombre_sucursal FROM sucursales ORDER BY nombre_sucursal")
+            # Solo sucursales no anuladas (paridad AdministraNET: listados activos)
+            cursor.execute("""
+                SELECT id_sucursal, nombre_sucursal FROM sucursales
+                WHERE (anulado IS NULL OR anulado <> 'Si')
+                ORDER BY nombre_sucursal
+            """)
             
             sucursales = []
             for row in cursor.fetchall():
@@ -572,3 +627,125 @@ class AdministraNETUserService:
             logger.error(f"Error al obtener sucursales: {e}")
             return []
 
+    def obtener_depositos(self, base_empresa: str) -> List[Dict]:
+        """Lista depósitos no anulados para desplegables (paridad CargaUsuario.frm)."""
+        try:
+            conn = self._get_connection(base_empresa)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT CodDeposito, NombreDeposito FROM deposito
+                WHERE (anulado IS NULL OR anulado <> 'Si')
+                ORDER BY NombreDeposito
+            """)
+            out = [{'id': row[0], 'nombre': (row[1] or '').strip() or f'Depósito {row[0]}'} for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            return out
+        except Exception as e:
+            logger.debug("No se pudo cargar depósitos: %s", e)
+            return []
+
+    def obtener_cajas_abm(self, base_empresa: str, id_sucursal: int = None) -> List[Dict]:
+        """Lista todas las cajas (caja_abm) no anuladas. Preferir obtener_cajas_abm_por_tipo para formulario usuario."""
+        try:
+            conn = self._get_connection(base_empresa)
+            cursor = conn.cursor()
+            q = """
+                SELECT id_caja, COALESCE(NULLIF(nombre_caja, ''), tipo_caja) AS nombre, tipo_caja
+                FROM caja_abm
+                WHERE (anulado IS NULL OR anulado <> 'Si')
+            """
+            params = []
+            if id_sucursal is not None:
+                q += " AND (id_sucursal IS NULL OR id_sucursal = %s)"
+                params.append(id_sucursal)
+            q += " ORDER BY nombre_caja, id_caja"
+            cursor.execute(q, params)
+            out = [{'id': row[0], 'nombre': (row[1] or row[2] or '').strip() or f'Caja {row[0]}'} for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            return out
+        except Exception as e:
+            logger.debug("No se pudo cargar cajas: %s", e)
+            return []
+
+    def obtener_cajas_abm_por_tipo(
+        self, base_empresa: str, tipos_caja: List[str], id_sucursal: int = None
+    ) -> List[Dict]:
+        """
+        Lista cajas (caja_abm) no anuladas filtradas por tipo_caja.
+        Paridad con CargaUsuario.frm: cada combo usa un RecordSource con tipos concretos.
+        tipos_caja: ej. ['Acumulativa', 'Punto de Venta', 'Fondo Fijo'] para efectivo.
+        """
+        if not tipos_caja:
+            return []
+        try:
+            conn = self._get_connection(base_empresa)
+            cursor = conn.cursor()
+            placeholders = ", ".join(["%s"] * len(tipos_caja))
+            q = f"""
+                SELECT id_caja, COALESCE(NULLIF(nombre_caja, ''), tipo_caja) AS nombre, tipo_caja
+                FROM caja_abm
+                WHERE (anulado IS NULL OR anulado <> 'Si') AND tipo_caja IN ({placeholders})
+            """
+            params = list(tipos_caja)
+            if id_sucursal is not None:
+                q += " AND (id_sucursal IS NULL OR id_sucursal = %s)"
+                params.append(id_sucursal)
+            q += " ORDER BY nombre_caja, id_caja"
+            cursor.execute(q, params)
+            out = [{'id': row[0], 'nombre': (row[1] or row[2] or '').strip() or f'Caja {row[0]}'} for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            return out
+        except Exception as e:
+            logger.debug("No se pudo cargar cajas por tipo %s: %s", tipos_caja, e)
+            return []
+
+    def obtener_cajas_usuario_formulario(
+        self, base_empresa: str, id_sucursal: int = None
+    ) -> Dict[str, List[Dict]]:
+        """
+        Devuelve las 6 listas de cajas para el formulario usuario, alineadas a CargaUsuario.frm:
+        - data_caja / Caja_Deposito: efectivo (Acumulativa, Punto de Venta, Fondo Fijo)
+        - data_caja_cheque: Cheque
+        - data_caja_cheque_deposito: Acumulativa Cheque
+        - data_caja_tarjeta / Caja_Tarjeta_Deposito: Tarjeta, Acumulativa Tarjeta
+        """
+        tipos_efectivo = ['Acumulativa', 'Punto de Venta', 'Fondo Fijo']
+        cajas_efectivo = self.obtener_cajas_abm_por_tipo(base_empresa, tipos_efectivo, id_sucursal)
+        cajas_cheque_cobranza = self.obtener_cajas_abm_por_tipo(base_empresa, ['Cheque'], id_sucursal)
+        cajas_cheque_rendicion = self.obtener_cajas_abm_por_tipo(
+            base_empresa, ['Acumulativa Cheque'], id_sucursal
+        )
+        cajas_tarjeta = self.obtener_cajas_abm_por_tipo(
+            base_empresa, ['Tarjeta', 'Acumulativa Tarjeta'], id_sucursal
+        )
+        return {
+            'cajas_efectivo_cobranza': cajas_efectivo,
+            'cajas_efectivo_rendicion': cajas_efectivo,
+            'cajas_cheque_cobranza': cajas_cheque_cobranza,
+            'cajas_cheque_rendicion': cajas_cheque_rendicion,
+            'cajas_tarjeta_cobranza': cajas_tarjeta,
+            'cajas_tarjeta_rendicion': cajas_tarjeta,
+        }
+
+    def obtener_puntos_venta(self, base_empresa: str, id_sucursal: int = None) -> List[Dict]:
+        """Lista puntos de venta para desplegables (paridad CargaUsuario.frm)."""
+        try:
+            conn = self._get_connection(base_empresa)
+            cursor = conn.cursor()
+            q = "SELECT id_punto_venta, nro_punto_venta FROM punto_venta WHERE 1=1"
+            params = []
+            if id_sucursal is not None:
+                q += " AND (id_sucursal IS NULL OR id_sucursal = %s)"
+                params.append(id_sucursal)
+            q += " ORDER BY nro_punto_venta, id_punto_venta"
+            cursor.execute(q, params)
+            out = [{'id': row[0], 'nombre': f"PV {row[1] or row[0]}"} for row in cursor.fetchall()]
+            cursor.close()
+            conn.close()
+            return out
+        except Exception as e:
+            logger.debug("No se pudo cargar puntos de venta: %s", e)
+            return []

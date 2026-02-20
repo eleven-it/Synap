@@ -132,7 +132,7 @@
              data-name="{{ module.name|lower }}"
              data-display-name="{{ module.display_name|lower }}"
              data-description="{{ module.description|lower }}"
-             data-category="{% if module.is_core %}core{% elif module.name in 'sales,purchases,inventory,accounting' %}business{% elif module.name in 'tiendanube' %}integration{% elif module.name in 'mercadopago,clover' %}payment{% else %}other{% endif %}"
+             data-category="{% if module.is_core %}core{% elif module.name in 'mercadopago,clover' %}payment{% else %}other{% endif %}"
              data-status="{% if module.is_active %}active{% else %}inactive{% endif %}"
              data-required="{% if module.is_required %}true{% else %}false{% endif %}"
              data-core="{% if module.is_core %}true{% else %}false{% endif %}">
@@ -354,7 +354,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Sugerencias de búsqueda
     const searchSuggestions = [
-        '{% trans "sales" %}', '{% trans "inventory" %}', '{% trans "accounting" %}',
         '{% trans "reports" %}', '{% trans "payment" %}', '{% trans "integration" %}',
         '{% trans "core" %}', '{% trans "business" %}', '{% trans "active" %}', '{% trans "inactive" %}'
     ];

@@ -175,18 +175,18 @@
         {% include 'partials/navbar.html' %}
     </header>
     
-    <div class="pt-16 min-h-screen w-full flex">
-        <!-- Sidebar dinámico eliminado -->
+    <div class="pt-16 min-h-screen w-full flex pb-8">
         <!-- Contenido principal -->
         <main class="app-content flex-1 transition-all duration-300 no-sidebar">
             <div class="p-8">
-                <!-- Logo de empresa eliminado -->
-                <!-- Contenido de la página -->
                 {% block content %}{% endblock content %}
             </div>
         </main>
     </div>
-    
+
+    <!-- Barra de estado (fecha/hora, empresa, sucursal, puesto, usuario) -->
+    {% include 'partials/status_bar.html' %}
+
     {% block extra_js %}{% endblock %}
     
     <script>

@@ -131,6 +131,28 @@ docker compose exec backend python manage.py shell
 docker compose down
 ```
 
+## Error «role support does not exist» / «password authentication failed for user support»
+
+Si el volumen de Postgres se creó en el pasado con **otras credenciales** (por ejemplo otro `POSTGRES_USER` en el `.env`), el backend intentará conectarse como `support` y fallará.
+
+**Solución recomendada** (se borran los datos de Support en Postgres):
+
+```bash
+cd support/docker
+docker compose down -v
+docker compose up -d
+```
+
+Con `-v` se elimina el volumen `support_postgres_data`; al levantar de nuevo, Postgres se inicializa con el usuario y base `support` del `.env` actual.
+
+Si preferís intentar crear el rol sin borrar datos (solo funciona si en el contenedor existe el superusuario `postgres`):
+
+```bash
+./fix-postgres-support-role.sh
+```
+
+Si ese script falla con «role postgres does not exist», la única opción es la de arriba (`down -v` y `up -d`).
+
 ## Volúmenes
 
 - `support_postgres_data`: datos de PostgreSQL.

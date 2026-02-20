@@ -368,36 +368,35 @@ def historial_view(request):
 @administranet_login_required
 def empresa_listar_view(request):
     """
-    Lista la empresa de la base de datos activa del usuario
-    En administraNET solo hay una empresa por base de datos
+    En AdministraNET hay una sola empresa por base de datos (DatosEmpresa, id_empresa=1).
+    Si existe, se redirige directo a la vista de detalle/edición; si no, se muestra estado vacío.
+    Ver docs/general/EMPRESA_UNA_POR_BASE_ADMINISTRANET.md.
     """
     from core.services.administranet_empresas import AdministraNETEmpresaService
-    
+
     session_user = request.session.get("user", {})
     base_empresa = session_user.get("base_empresa")
-    
-    logger.info(f"🔍 empresa_listar_view - session_user: {session_user}")
-    logger.info(f"🔍 empresa_listar_view - base_empresa: {base_empresa}")
-    
+
     if not base_empresa:
         logger.error("❌ No se encontró base_empresa en la sesión")
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:dashboard")
-    
+
     empresa_service = AdministraNETEmpresaService()
     empresa = empresa_service.obtener_empresa(base_empresa)
-    
-    # Debug: verificar qué se está obteniendo
-    if not empresa:
-        logger.warning(f"⚠️ No se encontró empresa en base_empresa: {base_empresa}")
-        messages.warning(request, f"No se encontró información de empresa en la base de datos '{base_empresa}'. Puede que la tabla DatosEmpresa esté vacía o no exista.")
-    else:
-        logger.info(f"✅ Empresa encontrada: {empresa.get('Nombre', 'Sin nombre')}")
-    
-    # Convertir a lista para compatibilidad con el template
-    empresas = [empresa] if empresa else []
-    
-    return render(request, 'core/system_config/empresa_list.html', {'empresas': empresas})
+
+    if empresa:
+        # Una empresa por base: mostrar directamente datos (detalle/edición)
+        empresa_id = empresa.get("id_empresa") or 1
+        return redirect("core:empresa_detalle", empresa_id=int(empresa_id))
+
+    # Sin datos: estado vacío y opción "Crear primera empresa"
+    logger.warning("⚠️ No se encontró empresa en base_empresa: %s", base_empresa)
+    return render(request, "core/system_config/empresa_list.html", {
+        "empresas": [],
+        "sin_datos_administranet": True,
+        "base_empresa": base_empresa,
+    })
 
 @administranet_login_required
 def empresa_detalle_view(request, empresa_id):
@@ -820,7 +819,15 @@ def branch_create_view(request, empresa_id):
     if request.method == 'POST':
         data = request.POST.copy()
         
-        # Preparar datos según estructura de sucursales
+        # Preparar datos según estructura de sucursales (Datos + COT + Geo + Envíos)
+        def _float_or_none(v):
+            if v is None or (isinstance(v, str) and not v.strip()):
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+
         datos_sucursal = {
             'nombre_sucursal': data.get('nombre_sucursal', '').strip(),
             'desc_sucursal': data.get('desc_sucursal', '').strip(),
@@ -832,11 +839,46 @@ def branch_create_view(request, empresa_id):
             'nro_estab_sucursal': data.get('nro_estab_sucursal', '').strip(),
             'cod_postal': data.get('cod_postal', '').strip(),
             'activa': data.get('activa') == 'on' or data.get('anulado') != 'Si',
+            'cot_clave_acceso': data.get('cot_clave_acceso', '').strip(),
+            'cot_kg_limite': _float_or_none(data.get('cot_kg_limite')),
+            'cot_monto_limite': _float_or_none(data.get('cot_monto_limite')),
+            'cot_cantidad_operaciones': _float_or_none(data.get('cot_cantidad_operaciones')),
+            'geo_latitud': data.get('geo_latitud', '').strip(),
+            'geo_longitud': data.get('geo_longitud', '').strip(),
+            'geo_api_key': data.get('geo_api_key', '').strip(),
+            'geo_api_key_javascript': data.get('geo_api_key_javascript', '').strip(),
+            'activa_calculo_envios': data.get('activa_calculo_envios') in ('Si', 'on', '1'),
+            'id_articulo_fact_envio': data.get('id_articulo_fact_envio', '').strip() or None,
+            # Configuración Sucursal (tabs Opciones Generales, Agente, Impresoras, DNF)
+            'vendedor_defecto': _float_or_none(data.get('vendedor_defecto')),
+            'limite_consulta': int(data.get('limite_consulta')) if data.get('limite_consulta', '').strip() else None,
+            'ruta_reporte_servidor': data.get('ruta_reporte_servidor', '').strip() or None,
+            'ruta_reporte_comprobante': data.get('ruta_reporte_comprobante', '').strip() or None,
+            'cant_renglon_venta': int(data.get('cant_renglon_venta')) if data.get('cant_renglon_venta', '').strip() else None,
+            'salida_sin_stock': 'Si' if data.get('salida_sin_stock') == 'Si' else 'No',
+            'dias_venc_presup': int(data.get('dias_venc_presup')) if data.get('dias_venc_presup', '').strip() else None,
+            'dias_venc_pedido': int(data.get('dias_venc_pedido')) if data.get('dias_venc_pedido', '').strip() else None,
+            'tipo_calculo_precios_impuesto_venta': data.get('tipo_calculo_precios_impuesto_venta', '').strip() or None,
+            'lim_redondeo_tpv': _float_or_none(data.get('lim_redondeo_tpv')),
+            'agente_retib': 'Si' if data.get('agente_retib') == 'Si' else 'No',
+            'agente_retg': 'Si' if data.get('agente_retg') == 'Si' else 'No',
+            'agente_reti': 'Si' if data.get('agente_reti') == 'Si' else 'No',
+            'agente_percep': 'Si' if data.get('agente_percep') == 'Si' else 'No',
+            'agente_percep_resol_afip_5329_iva': 'Si' if data.get('agente_percep_resol_afip_5329_iva') == 'Si' else 'No',
+            'tipo_impresora': data.get('tipo_impresora', '').strip() or None,
+            'nombre_impresora': data.get('nombre_impresora', '').strip() or None,
+            'puerto_impresora': data.get('puerto_impresora', '').strip() or None,
+            'doble_imp_etiqueta': 'Si' if data.get('doble_imp_etiqueta') == 'Si' else 'No',
+            'dnf_vta': 'Si' if data.get('dnf_vta') == 'Si' else 'No',
+            'dnf_tipo': data.get('dnf_tipo', '').strip() or None,
+            'dnf_texto': data.get('dnf_texto', '').strip() or None,
+            'dnf_texto2': data.get('dnf_texto2', '').strip() or None,
+            'dnf_texto3': data.get('dnf_texto3', '').strip() or None,
         }
         
-        # Validar campos obligatorios según CargaSucursal.frm
-        if not datos_sucursal['nombre_sucursal'] and not datos_sucursal['desc_sucursal']:
-            error = "Debe completar al menos el nombre o la descripción"
+        # Validar campos obligatorios: solo el nombre es obligatorio
+        if not datos_sucursal['nombre_sucursal']:
+            error = "El nombre de la sucursal es obligatorio."
         else:
             if sucursales_service.crear_sucursal(base_empresa, datos_sucursal):
                 messages.success(request, "✅ Sucursal creada exitosamente.")
@@ -844,16 +886,19 @@ def branch_create_view(request, empresa_id):
             else:
                 error = "Error al crear la sucursal. Por favor intente nuevamente."
     
-    # Obtener datos relacionados para los dropdowns
+    # Obtener datos relacionados para los dropdowns (paises, provincias, viajantes como en Configuración.frm)
     paises = empresa_service.obtener_paises(base_empresa)
     provincias = empresa_service.obtener_provincias(base_empresa, empresa.get('id_pais') if empresa else None)
+    viajantes = sucursales_service.obtener_viajantes(base_empresa)
     
     context = {
         'empresa': empresa,
+        'empresa_id': empresa_id,
         'modo_creacion': True,
         'error': error,
         'paises': paises,
         'provincias': provincias,
+        'viajantes': viajantes,
         'sucursal': None,
         'base_empresa': base_empresa,
     }
@@ -890,8 +935,16 @@ def branch_edit_view(request, empresa_id, branch_id):
     
     if request.method == 'POST':
         data = request.POST.copy()
-        
-        # Preparar datos según estructura de sucursales
+
+        def _float_or_none(v):
+            if v is None or (isinstance(v, str) and not v.strip()):
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+
+        # Preparar datos según estructura de sucursales (Datos + COT + Geo + Envíos)
         datos_sucursal = {
             'nombre_sucursal': data.get('nombre_sucursal', '').strip(),
             'desc_sucursal': data.get('desc_sucursal', '').strip(),
@@ -903,11 +956,46 @@ def branch_edit_view(request, empresa_id, branch_id):
             'nro_estab_sucursal': data.get('nro_estab_sucursal', '').strip(),
             'cod_postal': data.get('cod_postal', '').strip(),
             'activa': data.get('activa') == 'on' or data.get('anulado') != 'Si',
+            'cot_clave_acceso': data.get('cot_clave_acceso', '').strip(),
+            'cot_kg_limite': _float_or_none(data.get('cot_kg_limite')),
+            'cot_monto_limite': _float_or_none(data.get('cot_monto_limite')),
+            'cot_cantidad_operaciones': _float_or_none(data.get('cot_cantidad_operaciones')),
+            'geo_latitud': data.get('geo_latitud', '').strip(),
+            'geo_longitud': data.get('geo_longitud', '').strip(),
+            'geo_api_key': data.get('geo_api_key', '').strip(),
+            'geo_api_key_javascript': data.get('geo_api_key_javascript', '').strip(),
+            'activa_calculo_envios': data.get('activa_calculo_envios') in ('Si', 'on', '1'),
+            'id_articulo_fact_envio': data.get('id_articulo_fact_envio', '').strip() or None,
+            # Configuración Sucursal (tabs Opciones Generales, Agente, Impresoras, DNF)
+            'vendedor_defecto': _float_or_none(data.get('vendedor_defecto')),
+            'limite_consulta': int(data.get('limite_consulta')) if data.get('limite_consulta', '').strip() else None,
+            'ruta_reporte_servidor': data.get('ruta_reporte_servidor', '').strip() or None,
+            'ruta_reporte_comprobante': data.get('ruta_reporte_comprobante', '').strip() or None,
+            'cant_renglon_venta': int(data.get('cant_renglon_venta')) if data.get('cant_renglon_venta', '').strip() else None,
+            'salida_sin_stock': 'Si' if data.get('salida_sin_stock') == 'Si' else 'No',
+            'dias_venc_presup': int(data.get('dias_venc_presup')) if data.get('dias_venc_presup', '').strip() else None,
+            'dias_venc_pedido': int(data.get('dias_venc_pedido')) if data.get('dias_venc_pedido', '').strip() else None,
+            'tipo_calculo_precios_impuesto_venta': data.get('tipo_calculo_precios_impuesto_venta', '').strip() or None,
+            'lim_redondeo_tpv': _float_or_none(data.get('lim_redondeo_tpv')),
+            'agente_retib': 'Si' if data.get('agente_retib') == 'Si' else 'No',
+            'agente_retg': 'Si' if data.get('agente_retg') == 'Si' else 'No',
+            'agente_reti': 'Si' if data.get('agente_reti') == 'Si' else 'No',
+            'agente_percep': 'Si' if data.get('agente_percep') == 'Si' else 'No',
+            'agente_percep_resol_afip_5329_iva': 'Si' if data.get('agente_percep_resol_afip_5329_iva') == 'Si' else 'No',
+            'tipo_impresora': data.get('tipo_impresora', '').strip() or None,
+            'nombre_impresora': data.get('nombre_impresora', '').strip() or None,
+            'puerto_impresora': data.get('puerto_impresora', '').strip() or None,
+            'doble_imp_etiqueta': 'Si' if data.get('doble_imp_etiqueta') == 'Si' else 'No',
+            'dnf_vta': 'Si' if data.get('dnf_vta') == 'Si' else 'No',
+            'dnf_tipo': data.get('dnf_tipo', '').strip() or None,
+            'dnf_texto': data.get('dnf_texto', '').strip() or None,
+            'dnf_texto2': data.get('dnf_texto2', '').strip() or None,
+            'dnf_texto3': data.get('dnf_texto3', '').strip() or None,
         }
         
-        # Validar campos obligatorios
-        if not datos_sucursal['nombre_sucursal'] and not datos_sucursal['desc_sucursal']:
-            error = "Debe completar al menos el nombre o la descripción"
+        # Validar campos obligatorios: solo el nombre es obligatorio
+        if not datos_sucursal['nombre_sucursal']:
+            error = "El nombre de la sucursal es obligatorio."
         else:
             if sucursales_service.actualizar_sucursal(base_empresa, branch_id, datos_sucursal):
                 messages.success(request, "✅ Sucursal actualizada exitosamente.")
@@ -915,60 +1003,62 @@ def branch_edit_view(request, empresa_id, branch_id):
             else:
                 error = "Error al actualizar la sucursal. Por favor intente nuevamente."
     
-    # Obtener datos relacionados para los dropdowns
+    # Obtener datos relacionados para los dropdowns (paises, provincias, viajantes como en Configuración.frm)
     paises = empresa_service.obtener_paises(base_empresa)
     provincias = empresa_service.obtener_provincias(base_empresa, sucursal.get('id_pais'))
+    viajantes = sucursales_service.obtener_viajantes(base_empresa)
     
     context = {
         'empresa': empresa,
+        'empresa_id': empresa_id,
         'modo_creacion': False,
         'error': error,
+        'viajantes': viajantes,
         'paises': paises,
         'provincias': provincias,
         'sucursal': sucursal,
         'base_empresa': base_empresa,
+        'branch_id': branch_id,  # id de sucursal para API tipos de envío (data-id-sucursal)
     }
     
     return render(request, 'core/system_config/branch_form.html', context)
 
+@require_POST
 @administranet_login_required
-def branch_delete_view(request, empresa_id, branch_id):
+def branch_toggle_estado_view(request, empresa_id, branch_id):
     """
-    Elimina (anula) una sucursal en administraNET Gestión
+    Alterna el estado Activa/Anulada de una sucursal (Anulado=Si/No).
+    Las sucursales no se eliminan en AdministraNET, solo se desactivan.
     """
     from core.services.administranet_sucursales import AdministraNETSucursalesService
-    from core.services.administranet_empresas import AdministraNETEmpresaService
-    
+
     session_user = request.session.get("user", {})
     base_empresa = session_user.get("base_empresa")
-    
+
     if not base_empresa:
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:dashboard")
-    
+
     sucursales_service = AdministraNETSucursalesService()
-    empresa_service = AdministraNETEmpresaService()
-    empresa = empresa_service.obtener_empresa(base_empresa)
-    
-    sucursal = sucursales_service.obtener_sucursal(base_empresa, branch_id)
-    
-    if not sucursal:
-        messages.error(request, "Sucursal no encontrada.")
-        return redirect('core:branch_list', empresa_id=1)
-    
-    if request.method == 'POST':
-        if sucursales_service.eliminar_sucursal(base_empresa, branch_id):
-            messages.success(request, "✅ Sucursal eliminada exitosamente.")
-        else:
-            messages.error(request, "Error al eliminar la sucursal.")
-        return redirect('core:branch_list', empresa_id=1)
-    
-    context = {
-        'empresa': empresa,
-        'sucursal': sucursal,
-    }
-    
-    return render(request, 'core/system_config/branch_confirm_delete.html', context)
+    result = sucursales_service.toggle_anulado_sucursal(base_empresa, branch_id)
+
+    if result is None:
+        messages.error(request, "Sucursal no encontrada o error al actualizar.")
+    else:
+        messages.success(
+            request,
+            "Sucursal marcada como activa." if result else "Sucursal desactivada (anulada).",
+        )
+    return redirect("core:branch_list", empresa_id=1)
+
+
+@administranet_login_required
+def branch_delete_view(request, empresa_id, branch_id):
+    """
+    Redirige a la lista. Las sucursales no se eliminan; usar toggle estado (Activa/Anulada).
+    Se mantiene la ruta por compatibilidad con enlaces antiguos.
+    """
+    return redirect("core:branch_list", empresa_id=1)
 
 @require_POST
 @administranet_login_required

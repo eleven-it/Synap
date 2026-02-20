@@ -7,7 +7,7 @@ Compara por artículo:
      - Salida: solo REM (Remito Salida) o FA/FB/FC sin codmov_remito (venta directa). No se cuenta FA cuando ya existe REM.
      - Entrada: todas salvo REM con TipoComp 'Anul Remito' (no duplicar con NC devolución).
 
-Ver reports/docs/STOCK_VB6_PROCEDIMIENTOS_GUARDADO.md.
+Ver docs/self_checkout/STOCK_VB6_PROCEDIMIENTOS_GUARDADO.md.
 """
 from typing import Dict, List, Any
 import logging

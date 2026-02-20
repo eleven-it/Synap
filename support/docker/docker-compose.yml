@@ -52,6 +52,8 @@ services:
       DJANGO_SETTINGS_MODULE: config.settings.local
       # CORS: config.settings.local usa orígenes concretos + credentials (no wildcard)
       ALLOWED_HOSTS: "*"
+      # RAG: Synap (desde contenedor usar host.docker.internal si Synap corre en el host)
+      SUPPORT_SYNAP_API_URL: ${SUPPORT_SYNAP_API_URL:-}
     volumes:
       - ../backend:/app
       - support_static:/app/staticfiles

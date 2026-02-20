@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Box, Typography, TextField, Button, FormControlLabel, Checkbox } from '@mui/material'
+import { Box, Typography, TextField, Button, FormControlLabel, Checkbox, ToggleButtonGroup, ToggleButton } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSnackbar } from 'notistack'
 import api from '@/api/endpoints'
 import { Card } from '@/components/ui'
+
+type SistemaRAG = '' | 'synap' | 'administranet'
 
 interface CopilotPanelProps {
   caseId: number
@@ -13,6 +15,7 @@ interface CopilotPanelProps {
 export default function CopilotPanel({ caseId }: CopilotPanelProps) {
   const [input, setInput] = useState('')
   const [saveAsKnowledge, setSaveAsKnowledge] = useState(false)
+  const [sistema, setSistema] = useState<SistemaRAG>('')
   const queryClient = useQueryClient()
   const { enqueueSnackbar } = useSnackbar()
 
@@ -27,7 +30,7 @@ export default function CopilotPanel({ caseId }: CopilotPanelProps) {
 
   const postMutation = useMutation({
     mutationFn: (texto: string) =>
-      api.cases.copilotPost(caseId, texto, saveAsKnowledge),
+      api.cases.copilotPost(caseId, texto, saveAsKnowledge, sistema || undefined),
     onSuccess: (res) => {
       setInput('')
       queryClient.invalidateQueries({ queryKey: ['case', caseId, 'copilot'] })
@@ -48,9 +51,23 @@ export default function CopilotPanel({ caseId }: CopilotPanelProps) {
       <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
         Copiloto IA
       </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
         Chat agente ↔ IA para este caso
       </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+        Pregunta sobre:
+      </Typography>
+      <ToggleButtonGroup
+        value={sistema}
+        exclusive
+        onChange={(_, v: SistemaRAG | null) => v != null && setSistema(v)}
+        size="small"
+        sx={{ mb: 2 }}
+      >
+        <ToggleButton value="">Ambos</ToggleButton>
+        <ToggleButton value="synap">Synap</ToggleButton>
+        <ToggleButton value="administranet">AdministraNET (VB6)</ToggleButton>
+      </ToggleButtonGroup>
       <Box sx={{ flex: 1, overflow: 'auto', mb: 2 }}>
         {messages.map((m) => (
           <Box

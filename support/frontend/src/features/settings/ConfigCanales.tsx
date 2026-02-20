@@ -11,16 +11,56 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSnackbar } from 'notistack'
+import api from '@/api/endpoints'
+import type { ChannelConfig } from '@/types'
 
 interface ConfigCanalesProps {
   open: boolean
   onClose: () => void
+  channelsList: ChannelConfig[]
 }
 
 const STEPS = ['WhatsApp Meta', 'Telegram', 'Email SMTP/IMAP']
 
-export default function ConfigCanales({ open, onClose }: ConfigCanalesProps) {
+export default function ConfigCanales({ open, onClose, channelsList }: ConfigCanalesProps) {
   const [activeStep, setActiveStep] = useState(0)
+  const [telegramToken, setTelegramToken] = useState('')
+  const queryClient = useQueryClient()
+  const { enqueueSnackbar } = useSnackbar()
+
+  const telegramChannel = channelsList.find((c) => c.channel_type === 'telegram')
+
+  const saveTelegramMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const config = { token: token.trim() }
+      if (telegramChannel) {
+        return api.config.channels.patch(telegramChannel.id, { config })
+      }
+      return api.config.channels.create({
+        channel_type: 'telegram',
+        display_name: 'Telegram',
+        config,
+      })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config', 'channels'] })
+      enqueueSnackbar('Token de Telegram guardado (cifrado)', { variant: 'success' })
+      setTelegramToken('')
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      enqueueSnackbar(err.response?.data?.detail || 'Error al guardar el token', { variant: 'error' })
+    },
+  })
+
+  const handleSaveTelegram = () => {
+    if (!telegramToken.trim()) {
+      enqueueSnackbar('Escribí el token del bot', { variant: 'warning' })
+      return
+    }
+    saveTelegramMutation.mutate(telegramToken)
+  }
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}>
@@ -32,7 +72,7 @@ export default function ConfigCanales({ open, onClose }: ConfigCanalesProps) {
           </IconButton>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Los endpoints para guardar y probar esta configuración se documentan en README (Endpoints esperados → Canales).
+          Los tokens se guardan cifrados en el backend. Probar desde la card Canales tras guardar.
         </Typography>
         <Stepper activeStep={activeStep} sx={{ mb: 2 }}>
           {STEPS.map((label) => (
@@ -54,10 +94,26 @@ export default function ConfigCanales({ open, onClose }: ConfigCanalesProps) {
         {activeStep === 1 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Typography variant="subtitle2">Telegram</Typography>
-            <TextField label="Bot token" type="password" fullWidth size="small" placeholder="Configurar en backend" />
+            <TextField
+              label="Bot token"
+              type="password"
+              fullWidth
+              size="small"
+              placeholder={telegramChannel ? 'Dejar vacío para no cambiar' : 'Token de @BotFather'}
+              value={telegramToken}
+              onChange={(e) => setTelegramToken(e.target.value)}
+              helperText={telegramChannel?.config_masked?.token ? 'Actual: ' + String(telegramChannel.config_masked.token) : undefined}
+            />
             <Typography variant="caption" color="text.secondary">
               Crear bot con @BotFather y configurar webhook: POST /api/webhooks/telegram/
             </Typography>
+            <Button
+              variant="contained"
+              onClick={handleSaveTelegram}
+              disabled={saveTelegramMutation.isPending || !telegramToken.trim()}
+            >
+              {saveTelegramMutation.isPending ? 'Guardando…' : 'Guardar token (cifrado)'}
+            </Button>
           </Box>
         )}
         {activeStep === 2 && (
@@ -80,7 +136,7 @@ export default function ConfigCanales({ open, onClose }: ConfigCanalesProps) {
             </Button>
           ) : (
             <Button variant="contained" onClick={onClose}>
-              Guardar borrador
+              Cerrar
             </Button>
           )}
         </Box>

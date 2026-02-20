@@ -3,96 +3,413 @@
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 {% block admin_content %}
-<div class="max-w-2xl mx-auto">
-  <h1 class="text-2xl font-bold text-gray-800 mb-6">Editar Usuario</h1>
+<div class="max-w-5xl mx-auto" x-data="{ tab: 'perfil' }">
+  <p class="text-xs mb-2">
+    <a href="{% url 'core:usuarios' %}" class="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline inline-flex items-center gap-1">
+      <span class="material-icons text-sm">arrow_back</span>
+      Volver a usuarios
+    </a>
+  </p>
+  <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Modificar usuario {% if usuario.nombre_usuario or usuario.cod_usuario %}<span class="text-purple-600 dark:text-purple-400">{{ usuario.nombre_usuario|default:usuario.cod_usuario }}</span>{% endif %}</h1>
 
   {% if messages %}
     <div class="mb-4">
       {% for message in messages %}
-        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% else %}bg-green-500{% endif %} text-xs">
+        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% elif message.tags == 'warning' %}bg-amber-500{% else %}bg-green-500{% endif %} text-xs">
           {{ message }}
         </div>
       {% endfor %}
     </div>
   {% endif %}
 
-  <form method="post" class="bg-white p-6 rounded-lg shadow-md space-y-4">
+  <form method="post" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
     {% csrf_token %}
-    
     {% if es_supervisor %}
-    <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
-      <p class="text-xs text-yellow-800">
-        <strong>Nota:</strong> Este es el usuario Supervisor. Solo se puede cambiar la contraseña.
+    <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md p-3 mb-4">
+      <p class="text-xs text-amber-800 dark:text-amber-200">
+        <strong>Nota:</strong> Usuario Supervisor. Solo se puede cambiar la contraseña.
       </p>
     </div>
     {% endif %}
 
-    <div>
-      <label for="cod_usuario" class="block text-xs font-medium text-gray-700 mb-1">Código de Usuario *</label>
-      <input type="text" name="cod_usuario" id="cod_usuario" value="{{ usuario.cod_usuario }}" required
-             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
-             {% if es_supervisor %}readonly{% endif %}>
+    {# Barra de pestañas #}
+    <div class="border-b border-gray-200 dark:border-gray-600 mb-4" role="tablist" aria-label="Secciones del formulario">
+      <nav class="flex flex-wrap gap-1">
+        <button type="button" role="tab" aria-selected="true" aria-controls="panel-perfil" id="tab-perfil"
+                :aria-selected="tab === 'perfil'"
+                @click="tab = 'perfil'"
+                :class="tab === 'perfil' ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'"
+                class="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors">
+          <span class="material-icons text-sm">person</span>
+          Perfil
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-operacion" id="tab-operacion"
+                :aria-selected="tab === 'operacion'"
+                @click="tab = 'operacion'"
+                :class="tab === 'operacion' ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'"
+                class="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors">
+          <span class="material-icons text-sm">storefront</span>
+          Operación y ventas
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-cajas" id="tab-cajas"
+                :aria-selected="tab === 'cajas'"
+                @click="tab = 'cajas'"
+                :class="tab === 'cajas' ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'"
+                class="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors">
+          <span class="material-icons text-sm">payments</span>
+          Cajas
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-rutas" id="tab-rutas"
+                :aria-selected="tab === 'rutas'"
+                @click="tab = 'rutas'"
+                :class="tab === 'rutas' ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'"
+                class="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors">
+          <span class="material-icons text-sm">folder</span>
+          Rutas y archivos
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-apariencia" id="tab-apariencia"
+                :aria-selected="tab === 'apariencia'"
+                @click="tab = 'apariencia'"
+                :class="tab === 'apariencia' ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300'"
+                class="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors">
+          <span class="material-icons text-sm">palette</span>
+          Apariencia
+        </button>
+      </nav>
     </div>
 
-    <div>
-      <label for="nombre_usuario" class="block text-xs font-medium text-gray-700 mb-1">Nombre *</label>
-      <input type="text" name="nombre_usuario" id="nombre_usuario" value="{{ usuario.nombre_usuario }}" required
-             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
-             {% if es_supervisor %}readonly{% endif %}>
+    {% with input_class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-purple-500 focus:border-purple-500" %}
+    {% with label_class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1" %}
+
+    {# Panel Perfil — Col1: Empresa, Usuario, Nombre, Apellido | Col2: Sucursal, Puesto, Contraseña, Valid. Contraseña, Anulado (toggle) #}
+    <div id="panel-perfil" role="tabpanel" aria-labelledby="tab-perfil" x-show="tab === 'perfil'" x-cloak
+         class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 py-4">
+      <div class="space-y-4">
+        <div>
+          <label class="{{ label_class }} text-gray-500 dark:text-gray-400">Empresa</label>
+          <input type="text" value="{{ usuario.nombre_empresa|default:'' }}" readonly class="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-md text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+        </div>
+        <div>
+          <label for="cod_usuario" class="{{ label_class }}">Usuario (código) *</label>
+          <input type="text" name="cod_usuario" id="cod_usuario" value="{{ usuario.cod_usuario|default:'' }}" required class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+        </div>
+        <div>
+          <label for="nombre_usuario" class="{{ label_class }}">Nombre *</label>
+          <input type="text" name="nombre_usuario" id="nombre_usuario" value="{{ usuario.nombre_usuario|default:'' }}" required class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+        </div>
+        <div>
+          <label for="apellido_usuario" class="{{ label_class }}">Apellido</label>
+          <input type="text" name="apellido_usuario" id="apellido_usuario" value="{{ usuario.apellido_usuario|default:'' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+        </div>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="id_sucursal" class="{{ label_class }}">Sucursal *</label>
+          <select name="id_sucursal" id="id_sucursal" required class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+            <option value="">Seleccionar...</option>
+            {% for sucursal in sucursales %}
+            <option value="{{ sucursal.id }}" {% if usuario.id_sucursal == sucursal.id %}selected{% endif %}>{{ sucursal.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="id_puesto" class="{{ label_class }}">Puesto</label>
+          <select name="id_puesto" id="id_puesto" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+            <option value="">Seleccionar...</option>
+            {% for puesto in puestos %}
+            <option value="{{ puesto.id }}" {% if usuario.id_puesto == puesto.id %}selected{% endif %}>{{ puesto.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="password" class="{{ label_class }}">Contraseña</label>
+          <input type="password" name="password" id="password" class="{{ input_class }}" placeholder="Dejar vacío para no cambiar">
+        </div>
+        <div>
+          <label for="confirmar_password" class="{{ label_class }}">Valid. Contraseña</label>
+          <input type="password" name="confirmar_password" id="confirmar_password" class="{{ input_class }}">
+        </div>
+        <div>
+          <span class="{{ label_class }} block">Estado</span>
+          <input type="hidden" name="baja_usuario" id="baja_usuario_usr" value="{{ usuario.baja_usuario|default:'No' }}">
+          <button type="button" id="btn-toggle-estado-usuario" class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500"
+                title="Clic para activar o desactivar" {% if es_supervisor %}disabled{% endif %}>
+            <span class="material-icons text-sm mr-1" id="btn-toggle-estado-usuario-icon">check_circle</span>
+            <span id="btn-toggle-estado-usuario-text">Activo</span>
+          </button>
+        </div>
+      </div>
     </div>
 
-    <div>
-      <label for="apellido_usuario" class="block text-xs font-medium text-gray-700 mb-1">Apellido</label>
-      <input type="text" name="apellido_usuario" id="apellido_usuario" value="{{ usuario.apellido_usuario }}"
-             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
-             {% if es_supervisor %}readonly{% endif %}>
+    {# Panel Operación y ventas #}
+    <div id="panel-operacion" role="tabpanel" aria-labelledby="tab-operacion" x-show="tab === 'operacion'" x-cloak
+         class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 py-4">
+      <div>
+        <label for="id_punto_venta" class="{{ label_class }}">Punto de Venta</label>
+        <select name="id_punto_venta" id="id_punto_venta" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for pv in puntos_venta %}
+          <option value="{{ pv.id }}" {% if usuario.id_punto_venta == pv.id %}selected{% endif %}>{{ pv.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="pvc" class="{{ label_class }}">Nro Suc. Cob</label>
+        <input type="number" name="pvc" id="pvc" value="{{ usuario.pvc|default:'' }}" min="0" step="1" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="CodViajante" class="{{ label_class }}">Vendedor (viajante)</label>
+        <select name="CodViajante" id="CodViajante" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for v in viajantes %}
+          <option value="{{ v.CodViajante }}" {% if usuario.CodViajante == v.CodViajante %}selected{% endif %}>{{ v.Nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_deposito" class="{{ label_class }}">Depósito general</label>
+        <select name="id_deposito" id="id_deposito" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for dep in depositos %}
+          <option value="{{ dep.id }}" {% if usuario.id_deposito == dep.id %}selected{% endif %}>{{ dep.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="entrega_defecto" class="{{ label_class }}">Entrega default</label>
+        <input type="text" name="entrega_defecto" id="entrega_defecto" value="{{ usuario.entrega_defecto|default:'' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="permiso_supervisor_venta" class="{{ label_class }}">Supervisor venta</label>
+        <select name="permiso_supervisor_venta" id="permiso_supervisor_venta" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="No" {% if usuario.permiso_supervisor_venta != 'Si' %}selected{% endif %}>No</option>
+          <option value="Si" {% if usuario.permiso_supervisor_venta == 'Si' %}selected{% endif %}>Sí</option>
+        </select>
+      </div>
+      <div>
+        <label for="vendedor_web" class="{{ label_class }}">Vendedor de ecommerce</label>
+        <select name="vendedor_web" id="vendedor_web" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="No" {% if usuario.vendedor_web != 'Si' %}selected{% endif %}>No</option>
+          <option value="Si" {% if usuario.vendedor_web == 'Si' %}selected{% endif %}>Sí</option>
+        </select>
+      </div>
+      <div>
+        <label for="tipo_busq" class="{{ label_class }}">Tipo Búsqueda</label>
+        <input type="text" name="tipo_busq" id="tipo_busq" value="{{ usuario.tipo_busq|default:'Tipeo Directo' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="tipo_busqueda_defecto" class="{{ label_class }}">Búsqueda defecto</label>
+        <select name="tipo_busqueda_defecto" id="tipo_busqueda_defecto" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="0" {% if usuario.tipo_busqueda_defecto == 0 %}selected{% endif %}>Incluye texto</option>
+          <option value="1" {% if usuario.tipo_busqueda_defecto == 1 %}selected{% endif %}>Exacto</option>
+        </select>
+      </div>
     </div>
 
-    <div>
-      <label for="password" class="block text-xs font-medium text-gray-700 mb-1">Nueva Contraseña (dejar vacío para no cambiar)</label>
-      <input type="password" name="password" id="password"
-             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+    {# Panel Cajas #}
+    <div id="panel-cajas" role="tabpanel" aria-labelledby="tab-cajas" x-show="tab === 'cajas'" x-cloak
+         class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 py-4">
+      <div>
+        <label for="id_caja" class="{{ label_class }}">Caja efectivo cobranza</label>
+        <select name="id_caja" id="id_caja" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_efectivo_cobranza %}
+          <option value="{{ c.id }}" {% if usuario.id_caja == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_caja_deposito" class="{{ label_class }}">Caja efectivo rendición</label>
+        <select name="id_caja_deposito" id="id_caja_deposito" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_efectivo_rendicion %}
+          <option value="{{ c.id }}" {% if usuario.id_caja_deposito == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_caja_cheque" class="{{ label_class }}">Caja cheque cobranza</label>
+        <select name="id_caja_cheque" id="id_caja_cheque" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_cheque_cobranza %}
+          <option value="{{ c.id }}" {% if usuario.id_caja_cheque == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_caja_cheque_deposito" class="{{ label_class }}">Caja cheque rendición</label>
+        <select name="id_caja_cheque_deposito" id="id_caja_cheque_deposito" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_cheque_rendicion %}
+          <option value="{{ c.id }}" {% if usuario.id_caja_cheque_deposito == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_caja_tarjeta" class="{{ label_class }}">Caja tarjeta cobranza</label>
+        <select name="id_caja_tarjeta" id="id_caja_tarjeta" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_tarjeta_cobranza %}
+          <option value="{{ c.id }}" {% if usuario.id_caja_tarjeta == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="id_caja_tarjeta_deposito" class="{{ label_class }}">Caja tarjeta rendición</label>
+        <select name="id_caja_tarjeta_deposito" id="id_caja_tarjeta_deposito" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="">— Ninguno —</option>
+          {% for c in cajas_tarjeta_rendicion %}
+          <option value="{{ c.id }}" {% if usuario.id_caja_tarjeta_deposito == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
     </div>
 
-    <div>
-      <label for="confirmar_password" class="block text-xs font-medium text-gray-700 mb-1">Confirmar Contraseña</label>
-      <input type="password" name="confirmar_password" id="confirmar_password"
-             class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+    {# Panel Rutas y archivos #}
+    <div id="panel-rutas" role="tabpanel" aria-labelledby="tab-rutas" x-show="tab === 'rutas'" x-cloak
+         class="space-y-4 py-4 max-w-2xl">
+      <input type="file" id="folder-picker-usuario" class="hidden" webkitdirectory directory multiple tabindex="-1" accept="*" aria-hidden="true">
+      <div>
+        <label for="utiliza_reporte_local" class="{{ label_class }}">Reportes localmente</label>
+        <select name="utiliza_reporte_local" id="utiliza_reporte_local" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="No" {% if usuario.utiliza_reporte_local != 'Si' %}selected{% endif %}>No</option>
+          <option value="Si" {% if usuario.utiliza_reporte_local == 'Si' %}selected{% endif %}>Sí</option>
+        </select>
+        <div class="flex gap-2 mt-1">
+          <input type="text" name="ruta_reporte_local" id="ruta_reporte_local" value="{{ usuario.ruta_reporte_local|default:'' }}" class="{{ input_class }} flex-1 min-w-0" placeholder="Ruta reportes" {% if es_supervisor %}readonly{% endif %}>
+          <button type="button" class="btn-seleccionar-carpeta flex-shrink-0 inline-flex items-center px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 transition-colors" data-target-id="ruta_reporte_local" title="Seleccionar carpeta en este equipo" {% if es_supervisor %}disabled{% endif %}>
+            <span class="material-icons text-sm mr-1">folder_open</span>
+            <span>Seleccionar carpeta</span>
+          </button>
+        </div>
+      </div>
+      <div>
+        <label for="utiliza_certificado_local" class="{{ label_class }}">Certificados localmente</label>
+        <select name="utiliza_certificado_local" id="utiliza_certificado_local" class="{{ input_class }}" {% if es_supervisor %}disabled{% endif %}>
+          <option value="No" {% if usuario.utiliza_certificado_local != 'Si' %}selected{% endif %}>No</option>
+          <option value="Si" {% if usuario.utiliza_certificado_local == 'Si' %}selected{% endif %}>Sí</option>
+        </select>
+        <div class="flex gap-2 mt-1">
+          <input type="text" name="ruta_certificado_local" id="ruta_certificado_local" value="{{ usuario.ruta_certificado_local|default:'' }}" class="{{ input_class }} flex-1 min-w-0" placeholder="Ruta certificados" {% if es_supervisor %}readonly{% endif %}>
+          <button type="button" class="btn-seleccionar-carpeta flex-shrink-0 inline-flex items-center px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 transition-colors" data-target-id="ruta_certificado_local" title="Seleccionar carpeta en este equipo" {% if es_supervisor %}disabled{% endif %}>
+            <span class="material-icons text-sm mr-1">folder_open</span>
+            <span>Seleccionar carpeta</span>
+          </button>
+        </div>
+      </div>
+      <div>
+        <label for="carpeta_documentos" class="{{ label_class }}">Carpeta documentos</label>
+        <div class="flex gap-2">
+          <input type="text" name="carpeta_documentos" id="carpeta_documentos" value="{{ usuario.carpeta_documentos|default:'' }}" class="{{ input_class }} flex-1 min-w-0" placeholder="C:\administraNET\Archivos" {% if es_supervisor %}readonly{% endif %}>
+          <button type="button" class="btn-seleccionar-carpeta flex-shrink-0 inline-flex items-center px-3 py-2 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-1 transition-colors" data-target-id="carpeta_documentos" title="Seleccionar carpeta en este equipo" {% if es_supervisor %}disabled{% endif %}>
+            <span class="material-icons text-sm mr-1">folder_open</span>
+            <span>Seleccionar carpeta</span>
+          </button>
+        </div>
+      </div>
     </div>
 
-    <div>
-      <label for="id_puesto" class="block text-xs font-medium text-gray-700 mb-1">Puesto</label>
-      <select name="id_puesto" id="id_puesto"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
-              {% if es_supervisor %}disabled{% endif %}>
-        <option value="">Seleccionar...</option>
-        {% for puesto in puestos %}
-        <option value="{{ puesto.id }}" {% if usuario.id_puesto == puesto.id %}selected{% endif %}>{{ puesto.nombre }}</option>
-        {% endfor %}
-      </select>
+    {# Panel Apariencia #}
+    <div id="panel-apariencia" role="tabpanel" aria-labelledby="tab-apariencia" x-show="tab === 'apariencia'" x-cloak
+         class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 py-4">
+      <div>
+        <label for="resol_principal" class="{{ label_class }}">Resolución Principal</label>
+        <input type="text" name="resol_principal" id="resol_principal" value="{{ usuario.resol_principal|default:'1024x768' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="fuente_nombre" class="{{ label_class }}">Tipo de fuente</label>
+        <input type="text" name="fuente_nombre" id="fuente_nombre" value="{{ usuario.fuente_nombre|default:'Arial' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="fuente_tamano" class="{{ label_class }}">Tamaño fuente</label>
+        <input type="number" name="fuente_tamano" id="fuente_tamano" value="{{ usuario.fuente_tamano|default:8 }}" min="1" max="72" step="0.25" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="color_formulario" class="{{ label_class }}">Color formulario</label>
+        <input type="text" name="color_formulario" id="color_formulario" value="{{ usuario.color_formulario|default:'' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="tipo_boton" class="{{ label_class }}">Botón formulario</label>
+        <input type="text" name="tipo_boton" id="tipo_boton" value="{{ usuario.tipo_boton|default:'' }}" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
+      <div>
+        <label for="zoom_reportes" class="{{ label_class }}">Zoom reportes (%)</label>
+        <input type="number" name="zoom_reportes" id="zoom_reportes" value="{{ usuario.zoom_reportes|default:100 }}" min="50" max="200" step="10" class="{{ input_class }}" {% if es_supervisor %}readonly{% endif %}>
+      </div>
     </div>
 
-    <div>
-      <label for="id_sucursal" class="block text-xs font-medium text-gray-700 mb-1">Sucursal</label>
-      <select name="id_sucursal" id="id_sucursal"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500"
-              {% if es_supervisor %}disabled{% endif %}>
-        <option value="">Seleccionar...</option>
-        {% for sucursal in sucursales %}
-        <option value="{{ sucursal.id }}" {% if usuario.id_sucursal == sucursal.id %}selected{% endif %}>{{ sucursal.nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
+    {% endwith %}
+    {% endwith %}
 
-    <div class="flex items-center justify-between pt-4 border-t">
-      <a href="{% url 'core:usuarios' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors" title="Cancelar">
+    <div class="flex items-center justify-between pt-6 mt-6 border-t border-gray-200 dark:border-gray-600">
+      <a href="{% url 'core:usuarios' %}" class="inline-flex items-center justify-center w-8 h-8 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors" title="Cancelar">
         <span class="material-icons text-base">close</span>
       </a>
-      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Guardar Cambios">
+      <button type="submit" class="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs transition-colors" title="Guardar cambios">
         <span class="material-icons text-base">save</span>
       </button>
     </div>
   </form>
 </div>
-{% endblock %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Toggle estado (Activo/Anulado)
+  var btn = document.getElementById('btn-toggle-estado-usuario');
+  var hidden = document.getElementById('baja_usuario_usr');
+  if (btn && hidden) {
+    function actualizarEstilo() {
+      var activo = (hidden.value !== 'Si');
+      var icon = document.getElementById('btn-toggle-estado-usuario-icon');
+      var text = document.getElementById('btn-toggle-estado-usuario-text');
+      if (activo) {
+        btn.className = 'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800';
+        if (icon) icon.textContent = 'check_circle';
+        if (text) text.textContent = 'Activo';
+        btn.title = 'Clic para desactivar';
+      } else {
+        btn.className = 'inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500 bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800';
+        if (icon) icon.textContent = 'cancel';
+        if (text) text.textContent = 'Anulado';
+        btn.title = 'Clic para activar';
+      }
+    }
+    if (!btn.disabled) {
+      btn.addEventListener('click', function() {
+        hidden.value = (hidden.value === 'Si') ? 'No' : 'Si';
+        actualizarEstilo();
+      });
+    }
+    actualizarEstilo();
+  }
 
+  // Selector de carpeta local (Rutas y archivos)
+  var folderPicker = document.getElementById('folder-picker-usuario');
+  var folderTargetId = null;
+  if (folderPicker) {
+    folderPicker.addEventListener('change', function() {
+      if (!folderTargetId) return;
+      var target = document.getElementById(folderTargetId);
+      if (!target) return;
+      var path = '';
+      if (this.value) {
+        path = this.value;
+      } else if (this.files && this.files.length > 0 && this.files[0].webkitRelativePath) {
+        var rel = this.files[0].webkitRelativePath;
+        path = rel.split('/')[0] || rel.split('\\\\')[0] || rel;
+      }
+      if (path) target.value = path;
+      folderTargetId = null;
+      this.value = '';
+    });
+    document.querySelectorAll('.btn-seleccionar-carpeta').forEach(function(b) {
+      b.addEventListener('click', function() {
+        if (this.disabled) return;
+        folderTargetId = this.getAttribute('data-target-id');
+        if (folderTargetId) folderPicker.click();
+      });
+    });
+  }
+});
+</script>
+<style>[x-cloak]{display:none!important}</style>
+{% endblock %}

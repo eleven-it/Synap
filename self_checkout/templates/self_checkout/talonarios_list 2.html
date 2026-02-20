@@ -1,0 +1,246 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Puntos de venta y talonarios · Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-10">
+      <div>
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold">Self-Checkout</p>
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+          Puntos de venta y talonarios
+        </h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          Numeración por tipo de comprobante (FA, FB, FC, etc.). Fiel a administraNET: ABMTalonario / CargaTalonarios.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <a href="{% url 'self_checkout:punto_venta_create' %}"
+           class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl transition-all">
+          <span aria-hidden="true">+</span>
+          Nuevo punto de venta
+        </a>
+        {% if id_punto_venta and tipos_faltantes %}
+        <a href="{% url 'self_checkout:talonarios_create' %}?id_punto_venta={{ id_punto_venta }}"
+           class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-lg hover:shadow-xl transition-all">
+          <span aria-hidden="true">+</span>
+          Agregar talonario
+        </a>
+        {% endif %}
+        <a href="{% url 'self_checkout:config_list' %}"
+           class="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+          Volver a configuración
+        </a>
+      </div>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="mb-6 flex flex-wrap items-end gap-4">
+      <div>
+        <label for="pv" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Punto de venta</label>
+        <form method="get" action="{% url 'self_checkout:talonarios_list' %}" class="flex gap-2 items-center flex-wrap">
+          <select name="id_punto_venta" id="pv" onchange="this.form.submit()"
+                  class="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 max-w-xs">
+            {% for p in puntos_venta %}
+            <option value="{{ p.id_punto_venta }}" {% if id_punto_venta == p.id_punto_venta %}selected{% endif %}>
+              PV {{ p.nro_punto_venta }} (id {{ p.id_punto_venta }})
+            </option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      {% if id_punto_venta and id_sucursal_pv %}
+      <div class="flex flex-col gap-1">
+        <a href="{% url 'self_checkout:config_create' %}?id_punto_venta={{ id_punto_venta }}&id_sucursal={{ id_sucursal_pv }}"
+           class="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all w-fit">
+          Crear autoservicio con este PV
+        </a>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Podés tener varios autoservicios; cada uno usa un PV. Este enlace crea uno nuevo con PV {{ pv_label }} preseleccionado. Para asignar este PV a un autoservicio ya existente, usá <a href="{% url 'self_checkout:config_list' %}" class="text-sky-600 dark:text-sky-400 hover:underline">Configuración</a> → Editar.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+      {% if talonarios %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Comp</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nro actual</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nro inicial</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nro final</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nro CAI</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Fecha CAI</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nro crédito</th>
+              <th class="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for t in talonarios %}
+            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+              <td class="px-6 py-4 font-medium text-slate-900 dark:text-white">{{ t.TipoComprobante }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.Nro }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.NroInic }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.NroFinal }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300 font-mono">{{ t.NroCAI|default:"—" }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.FechaCAI|date:"d/m/Y"|default:"—" }}</td>
+              <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">{{ t.Nro_Credito }}</td>
+              <td class="px-6 py-4 flex flex-wrap gap-2">
+                <button type="button" class="talonario-consulta-afip-btn text-sm font-medium text-amber-600 dark:text-amber-400 hover:underline"
+                        data-id-pv="{{ t.id_punto_venta }}" data-tipo="{{ t.TipoComprobante }}">
+                  Consultar AFIP
+                </button>
+                <a href="{% url 'self_checkout:talonarios_edit' id_punto_venta=t.id_punto_venta tipo_comprobante=t.TipoComprobante %}"
+                   class="text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline">Modificar</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="p-12 text-center text-slate-500 dark:text-slate-400">
+        <p class="text-sm">No hay talonarios para este punto de venta.</p>
+        {% if id_punto_venta and tipos_faltantes %}
+        <a href="{% url 'self_checkout:talonarios_create' %}?id_punto_venta={{ id_punto_venta }}" class="mt-4 inline-flex rounded-xl px-4 py-2 text-sm font-semibold text-sky-600 dark:text-sky-400 hover:underline">Agregar talonario</a>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Modal Consulta AFIP / Sincronizar numeración -->
+<div id="modal-afip-talonario" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="modal-afip-titulo">
+  <div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl p-6">
+    <h2 id="modal-afip-titulo" class="text-lg font-semibold text-slate-900 dark:text-white">Numeración AFIP vs AdministraNET</h2>
+    <p id="modal-afip-subtitulo" class="text-sm text-slate-500 dark:text-slate-400 mt-1">PV <span id="modal-pv"></span>, tipo <span id="modal-tipo"></span></p>
+    <div id="modal-afip-loading" class="mt-4 py-6 text-center text-slate-500 dark:text-slate-400">
+      <span class="inline-block animate-pulse">Consultando AFIP…</span>
+    </div>
+    <div id="modal-afip-error" class="hidden mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm"></div>
+    <div id="modal-afip-content" class="hidden mt-4 space-y-3">
+      <div class="flex justify-between text-sm">
+        <span class="text-slate-600 dark:text-slate-400">Último autorizado en AFIP:</span>
+        <span id="modal-ultimo-afip" class="font-mono font-medium text-slate-900 dark:text-white"></span>
+      </div>
+      <div class="flex justify-between text-sm">
+        <span class="text-slate-600 dark:text-slate-400">Próximo en AFIP (ARCA):</span>
+        <span id="modal-proximo-afip" class="font-mono font-medium text-slate-900 dark:text-white"></span>
+      </div>
+      <div class="flex justify-between text-sm">
+        <span class="text-slate-600 dark:text-slate-400">Próximo en AdministraNET:</span>
+        <span id="modal-nro-talonario" class="font-mono font-medium text-slate-900 dark:text-white"></span>
+      </div>
+      <div id="modal-afip-desinc" class="hidden mt-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm">
+        Hay desincronización. Usá <strong>Sincronizar</strong> para actualizar AdministraNET con el valor de AFIP.
+      </div>
+      <div id="modal-afip-sinc-ok" class="hidden mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm">
+        Numeración sincronizada.
+      </div>
+    </div>
+    <div class="mt-6 flex flex-wrap gap-3 justify-end">
+      <button type="button" id="modal-afip-btn-sincronizar" class="hidden rounded-xl px-4 py-2.5 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-900 focus:ring-2 focus:ring-amber-400">
+        Sincronizar numeración
+      </button>
+      <button type="button" id="modal-afip-btn-cerrar" class="rounded-xl px-4 py-2.5 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const modal = document.getElementById('modal-afip-talonario');
+  const loadingEl = document.getElementById('modal-afip-loading');
+  const errorEl = document.getElementById('modal-afip-error');
+  const contentEl = document.getElementById('modal-afip-content');
+  const desincEl = document.getElementById('modal-afip-desinc');
+  const sincOkEl = document.getElementById('modal-afip-sinc-ok');
+  const btnSinc = document.getElementById('modal-afip-btn-sincronizar');
+  const btnCerrar = document.getElementById('modal-afip-btn-cerrar');
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name="csrf-token"]')?.content;
+
+  function showModal() { modal.classList.remove('hidden'); }
+  function hideModal() { modal.classList.add('hidden'); }
+  function showLoading() { loadingEl.classList.remove('hidden'); errorEl.classList.add('hidden'); contentEl.classList.add('hidden'); desincEl.classList.add('hidden'); sincOkEl.classList.add('hidden'); btnSinc.classList.add('hidden'); }
+  function showError(msg) { loadingEl.classList.add('hidden'); contentEl.classList.add('hidden'); errorEl.classList.remove('hidden'); errorEl.textContent = msg; btnSinc.classList.add('hidden'); }
+  function showContent(data) {
+    loadingEl.classList.add('hidden'); errorEl.classList.add('hidden'); contentEl.classList.remove('hidden');
+    document.getElementById('modal-pv').textContent = data.id_punto_venta;
+    document.getElementById('modal-tipo').textContent = data.tipo_comprobante;
+    document.getElementById('modal-ultimo-afip').textContent = data.ultimo_afip != null ? data.ultimo_afip : '—';
+    document.getElementById('modal-proximo-afip').textContent = data.proximo_afip != null ? data.proximo_afip : '—';
+    document.getElementById('modal-nro-talonario').textContent = data.nro_talonario != null ? data.nro_talonario : '—';
+    desincEl.classList.toggle('hidden', data.sincronizado);
+    sincOkEl.classList.toggle('hidden', !data.sincronizado);
+    btnSinc.classList.toggle('hidden', data.sincronizado);
+    btnSinc.dataset.idPv = data.id_punto_venta;
+    btnSinc.dataset.tipo = data.tipo_comprobante;
+    btnSinc.dataset.nro = data.proximo_afip;
+  }
+
+  document.querySelectorAll('.talonario-consulta-afip-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      const idPv = btn.getAttribute('data-id-pv');
+      const tipo = btn.getAttribute('data-tipo');
+      if (!idPv || !tipo) return;
+      showModal(); showLoading();
+      try {
+        const res = await fetch('/api/self-checkout/talonarios/consulta-afip/?id_punto_venta=' + encodeURIComponent(idPv) + '&tipo_comprobante=' + encodeURIComponent(tipo), { credentials: 'same-origin' });
+        const data = await res.json().catch(function() { return {}; });
+        if (data.error && data.ok === false) {
+          showError(data.error);
+        } else {
+          showContent(data);
+        }
+      } catch (e) {
+        showError('Error de conexión');
+      }
+    });
+  });
+
+  btnSinc.addEventListener('click', async function() {
+    const idPv = btnSinc.dataset.idPv;
+    const tipo = btnSinc.dataset.tipo;
+    const nro = btnSinc.dataset.nro;
+    if (!idPv || !tipo || nro === undefined) return;
+    btnSinc.disabled = true;
+    try {
+      const res = await fetch('/api/self-checkout/talonarios/sincronizar/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '', 'Accept': 'application/json' },
+        body: JSON.stringify({ id_punto_venta: parseInt(idPv, 10), tipo_comprobante: tipo, nro: parseInt(nro, 10) }),
+        credentials: 'same-origin'
+      });
+      const data = await res.json().catch(function() { return {}; });
+      if (res.ok && data.ok) {
+        showContent({ id_punto_venta: parseInt(idPv, 10), tipo_comprobante: tipo, ultimo_afip: parseInt(nro, 10) - 1, proximo_afip: parseInt(nro, 10), nro_talonario: parseInt(nro, 10), sincronizado: true });
+        setTimeout(function() { window.location.reload(); }, 800);
+      } else {
+        showError(data.error || 'No se pudo sincronizar');
+      }
+    } catch (e) {
+      showError('Error de conexión');
+    }
+    btnSinc.disabled = false;
+  });
+
+  btnCerrar.addEventListener('click', hideModal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) hideModal(); });
+})();
+</script>
+{% endblock %}

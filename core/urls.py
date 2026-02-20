@@ -2,7 +2,7 @@ from django.urls import path, include
 from . import views
 from .views import views_api
 from core.views.cdn_wizard import CDNWizardView
-from core.views.views import empresa_listar_view, empresa_eliminar_view, empresa_detalle_view, empresa_ficha_view, branch_list_view, branch_create_view, branch_edit_view, branch_delete_view, cambiar_empresa_branch
+from core.views.views import empresa_listar_view, empresa_eliminar_view, empresa_detalle_view, empresa_ficha_view, branch_list_view, branch_create_view, branch_edit_view, branch_delete_view, branch_toggle_estado_view, cambiar_empresa_branch
 from core.views.views_general import MenuExampleView
 from core.views.module_admin import (
     ModuleListView, ModuleDetailView, ModuleToggleView, ModuleBulkActionView,
@@ -101,6 +101,7 @@ urlpatterns = [
     path('empresas/<int:empresa_id>/sucursales/', branch_list_view, name='branch_list'),
     path('empresas/<int:empresa_id>/sucursales/nueva/', branch_create_view, name='branch_create'),
     path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/editar/', branch_edit_view, name='branch_edit'),
+    path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/toggle-estado/', branch_toggle_estado_view, name='branch_toggle_estado'),
     path('empresas/<int:empresa_id>/sucursales/<int:branch_id>/eliminar/', branch_delete_view, name='branch_delete'),
     path('cambiar-empresa-branch/', cambiar_empresa_branch, name='cambiar_empresa_branch'),
     

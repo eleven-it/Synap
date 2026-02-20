@@ -51,11 +51,13 @@ class RetrievalService:
         top_k: int | None = None,
         source_type: str | None = None,
         include_global: bool = True,
+        sistema: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Busca chunks por similitud al texto de la query.
         - company_id: empresa del caso; se incluyen chunks globales (company_id IS NULL) si include_global.
         - source_type: opcional (caso, codigo, human_note, resolved_case).
+        - sistema: opcional ("synap" | "administranet") para filtrar por metadata.sistema.
         Retorna lista de {"chunk_id", "text", "score", "metadata", "source_type", "source_id"}.
         """
         k = min(max(1, top_k or self.top_k), MAX_TOP_K)
@@ -77,6 +79,8 @@ class RetrievalService:
 
         if source_type:
             qs = qs.filter(source_type=source_type)
+        if sistema:
+            qs = qs.filter(metadata__sistema=sistema)
 
         from pgvector.django import CosineDistance
 
@@ -106,6 +110,7 @@ class RetrievalService:
         top_k: int | None = None,
         source_type: str | None = None,
         include_global: bool = True,
+        sistema: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Búsqueda textual (Postgres full-text) para admin cuando no hay EMBEDDING_FUNCTION.
@@ -121,6 +126,8 @@ class RetrievalService:
             qs = qs.filter(company_id__isnull=False)
         if source_type:
             qs = qs.filter(source_type=source_type)
+        if sistema:
+            qs = qs.filter(metadata__sistema=sistema)
         qs = qs.filter(text__icontains=query)[:k]
         return [
             {

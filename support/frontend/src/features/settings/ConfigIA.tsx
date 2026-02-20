@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Drawer,
   Typography,
@@ -10,11 +10,27 @@ import {
   FormControlLabel,
   Switch,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  ToggleButtonGroup,
+  ToggleButton,
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import SendIcon from '@mui/icons-material/Send'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/api/endpoints'
 import type { IAConfig } from '@/types'
+
+interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
 
 interface ConfigIAProps {
   open: boolean
@@ -31,6 +47,11 @@ export default function ConfigIA({ open, onClose, companyId = null }: ConfigIAPr
   const [status, setStatus] = useState<string>('draft')
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [testMessage, setTestMessage] = useState<string | null>(null)
+  const [chatModalOpen, setChatModalOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatSistema, setChatSistema] = useState<'' | 'synap' | 'administranet'>('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   const { data: list, isLoading } = useQuery({
     queryKey: ['config', 'ia', companyId],
@@ -82,6 +103,28 @@ export default function ConfigIA({ open, onClose, companyId = null }: ConfigIAPr
     },
   })
 
+  const chatMutation = useMutation({
+    mutationFn: ({ texto, sistema }: { texto: string; sistema?: 'synap' | 'administranet' }) =>
+      api.copiloto.mensaje(texto, sistema),
+    onSuccess: (res, { texto }) => {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'user', content: texto },
+        { role: 'assistant', content: res?.data?.respuesta_ia ?? '' },
+      ])
+      setChatInput('')
+    },
+    onError: (err: { response?: { data?: { message?: string; detail?: string } } }) => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: err.response?.data?.message || err.response?.data?.detail || 'Error al obtener respuesta del modelo.',
+        },
+      ])
+    },
+  })
+
   const handleSave = () => {
     setSaveMessage(null)
     setTestMessage(null)
@@ -102,8 +145,25 @@ export default function ConfigIA({ open, onClose, companyId = null }: ConfigIAPr
       setTestMessage('Indique proveedor y modelo y guarde antes de probar.')
       return
     }
-    testMutation.mutate()
+    setChatMessages([])
+    setChatModalOpen(true)
   }
+
+  const handleSendChat = () => {
+    const texto = chatInput.trim()
+    if (!texto || chatMutation.isPending) return
+    chatMutation.mutate({ texto, sistema: chatSistema || undefined })
+  }
+
+  const handleCloseChatModal = () => {
+    setChatModalOpen(false)
+    setChatMessages([])
+    setChatInput('')
+  }
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
 
   return (
     <Drawer
@@ -194,9 +254,9 @@ export default function ConfigIA({ open, onClose, companyId = null }: ConfigIAPr
               <Button
                 variant="outlined"
                 onClick={handleTest}
-                disabled={testMutation.isPending || !provider.trim() || !model.trim()}
+                disabled={!provider.trim() || !model.trim()}
               >
-                {testMutation.isPending ? 'Probando…' : 'Probar LLM'}
+                Probar LLM
               </Button>
               <Button variant="contained" onClick={handleSave} disabled={patchMutation.isPending}>
                 {patchMutation.isPending ? 'Guardando…' : 'Guardar'}
@@ -206,6 +266,88 @@ export default function ConfigIA({ open, onClose, companyId = null }: ConfigIAPr
           </>
         )}
       </Box>
+
+      <Dialog
+        open={chatModalOpen}
+        onClose={handleCloseChatModal}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { maxHeight: '85vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>Probar modelo</span>
+          <IconButton onClick={handleCloseChatModal} aria-label="Cerrar" size="small">
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0, display: 'flex', flexDirection: 'column', minHeight: 320 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 1 }}>
+            Conversá con el modelo para probar la configuración. Guardá los cambios antes si acabás de editar.
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 0.5 }}>
+            Pregunta sobre:
+          </Typography>
+          <Box sx={{ px: 2, py: 1 }}>
+            <ToggleButtonGroup
+              value={chatSistema}
+              exclusive
+              onChange={(_, v: '' | 'synap' | 'administranet' | null) => v != null && setChatSistema(v)}
+              size="small"
+            >
+              <ToggleButton value="">Ambos</ToggleButton>
+              <ToggleButton value="synap">Synap</ToggleButton>
+              <ToggleButton value="administranet">AdministraNET (VB6)</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          <Paper variant="outlined" sx={{ flex: 1, m: 2, overflow: 'auto', minHeight: 200 }}>
+            <List dense sx={{ py: 1 }}>
+              {chatMessages.length === 0 && (
+                <ListItem>
+                  <ListItemText
+                    primary="Escribí un mensaje y pulsá Enviar para probar."
+                    primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }}
+                  />
+                </ListItem>
+              )}
+              {chatMessages.map((msg, i) => (
+                <ListItem key={i} alignItems="flex-start" sx={{ flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    {msg.role === 'user' ? 'Vos' : 'Modelo'}
+                  </Typography>
+                  <ListItemText
+                    primary={msg.content}
+                    primaryTypographyProps={{ variant: 'body2', sx: { whiteSpace: 'pre-wrap' } }}
+                    sx={{ maxWidth: '100%' }}
+                  />
+                </ListItem>
+              ))}
+              <div ref={chatEndRef} />
+            </List>
+          </Paper>
+          <Box sx={{ display: 'flex', gap: 1, p: 2, pt: 0 }}>
+            <TextField
+              placeholder="Escribí un mensaje…"
+              size="small"
+              fullWidth
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendChat())}
+              disabled={chatMutation.isPending}
+            />
+            <Button
+              variant="contained"
+              onClick={handleSendChat}
+              disabled={!chatInput.trim() || chatMutation.isPending}
+              endIcon={chatMutation.isPending ? <CircularProgress size={16} /> : <SendIcon />}
+            >
+              Enviar
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1 }}>
+          <Button onClick={handleCloseChatModal}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   )
 }

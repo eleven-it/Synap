@@ -327,4 +327,4 @@ El resultado se muestra en un mensaje (éxito o error) y se actualizan "Última 
 | Copiloto responde "agente IA no está configurado" | Configuración → IA: proveedor `openai`, modelo, API key y estado **Activo**. Ver [§ 9](#9-activar-el-agente-ia-copiloto). |
 | Canales en "Validando" o el bot no responde | El canal debe estar en estado **Activo**. Para que Telegram responda con IA, también **Configuración → IA** debe estar **Activo** (OpenAI u otro con API key). La URL del webhook en Telegram debe ser la de tu backend público: `https://tu-dominio/api/webhooks/telegram/`. Ver [§ 10](#10-canales-telegram-whatsapp-email). |
 
-Documentación adicional: [support/docs/backend/](backend/), [support/docs/frontend/](frontend/), [support/docker/README.md](../docker/README.md).
+Documentación adicional: [support/docs/backend/](backend/), [support/docs/frontend/](frontend/), [support/docker/README.md](../docker/README.md), [support/docs/PROXMOX_VM_CONFIG.md](PROXMOX_VM_CONFIG.md) (VM en Proxmox, red y HTTPS).

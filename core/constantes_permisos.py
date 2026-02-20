@@ -118,6 +118,13 @@ PERMISOS_POR_MODULO = {
         ("finance.reportes", "Ver reportes financieros"),
         ("finance.exportar", "Exportar datos financieros"),
     ],
+    "Stock": [
+        ("stock.ver", "Ver módulo Stock"),
+        ("stock.crear_movimiento", "Crear movimiento de stock"),
+        ("stock.consultas", "Consultas y anulaciones de stock"),
+        ("stock.ref_movstock", "ABM referencia de movimiento de stock"),
+        ("stock.informes", "Informes de stock"),
+    ],
     "Reportes": [
         ("reports.view_operational", "Informes operativos"),
         ("reports.view_managerial", "Informes gerenciales"),
@@ -228,13 +235,6 @@ PERMISOS_POR_MODULO = {
         ("core.can_validate_data", "Validar datos de integración"),
         ("core.can_manage_validation_rules", "Gestionar reglas de validación"),
     ],
-    "SIA (Insights Estratégicos y Alineamiento)": [
-        ("sia.manage_cycles", "Gestionar Ciclos de Evaluación"),
-        ("sia.view_company_dashboard", "Ver Dashboard Consolidado"),
-        ("sia.view_own_responses", "Ver Propias Respuestas"),
-        ("sia.create_response", "Crear Respuestas"),
-        ("sia.view_all_responses", "Ver Todas las Respuestas"),
-    ]
 }
 
 # Roles predefinidos con sus permisos
@@ -343,3 +343,8 @@ CAN_CONFIGURE_INTEGRATIONS = "core.can_configure_integrations"
 CAN_VALIDATE_DATA = "core.can_validate_data"
 CAN_MANAGE_VALIDATION_RULES = "core.can_manage_validation_rules"
 
+# Self-Checkout (AdministraNET permiso_sistema)
+SCO_KIOSK = "self_checkout.kiosk"
+SCO_SUPERVISOR = "self_checkout.supervisor"
+SCO_ADMIN = "self_checkout.admin"
+SCO_PERMISSIONS = (SCO_KIOSK, SCO_SUPERVISOR, SCO_ADMIN)

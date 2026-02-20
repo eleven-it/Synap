@@ -111,3 +111,12 @@ class SynapClient:
             if e.status_code == 404:
                 return None
             raise
+
+    def get_conocimiento(self) -> list[dict]:
+        """
+        Obtiene items de conocimiento desde Synap para RAG.
+        GET /core/api/support/conocimiento/ → { "items": [ { "text", "source_id", "metadata" } ] }
+        Lanza SynapClientError si la URL no está configurada o la petición falla.
+        """
+        data = self._request("GET", "/core/api/support/conocimiento/")
+        return data.get("items") or []

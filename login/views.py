@@ -77,6 +77,13 @@ def login_view(request):
                 "id_sesion": session_data['id_sesion'] if session_data else None
             }
             
+            # Sincronización automática de permisos Synap → permiso_sistema (con cache por empresa)
+            try:
+                from core.services.sync_permisos_synap import asegurar_permisos_synap_si_procede
+                asegurar_permisos_synap_si_procede(base_empresa)
+            except Exception as e:
+                logger.debug("Sync permisos post-login (no crítico): %s", e)
+            
             logger.info(f"✅ Login exitoso: {cod_usuario} en empresa {base_empresa}")
             
             # Validar y retornar next si está presente
@@ -160,27 +167,46 @@ def logout_view(request):
     user_data = None
     id_sesion = None
     base_empresa = None
-    
+    id_vendedor_usr = None
+
     if hasattr(request, 'session') and request.session:
         user_data = request.session.get("user")
         if user_data:
             id_sesion = user_data.get('id_sesion')
             base_empresa = user_data.get('base_empresa')
-    
+            id_vendedor_usr = user_data.get('id_vendedor_usr')
+
+    # PASO 1b: Cierra_Logueo_Vendedor (paridad Principal VB6) — antes de cerrar sesión
+    if id_vendedor_usr is not None and base_empresa:
+        try:
+            auth_service = AdministraNETAuth()
+            with auth_service.get_connection(base_empresa) as connection:
+                cursor = connection.cursor()
+                cursor.execute("""
+                    UPDATE viajantes
+                    SET logueado = 'No', detalle_logueo = NULL, ip_logueo = NULL
+                    WHERE CodViajante = %s
+                """, [id_vendedor_usr])
+                connection.commit()
+                cursor.close()
+            logger.info("Cierra_Logueo_Vendedor: CodViajante=%s", id_vendedor_usr)
+        except Exception as e:
+            logger.warning("Cierra_Logueo_Vendedor no aplicado (viajantes): %s", e)
+
     # PASO 2: Cerrar sesión en administraNET (MySQL) - DEBE ser antes de limpiar Django
     if id_sesion and base_empresa:
         try:
             auth_service = AdministraNETAuth()
-            connection = auth_service.get_connection(base_empresa)
-            
-            with connection.cursor() as cursor:
+            with auth_service.get_connection(base_empresa) as connection:
+                cursor = connection.cursor()
                 cursor.execute("""
-                    UPDATE sesion 
-                    SET fechafin = NOW() 
+                    UPDATE sesion
+                    SET fechafin = NOW()
                     WHERE id_sesion = %s AND fechafin IS NULL
                 """, [id_sesion])
                 connection.commit()
-            logger.info(f"✅ Sesión {id_sesion} cerrada en administraNET")
+                cursor.close()
+            logger.info("Sesión %s cerrada en administraNET", id_sesion)
         except Exception as e:
             logger.error(f"❌ Error al cerrar sesión en administraNET: {e}", exc_info=True)
             # Continuar con el logout aunque falle el cierre en administraNET

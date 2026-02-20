@@ -1,0 +1,10 @@
+# Levantar solo Support (sin Synap).
+# Uso desde la raíz del repo (obligatorio -p support para que stop/down encuentren los contenedores):
+#   docker compose -f docker-compose.support.yml -p support up -d
+#   docker compose -f docker-compose.support.yml -p support stop
+#   docker compose -f docker-compose.support.yml -p support down
+# Backend: http://localhost:8250  Frontend (perfil dev): http://localhost:3000
+name: support
+
+include:
+  - support/docker/docker-compose.yml

@@ -1,0 +1,36 @@
+# MySQL 5.7 local para DB administraNET (reportes, BO, etc.) — SOLO DESARROLLO
+# En producción la app apunta al MySQL productivo; no se levanta este contenedor.
+# Uso: docker compose -f docker-compose.mysql.yml up -d
+# Restaurar backup: ./scripts/restore-mysql-local.sh backups/backup_administranet_*.zip
+
+services:
+  mysql_administranet:
+    networks:
+      - synap_net
+    image: mysql:5.7
+    platform: linux/amd64
+    container_name: Synap_mysql57
+    environment:
+      MYSQL_ROOT_PASSWORD: root_local
+      MYSQL_DATABASE: administranet
+      MYSQL_USER: administranet
+      MYSQL_PASSWORD: administranet_local
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_administranet_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+networks:
+  synap_net:
+    external: true
+
+volumes:
+  mysql_administranet_data:

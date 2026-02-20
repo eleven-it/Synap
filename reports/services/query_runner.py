@@ -2858,7 +2858,7 @@ class QueryRunnerService:
         
         RESPUESTAS OBLIGATORIAS (Backorder detalle row-level):
         1) ID cliente: comp_ped.Codigo. Tabla maestra: cliente. Join: cliente cli ON cli.Codigo = cp.Codigo.
-        2) precio_x_renglon: stockp.PrecioVentaxR (total por renglón; no unitario).
+        2) precio_x_renglon: stockp.PrecioNetoxR (total por renglón; alineado con VB6).
         3) cant_pend: stockp.cantidad_pendiente.
         4) Subrubro: existe. Tabla subrubro, join articulo.IDSubRubro = subrubro.IDSubRubro. Vendedor: existe.
            Tabla viajantes, join comp_ped.CodViajante = viajantes.CodViajante. Sin match -> ''.
@@ -3131,7 +3131,8 @@ class QueryRunnerService:
                 reservado_excl_clause = " AND cp_res.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
 
             # Detalle BO por producto con cálculo de cobertura
-            # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.
+            # bo_importe = SUM(PrecioNetoxR), alineado con VB6 (stock físico, disponibles y backorder).
+            # Backorder filtrado por stockp.Fecha en el intervalo (como VB6).
             # oc_pendiente = CALCULADO desde stockp+cuentaproveedor (OC Estado=Pendiente). NO usar stock_deposito.saldo_pedido_proveedor.
             # stock_reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). NO usar stock_deposito.saldo_pedido_cliente.
             sql_bo_detalle = f"""
@@ -3141,7 +3142,7 @@ class QueryRunnerService:
                     a.NombreArticulo AS articulo,
                     COALESCE(r.NombreRubro, 'Sin Rubro') AS categoria,
                     SUM(sp.Cantidad) AS bo_qty,
-                    SUM(sp.PrecioVentaxR) AS bo_importe,
+                    SUM(sp.PrecioNetoxR) AS bo_importe,
                     COALESCE(sd.stock_total, 0) AS stock_actual,
                     COALESCE(reservado_sub.reservado, 0) AS stock_reservado,
                     GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(reservado_sub.reservado, 0)) AS disponible,
@@ -3186,12 +3187,13 @@ class QueryRunnerService:
                     AND cp.Anulado = 'No'
                     AND (sp.anulado IS NULL OR sp.anulado = 'No')
                     AND cp.Estado IN {bo_estados}
-                    AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                    AND sp.CodigoMovimiento IS NOT NULL
+                    AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                 GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
             """
-            cursor.execute(sql_bo_detalle)
+            cursor.execute(sql_bo_detalle, [fecha_inicio, fecha_fin])
             bo_rows = cursor.fetchall()
             logger.info("📊 [BO] Detalle BO (producto) OK (%d filas)", len(bo_rows))
 
@@ -3337,10 +3339,11 @@ class QueryRunnerService:
                         AND cp.Anulado = 'No'
                         AND (sp.anulado IS NULL OR sp.anulado = 'No')
                         AND cp.Estado IN {bo_estados}
-                        AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                        AND sp.CodigoMovimiento IS NOT NULL
+                        AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                     ORDER BY sp.IDArt, cp.Fecha, cp.NroComprobante
                 """
-                cursor.execute(sql_bo_comp_detalle)
+                cursor.execute(sql_bo_comp_detalle, [fecha_inicio, fecha_fin])
                 bo_comp_rows = cursor.fetchall()
 
                 def _fmt_bo_date(d):
@@ -3517,8 +3520,8 @@ class QueryRunnerService:
             # =========================================================
             # 3b. BACKORDER DETALLE ROW-LEVEL (Excel-like, un renglón por fila)
             # Cabecera: comp_ped | Renglones: stockp | Cliente: cliente.Codigo | Vendedor: viajantes
-            # precio_x_renglon: stockp.PrecioVentaxR. cant_pend: stockp.cantidad_pendiente.
-            # Sin límite: se devuelve la cantidad real de renglones.
+            # precio_x_renglon: stockp.PrecioNetoxR (alineado con VB6). cant_pend: stockp.cantidad_pendiente.
+            # Filtro por spr.Fecha en el intervalo (como VB6). Sin límite: se devuelve la cantidad real de renglones.
             # =========================================================
             where_bo_rows = [
                 "cp.TipoComprobante = 'PED'",
@@ -3527,8 +3530,9 @@ class QueryRunnerService:
                 "(spr.anulado IS NULL OR spr.anulado = 'No')",
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
+                "spr.Fecha >= %s AND spr.Fecha <= %s",
             ]
-            params_bo_rows = []
+            params_bo_rows = [fecha_inicio, fecha_fin]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
@@ -3547,7 +3551,7 @@ class QueryRunnerService:
                     cp.Estado AS estado,
                     COALESCE(cli.nombre_cliente, '') AS cliente,
                     cp.Codigo AS id_cliente,
-                    COALESCE(spr.PrecioVentaxR, 0) AS precio_x_renglon,
+                    COALESCE(spr.PrecioNetoxR, 0) AS precio_x_renglon,
                     COALESCE(r.NombreRubro, '') AS nombre_rubro,
                     COALESCE(sr.NombreSubRubro, '') AS nombre_sub_rubro,
                     COALESCE(v.Nombre, '') AS nombre_vendedor
@@ -3656,7 +3660,7 @@ class QueryRunnerService:
                 f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 "Reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). No usar stock_deposito.saldo_pedido_cliente.",
-                "Backorder: renglones desde stockp + comp_ped. CON INGRESO = OC pendientes (calculado desde stockp+cuentaproveedor). OC cubre primero faltante reservado, el resto cubre BO. No usar stock_deposito.saldo_pedido_proveedor.",
+                "Backorder: renglones desde stockp + comp_ped, filtrado por stockp.Fecha en el período (alineado con VB6). bo_importe = PrecioNetoxR. CON INGRESO = OC pendientes (calculado desde stockp+cuentaproveedor). OC cubre primero faltante reservado, el resto cubre BO. No usar stock_deposito.saldo_pedido_proveedor.",
                 f"Backorder detalle: {len(backorder_detalle_rows)} renglones.",
                 "Facturación por cliente: % ventas = (sub_total_cliente / facturacion_neta_total) * 100. Última compra = MAX(fecha) dentro del período.",
                 "Facturación: reporte consolidado (todos los depósitos/clientes salvo exclusiones). Tab mostrando primeros " + str(len(facturacion_por_cliente)) + f" clientes (límite {FAC_CLI_LIMIT}).",

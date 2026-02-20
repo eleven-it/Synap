@@ -133,7 +133,7 @@ def telegram_webhook(request):
         direction=MessageDirection.INBOUND,
     )
 
-    reply_text, _ = copilot_reply(text, case=case)
+    reply_text, _, _ = copilot_reply(text, case=case)
 
     ok, err = send_telegram_message(token, chat_id, reply_text)
     if not ok:

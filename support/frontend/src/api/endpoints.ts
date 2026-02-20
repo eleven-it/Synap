@@ -11,6 +11,9 @@ import type {
   MetricsResponse,
   IAConfig,
   ChannelConfig,
+  BrandingConfig,
+  RAGConfigItem,
+  KnowledgeChunksResponse,
 } from '@/types'
 
 const api = {
@@ -44,14 +47,23 @@ const api = {
     },
     copilotMessages: (id: number) =>
       client.get<{ messages: CopilotMessage[] }>(`/casos/${id}/copiloto/mensajes/`),
-    copilotPost: (id: number, texto: string, guardar_respuesta_como_conocimiento = false) =>
+    copilotPost: (
+      id: number,
+      texto: string,
+      guardar_respuesta_como_conocimiento = false,
+      sistema?: 'synap' | 'administranet',
+    ) =>
       client.post<{
         respuesta_ia: string
         sugerencia_respuesta: string
         mensaje_id: number
         guardado_como_conocimiento: boolean
         knowledge_chunk_id: number | null
-      }>(`/casos/${id}/copiloto/mensajes/`, { texto, guardar_respuesta_como_conocimiento }),
+      }>(`/casos/${id}/copiloto/mensajes/`, {
+        texto,
+        guardar_respuesta_como_conocimiento,
+        ...(sistema ? { sistema } : {}),
+      }),
   },
   companies: {
     list: () => client.get<Company[]>('/empresas/'),
@@ -74,6 +86,8 @@ const api = {
   metrics: (params?: { desde_fecha?: string; hasta_fecha?: string; empresa_id?: number }) =>
     client.get<MetricsResponse>('/metricas/', { params }),
   knowledge: {
+    chunksList: (params?: { limit?: number; offset?: number; source_type?: string; company_id?: number | null }) =>
+      client.get<KnowledgeChunksResponse>('/knowledge/chunks/', { params: params ?? {} }),
     ingest: (items: { text: string; source_id?: string; metadata?: Record<string, unknown> }[], company_id?: number, source_type?: string) =>
       client.post<{ created: number; updated: number; message: string }>('/knowledge/ingest/', {
         items,
@@ -83,10 +97,23 @@ const api = {
     search: (q: string, params?: { company_id?: number; top_k?: number; source_type?: string; fallback?: string }) =>
       client.get<{ results: unknown[]; mode?: string }>('/knowledge/search/', { params: { q, ...params } }),
   },
+  copiloto: {
+    /** Envía un mensaje al copiloto (sin caso) y devuelve la respuesta IA. sistema opcional filtra RAG. */
+    mensaje: (texto: string, sistema?: 'synap' | 'administranet') =>
+      client.post<{ respuesta_ia: string; sugerencia_respuesta: string | null }>('/copiloto/mensaje/', {
+        texto,
+        ...(sistema ? { sistema } : {}),
+      }),
+  },
   config: {
     channels: {
       list: (params?: { company_id?: number | null }) =>
         client.get<{ count: number; results: ChannelConfig[] }>('/config/channels/', { params: params ?? {} }),
+      get: (id: number) => client.get<ChannelConfig>(`/config/channels/${id}/`),
+      create: (data: { company_id?: number | null; channel_type: string; display_name?: string; status?: string; config?: Record<string, unknown> }) =>
+        client.post<ChannelConfig>('/config/channels/', data),
+      patch: (id: number, data: { config?: Record<string, unknown>; status?: string; display_name?: string; company_id?: number | null }) =>
+        client.patch<ChannelConfig>(`/config/channels/${id}/`, data),
       activate: (id: number) =>
         client.post<{ success: boolean; message?: string }>(`/config/channels/${id}/activate/`),
       deactivate: (id: number) =>
@@ -102,7 +129,21 @@ const api = {
       test: (company_id?: number | null) =>
         client.post<{ success: boolean; message?: string }>('/config/ia/test/', company_id != null ? { company_id } : {}),
     },
+    branding: {
+      list: (company_id?: number | null) =>
+        client.get<BrandingConfig[]>('/config/branding/', { params: company_id != null ? { company_id } : {} }),
+      patch: (data: Partial<{ company_id: number | null; assistant_name: string; welcome_message: string; default_language: string }>) =>
+        client.patch<BrandingConfig>('/config/branding/', data),
+    },
+    rag: {
+      list: (company_id?: number | null) =>
+        client.get<RAGConfigItem[]>('/config/rag/', { params: company_id != null ? { company_id } : {} }),
+      patch: (data: Partial<{ company_id: number | null; top_k: number; status: string; sources_enabled: string[]; cache_ttl_seconds: number }>) =>
+        client.patch<RAGConfigItem>('/config/rag/', data),
+    },
   },
+  knowledgeSyncFromSynap: (company_id?: number | null) =>
+    client.post<{ created: number; updated: number; message: string }>('/knowledge/sync-from-synap/', { company_id: company_id ?? null }),
 }
 
 export default api

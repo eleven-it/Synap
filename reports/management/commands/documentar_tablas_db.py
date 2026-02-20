@@ -7,8 +7,8 @@ Además extrae:
 - Uso de cada tabla en AdministraNET (formularios/procedimientos que leen/escriben).
 
 Salida:
-- reports/docs/DB_INDICE_TABLAS.md: índice de tablas con enlaces.
-- reports/docs/tablas/<nombre_tabla>.md: documento por tabla (schema, relaciones, uso).
+- docs/general/DB_INDICE_TABLAS.md: índice de tablas con enlaces.
+- docs/general/tablas/<nombre_tabla>.md: documento por tabla (schema, relaciones, uso).
 
 Uso:
   python manage.py documentar_tablas_db
@@ -61,7 +61,7 @@ class Command(BaseCommand):
             "--output-dir",
             type=str,
             default=None,
-            help="Carpeta base de documentación (default: reports/docs)",
+            help="Carpeta base de documentación (default: docs/general)",
         )
 
     def handle(self, *args, **options):
@@ -80,7 +80,7 @@ class Command(BaseCommand):
         vb6_path = options.get("vb6")
         output_dir = Path(
             options.get("output_dir")
-            or (Path(settings.BASE_DIR) / "reports" / "docs")
+            or (Path(settings.BASE_DIR) / "docs" / "general")
         )
         tablas_dir = output_dir / "tablas"
         tablas_dir.mkdir(parents=True, exist_ok=True)

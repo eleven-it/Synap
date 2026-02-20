@@ -13,8 +13,10 @@ Documentadas en `support/backend/.env.example`. Resumen:
 | POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD | Alternativa a DATABASE_URL | |
 | REDIS_URL | Redis (broker y cache) | redis://localhost:6379/0 |
 | CELERY_BROKER_URL | Broker de Celery | Si no se define, se usa REDIS_URL |
-| SUPPORT_SYNAP_API_URL | URL base de la API Synap | |
+| SUPPORT_SYNAP_API_URL | URL base de la API Synap (para empresas y **conocimiento RAG**) | |
 | SUPPORT_SYNAP_JWT_SECRET | Secret para firmar JWT hacia Synap | |
+| OPENAI_API_KEY | API key OpenAI para embeddings (RAG). Puede ser la misma que en Config → IA | |
+| EMBEDDING_DIMENSION | Dimensión del vector (default 1536, text-embedding-3-small) | 1536 |
 | S3_ENDPOINT_URL | Endpoint S3/MinIO (MinIO: http://minio:9000) | |
 | S3_ACCESS_KEY, S3_SECRET_KEY | Credenciales S3 | |
 | S3_BUCKET_NAME | Bucket de adjuntos | support-attachments |

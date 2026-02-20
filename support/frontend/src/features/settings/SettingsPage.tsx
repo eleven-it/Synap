@@ -166,6 +166,17 @@ export default function SettingsPage() {
     iaToggleMutation.mutate(active)
   }
 
+  const { data: ragList } = useQuery({
+    queryKey: ['config', 'rag', null],
+    queryFn: async () => {
+      const { data } = await api.config.rag.list(undefined)
+      return data
+    },
+  })
+  const ragConfig = Array.isArray(ragList) && ragList.length > 0 ? ragList[0] : null
+  const ragStatus: ConfigStatus = !ragConfig ? 'no_configurado' : ragConfig.status === 'active' ? 'activo' : 'parcial'
+  const ragActive = ragConfig?.status === 'active'
+
   const { data: channelsResponse } = useQuery({
     queryKey: ['config', 'channels'],
     queryFn: async () => {
@@ -187,6 +198,21 @@ export default function SettingsPage() {
   const channelsActive = channelsList.some((c) => c.status === 'active')
   const firstChannelId = channelsList[0]?.id
   const firstActiveChannelId = channelsList.find((c) => c.status === 'active')?.id
+
+  const ragToggleMutation = useMutation({
+    mutationFn: (active: boolean) =>
+      api.config.rag.patch({
+        company_id: ragConfig?.company_id ?? null,
+        status: active ? 'active' : 'draft',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config', 'rag'] })
+      enqueueSnackbar('Estado de RAG actualizado', { variant: 'success' })
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) => {
+      enqueueSnackbar(err.response?.data?.message || 'Error al actualizar RAG', { variant: 'error' })
+    },
+  })
 
   const channelToggleMutation = useMutation({
     mutationFn: ({ active, id }: { active: boolean; id: number }) =>
@@ -279,10 +305,14 @@ export default function SettingsPage() {
         <Grid item xs={12} md={6} lg={4}>
           <ConfigCard
             title="RAG / Conocimiento"
-            description="Fuentes, top_k, política global+empresa, cache. Reindexar e ingestar."
-            status="no_configurado"
+            description="Base de conocimiento para el copiloto. Cargar desde Synap, top_k, activar/desactivar."
+            status={ragStatus}
             onConfigure={() => setDrawer('rag')}
             onTest={() => {}}
+            canActivate
+            active={ragActive}
+            onToggleActive={(v) => (ragConfig ? ragToggleMutation.mutate(v) : setDrawer('rag'))}
+            toggleDisabled={ragToggleMutation.isPending}
             icon={<ScienceIcon />}
           />
         </Grid>
@@ -336,7 +366,7 @@ export default function SettingsPage() {
         </Grid>
       </Grid>
 
-      {drawer === 'canales' && <ConfigCanales open onClose={closeDrawer} />}
+      {drawer === 'canales' && <ConfigCanales open onClose={closeDrawer} channelsList={channelsList} />}
       {drawer === 'ia' && <ConfigIA open onClose={closeDrawer} />}
       {drawer === 'rag' && <ConfigRAG open onClose={closeDrawer} />}
       {drawer === 'sla' && <ConfigSLA open onClose={closeDrawer} />}

@@ -51,7 +51,7 @@
                     onchange="cambiarPais()">
               <option value="">-- Seleccione un país --</option>
               {% for pais in paises %}
-                <option value="{{ pais.id }}" {% if empresa.id_pais == pais.id %}selected{% endif %}>{{ pais.nombre }}</option>
+                <option value="{{ pais.id }}" {% if empresa and empresa.id_pais|stringformat:"s" == pais.id|stringformat:"s" %}selected{% endif %}>{{ pais.nombre }}</option>
               {% endfor %}
             </select>
             <input type="hidden" name="Pais" id="Pais" value="{{ empresa.Pais|default:'' }}">
@@ -65,7 +65,7 @@
                     onchange="cambiarProvincia()">
               <option value="">-- Seleccione una provincia --</option>
               {% for provincia in provincias %}
-                <option value="{{ provincia.id }}" {% if empresa.CodProvincia == provincia.id %}selected{% endif %}>{{ provincia.nombre }}</option>
+                <option value="{{ provincia.id }}" {% if empresa and empresa.CodProvincia|stringformat:"s" == provincia.id|stringformat:"s" %}selected{% endif %}>{{ provincia.nombre }}</option>
               {% endfor %}
             </select>
           </div>
@@ -77,7 +77,7 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
               <option value="">-- Seleccione un departamento --</option>
               {% for departamento in departamentos %}
-                <option value="{{ departamento.id }}" {% if empresa.CodDepartamento == departamento.id %}selected{% endif %}>{{ departamento.nombre }}</option>
+                <option value="{{ departamento.id }}" {% if empresa and empresa.CodDepartamento|stringformat:"s" == departamento.id|stringformat:"s" %}selected{% endif %}>{{ departamento.nombre }}</option>
               {% endfor %}
             </select>
           </div>
@@ -96,7 +96,7 @@
                     class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
               <option value="">-- Seleccione una condición --</option>
               {% for contribuyente in contribuyentes %}
-                <option value="{{ contribuyente.id }}" {% if empresa.IDIva == contribuyente.id %}selected{% endif %}>{{ contribuyente.nombre }}</option>
+                <option value="{{ contribuyente.id }}" {% if empresa and empresa.IDIva|stringformat:"s" == contribuyente.id|stringformat:"s" %}selected{% endif %}>{{ contribuyente.nombre }}</option>
               {% endfor %}
             </select>
           </div>
@@ -184,45 +184,52 @@
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
+          <!-- Opcionales: redes y URLs (no obligatorios) -->
           <!-- WhatsApp -->
           <div>
             <label for="whatsapp" class="block text-xs font-medium text-gray-700 mb-1">WhatsApp</label>
-            <input type="text" name="whatsapp" id="whatsapp" value="{{ empresa.whatsapp|default:'-' }}"
+            <input type="text" name="whatsapp" id="whatsapp" value="{{ empresa.whatsapp|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
           <!-- Facebook Messenger -->
           <div>
             <label for="facebook_messenger" class="block text-xs font-medium text-gray-700 mb-1">Facebook mess</label>
-            <input type="text" name="facebook_messenger" id="facebook_messenger" value="{{ empresa.facebook_messenger|default:'-' }}"
+            <input type="text" name="facebook_messenger" id="facebook_messenger" value="{{ empresa.facebook_messenger|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
           <!-- Twitter -->
           <div>
             <label for="twitter" class="block text-xs font-medium text-gray-700 mb-1">Twitter</label>
-            <input type="text" name="twitter" id="twitter" value="{{ empresa.twitter|default:'-' }}"
+            <input type="text" name="twitter" id="twitter" value="{{ empresa.twitter|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
           <!-- URL empresa -->
           <div>
             <label for="direccion_web" class="block text-xs font-medium text-gray-700 mb-1">URL empresa</label>
-            <input type="url" name="direccion_web" id="direccion_web" value="{{ empresa.direccion_web|default:'-' }}"
+            <input type="text" name="direccion_web" id="direccion_web" value="{{ empresa.direccion_web|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
           <!-- URL ecom cli -->
           <div>
             <label for="url_ecommerce_cliente" class="block text-xs font-medium text-gray-700 mb-1">URL ecom cli</label>
-            <input type="url" name="url_ecommerce_cliente" id="url_ecommerce_cliente" value="{{ empresa.url_ecommerce_cliente|default:'-' }}"
+            <input type="text" name="url_ecommerce_cliente" id="url_ecommerce_cliente" value="{{ empresa.url_ecommerce_cliente|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
           <!-- URL ecom vend -->
           <div>
             <label for="url_ecommerce_vendedor" class="block text-xs font-medium text-gray-700 mb-1">URL ecom vend</label>
-            <input type="url" name="url_ecommerce_vendedor" id="url_ecommerce_vendedor" value="{{ empresa.url_ecommerce_vendedor|default:'-' }}"
+            <input type="text" name="url_ecommerce_vendedor" id="url_ecommerce_vendedor" value="{{ empresa.url_ecommerce_vendedor|default:'' }}"
+                   placeholder="Opcional"
                    class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
           </div>
 
@@ -232,7 +239,7 @@
             <select name="rubro_canal" id="rubro_canal"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
               {% for valor in valores_rubro_canal %}
-                <option value="{{ valor }}" {% if empresa.rubro_canal == valor %}selected{% endif %}>{{ valor }}</option>
+                <option value="{{ valor }}" {% if empresa and empresa.rubro_canal == valor %}selected{% endif %}>{{ valor }}</option>
               {% endfor %}
             </select>
           </div>
@@ -243,7 +250,7 @@
             <select name="actividad" id="actividad"
                     class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
               {% for valor in valores_actividad %}
-                <option value="{{ valor }}" {% if empresa.actividad == valor %}selected{% endif %}>{{ valor }}</option>
+                <option value="{{ valor }}" {% if empresa and empresa.actividad == valor %}selected{% endif %}>{{ valor }}</option>
               {% endfor %}
             </select>
           </div>

@@ -96,7 +96,7 @@ def hook_list(request):
     
     # Obtener módulos y categorías para filtros
     modules = list(set([module['name'] for module in module_manager.get_modules_summary()['modules']]))
-    categories = ['sales', 'purchases', 'inventory', 'accounting', 'core']
+    categories = ['core']
     
     context = {
         'page_obj': page_obj,

@@ -40,13 +40,15 @@ Para producción hay que implementar validación de firma (HMAC según proveedor
 
 ---
 
-## Copiloto IA (stub)
+## Copiloto IA (RAG-only, sin alucinaciones)
 
 **Módulo:** `apps.integrations.services.copilot_reply`
 
-- **Función:** `copilot_reply(text, case=None, user=None)` → `(respuesta_ia, sugerencia_respuesta)`.
-- Comportamiento actual: devuelve un texto fijo de respuesta y una sugerencia de respuesta para el usuario (stub). No llama a ningún LLM ni a RAG.
-- Los mensajes se persisten en `CopilotMessage` (role user/assistant) asociados al usuario y opcionalmente al caso.
+- **Función:** `copilot_reply(text, case=None, user=None, sistema=None)` → `(respuesta_ia, sugerencia_respuesta, derivado_a_humano)`.
+- **Regla:** El LLM solo responde con información del RAG (base de conocimiento). No inventa datos ni alucina.
+- **Sin contexto RAG:** Si RAG no está configurado, no hay embeddings o la búsqueda no devuelve chunks relevantes, no se llama al LLM. Se devuelve un mensaje estándar indicando que se derivó el caso a un agente humano y, si hay `case`, se transiciona el estado a **Derivado a humano** (vía `apps.cases.services.derive_case_to_human`).
+- **Con contexto RAG:** El prompt del sistema instruye al modelo a responder únicamente con el "Contexto de la base de conocimiento" proporcionado; si la respuesta no está en ese contexto, debe indicar que no tiene la información y que se derivará a un agente.
+- Los mensajes se persisten en `CopilotMessage` (role user/assistant). Las respuestas de la API de copiloto incluyen `derivado_a_humano: true` cuando se derivó el caso.
 
 ---
 

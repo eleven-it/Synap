@@ -37,7 +37,12 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 client.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) {
+    const status = err.response?.status
+    const detail = (err.response?.data?.detail || err.response?.data?.message || '').toLowerCase()
+    const isUnauthenticated =
+      status === 401 ||
+      (status === 403 && (detail.includes('credential') || detail.includes('authentication') || detail.includes('no se proveyeron')))
+    if (isUnauthenticated) {
       window.dispatchEvent(new CustomEvent('auth:logout'))
     }
     return Promise.reject(err)

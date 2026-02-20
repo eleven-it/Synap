@@ -93,7 +93,8 @@ urlpatterns.extend([
     # path('finance/', include('finance.urls', namespace='finance')),
     # path('support/', include('support_ai.urls', namespace='support_ai')),
     path('reports/', include('reports.urls', namespace='reports')),
-    path('sia/', include('sia.urls', namespace='sia')),
+    path('stock/', include('stock.urls', namespace='stock')),
+    path('compras/', include('compras.urls', namespace='compras')),
 ])
 
 # Logistics API
@@ -105,7 +106,6 @@ urlpatterns.extend([
 urlpatterns.extend([
     # path('api/finance/', include('finance.api_urls')),
     path('api/reports/', include('reports.api_urls', namespace='reports-api')),
-    path('api/sia/', include('sia.api.urls', namespace='sia-api')),
     path('api/self-checkout/', include('self_checkout.api_urls')),
 ])
 

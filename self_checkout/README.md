@@ -81,7 +81,7 @@ Agregar en `permiso_sistema` y asignar en `permiso_sistema_puesto`:
 - `self_checkout.supervisor` → asistencia / cancelaciones
 - `self_checkout.admin` → configuración
 
-Ver `reports/docs/AUDITORIA_PERMISOS_ADMINISTRANET_SELF_CHECKOUT.md`.
+Ver `docs/self_checkout/AUDITORIA_PERMISOS_ADMINISTRANET_SELF_CHECKOUT.md`.
 
 ---
 
@@ -407,9 +407,9 @@ Reintenta facturas con estado `issued_caea_pending` o `failed`.
 
 ## Documentación relacionada
 
-- `reports/docs/DESARROLLO_SELF_CHECKOUT_SYNAP_FASE1.md`
-- `reports/docs/AUDITORIA_PERMISOS_ADMINISTRANET_SELF_CHECKOUT.md`
-- `reports/docs/CONTEXTO_TABLAS_VB6_INFORMES.md` (sección 11)
+- `docs/self_checkout/DESARROLLO_SELF_CHECKOUT_SYNAP_FASE1.md`
+- `docs/self_checkout/AUDITORIA_PERMISOS_ADMINISTRANET_SELF_CHECKOUT.md`
+- `docs/general/CONTEXTO_TABLAS_VB6_INFORMES.md` (sección 11)
 
 ---
 

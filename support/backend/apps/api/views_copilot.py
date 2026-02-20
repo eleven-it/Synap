@@ -16,6 +16,7 @@ def copilot_message(request):
     """POST texto; opcional case_id. Devuelve respuesta_ia y sugerencia_respuesta (stub)."""
     texto = request.data.get("texto", request.data.get("text", ""))
     case_id = request.data.get("case_id")
+    sistema = request.data.get("sistema")  # opcional: "synap" | "administranet" para filtrar RAG
     if not texto:
         return Response(
             {"code": "VALIDATION_ERROR", "message": "texto requerido", "details": []},
@@ -28,7 +29,9 @@ def copilot_message(request):
         role="user",
         content=texto,
     )
-    reply_text, suggestion = copilot_reply(texto, case=case, user=request.user)
+    reply_text, suggestion, derivado_a_humano = copilot_reply(
+        texto, case=case, user=request.user, sistema=sistema
+    )
     CopilotMessage.objects.create(
         case=case,
         user=request.user,
@@ -38,6 +41,7 @@ def copilot_message(request):
     return Response({
         "respuesta_ia": reply_text,
         "sugerencia_respuesta": suggestion,
+        "derivado_a_humano": derivado_a_humano,
     })
 
 

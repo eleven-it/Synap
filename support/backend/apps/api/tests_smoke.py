@@ -1,9 +1,11 @@
 """
-Tests smoke: health, idempotencia, dedupe webhook, búsqueda conocimiento.
+Tests smoke: health, idempotencia, dedupe webhook, búsqueda conocimiento, sync RAG desde Synap.
 Ejecutar: python manage.py test apps.api.tests_smoke
 """
 import json
-from django.test import TestCase, Client
+from unittest.mock import patch
+
+from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from apps.companies.models import Company
 from apps.cases.models import Case, CaseCounter, Message
@@ -192,3 +194,36 @@ class KnowledgeMultiTenantSmokeTests(TestCase):
         self.assertIn("Contenido global para todos", texts)
         self.assertNotIn("Contenido exclusivo empresa X", texts)
         self.assertEqual(len(results), 1)
+
+
+class SyncRagFromSynapSmokeTests(TestCase):
+    """POST /api/knowledge/sync-from-synap/: carga conocimiento desde Synap (mock) e ingesta en RAG."""
+
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin-sync", password="test123")
+        AgentProfile.objects.create(user=self.admin, role="admin")
+        self.client = Client()
+        self.client.force_login(self.admin)
+
+    @override_settings(SUPPORT_SYNAP_API_URL="http://test-synap")
+    @patch("apps.integrations.adapters.synap_client.SynapClient")
+    def test_sync_from_synap_ingesta_chunks(self, mock_synap_client_class):
+        mock_synap_client_class.return_value.get_conocimiento.return_value = [
+            {"text": "AdministraNET es el ERP. Synap es la evolución web.", "source_id": "synap-intro", "metadata": {"origen": "synap"}},
+            {"text": "Soporte: contactar a Estrategias de Negocios.", "source_id": "synap-soporte", "metadata": {}},
+        ]
+        r = self.client.post(
+            "/api/knowledge/sync-from-synap/",
+            data=json.dumps({"company_id": None}),
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertIn("created", data)
+        self.assertIn("updated", data)
+        self.assertIn("message", data)
+        self.assertGreaterEqual(data["created"] + data["updated"], 1)
+        self.assertTrue(
+            KnowledgeChunk.objects.filter(source_type="synap").exists(),
+            "Debe existir al menos un chunk con source_type=synap",
+        )

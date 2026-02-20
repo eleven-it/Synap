@@ -191,6 +191,7 @@ def case_copilot_mensajes(request, pk):
     from apps.knowledge.services import KnowledgeIngestionService
 
     texto = request.data.get("texto", request.data.get("text", ""))
+    sistema = request.data.get("sistema")  # opcional: "synap" | "administranet" para filtrar RAG
     if not texto:
         return Response(
             {"code": "VALIDATION_ERROR", "message": "texto requerido", "details": []},
@@ -204,7 +205,9 @@ def case_copilot_mensajes(request, pk):
         role="user",
         content=texto,
     )
-    reply_text, suggestion = copilot_reply(texto, case=case, user=request.user)
+    reply_text, suggestion, derivado_a_humano = copilot_reply(
+        texto, case=case, user=request.user, sistema=sistema
+    )
     assistant_msg = CopilotMessage.objects.create(
         case=case,
         user=request.user,
@@ -238,6 +241,7 @@ def case_copilot_mensajes(request, pk):
         "mensaje_id": assistant_msg.id,
         "guardado_como_conocimiento": assistant_msg.saved_to_knowledge,
         "knowledge_chunk_id": knowledge_chunk_id,
+        "derivado_a_humano": derivado_a_humano,
     })
 
 

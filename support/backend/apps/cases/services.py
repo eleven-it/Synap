@@ -125,6 +125,26 @@ def transition_case_status(
     return case
 
 
+def derive_case_to_human(case: Case, actor_id: int | None = None) -> Case:
+    """
+    Deriva el caso a un agente humano (estado DERIVADO_A_HUMANO).
+    Si el caso está INICIADO, primero transiciona a EN_ANALISIS_IA y luego a DERIVADO_A_HUMANO.
+    Si ya está en DERIVADO_A_HUMANO o en un estado que no permite derivar, no hace nada.
+    """
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    actor = User.objects.filter(pk=actor_id).first() if actor_id else None
+    status = case.status
+    if status == CaseStatus.DERIVADO_A_HUMANO:
+        return case
+    if status == CaseStatus.INICIADO:
+        transition_case_status(case, CaseStatus.EN_ANALISIS_IA, actor_id=actor_id)
+        case.refresh_from_db()
+    if can_transition(case.status, CaseStatus.DERIVADO_A_HUMANO):
+        transition_case_status(case, CaseStatus.DERIVADO_A_HUMANO, actor_id=actor_id)
+    return case
+
+
 def assign_case(case: Case, assigned_to_id: int, actor_id: int | None = None) -> Case:
     """Asigna el caso a un agente. Transiciona a ASIGNADO_A_AGENTE_HUMANO y dispara inicio SLA."""
     from django.contrib.auth import get_user_model

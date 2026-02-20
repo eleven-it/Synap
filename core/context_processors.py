@@ -227,6 +227,15 @@ def usuario_y_permisos(request):
         except Exception as e:
             logger.error(f"Error al obtener empresa/sucursal desde administraNET: {e}")
 
+    # Fecha/hora servidor para barra de estado (Principal, paridad VB6 Control_Fecha)
+    from django.utils import timezone
+    now = timezone.now()
+    fecha_servidor = {
+        "fecha": now.strftime("%Y-%m-%d"),
+        "hora": now.strftime("%H:%M:%S"),
+        "iso": now.isoformat(),
+    }
+
     return {
         "user": user,
         "permisos_usuario": sorted(permisos_totales),
@@ -237,7 +246,8 @@ def usuario_y_permisos(request):
         "branch_activa": branch_activa,
         "empresas_disponibles": empresas_disponibles,
         "sucursales_disponibles": sucursales_disponibles,
-        "session_user": session_user,  # Agregar datos de sesión para el navbar
+        "session_user": session_user,
+        "fecha_servidor": fecha_servidor,
     }
 
 def menu_context(request):
@@ -263,12 +273,6 @@ def menu_context(request):
         #     current_app_id = 'tiendanube'
         # elif app_name == 'purchases':
         #     current_app_id = 'purchases'
-        # elif app_name == 'sales':
-        #     current_app_id = 'sales'
-        elif app_name == 'accounting':
-            current_app_id = 'accounting'
-        elif app_name == 'administraNET_integration':
-            current_app_id = 'administraNET_integration'
         elif app_name == 'reports':
             current_app_id = 'reports'
     
@@ -306,19 +310,5 @@ def menu_context(request):
 #     return {"purchases_sidebar_items": []}
 
 def administraNET_integration_menu_context(request):
-    """
-    Procesa el contexto para el menú lateral del módulo de administraNET_integration.
-    Mantenido para compatibilidad.
-    """
-    user = getattr(request, "user", None)
-    administraNET_integration_sidebar_items = []
-    
-    if user and getattr(user, "is_authenticated", False):
-        if request.resolver_match and request.resolver_match.app_name == 'administraNET_integration':
-            app = obtener_app_por_id("administraNET_integration")
-            if app and app.get("submenus"):
-                administraNET_integration_sidebar_items = app["submenus"]
-
-    return {
-        "administraNET_integration_sidebar_items": administraNET_integration_sidebar_items
-    }
+    """Módulo administraNET_integration eliminado; se mantiene por compatibilidad con templates."""
+    return {"administraNET_integration_sidebar_items": []}

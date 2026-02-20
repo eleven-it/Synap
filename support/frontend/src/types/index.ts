@@ -119,6 +119,53 @@ export interface ChannelConfig {
   updated_at: string
 }
 
+/** Configuración de branding (nombre del asistente, mensaje de bienvenida). */
+export interface BrandingConfig {
+  id: number
+  company_id: number | null
+  assistant_name: string
+  welcome_message: string
+  default_language: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** Configuración RAG (top_k, fuentes, estado). */
+export interface RAGConfigItem {
+  id: number
+  company_id: number | null
+  top_k: number
+  sources_enabled: string[]
+  cache_ttl_seconds: number
+  status: string
+  last_ingest_at: string | null
+  last_error: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** Chunk de conocimiento RAG (listado para UI). */
+export interface KnowledgeChunkItem {
+  id: number
+  source_type: string
+  source_id: string
+  company_id: number | null
+  text: string
+  text_length: number
+  metadata: Record<string, unknown>
+  sistema?: string
+  file?: string
+  has_embedding: boolean
+  created_at: string | null
+}
+
+export interface KnowledgeChunksResponse {
+  count: number
+  limit: number
+  offset: number
+  results: KnowledgeChunkItem[]
+}
+
 /** Configuración IA (GET devuelve api_key_masked; PATCH acepta api_key en texto para guardar cifrado). */
 export interface IAConfig {
   id: number
