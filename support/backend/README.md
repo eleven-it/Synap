@@ -88,7 +88,7 @@ celery -A config beat -l info
   - `attachments` — Adjuntos (metadata + S3).
   - `sla` — ConfigSLA y motor (inicio, pausa, warning, vencimiento; tareas Celery).
   - `audit` — EventoAuditoria append-only.
-  - `knowledge` — Chunks RAG con pgvector (embedding, RetrievalService, KnowledgeIngestionService, Celery embed_chunk).
+  - `knowledge` — RAG con LangChain PGVector (langchain_rag: store, ingesta add_documents, retriever, cadena LCEL); sin tabla Django propia.
   - `integrations` — SynapClient, adapters de canal, copiloto; modelos CopilotMessage.
   - `system_config` — Configuración producto (canales, IA, RAG, storage, seguridad, notificaciones, branding, SLA CRUD); cifrado de secretos, ConfigService con cache, auditoría.
   - `api` — Vistas y serializers DRF.

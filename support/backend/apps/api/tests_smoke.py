@@ -1,8 +1,10 @@
 """
 Tests smoke: health, idempotencia, dedupe webhook, búsqueda conocimiento, sync RAG desde Synap.
+RAG usa LangChain PGVector; los tests mockean langchain_rag cuando hace falta.
 Ejecutar: python manage.py test apps.api.tests_smoke
 """
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import TestCase, Client, override_settings
@@ -10,9 +12,13 @@ from django.contrib.auth import get_user_model
 from apps.companies.models import Company
 from apps.cases.models import Case, CaseCounter, Message
 from apps.agents.models import AgentProfile
-from apps.knowledge.models import KnowledgeChunk
 
 User = get_user_model()
+
+
+def _doc(page_content, metadata=None):
+    """Documento mínimo para mocks (page_content + metadata)."""
+    return SimpleNamespace(page_content=page_content, metadata=metadata or {})
 
 
 class HealthSmokeTests(TestCase):
@@ -126,56 +132,56 @@ class KnowledgeSearchSmokeTests(TestCase):
         r = self.client.get("/api/knowledge/search/")
         self.assertEqual(r.status_code, 400)
 
-    def test_search_with_q_returns_200_with_fallback_text(self):
-        # Sin EMBEDDING_FUNCTION, ?fallback=text devuelve 200 con búsqueda textual
-        r = self.client.get("/api/knowledge/search/?q=test&fallback=text")
+    @patch("apps.api.views_knowledge.langchain_rag.is_langchain_rag_available")
+    @patch("apps.api.views_knowledge.langchain_rag.search_documents")
+    def test_search_with_q_returns_200_when_rag_available(self, mock_search, mock_available):
+        mock_available.return_value = True
+        mock_search.return_value = [
+            (_doc("Contenido de prueba", {"source_type": "caso", "source_id": "1"}), 0.92),
+        ]
+        r = self.client.get("/api/knowledge/search/?q=test")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertIn("results", data)
         self.assertIsInstance(data["results"], list)
-        self.assertEqual(data.get("mode"), "text")
+        self.assertEqual(data.get("mode"), "vector")
+        self.assertEqual(len(data["results"]), 1)
+        self.assertIn("Contenido de prueba", data["results"][0]["text"])
 
-    def test_search_without_embedder_returns_501_without_fallback(self):
-        # Sin EMBEDDING_FUNCTION y sin fallback=text -> 501
+    @patch("apps.api.views_knowledge.langchain_rag.is_langchain_rag_available")
+    def test_search_without_rag_returns_501(self, mock_available):
+        mock_available.return_value = False
         r = self.client.get("/api/knowledge/search/?q=test")
         self.assertEqual(r.status_code, 501)
         data = r.json()
         self.assertIn("message", data)
-        self.assertIn("embeddings", data["message"].lower())
+        self.assertIn("RAG", data["message"])
 
 
 class KnowledgeMultiTenantSmokeTests(TestCase):
     """
-    RAG multi-tenant: chunk global (company NULL) + chunk empresa X.
+    RAG multi-tenant: documento global + documento empresa X.
     Buscar como empresa X debe traer ambos; buscar como empresa Y solo el global.
+    Se mockea search_documents para simular el comportamiento del store LangChain.
     """
 
     def setUp(self):
         self.company_x = Company.objects.create(synap_id="rag-x", prefix="RX", language="es")
         self.company_y = Company.objects.create(synap_id="rag-y", prefix="RY", language="es")
-        # Chunk global (company=None)
-        KnowledgeChunk.objects.create(
-            company_id=None,
-            source_type="caso",
-            source_id="global-1",
-            text="Contenido global para todos",
-        )
-        # Chunk solo empresa X
-        KnowledgeChunk.objects.create(
-            company_id=self.company_x.id,
-            source_type="caso",
-            source_id="x-1",
-            text="Contenido exclusivo empresa X",
-        )
+        self.doc_global = _doc("Contenido global para todos", {"source_type": "caso", "source_id": "global-1"})
+        self.doc_x = _doc("Contenido exclusivo empresa X", {"source_type": "caso", "source_id": "x-1"})
         self.admin = User.objects.create_user(username="admin-rag", password="test123")
         AgentProfile.objects.create(user=self.admin, role="admin")
         self.client = Client()
         self.client.force_login(self.admin)
 
-    def test_search_as_company_x_gets_global_and_company_chunk(self):
-        # fallback=text para no depender de embeddings
+    @patch("apps.api.views_knowledge.langchain_rag.is_langchain_rag_available")
+    @patch("apps.api.views_knowledge.langchain_rag.search_documents")
+    def test_search_as_company_x_gets_global_and_company_chunk(self, mock_search, mock_available):
+        mock_available.return_value = True
+        mock_search.return_value = [(self.doc_global, 0.9), (self.doc_x, 0.85)]
         r = self.client.get(
-            f"/api/knowledge/search/?q=Contenido&company_id={self.company_x.id}&fallback=text"
+            f"/api/knowledge/search/?q=Contenido&company_id={self.company_x.id}"
         )
         self.assertEqual(r.status_code, 200)
         results = r.json()["results"]
@@ -184,9 +190,13 @@ class KnowledgeMultiTenantSmokeTests(TestCase):
         self.assertIn("Contenido exclusivo empresa X", texts)
         self.assertEqual(len(results), 2)
 
-    def test_search_as_company_y_does_not_get_company_x_chunk(self):
+    @patch("apps.api.views_knowledge.langchain_rag.is_langchain_rag_available")
+    @patch("apps.api.views_knowledge.langchain_rag.search_documents")
+    def test_search_as_company_y_does_not_get_company_x_chunk(self, mock_search, mock_available):
+        mock_available.return_value = True
+        mock_search.return_value = [(self.doc_global, 0.9)]
         r = self.client.get(
-            f"/api/knowledge/search/?q=Contenido&company_id={self.company_y.id}&fallback=text"
+            f"/api/knowledge/search/?q=Contenido&company_id={self.company_y.id}"
         )
         self.assertEqual(r.status_code, 200)
         results = r.json()["results"]
@@ -206,12 +216,14 @@ class SyncRagFromSynapSmokeTests(TestCase):
         self.client.force_login(self.admin)
 
     @override_settings(SUPPORT_SYNAP_API_URL="http://test-synap")
+    @patch("apps.api.views_knowledge.langchain_rag.add_documents_from_synap_items")
     @patch("apps.integrations.adapters.synap_client.SynapClient")
-    def test_sync_from_synap_ingesta_chunks(self, mock_synap_client_class):
+    def test_sync_from_synap_ingesta_chunks(self, mock_synap_client_class, mock_add_docs):
         mock_synap_client_class.return_value.get_conocimiento.return_value = [
             {"text": "AdministraNET es el ERP. Synap es la evolución web.", "source_id": "synap-intro", "metadata": {"origen": "synap"}},
             {"text": "Soporte: contactar a Estrategias de Negocios.", "source_id": "synap-soporte", "metadata": {}},
         ]
+        mock_add_docs.return_value = (2, 0)
         r = self.client.post(
             "/api/knowledge/sync-from-synap/",
             data=json.dumps({"company_id": None}),
@@ -223,7 +235,6 @@ class SyncRagFromSynapSmokeTests(TestCase):
         self.assertIn("updated", data)
         self.assertIn("message", data)
         self.assertGreaterEqual(data["created"] + data["updated"], 1)
-        self.assertTrue(
-            KnowledgeChunk.objects.filter(source_type="synap").exists(),
-            "Debe existir al menos un chunk con source_type=synap",
-        )
+        mock_add_docs.assert_called_once()
+        call_kw = mock_add_docs.call_args[1]
+        self.assertEqual(call_kw.get("source_type"), "synap")

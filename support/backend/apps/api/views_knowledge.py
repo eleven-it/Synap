@@ -7,12 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.api.permissions import IsAdmin, IsAgentOrAdmin
-from apps.knowledge.models import KnowledgeChunk
-from apps.knowledge.services import (
-    RetrievalService,
-    KnowledgeIngestionService,
-    is_embedding_configured,
-)
+from apps.knowledge import langchain_rag
 from apps.system_config.services import invalidate_config_cache
 
 
@@ -22,7 +17,7 @@ def knowledge_ingest(request):
     """
     POST /api/knowledge/ingest
     Admin. Ingesta chunks: body.items = [ { "text", "source_id?", "metadata?" } ];
-    opcional company_id, source_type. Dispara jobs de embedding.
+    opcional company_id, source_type. Ingesta vía LangChain PGVector.
     """
     items = request.data.get("items")
     if not items or not isinstance(items, list):
@@ -31,19 +26,29 @@ def knowledge_ingest(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     company_id = request.data.get("company_id")
+    if company_id is not None:
+        try:
+            company_id = int(company_id)
+        except (TypeError, ValueError):
+            company_id = None
     source_type = (request.data.get("source_type") or "caso")[:32]
 
-    svc = KnowledgeIngestionService()
-    created, updated = svc.create_or_update_chunks(
-        items=items,
-        company_id=company_id,
-        source_type=source_type,
-    )
-    return Response({
-        "created": created,
-        "updated": updated,
-        "message": f"Ingesta: {created} creados, {updated} actualizados.",
-    }, status=status.HTTP_200_OK)
+    try:
+        added, total = langchain_rag.add_documents_from_synap_items(
+            items=items,
+            company_id=company_id,
+            source_type=source_type,
+        )
+        return Response({
+            "created": added,
+            "updated": 0,
+            "message": f"Ingesta: {added} documentos añadidos al RAG.",
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response(
+            {"message": f"Error al ingestar en la base de conocimiento: {e!s}."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
 @api_view(["GET"])
@@ -51,7 +56,8 @@ def knowledge_ingest(request):
 def knowledge_chunks_list(request):
     """
     GET /api/knowledge/chunks/
-    Listado paginado de chunks de conocimiento. Params: limit, offset, source_type, company_id.
+    Con RAG LangChain no hay listado paginado desde el store; se devuelve lista vacía.
+    Use GET /api/knowledge/search?q=... para ver documentos relevantes a una consulta.
     """
     limit = request.query_params.get("limit")
     offset = request.query_params.get("offset")
@@ -63,44 +69,12 @@ def knowledge_chunks_list(request):
         offset = max(0, int(offset)) if offset else 0
     except (TypeError, ValueError):
         offset = 0
-    source_type = (request.query_params.get("source_type") or "").strip() or None
-    company_id = request.query_params.get("company_id")
-    if company_id is not None:
-        try:
-            company_id = int(company_id)
-        except (TypeError, ValueError):
-            company_id = None
-
-    qs = KnowledgeChunk.objects.all().order_by("-created_at")
-    if source_type:
-        qs = qs.filter(source_type=source_type)
-    if company_id is not None:
-        qs = qs.filter(company_id=company_id)
-    total = qs.count()
-    chunks = list(qs[offset : offset + limit])
-
-    def serialize(chunk):
-        meta = chunk.metadata or {}
-        has_embedding = getattr(chunk, "embedding", None) is not None
-        return {
-            "id": chunk.id,
-            "source_type": chunk.source_type,
-            "source_id": chunk.source_id or "",
-            "company_id": chunk.company_id,
-            "text": chunk.text[:500] + "…" if chunk.text and len(chunk.text) > 500 else (chunk.text or ""),
-            "text_length": len(chunk.text) if chunk.text else 0,
-            "metadata": meta,
-            "sistema": meta.get("sistema"),
-            "file": meta.get("file"),
-            "has_embedding": has_embedding,
-            "created_at": chunk.created_at.isoformat() if chunk.created_at else None,
-        }
-
     return Response({
-        "count": total,
+        "count": 0,
         "limit": limit,
         "offset": offset,
-        "results": [serialize(c) for c in chunks],
+        "results": [],
+        "message": "Con RAG LangChain el listado completo no está disponible. Use la búsqueda (search) para ver fragmentos por consulta.",
     })
 
 
@@ -109,8 +83,7 @@ def knowledge_chunks_list(request):
 def knowledge_search(request):
     """
     GET /api/knowledge/search?q=...&company_id=...&top_k=...&source_type=...&fallback=text
-    Admin (debug). Búsqueda vectorial si EMBEDDING_FUNCTION está configurada.
-    Si no: 501 salvo que fallback=text, entonces búsqueda textual (full-text) para debug.
+    Admin (debug). Búsqueda vectorial vía LangChain PGVector si el RAG está configurado; si no, 501.
     """
     q = (request.query_params.get("q") or "").strip()
     if not q:
@@ -132,44 +105,34 @@ def knowledge_search(request):
             top_k = 10
     else:
         top_k = 10
-    source_type = (request.query_params.get("source_type") or "").strip() or None
     sistema = (request.query_params.get("sistema") or "").strip() or None
-    fallback_text = request.query_params.get("fallback", "").strip().lower() == "text"
 
-    if not is_embedding_configured():
-        if fallback_text:
-            retrieval = RetrievalService(top_k=top_k)
-            results = retrieval.search_text_fallback(
-                query=q,
-                company_id=company_id,
-                top_k=top_k,
-                source_type=source_type,
-                include_global=True,
-                sistema=sistema,
-            )
-            return Response({
-                "results": results,
-                "mode": "text",
-                "message": "Búsqueda textual (embeddings provider not configured).",
-            })
+    if not langchain_rag.is_langchain_rag_available():
         return Response(
             {
                 "code": "NOT_IMPLEMENTED",
-                "message": "embeddings provider not configured",
-                "details": ["Configure EMBEDDING_FUNCTION in settings or use ?fallback=text for text search."],
+                "message": "RAG no configurado (OPENAI_API_KEY y PostgreSQL requeridos).",
+                "details": [],
             },
             status=status.HTTP_501_NOT_IMPLEMENTED,
         )
-
-    retrieval = RetrievalService(top_k=top_k)
-    results = retrieval.search(
+    docs_with_score = langchain_rag.search_documents(
         query=q,
         company_id=company_id,
-        top_k=top_k,
-        source_type=source_type,
-        include_global=True,
         sistema=sistema,
+        top_k=top_k,
     )
+    results = [
+        {
+            "chunk_id": id(doc),
+            "text": doc.page_content,
+            "score": round(score, 4) if score is not None else 0.0,
+            "metadata": doc.metadata or {},
+            "source_type": doc.metadata.get("source_type"),
+            "source_id": doc.metadata.get("source_id"),
+        }
+        for doc, score in docs_with_score
+    ]
     return Response({"results": results, "mode": "vector"})
 
 
@@ -229,8 +192,7 @@ def sync_from_synap(request):
         )
 
     try:
-        svc = KnowledgeIngestionService()
-        created, updated = svc.create_or_update_chunks(
+        added, total = langchain_rag.add_documents_from_synap_items(
             items=items,
             company_id=company_id,
             source_type="synap",
@@ -238,9 +200,9 @@ def sync_from_synap(request):
         invalidate_config_cache("rag", company_id)
         return Response(
             {
-                "created": created,
-                "updated": updated,
-                "message": f"Cargado desde Synap: {created} creados, {updated} actualizados.",
+                "created": added,
+                "updated": 0,
+                "message": f"Cargado desde Synap: {added} documentos añadidos al RAG.",
             },
             status=status.HTTP_200_OK,
         )

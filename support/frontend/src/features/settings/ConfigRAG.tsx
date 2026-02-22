@@ -245,6 +245,11 @@ export default function ConfigRAG({ open, onClose, companyId }: ConfigRAGProps) 
                 )}
                 {!chunksLoading && !chunksError && chunksData != null && (
                   <>
+                    {chunksData.results.length === 0 && chunksData.message != null && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {chunksData.message}
+                      </Typography>
+                    )}
                     <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 320, mb: 1 }}>
                       <Table size="small" stickyHeader>
                         <TableHead>
@@ -260,7 +265,9 @@ export default function ConfigRAG({ open, onClose, companyId }: ConfigRAGProps) 
                           {chunksData.results.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 3 }}>
-                                No hay fragmentos. Cargá desde Synap o guardá respuestas como conocimiento.
+                                {chunksData.message
+                                  ? 'Usá la búsqueda (GET /api/knowledge/search?q=...) para ver fragmentos por consulta.'
+                                  : 'No hay fragmentos. Cargá desde Synap o guardá respuestas como conocimiento.'}
                               </TableCell>
                             </TableRow>
                           ) : (

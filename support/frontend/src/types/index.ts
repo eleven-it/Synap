@@ -164,6 +164,8 @@ export interface KnowledgeChunksResponse {
   limit: number
   offset: number
   results: KnowledgeChunkItem[]
+  /** Mensaje del backend cuando el listado no está disponible (ej. RAG LangChain: usar búsqueda). */
+  message?: string
 }
 
 /** Configuración IA (GET devuelve api_key_masked; PATCH acepta api_key en texto para guardar cifrado). */

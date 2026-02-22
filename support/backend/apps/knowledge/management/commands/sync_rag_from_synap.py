@@ -7,7 +7,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.integrations.adapters.synap_client import SynapClient, SynapClientError
-from apps.knowledge.services import KnowledgeIngestionService
+from apps.knowledge import langchain_rag
 from apps.system_config.services import invalidate_config_cache
 
 
@@ -44,13 +44,12 @@ class Command(BaseCommand):
             )
 
         self.stdout.write(f"Recibidos {len(items)} ítems desde Synap. Ingestando...")
-        svc = KnowledgeIngestionService()
-        created, updated = svc.create_or_update_chunks(
+        added, _ = langchain_rag.add_documents_from_synap_items(
             items=items,
             company_id=company_id,
             source_type="synap",
         )
         invalidate_config_cache("rag", company_id)
         self.stdout.write(
-            self.style.SUCCESS(f"Carga RAG OK: {created} creados, {updated} actualizados.")
+            self.style.SUCCESS(f"Carga RAG OK: {added} documentos añadidos al RAG.")
         )

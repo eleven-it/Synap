@@ -14,6 +14,7 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **administranet_vb6/** | Documentación **exclusiva de AdministraNET (VB6)**. Los `.md` aquí se etiquetan como sistema **administranet** cuando Synap sirve conocimiento al RAG del módulo Support; el resto de `docs/` se etiqueta como **synap**. Colocar aquí procedimientos VB6, tablas, menú Archivo, etc. Actualización: cada "Cargar desde Synap" en Support lee `docs/` al vuelo (sin caché). Ver [administranet_vb6/README.md](administranet_vb6/README.md) y [support/docs/RAG_Y_SYNAP.md](../support/docs/RAG_Y_SYNAP.md). |
 | **reports/** | Módulo Reportes: análisis ventas netas, validaciones (BO, pedidos, ventas), total consolidado, KPI, builder técnico, rendimiento BO, reconocimiento de relaciones, comando inspect_articulos, widgets. |
 | **self_checkout/** | Self-checkout, TPV, caja, AFIP/CAE/CAEA, certificados, auditorías TPV, procedimientos stock VB6, scripts SQL (`self_checkout/sql/`). |
+| **support/** | Módulo Support: RAG con LangChain/PGVector, implementación del refactor ([RAG_LANGCHAIN_IMPLEMENTACION.md](support/RAG_LANGCHAIN_IMPLEMENTACION.md)), uso y configuración (ver también [support/docs/RAG_Y_SYNAP.md](../support/docs/RAG_Y_SYNAP.md)). |
 | **login/** | Reservado para documentación de login, sesión y autenticación. |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.

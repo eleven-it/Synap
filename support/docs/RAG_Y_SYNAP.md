@@ -1,6 +1,6 @@
 # RAG y conocimiento desde Synap
 
-Support usa una base de conocimiento (RAG) para que el copiloto pueda responder con contexto de producto y de Synap/AdministraNET.
+Support usa una base de conocimiento (RAG) para que el copiloto pueda responder con contexto de producto y de Synap/AdministraNET. El RAG está implementado con **LangChain** y **PGVector**: no hay tabla Django propia de chunks; los vectores se almacenan en el schema que crea `langchain-postgres`.
 
 ## Configuración automática ya aplicada
 
@@ -8,19 +8,19 @@ Support usa una base de conocimiento (RAG) para que el copiloto pueda responder 
 - **Support (backend)**:
   - `support/backend/.env`: `SUPPORT_SYNAP_API_URL=http://localhost:8000` (cuando backend y Synap corren en el mismo host).
   - `support/docker/.env`: `SUPPORT_SYNAP_API_URL=http://host.docker.internal:8000` (cuando Support corre en Docker y Synap en el host).
-- **Test automatizado**: `apps.api.tests_smoke.SyncRagFromSynapSmokeTests` — ejecutar con `python manage.py test apps.api.tests_smoke.SyncRagFromSynapSmokeTests` (o desde el contenedor: `docker exec support_backend python manage.py test apps.api.tests_smoke.SyncRagFromSynapSmokeTests`).
-- **Comando de carga**: `python manage.py sync_rag_from_synap [--company-id ID]` (o desde contenedor: `docker exec support_backend python manage.py sync_rag_from_synap`). Requiere Synap levantado y alcanzable desde donde se ejecuta el comando.
+- **Test automatizado**: `apps.api.tests_smoke.SyncRagFromSynapSmokeTests` y `KnowledgeSearchSmokeTests` — ejecutar con `python manage.py test apps.api.tests_smoke` (o desde el contenedor: `docker exec Synap_app python manage.py test apps.api.tests_smoke`).
+- **Comando de carga**: `python manage.py sync_rag_from_synap [--company-id ID]` (o desde contenedor: `docker exec Synap_app python manage.py sync_rag_from_synap`). Requiere Synap levantado y alcanzable desde donde se ejecuta el comando.
 
 ## Activar RAG
 
-1. **Configurar embeddings**  
-   En `.env` del backend Support definir `OPENAI_API_KEY` (puede ser la misma que en Configuración → IA). Sin esta variable la búsqueda vectorial no estará disponible (sí se puede usar búsqueda textual con `?fallback=text` en la API de búsqueda).
+1. **Configurar embeddings y base de datos**  
+   En `.env` del backend Support definir `OPENAI_API_KEY` (puede ser la misma que en Configuración → IA). La base de datos por defecto debe ser **PostgreSQL** con la extensión **vector** (pgvector). Sin `OPENAI_API_KEY` y PostgreSQL, el RAG no estará disponible (la API de búsqueda devolverá 501).
 
 2. **Configuración en la UI**  
    En **Configuración** → **RAG / Conocimiento**: activar el interruptor "RAG activo", ajustar Top K si se desea y guardar.
 
 3. **Cargar conocimiento desde Synap**  
-   Pulsar **"Cargar desde Synap"**. Support llamará a Synap en `GET /core/api/support/conocimiento/`, obtendrá la lista de ítems (texto, source_id, metadata) e ingesta en la base de conocimiento con `source_type=synap`. Los embeddings se generan en segundo plano (Celery).
+   Pulsar **"Cargar desde Synap"**. Support llamará a Synap en `GET /core/api/support/conocimiento/`, obtendrá la lista de ítems (texto, source_id, metadata) e ingesta en el store vectorial LangChain con `source_type=synap`. Los embeddings se generan **en la misma petición** (ingesta síncrona vía `vector_store.add_documents()`).
 
 ## Endpoint en Synap
 
@@ -38,30 +38,35 @@ En producción conviene proteger este endpoint (p. ej. restringir por IP del ser
 ## Flujo en Support
 
 1. **Sync**  
-   `POST /api/knowledge/sync-from-synap/` (body opcional: `{ "company_id": number | null }`). Support usa `SynapClient.get_conocimiento()` y luego `KnowledgeIngestionService.create_or_update_chunks(..., source_type="synap")`. Los ítems ya traen `metadata.sistema` desde Synap y se conservan en cada chunk.
+   `POST /api/knowledge/sync-from-synap/` (body opcional: `{ "company_id": number | null }`). Support usa `SynapClient.get_conocimiento()` y luego `langchain_rag.add_documents_from_synap_items(..., source_type="synap")`. Los ítems ya traen `metadata.sistema` desde Synap y se conservan en la metadata de cada documento en PGVector.
 
 2. **Copiloto (solo RAG)**  
-   El copiloto responde **únicamente** con información del RAG: no inventa datos ni alucina. Si RAG está activo y hay embeddings, se hace una búsqueda por similitud; los fragmentos relevantes (top_k) se inyectan en el prompt como "Contexto de la base de conocimiento". Si no hay contexto RAG (RAG inactivo, sin embeddings o sin chunks relevantes), no se llama al LLM: se devuelve un mensaje fijo de derivación y el caso pasa a estado **Derivado a humano** para que lo atienda un agente.
+   El copiloto responde **únicamente** con información del RAG: no inventa datos ni alucina. Si RAG está activo y el store LangChain está disponible, se hace una búsqueda por similitud (retriever con filtros por `company_id` y `sistema`); los fragmentos relevantes (top_k) se inyectan en el prompt como "Contexto de la base de conocimiento". Si no hay contexto RAG (RAG inactivo, store no disponible o sin documentos relevantes), no se llama al LLM: se devuelve un mensaje fijo de derivación y el caso pasa a estado **Derivado a humano** para que lo atienda un agente.
 
 3. **Filtro por sistema (Synap vs AdministraNET)**  
-   El copiloto puede restringir la búsqueda RAG a un solo sistema. En el chat del copiloto (detalle de caso y en **Configuración → IA → Probar LLM**) hay un selector **"Pregunta sobre: Synap | AdministraNET (VB6) | Ambos"**. Si se elige Synap o AdministraNET, Support filtra los chunks con `metadata.sistema` igual al valor elegido, de modo que las respuestas se basen solo en la documentación de ese sistema. La API de copiloto acepta en el body un campo opcional `sistema` (`"synap"` o `"administranet"`). La API de búsqueda de conocimiento acepta el query param opcional `sistema` para pruebas.
+   El copiloto puede restringir la búsqueda RAG a un solo sistema. En el chat del copiloto (detalle de caso y en **Configuración → IA → Probar LLM**) hay un selector **"Pregunta sobre: Synap | AdministraNET (VB6) | Ambos"**. Si se elige Synap o AdministraNET, Support filtra los documentos con `metadata.sistema` igual al valor elegido. La API de copiloto acepta en el body un campo opcional `sistema` (`"synap"` o `"administranet"`). La API de búsqueda de conocimiento acepta el query param opcional `sistema` para pruebas.
 
 ## Dónde ver la información ingestada
 
-- **UI de Support (recomendado)**  
-  En **Configuración** → **RAG / Conocimiento** abrí el acordeón **"Conocimientos cargados"**. Ahí se listan los fragmentos (chunks) con tipo de fuente, sistema (Synap/AdministraNET), vista previa del texto, si tienen embedding y fecha. Podés filtrar por fuente (Synap, nota humana, caso resuelto, etc.) y paginar.
-
-- **Django Admin**  
-  En **`/admin/`** → **Knowledge** → **Chunks conocimiento** podés ver todos los fragmentos, filtrar por tipo fuente y empresa, y buscar por texto.
+- **UI de Support**  
+  En **Configuración** → **RAG / Conocimiento** el listado completo de chunks no está disponible (el store es el de LangChain PGVector). Se recomienda usar la **búsqueda** para comprobar qué fragmentos devuelve el RAG para una consulta.
 
 - **API de búsqueda (debug)**  
-  **`GET /api/knowledge/search?q=ajuste+stock&sistema=synap`** (requiere autenticación y rol admin). La respuesta incluye los chunks que el copiloto usaría como contexto para esa consulta.
+  **`GET /api/knowledge/search?q=ajuste+stock&sistema=synap`** (requiere autenticación y rol admin). La respuesta incluye los documentos que el copiloto usaría como contexto para esa consulta (modo vector). Si el RAG no está configurado, la API devuelve 501.
+
+## Implementación técnica (LangChain)
+
+- **Módulo**: `apps/knowledge/langchain_rag.py` — `get_store()`, `add_documents_from_synap_items()`, `get_retriever()`, `search_documents()`, `invoke_rag_chain()`.
+- **Store**: PGVector (paquete `langchain-postgres`) con colección configurable por `LANGCHAIN_PGVECTOR_COLLECTION_NAME` (por defecto `support_rag`). Conexión desde `settings.DATABASES["default"]` (postgresql+psycopg).
+- **Ingesta**: Todo por `vector_store.add_documents()`; embeddings con OpenAI. No hay tarea Celery de embedding.
+- **Eliminado**: Modelo Django `KnowledgeChunk`, tabla `support_knowledge_chunk`, `RetrievalService`, `KnowledgeIngestionService` y tarea `embed_chunk_task`; migración `0004_delete_knowledgechunk` elimina la tabla.
 
 ## Variables
 
 - **Support (backend)**  
-  - `OPENAI_API_KEY`: para generar embeddings (ingesta y búsqueda).  
-  - `SUPPORT_SYNAP_API_URL`, `SUPPORT_SYNAP_JWT_SECRET`: para que Support pueda llamar a Synap y traer el conocimiento.
+  - `OPENAI_API_KEY`: para generar embeddings (ingesta y búsqueda) y para el LLM del copiloto.  
+  - `SUPPORT_SYNAP_API_URL`, `SUPPORT_SYNAP_JWT_SECRET`: para que Support pueda llamar a Synap y traer el conocimiento.  
+  - `LANGCHAIN_PGVECTOR_COLLECTION_NAME`: opcional; nombre de la colección en PGVector (default `support_rag`).
 
 - **Synap**  
   No requiere variables adicionales para el endpoint de conocimiento; la protección del endpoint es opcional (VPN, JWT, IP).

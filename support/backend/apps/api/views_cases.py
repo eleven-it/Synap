@@ -187,8 +187,7 @@ def case_copilot_mensajes(request, pk):
 
     # POST
     from apps.integrations.services import copilot_reply
-    from apps.knowledge.models import KnowledgeChunk
-    from apps.knowledge.services import KnowledgeIngestionService
+    from apps.knowledge import langchain_rag
 
     texto = request.data.get("texto", request.data.get("text", ""))
     sistema = request.data.get("sistema")  # opcional: "synap" | "administranet" para filtrar RAG
@@ -215,32 +214,22 @@ def case_copilot_mensajes(request, pk):
         content=reply_text,
     )
 
-    knowledge_chunk_id = None
     if save_as_knowledge and reply_text:
-        svc = KnowledgeIngestionService()
         source_id = f"copilot_msg_{assistant_msg.id}"
-        svc.create_or_update_chunks(
+        langchain_rag.add_documents_from_synap_items(
             items=[{"text": reply_text, "source_id": source_id, "metadata": {"case_id": case.id}}],
             company_id=case.company_id,
             source_type="human_note",
         )
-        chunk = KnowledgeChunk.objects.filter(
-            company_id=case.company_id,
-            source_type="human_note",
-            source_id=source_id,
-        ).first()
-        if chunk:
-            knowledge_chunk_id = chunk.id
-            assistant_msg.saved_to_knowledge = True
-            assistant_msg.knowledge_chunk_id = chunk.id
-            assistant_msg.save(update_fields=["saved_to_knowledge", "knowledge_chunk_id"])
+        assistant_msg.saved_to_knowledge = True
+        assistant_msg.save(update_fields=["saved_to_knowledge"])
 
     return Response({
         "respuesta_ia": reply_text,
         "sugerencia_respuesta": suggestion,
         "mensaje_id": assistant_msg.id,
         "guardado_como_conocimiento": assistant_msg.saved_to_knowledge,
-        "knowledge_chunk_id": knowledge_chunk_id,
+        "knowledge_chunk_id": getattr(assistant_msg, "knowledge_chunk_id", None),
         "derivado_a_humano": derivado_a_humano,
     })
 

@@ -153,12 +153,8 @@ SUPPORT_SYNAP_JWT_SECRET = env("SUPPORT_SYNAP_JWT_SECRET", default="")
 # RAG / pgvector: dimensión del embedding (1536 OpenAI text-embedding-3-small)
 EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=1536)
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
-# Función de embedding para búsqueda vectorial (usa OPENAI_API_KEY)
-try:
-    from apps.knowledge.embedding import openai_embedding
-    EMBEDDING_FUNCTION = openai_embedding
-except ImportError:
-    EMBEDDING_FUNCTION = None
+# LangChain PGVector: colección fija para RAG (schema langchain-postgres)
+LANGCHAIN_PGVECTOR_COLLECTION_NAME = env("LANGCHAIN_PGVECTOR_COLLECTION_NAME", default="support_rag")
 
 # Configuración producto: clave para cifrar secretos (base64 url-safe, ver cryptography.fernet)
 CONFIG_ENCRYPTION_KEY = env("CONFIG_ENCRYPTION_KEY", default="")

@@ -277,22 +277,26 @@ class RAGConfigViewSet(GenericViewSet):
 
     @action(detail=False, methods=["post"], url_path="ingest")
     def ingest(self, request):
-        from apps.knowledge.services import KnowledgeIngestionService
+        from apps.knowledge import langchain_rag
         items = request.data.get("items") or []
         if not items:
             return Response(
                 {"message": "items (lista) requerido", "created": 0, "updated": 0},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        svc = KnowledgeIngestionService()
         company_id = request.data.get("company_id")
+        if company_id is not None:
+            try:
+                company_id = int(company_id)
+            except (TypeError, ValueError):
+                company_id = None
         source_type = (request.data.get("source_type") or "manual")[:32]
-        created, updated = svc.create_or_update_chunks(
+        added, _ = langchain_rag.add_documents_from_synap_items(
             items=items,
             company_id=company_id,
             source_type=source_type,
         )
-        return Response({"created": created, "updated": updated, "message": f"Ingesta: {created} creados, {updated} actualizados."})
+        return Response({"created": added, "updated": 0, "message": f"Ingesta: {added} documentos añadidos al RAG."})
 
     @action(detail=False, methods=["post"], url_path="reindex")
     def reindex(self, request):
