@@ -1,8 +1,9 @@
-# Levantar solo Support (sin Synap).
-# Uso desde la raíz del repo (obligatorio -p support para que stop/down encuentren los contenedores):
-#   docker compose -f docker-compose.support.yml -p support up -d
+# Levantar solo Support (sin Synap). Un solo .env: support/.env (desde support/.env.example).
+# Desde la raíz del repo (obligatorio -p support y --env-file para que use support/.env):
+#   docker compose -f docker-compose.support.yml -p support --env-file support/.env up -d
 #   docker compose -f docker-compose.support.yml -p support stop
 #   docker compose -f docker-compose.support.yml -p support down
+# Alternativa: cd support && docker compose -f docker/docker-compose.yml up -d (usa support/.env por defecto).
 # Backend: http://localhost:8250  Frontend (perfil dev): http://localhost:3000
 name: support
 

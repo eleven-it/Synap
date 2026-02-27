@@ -280,7 +280,7 @@ def listar_pedidos_pendientes(
     Lista pedidos pendientes para Busca_PEDI (modal lista).
     - motivo 6 (Transferencia): PEDI + movimiento_stock, tipo_pedido_interno = 'A deposito',
       movimiento_stock.deposito_origen = deposito_destino. Requiere deposito_destino.
-    - motivo 11 (Pedido producción) / 12 (Parte producción): comp_ped PED, tipo_pedido_opt = 'Fabrica', Estado = 'Pendiente'.
+    - motivo 11 (Pedido producción) / 12 (Parte producción): comp_ped PED, tipo_pedido_opt = 'Pendiente' (pedidos pendientes de producción).
     Devuelve lista de dict con CodigoMovimiento, NroComprobante y opcionalmente nombre_cliente, Estado.
     """
     motivo = int(motivo)
@@ -321,8 +321,7 @@ def listar_pedidos_pendientes(
                     LEFT JOIN cliente cli ON cli.codigo = cp.codigo
                     WHERE cp.Anulado = 'No'
                       AND cp.TipoComprobante IN ('PED')
-                      AND COALESCE(cp.tipo_pedido_opt, '') = 'Fabrica'
-                      AND cp.Estado = 'Pendiente'
+                      AND COALESCE(cp.tipo_pedido_opt, '') = 'Pendiente'
                     ORDER BY cp.CodigoMovimiento DESC
                     LIMIT 200
                     """,
@@ -514,8 +513,9 @@ def get_motivos_permitidos(
         motivos = [(c, n) for c, n in MOTIVOS_MOVIMIENTO if c == 6]
     else:
         motivos = list(MOTIVOS_MOVIMIENTO)
+    # Motivos 9 (Armado), 11 (Pedido producción), 12 (Parte producción) solo desde módulo MPR
     if not incluir_pedidos_produccion:
-        motivos = [(c, n) for c, n in motivos if c not in (11, 12)]
+        motivos = [(c, n) for c, n in motivos if c not in (9, 11, 12)]
     return motivos
 
 

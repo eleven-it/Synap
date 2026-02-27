@@ -1,6 +1,6 @@
 # Support – Stack independiente (no depende de Synap)
-# Uso: cd support/docker && cp .env.example .env && docker compose up -d
-# O desde la raíz: docker compose -f docker-compose.support.yml -p support up -d
+# Un solo .env: support/.env (desde support/.env.example).
+# Uso: cd support && cp .env.example .env && docker compose -f docker/docker-compose.yml up -d
 # Backend: http://localhost:8250   Frontend: http://localhost:3000
 
 name: support
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     container_name: support_backend
     env_file:
-      - .env
+      - ../.env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-support}:${POSTGRES_PASSWORD:-support}@db:5432/${POSTGRES_DB:-support}
       REDIS_URL: redis://redis:6379/0

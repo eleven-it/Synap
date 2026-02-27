@@ -60,10 +60,17 @@ def str_or_default(value: Any, default: str = '') -> str:
     """
     Normaliza valores para columnas VARCHAR/MEDIUMTEXT.
     Devuelve el string limpio (strip) o default si está vacío/None.
+    Si el valor viene como bytes (p. ej. de MySQL), se decodifica a UTF-8.
     Usar default='-' para campos opcionales que en AdministraNET suelen llevar '-' cuando vacío.
     """
     if value is None:
         return default
+    if isinstance(value, bytes):
+        try:
+            s = value.decode("utf-8", errors="replace").strip()
+        except Exception:
+            s = ""
+        return s if s else default
     s = str(value).strip()
     return s if s else default
 

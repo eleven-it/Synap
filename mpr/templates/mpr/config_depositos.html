@@ -1,0 +1,80 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Config. Depósitos - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Config. Depósitos</span>
+        </nav>
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Configuración depósitos (MPR)</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Indique si cada depósito suma al stock total (Suma stock: Sí) o no (tránsito, scrap, etc.). Configure el <strong>depósito de producción</strong> para que al confirmar la orden de producción (OPT) el stock se lleve allí en forma automática.</p>
+
+        {# Depósito de producción: donde se registra el stock al liberar OPT (automático) #}
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-900/50 shadow-sm p-5 mb-6">
+            <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2">Depósito de producción</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Al confirmar la orden de producción (OPT), el stock se registrará en este depósito sin pedir selección. Obligatorio para el asistente de producción.</p>
+            <form method="post" action="" class="flex flex-wrap items-end gap-3">
+                {% csrf_token %}
+                <div class="min-w-[200px]">
+                    <label for="select_dep_prod" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito</label>
+                    <select id="select_dep_prod" name="deposito_produccion" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 focus:ring-2 focus:ring-purple-500">
+                        <option value="">— Ninguno (configurar después) —</option>
+                        {% for dep in depositos %}
+                        <option value="{{ dep.CodDeposito }}" {% if id_deposito_produccion == dep.CodDeposito %}selected{% endif %}>{{ dep.NombreDeposito|default:dep.CodDeposito }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="px-4 py-2 rounded-lg font-medium bg-purple-600 hover:bg-purple-500 text-white transition-colors">Guardar depósito de producción</button>
+            </form>
+        </div>
+
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Código</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Suma stock</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for dep in depositos %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ dep.CodDeposito }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ dep.NombreDeposito }}</td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded {% if dep.suma_stock == 'Si' %}bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300{% endif %}">{{ dep.suma_stock|default:'Si' }}</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <form method="post" action="" class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="cod_deposito" value="{{ dep.CodDeposito }}"/>
+                                    <input type="hidden" name="valor" value="{% if dep.suma_stock == 'Si' %}No{% else %}Si{% endif %}"/>
+                                    <button type="submit" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline">
+                                        Cambiar a {% if dep.suma_stock == 'Si' %}No{% else %}Sí{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No hay depósitos o no se pudo leer la tabla.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="mt-4">
+            <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Volver al tablero</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

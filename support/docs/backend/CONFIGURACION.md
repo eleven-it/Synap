@@ -2,7 +2,7 @@
 
 ## Variables de entorno
 
-Documentadas en `support/backend/.env.example`. Resumen:
+Documentadas en **support/.env.example** (único archivo de variables de Support). Resumen:
 
 | Variable | Descripción | Ejemplo / default |
 |----------|-------------|-------------------|

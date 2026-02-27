@@ -17,10 +17,10 @@ SPA React para el backoffice de Synap Support. Solo usuarios con rol **Admin**, 
 ```bash
 cd support/frontend
 npm install
-cp .env.example .env
-# Editar .env: VITE_API_BASE_URL si el backend no está en localhost:8000
+# Las variables (VITE_API_BASE_URL, etc.) se leen de support/.env
 npm run dev
 ```
+*(Crear `support/.env` desde `support/.env.example` si aún no existe; Vite está configurado con `envDir: ..`.)*
 
 En desarrollo, Vite puede hacer proxy de `/api` al backend (ver `vite.config.ts`). En ese caso `VITE_API_BASE_URL` puede omitirse o dejarse vacío para usar rutas relativas.
 

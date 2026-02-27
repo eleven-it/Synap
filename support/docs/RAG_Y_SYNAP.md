@@ -5,16 +5,17 @@ Support usa una base de conocimiento (RAG) para que el copiloto pueda responder 
 ## Configuración automática ya aplicada
 
 - **Synap**: Expone `GET /core/api/support/conocimiento/` (devuelve ítems de conocimiento funcional).
-- **Support (backend)**:
-  - `support/backend/.env`: `SUPPORT_SYNAP_API_URL=http://localhost:8000` (cuando backend y Synap corren en el mismo host).
-  - `support/docker/.env`: `SUPPORT_SYNAP_API_URL=http://host.docker.internal:8000` (cuando Support corre en Docker y Synap en el host).
-- **Test automatizado**: `apps.api.tests_smoke.SyncRagFromSynapSmokeTests` y `KnowledgeSearchSmokeTests` — ejecutar con `python manage.py test apps.api.tests_smoke` (o desde el contenedor: `docker exec Synap_app python manage.py test apps.api.tests_smoke`).
-- **Comando de carga**: `python manage.py sync_rag_from_synap [--company-id ID]` (o desde contenedor: `docker exec Synap_app python manage.py sync_rag_from_synap`). Requiere Synap levantado y alcanzable desde donde se ejecuta el comando.
+- **Support (backend)** usa el único **support/.env**:
+  - Local: `SUPPORT_SYNAP_API_URL=http://localhost:8000` (backend y Synap en el mismo host).
+  - Docker: `SUPPORT_SYNAP_API_URL=http://host.docker.internal:8000` (Support en Docker, Synap en el host).
+  - Producción: `SUPPORT_SYNAP_API_URL=https://synap.estrategiasdenegocios.ar` (o la URL base del ERP).
+- **Test automatizado**: `apps.api.tests_smoke.SyncRagFromSynapSmokeTests` y `KnowledgeSearchSmokeTests` — ejecutar con `python manage.py test apps.api.tests_smoke` (o desde el contenedor: `docker exec support_backend python manage.py test apps.api.tests_smoke`).
+- **Comando de carga**: `python manage.py sync_rag_from_synap [--company-id ID]` (o desde contenedor: `docker exec support_backend python manage.py sync_rag_from_synap`). Requiere Synap levantado y alcanzable desde donde se ejecuta el comando.
 
 ## Activar RAG
 
 1. **Configurar embeddings y base de datos**  
-   En `.env` del backend Support definir `OPENAI_API_KEY` (puede ser la misma que en Configuración → IA). La base de datos por defecto debe ser **PostgreSQL** con la extensión **vector** (pgvector). Sin `OPENAI_API_KEY` y PostgreSQL, el RAG no estará disponible (la API de búsqueda devolverá 501).
+   En **support/.env** definir `OPENAI_API_KEY` (puede ser la misma que en Configuración → IA). La base de datos por defecto debe ser **PostgreSQL** con la extensión **vector** (pgvector). Sin `OPENAI_API_KEY` y PostgreSQL, el RAG no estará disponible (la API de búsqueda devolverá 501). Con API key pero sin modo vector se puede usar búsqueda textual con `?fallback=text`.
 
 2. **Configuración en la UI**  
    En **Configuración** → **RAG / Conocimiento**: activar el interruptor "RAG activo", ajustar Top K si se desea y guardar.

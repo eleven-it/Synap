@@ -38,7 +38,8 @@ def api_ingreso_datos_iniciales(request):
         return err
     depositos = svc.get_depositos(ctx["base_empresa"], ctx["id_puesto"])
     ref_movstock = svc.get_ref_movstock(ctx["base_empresa"], ctx["id_puesto"])
-    motivos = svc.get_motivos_permitidos(ctx["base_empresa"], ctx["id_puesto"], incluir_pedidos_produccion=True)
+    # Armado (9), Pedido producción (11), Parte producción (12) solo desde MPR
+    motivos = svc.get_motivos_permitidos(ctx["base_empresa"], ctx["id_puesto"], incluir_pedidos_produccion=False)
     motivos_list = [{"codigo": c, "nombre": n} for c, n in motivos]
     viajantes = svc.get_viajantes(ctx["base_empresa"])
     clientes = svc.get_clientes(ctx["base_empresa"], limit=300)

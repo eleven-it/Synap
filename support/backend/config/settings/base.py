@@ -25,8 +25,9 @@ env = environ.Env(
     ALLOW_EXTERNAL_TESTS=(bool, True),
 )
 
-# overwrite=False: las variables ya definidas en el entorno (p. ej. por Docker) no se sobrescriben con .env
-environ.Env.read_env(BASE_DIR / ".env", overwrite=False)
+# Un solo .env en la raíz de Support (support/.env). overwrite=False: Docker/env ya definidos no se sobrescriben.
+_SUPPORT_ROOT = BASE_DIR.parent
+environ.Env.read_env(_SUPPORT_ROOT / ".env", overwrite=False)
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env.bool("DEBUG", default=False)

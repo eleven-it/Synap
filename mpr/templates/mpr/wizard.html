@@ -1,0 +1,415 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Asistente de producción - MPR - Synap{% endblock %}
+
+{% block content %}
+<style>.wizard-cloak[x-cloak]{display:none!important}</style>
+<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Asistente de producción</span>
+        </nav>
+
+        <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">
+            Asistente de producción
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">
+            Flujo: Crear orden (OPT) → Confirmar (crear y liberar a producción) → Crear OPP → Armado (opcional) → Cierre. El depósito de producción se usa automáticamente al confirmar (configúrelo en <a href="{% url 'mpr:config_depositos' %}" class="text-purple-600 dark:text-purple-400 hover:underline font-medium">Config. Depósitos</a>). Para demanda por varios artículos use <a href="{% url 'mpr:ventana_pack' %}" class="text-purple-600 dark:text-purple-400 hover:underline font-medium">Pedido producción trabajo (OPT)</a>.
+        </p>
+
+        {# Stepper: 1 Crear OPT, 2 Confirmar, 3 OPP, 4 Armado, 5 Cierre #}
+        <div class="flex flex-wrap items-center gap-2 sm:gap-0 mb-8">
+            {% for i in "12345" %}
+            <div class="flex items-center {% if not forloop.first %}flex-1 min-w-0{% endif %}">
+                {% if not forloop.first %}
+                <div class="hidden sm:block flex-1 h-0.5 mx-1 {% if wizard_paso > forloop.counter %}bg-purple-500{% else %}bg-gray-300 dark:bg-gray-600{% endif %}"></div>
+                {% endif %}
+                <div class="flex flex-col items-center">
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium
+                        {% if wizard_paso > forloop.counter %}bg-purple-600 text-white
+                        {% elif wizard_paso == forloop.counter %}bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-800
+                        {% else %}bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400{% endif %}">
+                        {{ forloop.counter }}
+                    </span>
+                    <span class="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">
+                        {% if forloop.counter == 1 %}Crear OPT{% elif forloop.counter == 2 %}Confirmar{% elif forloop.counter == 3 %}OPP{% elif forloop.counter == 4 %}Armado{% else %}Cierre{% endif %}
+                    </span>
+                </div>
+                {% if not forloop.last %}
+                <div class="hidden sm:block flex-1 h-0.5 mx-1 {% if wizard_paso > forloop.counter %}bg-purple-500{% else %}bg-gray-300 dark:bg-gray-600{% endif %}"></div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {# Solo el último mensaje, compacto y cerrable #}
+        {% if messages %}
+        {% for message in messages %}
+        {% if forloop.last %}
+        <div class="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm shadow-sm {% if message.tags == 'error' %}bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800{% else %}bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800{% endif %}" role="alert" id="wizard-last-message">
+            <span>{{ message }}</span>
+            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" aria-label="Cerrar">
+                <span class="material-icons text-lg">close</span>
+            </button>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+
+        {# Paso 1 – Crear orden de producción (OPT): artículo + cantidad #}
+        {% if wizard_paso == 1 %}
+        <form method="post" action="" class="space-y-6">
+            {% csrf_token %}
+            <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl shadow-purple-500/10 dark:shadow-purple-900/20 p-6 sm:p-8">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 text-white">
+                        <span class="material-icons text-2xl">inventory_2</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Crear orden de producción (OPT)</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Artículo y cantidad. En el siguiente paso confirmará y liberará a producción (depósito automático).</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label for="id_articulo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Artículo</label>
+                        <select id="id_articulo" name="id_articulo" required
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">Seleccione artículo</option>
+                            {% for art in articulos %}
+                            <option value="{{ art.id_articulo }}">{{ art.codigo_articulo }} · {{ art.descripcion_articulo|truncatewords:8 }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="cantidad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cantidad pedida</label>
+                        <input type="number" id="cantidad" name="cantidad" min="1" value="1"
+                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 text-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                    </div>
+                    {% if opcional_op.has_deposito_produccion and depositos %}
+                    <div>
+                        <label for="id_deposito_produccion" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito de producción (opcional)</label>
+                        <select id="id_deposito_produccion" name="id_deposito_produccion"
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                            <option value="">— Opcional —</option>
+                            {% for d in depositos %}
+                            <option value="{{ d.CodDeposito }}">{{ d.NombreDeposito|default:d.CodDeposito }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    {% if opcional_op.has_prioridad %}
+                    <div>
+                        <label for="prioridad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Prioridad</label>
+                        <input type="number" id="prioridad" name="prioridad" min="0" step="1" placeholder="Opcional"
+                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500"/>
+                    </div>
+                    {% endif %}
+                    {% if opcional_op.has_fecha_objetivo %}
+                    <div>
+                        <label for="fecha_objetivo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha objetivo</label>
+                        <input type="date" id="fecha_objetivo" name="fecha_objetivo"
+                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500"/>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <span class="material-icons text-xl">arrow_forward</span>
+                    Continuar
+                </button>
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Salir del asistente
+                </a>
+            </div>
+        </form>
+        {% endif %}
+
+        {# Paso 2 – Confirmar orden (crear OPT + liberar a producción con depósito config) #}
+        {% if wizard_paso == 2 %}
+        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-amber-200 dark:border-amber-900/50 shadow-xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3">Resumen de la orden</h2>
+            <ul class="space-y-2 text-sm">
+                <li><span class="text-gray-500 dark:text-gray-400">Artículo:</span> <strong class="text-gray-900 dark:text-white">{{ articulo_nombre }}</strong></li>
+                <li><span class="text-gray-500 dark:text-gray-400">Cantidad:</span> <strong class="text-amber-600 dark:text-amber-400">{{ cantidad_pedida }}</strong> unidades</li>
+                <li><span class="text-gray-500 dark:text-gray-400">Depósito de producción (stock automático):</span> <strong>{{ deposito_produccion_nombre }}</strong></li>
+            </ul>
+            <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">Al confirmar se creará la OPT y se liberará a producción en ese depósito (configurado en Config. Depósitos).</p>
+        </div>
+        <form method="post" action="" class="space-y-6">
+            {% csrf_token %}
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <span class="material-icons text-xl">rocket_launch</span>
+                    Confirmar y liberar a producción
+                </button>
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Salir del asistente
+                </a>
+            </div>
+        </form>
+        {% endif %}
+
+        {# Paso 3 – Crear OPP (cantidades por depósito destino; origen = depósito producción) #}
+        {% if wizard_paso == 3 %}
+        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-amber-200 dark:border-amber-900/50 shadow-xl p-6 mb-6">
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-2">OPT Nº {{ id_lista }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Pendiente total: <strong class="text-amber-600 dark:text-amber-400">{{ total_pendiente }}</strong> unidades. Indique cuántas unidades enviar a cada depósito destino (origen: depósito de producción).</p>
+        </div>
+        <form method="post" action="" id="form-opp-wizard" class="space-y-6">
+            {% csrf_token %}
+            <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl shadow-purple-500/10 dark:shadow-purple-900/20 p-6 sm:p-8">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 text-white">
+                        <span class="material-icons text-2xl">assignment</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Crear OPP (parte de producción)</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Cantidad a registrar por depósito destino (Terminado, Semielaborado, etc.).</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Depósito destino</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad pendientes <span id="opp-pendiente-display" class="tabular-nums text-amber-600 dark:text-amber-400">{{ total_pendiente }}</span></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for dep in depositos %}
+                            {% if dep.CodDeposito != id_deposito_produccion %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">{{ dep.NombreDeposito|default:dep.CodDeposito }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <input type="number" name="cantidad_dep_{{ dep.CodDeposito }}" value="0" min="0" max="{{ total_pendiente }}" step="1" data-opp-dep="1"
+                                           class="w-24 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-right focus:ring-2 focus:ring-purple-500"/>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="opp-total-pendiente" data-total="{{ total_pendiente }}" class="hidden"></div>
+            <div class="flex flex-wrap gap-3">
+                <button type="button" id="btn-registrar-opp" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <span class="material-icons text-xl">assignment</span>
+                    Registrar OPP
+                </button>
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Salir del asistente
+                </a>
+            </div>
+        </form>
+
+        {# Modal validación OPP #}
+        <div id="modal-opp-error" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-opp-title" role="dialog" aria-modal="true">
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50 transition-opacity" aria-hidden="true" id="modal-opp-backdrop"></div>
+                <div class="relative rounded-2xl bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full">
+                    <div class="flex items-start gap-4">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                            <span class="material-icons text-amber-600 dark:text-amber-400">warning</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 id="modal-opp-title" class="text-lg font-semibold text-gray-900 dark:text-white">No se puede registrar el OPP</h3>
+                            <p id="modal-opp-message" class="mt-2 text-sm text-gray-600 dark:text-gray-300"></p>
+                            <div class="mt-4">
+                                <button type="button" id="modal-opp-close" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">
+                                    Entendido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function() {
+            var totalPendiente = parseInt(document.getElementById('opp-total-pendiente').getAttribute('data-total'), 10) || 0;
+            var display = document.getElementById('opp-pendiente-display');
+            var form = document.getElementById('form-opp-wizard');
+            var btn = document.getElementById('btn-registrar-opp');
+            var modal = document.getElementById('modal-opp-error');
+            var modalMsg = document.getElementById('modal-opp-message');
+            var modalClose = document.getElementById('modal-opp-close');
+            var modalBackdrop = document.getElementById('modal-opp-backdrop');
+
+            function getSumaDestinos() {
+                var inputs = form.querySelectorAll('input[data-opp-dep="1"]');
+                var sum = 0;
+                for (var i = 0; i < inputs.length; i++) {
+                    var v = parseInt(inputs[i].value, 10);
+                    sum += isNaN(v) ? 0 : v;
+                }
+                return sum;
+            }
+
+            function updatePendienteDisplay() {
+                var suma = getSumaDestinos();
+                var restante = Math.max(0, totalPendiente - suma);
+                if (display) display.textContent = restante;
+            }
+
+            if (form) {
+                form.addEventListener('input', updatePendienteDisplay);
+                form.addEventListener('change', updatePendienteDisplay);
+            }
+
+            function showModal(message) {
+                if (modalMsg) modalMsg.textContent = message;
+                if (modal) modal.classList.remove('hidden');
+            }
+            function hideModal() {
+                if (modal) modal.classList.add('hidden');
+            }
+            if (modalClose) modalClose.addEventListener('click', hideModal);
+            if (modalBackdrop) modalBackdrop.addEventListener('click', hideModal);
+
+            if (btn && form) {
+                btn.addEventListener('click', function() {
+                    var suma = getSumaDestinos();
+                    if (suma === 0) {
+                        showModal('Indique al menos un depósito con cantidad a registrar.');
+                        return;
+                    }
+                    if (suma > totalPendiente) {
+                        showModal('La suma de cantidades (' + suma + ') no puede superar el pendiente (' + totalPendiente + ').');
+                        return;
+                    }
+                    if (suma < totalPendiente) {
+                        var quedan = totalPendiente - suma;
+                        showModal('Quedan ' + quedan + ' unidades sin registrar. Debe distribuir todo el pendiente (' + totalPendiente + ') para continuar.');
+                        return;
+                    }
+                    form.submit();
+                });
+            }
+        })();
+        </script>
+        {% endif %}
+
+        {# Paso 4 – Armado (condicional) #}
+        {% if wizard_paso == 4 and mostrar_armado %}
+        {% if bom_seleccionado and articulo_armado %}
+        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-emerald-200 dark:border-emerald-900/50 shadow-xl p-4 mb-6">
+            <p class="text-sm text-gray-700 dark:text-gray-300">Producto resultante: <strong>{{ articulo_armado.codigo_articulo }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
+        </div>
+        {% endif %}
+        <form method="post" action="" class="space-y-6">
+            {% csrf_token %}
+            <input type="hidden" name="id_en_abm" value="{{ id_en_abm }}">
+            <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl shadow-purple-500/10 dark:shadow-purple-900/20 p-6 sm:p-8">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                        <span class="material-icons text-2xl">build</span>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Ejecutar armado ahora</h2>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Consumir componentes y producir producto armado.</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label for="cantidad_a_armar" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cantidad a armar</label>
+                        <input type="number" id="cantidad_a_armar" name="cantidad_a_armar" value="{{ cantidad_sugerida|default:1 }}" min="1" required
+                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500"/>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label for="deposito_origen" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito origen (componentes)</label>
+                            <select id="deposito_origen" name="deposito_origen" required
+                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                <option value="">Seleccione</option>
+                                {% for dep in depositos %}
+                                <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label for="deposito_destino" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito destino (producto armado)</label>
+                            <select id="deposito_destino" name="deposito_destino" required
+                                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                <option value="">Seleccione</option>
+                                {% for dep in depositos %}
+                                <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-500/30 transition-all">
+                    <span class="material-icons text-xl">build</span>
+                    Ejecutar armado
+                </button>
+                <button type="submit" name="omitir_armado" value="1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-amber-500 hover:bg-amber-400 text-white transition-colors">
+                    Omitir y continuar
+                </button>
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Salir del asistente
+                </a>
+            </div>
+        </form>
+        {% endif %}
+
+        {# Paso 5 – Cierre #}
+        {% if wizard_paso == 5 %}
+        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-emerald-200 dark:border-emerald-900/50 shadow-xl p-6 mb-6">
+            <div class="flex items-center gap-4">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white">
+                    <span class="material-icons text-2xl">check_circle</span>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">OPT Nº {{ id_lista }}</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Pendiente: <strong class="text-amber-600 dark:text-amber-400">{{ total_pendiente }}</strong> unidades.</p>
+                </div>
+            </div>
+        </div>
+        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl p-6 mb-6">
+            <h3 class="text-base font-bold text-gray-900 dark:text-white mb-4">Siguientes acciones</h3>
+            <div class="flex flex-col sm:flex-row flex-wrap gap-3">
+                <a href="{% url 'mpr:registrar_opp' id_lista=id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <span class="material-icons text-xl">assignment</span>
+                    Registrar OPP
+                </a>
+                <a href="{% url 'mpr:opt_detail' id_lista=id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
+                    <span class="material-icons text-xl">visibility</span>
+                    Ver detalle de la OPT
+                </a>
+                {% if total_pendiente == 0 and id_lista %}
+                <form method="post" action="" class="inline" onsubmit="return confirm('¿Cerrar esta OPT?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="cerrar_opt">
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-400 transition-colors shadow-md">
+                        <span class="material-icons text-xl">check_circle</span>
+                        Cerrar OPT
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <form method="post" action="">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="finalizar">
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <span class="material-icons text-xl">done_all</span>
+                    Finalizar asistente
+                </button>
+                <a href="{% url 'mpr:opt_detail' id_lista=id_lista %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Ver detalle de la OPT
+                </a>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

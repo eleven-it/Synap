@@ -95,6 +95,7 @@ urlpatterns.extend([
     path('reports/', include('reports.urls', namespace='reports')),
     path('stock/', include('stock.urls', namespace='stock')),
     path('compras/', include('compras.urls', namespace='compras')),
+    path('mpr/', include('mpr.urls', namespace='mpr')),
 ])
 
 # Logistics API

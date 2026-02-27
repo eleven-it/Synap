@@ -65,8 +65,8 @@
 | **lote** | Alta/actualización de lotes (cod_lote, fecha_vto_lote, stock_total_lote, id_articulo, id_proveedor). |
 | **lote_stock** | Stock por lote y depósito; se actualiza o se inserta en salidas/entradas con lote. |
 | **ref_movstock** | Catálogo de referencias; solo lectura en CargaMovStock (combo Referencia). |
-| **lista_produccion_agrupada / lista_produccion_historico** | Para motivo 10 (Pedido producción) y 11 (Parte producción): pendientes y historial. |
-| **stockp** | Para motivo 11: cantidad_fab_pendiente_opt. |
+| **lista_produccion_agrupada / lista_produccion_historico** | Para motivo 10 (Pedido producción) y 11 (Parte producción): pendientes y historial. En MPR (Synap) el flujo OPP usa lista_produccion_agrupada.cantidad_pendiente_prod. |
+| **stockp** | En VB6 motivo 11 usaba cantidad_fab_pendiente_opt; *deprecado para MPR*. |
 | **movstock_pedi** | Relación movimiento de stock ↔ pedido interno (comp_ped). |
 | **comp_ped** | Estado "Completo" cuando se asocia mov stock a pedido interno. |
 | **serie_entrada_temp / serie_salida_temp** | Temporales de números de serie por usuario y tipo Mstock. |

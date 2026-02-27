@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
+    'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
     # 'administraNET_integration',  # No necesario

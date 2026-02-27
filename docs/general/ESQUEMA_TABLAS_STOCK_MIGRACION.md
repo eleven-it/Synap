@@ -16,8 +16,8 @@ Documento de Fase 0 del plan de migración. Referencia tablas AdministraNET con 
 | **ref_movstock** | Catálogo referencias (solo lectura en alta) | [tablas/ref_movstock.md](tablas/ref_movstock.md) |
 | **movstock_pedi** | Relación movimiento ↔ pedido interno (comp_ped) | [tablas/movstock_pedi.md](tablas/movstock_pedi.md) |
 | **serie_entrada_temp** / **serie_salida_temp** | Temporales de series por usuario (Mstock) | [tablas/serie_entrada_temp.md](tablas/serie_entrada_temp.md) |
-| **lista_produccion_agrupada** / **lista_produccion_historico** | Motivos 10/11 (Pedido producción, Parte producción) | — |
-| **stockp** | Motivo 11: cantidad_fab_pendiente_opt | [tablas/stockp.md](tablas/stockp.md) |
+| **lista_produccion_agrupada** / **lista_produccion_historico** | Motivos 10/11 (Pedido producción, Parte producción). En MPR el flujo OPP usa cantidad_pendiente_prod de lista_produccion_agrupada. | — |
+| **stockp** | Cuerpo pedidos; motivo 11 en VB6 usaba cantidad_fab_pendiente_opt (*deprecado para MPR*). | [tablas/stockp.md](tablas/stockp.md) |
 
 El esquema exacto de cada tabla (tipos, nulabilidad) se toma de la base MySQL o de los archivos en `docs/general/tablas/`. No se crean modelos Django para estas tablas; se usa el pool MySQL y servicios en Python.
 

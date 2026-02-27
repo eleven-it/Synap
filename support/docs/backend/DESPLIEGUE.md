@@ -10,17 +10,19 @@
 ## Instalación local
 
 ```bash
-cd support/backend
+cd support
+cp .env.example .env
+# Editar support/.env (DATABASE_URL, REDIS_URL, SECRET_KEY, CONFIG_ENCRYPTION_KEY, etc.)
+cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-# Editar .env (DATABASE_URL, REDIS_URL, SECRET_KEY, etc.)
 export DJANGO_SETTINGS_MODULE=config.settings.local
 python manage.py migrate
 python manage.py createsuperuser
 # Crear perfil de agente en Admin → Perfiles de agente para el usuario creado
 ```
+*(Support usa un solo .env en `support/.env`.)*
 
 ## Scripts de arranque
 
@@ -32,7 +34,7 @@ python manage.py createsuperuser
 
 - **Dockerfile** en `support/backend`: imagen basada en Python 3.11-slim; instala dependencias, copia el código y define CMD que ejecuta `migrate` y luego `gunicorn` en el puerto 8000.
 - Construcción: `docker build -t support-backend .` desde `support/backend`.
-- Variables de entorno: inyectar las mismas que en `.env.example` (DATABASE_URL, REDIS_URL, SECRET_KEY, etc.). En Compose se suelen definir en `environment` o en un archivo `env_file`.
+- Variables de entorno: inyectar las mismas que en **support/.env.example** (DATABASE_URL, REDIS_URL, SECRET_KEY, etc.). En Compose se usa el único archivo **support/.env** (env_file en docker-compose apunta a `../.env`).
 
 ## Healthcheck
 

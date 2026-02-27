@@ -7,31 +7,30 @@ Levanta todo el stack: PostgreSQL (pgvector), Redis, backend Django y opcionalme
 ## Requisitos
 
 - Docker y Docker Compose (v2).
-- En `.env` debes definir **CONFIG_ENCRYPTION_KEY** (clave Fernet para cifrar la configuración por UI). Generar con:
+- **Un solo .env para todo Support:** `support/.env`. Debe definir **CONFIG_ENCRYPTION_KEY** (clave Fernet para cifrar la configuración por UI). Generar con:
   ```bash
   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
   ```
 
 ## Uso rápido
 
-**Desde este directorio** (si estás en la raíz del repo, `support/docker`; si ya estás en `support/`, solo `cd docker`):
+**Desde support/** (recomendado; Compose usa por defecto `support/.env`):
 
 ```bash
-cd support/docker   # desde la raíz del repo
-# o:  cd docker     # si ya estás en support/
+cd support
 cp .env.example .env
-# Editar .env y poner CONFIG_ENCRYPTION_KEY=...
-docker compose up -d
+# Editar .env: CONFIG_ENCRYPTION_KEY=..., SUPPORT_SYNAP_API_URL=...
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-**Desde la raíz del repo** (solo Support, no levanta Synap). Usar siempre `-p support` para que stop/down desde raíz afecten a estos contenedores:
+**Desde la raíz del repo** (solo Support, no levanta Synap). Usar siempre `-p support` y **--env-file support/.env**:
 
 ```bash
-docker compose -f docker-compose.support.yml -p support up -d
+cp support/.env.example support/.env
+# Editar support/.env
+docker compose -f docker-compose.support.yml -p support --env-file support/.env up -d
 # Para parar: docker compose -f docker-compose.support.yml -p support down
 ```
-
-El `.env` se lee de `support/docker/.env`; créalo desde `support/docker/.env.example` antes de usar la opción desde raíz.
 
 Con esto se levantan:
 
@@ -39,10 +38,16 @@ Con esto se levantan:
 - **redis** en `localhost:6379`
 - **backend** (Django, migrate + gunicorn) en **http://localhost:8250**
 
-Crear usuario admin (con TTY para poder escribir usuario y contraseña):
+Crear usuario admin (con TTY para poder escribir usuario y contraseña). Si arrancaste desde `support/`:
 
 ```bash
-docker compose exec -it backend python manage.py createsuperuser
+docker compose -f docker/docker-compose.yml exec -it backend python manage.py createsuperuser
+```
+
+Si arrancaste desde la raíz con `-f docker-compose.support.yml`, el nombre del servicio es `support_backend`:
+
+```bash
+docker compose -f docker-compose.support.yml -p support exec -it support_backend python manage.py createsuperuser
 ```
 
 Si no tienes TTY (script o CI), crear desde shell:
@@ -69,7 +74,7 @@ Para levantar también el frontend (Vite, hot reload) en **http://localhost:3000
 docker compose --profile dev up -d
 ```
 
-El navegador debe poder alcanzar el backend en `http://localhost:8250` (configurado por defecto en `VITE_API_BASE_URL` en `.env`).
+El navegador debe poder alcanzar el backend en `http://localhost:8250` (configurado por defecto en `VITE_API_BASE_URL` en **support/.env**).
 
 ### MinIO (almacenamiento S3)
 
@@ -79,7 +84,7 @@ Si quieres MinIO para adjuntos/storage:
 docker compose --profile storage up -d
 ```
 
-En `.env` del directorio `docker` (o en el backend) configura:
+En **support/.env** configura:
 
 - `S3_ENDPOINT_URL=http://minio:9000`
 - `S3_ACCESS_KEY=minioadmin`
@@ -114,6 +119,8 @@ docker rm support_backend support_redis support_db
 
 ## Comandos útiles
 
+*(Si arrancaste desde `support/`, anteponer `docker compose -f docker/docker-compose.yml` a cada comando; si arrancaste desde la raíz con `-f docker-compose.support.yml -p support`, usar `docker compose -f docker-compose.support.yml -p support` y el servicio backend se llama `support_backend`.)*
+
 ```bash
 # Ver logs del backend
 docker compose logs -f backend
@@ -133,17 +140,17 @@ docker compose down
 
 ## Error «role support does not exist» / «password authentication failed for user support»
 
-Si el volumen de Postgres se creó en el pasado con **otras credenciales** (por ejemplo otro `POSTGRES_USER` en el `.env`), el backend intentará conectarse como `support` y fallará.
+Si el volumen de Postgres se creó en el pasado con **otras credenciales** (por ejemplo otro `POSTGRES_USER` en **support/.env**), el backend intentará conectarse como `support` y fallará.
 
 **Solución recomendada** (se borran los datos de Support en Postgres):
 
 ```bash
-cd support/docker
-docker compose down -v
-docker compose up -d
+cd support
+docker compose -f docker/docker-compose.yml down -v
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-Con `-v` se elimina el volumen `support_postgres_data`; al levantar de nuevo, Postgres se inicializa con el usuario y base `support` del `.env` actual.
+Con `-v` se elimina el volumen `support_postgres_data`; al levantar de nuevo, Postgres se inicializa con el usuario y base `support` de **support/.env**.
 
 Si preferís intentar crear el rol sin borrar datos (solo funciona si en el contenedor existe el superusuario `postgres`):
 

@@ -1,0 +1,159 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Confirmar OPT - Pedido producción trabajo (OPT) - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'mpr:ventana_pack' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Pedido producción trabajo (OPT)</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Confirmar OPT</span>
+        </nav>
+
+        {% if en_wizard %}
+        <div class="mb-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 px-4 py-2 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs font-medium text-purple-800 dark:text-purple-200">Asistente de producción — Paso {{ wizard_paso }} de 5: Confirmar (crear y liberar)</span>
+            <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Salir del asistente</a>
+        </div>
+        {% endif %}
+
+        <header class="mb-6">
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Confirmar orden de producción</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Revise las cantidades y pulse «Generar OPT» para crear la orden.
+            </p>
+        </header>
+
+        {# Solo Unidades: componentes de recetas (BOM) con Cant. a fabricar editable, alineado con VB6 #}
+        <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-generar-opt">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="generar_opt"/>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                Desglose por unidades: componentes de las recetas (BOM) de los packs seleccionados. Edite «Cant. a fabricar» y pulse «Generar OPT».
+            </p>
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cod. Sist</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Artículo</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stock</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. Pedida</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. a fabricar</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Urgente</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for f in filas_unidades %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ f.id_articulo }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ f.codigo_manual }}</span>
+                                    <span class="block text-xs text-gray-500 dark:text-gray-400">{{ f.descripcion_articulo|truncatewords:12 }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">
+                                    <span class="stock-terminado-tooltip-trigger cursor-help inline-block" data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}">{{ f.stock|floatformat:0 }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ f.cantidad_pedida|floatformat:0 }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar }}" min="1" step="1"
+                                           class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
+                                </td>
+                                <td class="px-4 py-3 text-right tabular-nums text-sm {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_abs|floatformat:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                    No hay componentes. Los packs seleccionados no tienen receta (BOM) o no se encontraron componentes.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                    Volver a Pedido producción trabajo (OPT)
+                </a>
+                {% if filas_unidades %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-all">
+                    <span class="material-icons text-lg">add_circle</span>
+                    Generar OPT
+                </button>
+                {% endif %}
+            </div>
+        </form>
+
+        <div id="tooltip-stock-deposito" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[280px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none;" role="tooltip"></div>
+    </div>
+</section>
+<script>
+(function() {
+    function parseDetalle(raw) {
+        if (!raw || typeof raw !== 'string') return { filas: [], total: 0, disponible: 0, reserva: 0 };
+        try {
+            var s = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+            var o = JSON.parse(s);
+            return { filas: o.filas || [], total: o.total != null ? o.total : 0, disponible: o.disponible != null ? o.disponible : 0, reserva: o.reserva != null ? Number(o.reserva) : 0 };
+        } catch (e) {
+            try { var o = JSON.parse(raw); return { filas: o.filas || [], total: o.total || 0, disponible: o.disponible || 0, reserva: o.reserva != null ? Number(o.reserva) : 0 }; } catch (e2) { return { filas: [], total: 0, disponible: 0, reserva: 0 }; }
+        }
+    }
+    var tipStock = document.getElementById('tooltip-stock-deposito');
+    if (!tipStock) return;
+    function esc(s) {
+        if (s == null || s === '') return '-';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+    function valorClass(v) {
+        return (v !== 0 && !isNaN(v)) ? 'text-emerald-300 font-semibold' : 'text-slate-400';
+    }
+    function positionStockTip(ev) {
+        var trigger = ev.currentTarget;
+        var rect = trigger.getBoundingClientRect();
+        var pad = 10;
+        var left = ev.clientX + pad;
+        if (left + 280 > window.innerWidth) left = ev.clientX - 280 - pad;
+        tipStock.style.left = Math.max(pad, left) + 'px';
+        tipStock.style.top = rect.top + 'px';
+        if (tipStock.offsetHeight && rect.top + tipStock.offsetHeight > window.innerHeight - pad) {
+            tipStock.style.top = (rect.bottom - tipStock.offsetHeight - 4) + 'px';
+        }
+    }
+    function showStockTip(ev, data) {
+        var title = '<div class="font-bold text-sm text-white mb-1">Stock por depósito</div><div class="text-[10px] text-slate-400 mb-0.5">Depósitos con suma_stock=Si</div>';
+        var lines = [];
+        (data.filas || []).forEach(function(d) {
+            var saldo = d.stock_terminado != null ? Number(d.stock_terminado) : 0;
+            lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs">' + esc(d.deposito) + '</span><span class="' + valorClass(saldo) + ' text-xs tabular-nums">' + saldo + '</span></div>');
+        });
+        var total = data.total != null ? Number(data.total) : 0;
+        var reserva = data.reserva != null ? Number(data.reserva) : 0;
+        var disp = data.disponible != null ? Number(data.disponible) : 0;
+        lines.push('<div class="flex items-center justify-between gap-3 py-0.5 border-t border-slate-700 mt-0.5 pt-0.5"><span class="text-slate-300 text-xs font-medium">Total</span><span class="' + valorClass(total) + ' text-xs tabular-nums">' + total + '</span></div>');
+        lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs font-medium">Reserva</span><span class="' + valorClass(reserva) + ' text-xs tabular-nums">' + reserva + '</span></div>');
+        lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs font-medium">Disponible</span><span class="' + valorClass(disp) + ' text-xs tabular-nums">' + disp + '</span></div>');
+        tipStock.innerHTML = title + '<div class="space-y-0.5 border-t border-slate-700 pt-1 mt-1">' + lines.join('') + '</div>';
+        tipStock.style.display = 'block';
+        positionStockTip(ev);
+    }
+    document.querySelectorAll('.stock-terminado-tooltip-trigger').forEach(function(el) {
+        var raw = el.getAttribute('data-detalle-stock');
+        var data = parseDetalle(raw);
+        el.addEventListener('mouseenter', function(ev) { showStockTip(ev, data); });
+        el.addEventListener('mousemove', function(ev) {
+            if (tipStock.style.display === 'block') positionStockTip(ev);
+        });
+        el.addEventListener('mouseleave', function() { tipStock.style.display = 'none'; });
+    });
+})();
+</script>
+{% endblock %}

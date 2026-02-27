@@ -12,13 +12,15 @@ Backend del servicio de soporte (Django 4+ y Django REST Framework). Independien
 ## Instalación
 
 ```bash
-cd support/backend
+cd support
+cp .env.example .env
+# Editar support/.env (DATABASE_URL, REDIS_URL, CONFIG_ENCRYPTION_KEY, etc.)
+cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env
-# Editar .env con DATABASE_URL, REDIS_URL, etc.
 ```
+*(Support usa un solo .env en `support/.env`; el backend lo lee desde ahí.)*
 
 ## Base de datos
 
@@ -102,7 +104,7 @@ Ver `/support/docker` para docker-compose. El backend se construye con:
 docker build -t support-backend .
 ```
 
-Variables de entorno: ver `.env.example`.
+Variables de entorno: ver `support/.env.example` (único .env del proyecto Support).
 
 ## Documentación
 

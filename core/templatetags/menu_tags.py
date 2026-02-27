@@ -38,6 +38,8 @@ def get_current_module(context):
         return 'stock'
     elif app_name == 'stock':
         return app_name
+    elif app_name == 'mpr':
+        return 'mpr'
 
     return None
 

@@ -125,6 +125,9 @@ PERMISOS_POR_MODULO = {
         ("stock.ref_movstock", "ABM referencia de movimiento de stock"),
         ("stock.informes", "Informes de stock"),
     ],
+    "Producción (MPR)": [
+        ("mpr.ver", "Ver módulo Producción (MPR)"),
+    ],
     "Reportes": [
         ("reports.view_operational", "Informes operativos"),
         ("reports.view_managerial", "Informes gerenciales"),

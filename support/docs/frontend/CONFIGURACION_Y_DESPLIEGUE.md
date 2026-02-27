@@ -2,22 +2,21 @@
 
 ## Variables de entorno
 
-Solo se requieren variables mínimas; **no** se configuran claves operativas (canales, IA, storage, etc.) por `.env` en el frontend: esa configuración se hace desde la UI de Configuración (Admin) y se persiste en el **backend** (PostgreSQL, secretos cifrados). En el backend, el `.env` debe incluir al menos `CONFIG_ENCRYPTION_KEY` (clave Fernet en base64) para cifrar tokens y API keys; ver `support/backend/.env.example` y `support/docs/backend/API.md`.
+Solo se requieren variables mínimas; **no** se configuran claves operativas (canales, IA, storage, etc.) por `.env` en el frontend: esa configuración se hace desde la UI de Configuración (Admin) y se persiste en el **backend** (PostgreSQL, secretos cifrados). Support usa **un solo .env** en `support/.env`; debe incluir al menos `CONFIG_ENCRYPTION_KEY` (clave Fernet en base64) para cifrar tokens y API keys; ver `support/.env.example` y `support/docs/backend/API.md`.
 
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
 | `VITE_API_BASE_URL` | URL base del backend **sin** `/api` al final. En desarrollo con proxy puede dejarse vacía para usar rutas relativas. | `http://localhost:8250` |
 | `VITE_POLL_INTERVAL` | Opcional. Intervalo de polling en ms (p. ej. para refrescar detalle de caso). `0` = desactivado. | `10000` |
 
-Archivo de ejemplo: `support/frontend/.env.example`. Copiar a `.env` y ajustar si hace falta.
+El frontend lee las variables desde **support/.env** (Vite tiene `envDir: ..` en `vite.config.ts`). Archivo de ejemplo: `support/.env.example`.
 
 ## Desarrollo local
 
 ```bash
 cd support/frontend
 npm install
-cp .env.example .env
-# Opcional: editar .env y definir VITE_API_BASE_URL si el backend no está en localhost:8250
+# Crear support/.env desde support/.env.example si no existe; VITE_API_BASE_URL y demás se leen de ahí
 npm run dev
 ```
 
