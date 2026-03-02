@@ -4,11 +4,14 @@
 {% block title %}Estados de carritos · Self-Checkout{% endblock %}
 
 {% block content %}
-<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-6 transition-colors duration-500">
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-6 transition-colors duration-500"
+         aria-labelledby="carritos-heading">
   <div class="w-full px-4">
     <header class="mb-6">
-      <a href="{% url 'self_checkout:config_list' %}" class="text-sm font-medium text-slate-500 dark:text-slate-400">← Configuración</a>
-      <h1 class="text-xl font-semibold text-slate-900 dark:text-white tracking-tight mt-2">
+      <a href="{% url 'self_checkout:config_list' %}"
+         class="text-sm font-medium text-slate-500 dark:text-slate-400 focus:outline-none focus:underline">← Configuración</a>
+      <h1 id="carritos-heading"
+          class="text-xl font-semibold text-slate-900 dark:text-white tracking-tight mt-2">
         Estados de carritos
       </h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -17,28 +20,38 @@
     </header>
 
     {% csrf_token %}
-    <div id="toast" class="hidden fixed top-4 left-4 right-4 z-[200] rounded-xl px-4 py-3 text-sm font-semibold shadow-lg" role="alert"></div>
+    <div id="synap-toast" class="hidden fixed top-4 left-4 right-4 z-[200] rounded-xl px-4 py-3 text-sm font-semibold shadow-lg"
+         role="alert" aria-live="assertive"></div>
 
     {% if mysql_connection_error %}
-    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-8 text-center">
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-8 text-center"
+         role="alert">
       <div class="rounded-xl bg-amber-500/20 border border-amber-400/50 px-4 py-3 mb-4 inline-block">
         <p class="text-base font-semibold text-amber-700 dark:text-amber-200">Fuera de servicio</p>
       </div>
       <p class="text-sm text-slate-600 dark:text-slate-300 mt-2">Sin conexión al servidor.</p>
       <div class="mt-4 flex flex-col gap-2">
-        <button type="button" onclick="window.location.reload()" class="rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500 text-slate-900 min-h-[3rem] active:scale-[0.98] transition-all touch-manipulation">Reintentar</button>
-        <a href="{% url 'self_checkout:config_list' %}" class="rounded-xl px-4 py-3 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-center min-h-[3rem] flex items-center justify-center">Volver</a>
+        <button type="button" onclick="window.location.reload()"
+                class="rounded-xl px-4 py-3 text-sm font-semibold bg-amber-500 text-slate-900 min-h-[2.75rem] active:scale-[0.98] transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-amber-400">
+          Reintentar
+        </button>
+        <a href="{% url 'self_checkout:config_list' %}"
+           class="rounded-xl px-4 py-3 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-center min-h-[2.75rem] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-slate-400">
+          Volver
+        </a>
       </div>
     </div>
     {% else %}
 
     {% if carritos %}
     <div class="mb-4 space-y-3">
+      <label for="carritos-search" class="sr-only">Buscar carrito</label>
       <input type="text" id="carritos-search" placeholder="Buscar carrito…"
-             class="w-full py-3 px-4 text-sm border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-400 min-h-[3rem]"
-             autocomplete="off">
+             class="w-full py-3 px-4 text-sm border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-400 focus:outline-none min-h-[2.75rem]"
+             autocomplete="off" inputmode="search">
+      <label for="carritos-filter-estado" class="sr-only">Filtrar por estado</label>
       <select id="carritos-filter-estado"
-              class="w-full py-3 px-4 text-sm border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 min-h-[3rem]">
+              class="w-full py-3 px-4 text-sm border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:outline-none min-h-[2.75rem]">
         <option value="">Todos los estados</option>
         <option value="borrador">Borrador</option>
         <option value="pago_pendiente">Pago pendiente</option>
@@ -46,12 +59,15 @@
         <option value="error_confirmacion">Error</option>
         <option value="confirmado">Confirmado</option>
       </select>
-      <p class="text-xs text-slate-500 dark:text-slate-400">Mostrando <span id="carritos-count">{{ carritos|length }}</span> carrito(s)</p>
+      <p class="text-xs text-slate-500 dark:text-slate-400" role="status" aria-live="polite">
+        Mostrando <span id="carritos-count">{{ carritos|length }}</span> carrito(s)
+      </p>
     </div>
 
-    <div id="carritos-list" class="space-y-3">
+    <div id="carritos-list" class="space-y-3" role="list" aria-label="Carritos">
       {% for c in carritos %}
-      <div class="carrito-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-4"
+      <div class="carrito-card rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm p-4 focus-within:ring-2 focus-within:ring-sky-400"
+           role="listitem"
            data-cart-id="{{ c.id }}"
            data-estado="{% if c.nro_factura %}confirmado{% else %}{{ c.estado|default:'pago_aprobado' }}{% endif %}"
            data-tiene-pi="{% if c.tiene_pi %}1{% else %}0{% endif %}"
@@ -79,29 +95,49 @@
           <div><span class="text-slate-500">Pago:</span> {% if c.pago_mp or c.pi_aprobado %}Mercado Pago{% else %}—{% endif %}</div>
         </div>
         {% if c.estado == 'error_confirmacion' and c.ultimo_error_confirmacion %}
-        <p class="text-xs text-amber-600 dark:text-amber-400 mb-3 line-clamp-2">{{ c.ultimo_error_confirmacion|truncatechars:100 }}</p>
+        <p class="text-xs text-amber-600 dark:text-amber-400 mb-3 line-clamp-2" role="alert">{{ c.ultimo_error_confirmacion|truncatechars:100 }}</p>
         {% endif %}
         <div class="flex flex-wrap gap-2">
           {% if c.nro_factura %}
-          <a href="{% url 'self_checkout:ticket_print' c.id %}?print=1" target="_blank"
-             class="reimprimir-link flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 text-center flex items-center justify-center active:scale-[0.98] touch-manipulation">
+          <a href="{% url 'self_checkout:ticket_print' c.id %}?print=1" target="_blank" rel="noopener"
+             class="reimprimir-link flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 text-center flex items-center justify-center active:scale-[0.98] touch-manipulation focus:outline-none focus:ring-2 focus:ring-sky-400"
+             aria-label="Reimprimir carrito #{{ c.id }}">
             Reimprimir
           </a>
           {% elif c.estado == 'error_confirmacion' %}
-          <button type="button" class="reintentar-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50" data-cart-id="{{ c.id }}">
-            <span class="btn-text">Reintentar</span><span class="btn-loading hidden">…</span>
+          <button type="button"
+                  class="reintentar-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+                  data-cart-id="{{ c.id }}"
+                  aria-label="Reintentar emisión carrito #{{ c.id }}">
+            <span class="btn-text">Reintentar</span><span class="btn-loading hidden">Procesando…</span>
           </button>
-          <button type="button" class="eliminar-btn min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-red-600 border border-red-300 dark:border-red-700 active:scale-[0.98] touch-manipulation disabled:opacity-50" data-cart-id="{{ c.id }}">Eliminar</button>
+          <button type="button"
+                  class="eliminar-btn min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-red-600 border border-red-300 dark:border-red-700 active:scale-[0.98] touch-manipulation disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+                  data-cart-id="{{ c.id }}"
+                  aria-label="Eliminar carrito #{{ c.id }}">
+            Eliminar
+          </button>
           {% elif c.estado == 'borrador' or c.estado == 'pago_pendiente' %}
           {% if c.tiene_pi %}
-          <button type="button" class="buscar-mp-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50" data-cart-id="{{ c.id }}">
-            <span class="btn-text">Buscar pago MP</span><span class="btn-loading hidden">…</span>
+          <button type="button"
+                  class="buscar-mp-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+                  data-cart-id="{{ c.id }}"
+                  aria-label="Buscar pago en Mercado Pago para carrito #{{ c.id }}">
+            <span class="btn-text">Buscar pago MP</span><span class="btn-loading hidden">Buscando…</span>
           </button>
           {% endif %}
-          <button type="button" class="eliminar-btn min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-red-600 border border-red-300 dark:border-red-700 active:scale-[0.98] touch-manipulation disabled:opacity-50" data-cart-id="{{ c.id }}">Eliminar</button>
+          <button type="button"
+                  class="eliminar-btn min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-red-600 border border-red-300 dark:border-red-700 active:scale-[0.98] touch-manipulation disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+                  data-cart-id="{{ c.id }}"
+                  aria-label="Eliminar carrito #{{ c.id }}">
+            Eliminar
+          </button>
           {% else %}
-          <button type="button" class="emitir-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50" data-cart-id="{{ c.id }}">
-            <span class="btn-text">Emitir comprobante</span><span class="btn-loading hidden">…</span>
+          <button type="button"
+                  class="emitir-btn flex-1 min-h-[2.75rem] rounded-xl px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 shadow-md active:scale-[0.98] touch-manipulation disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+                  data-cart-id="{{ c.id }}"
+                  aria-label="Emitir comprobante para carrito #{{ c.id }}">
+            <span class="btn-text">Emitir comprobante</span><span class="btn-loading hidden">Emitiendo…</span>
           </button>
           {% endif %}
         </div>
@@ -109,79 +145,92 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-500 dark:text-slate-400">
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-500 dark:text-slate-400"
+         role="status">
       <p class="text-sm">No hay carritos para mostrar.</p>
-      <a href="{% url 'self_checkout:config_list' %}" class="mt-4 inline-flex text-sm font-semibold text-sky-600 dark:text-sky-400">Volver</a>
+      <a href="{% url 'self_checkout:config_list' %}"
+         class="mt-4 inline-flex text-sm font-semibold text-sky-600 dark:text-sky-400 focus:outline-none focus:underline">Volver</a>
     </div>
     {% endif %}
     {% endif %}
   </div>
 </section>
 
+{% include "self_checkout/mobile/_utils.html" %}
 <script>
 (function() {
+  var M = window.SynapMobile;
   var cards = document.querySelectorAll('.carrito-card');
   if (!cards.length) return;
   var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
-  function showToast(msg, isError) {
-    var el = document.getElementById('toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = 'fixed top-4 left-4 right-4 z-[200] rounded-xl px-4 py-3 text-sm font-semibold shadow-lg ' + (isError ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white');
-    el.classList.remove('hidden');
-    setTimeout(function() { el.classList.add('hidden'); }, 6000);
+  function apiPost(url) {
+    return M.csrfFetch(url, { method: 'POST', body: '{}' });
   }
 
   document.addEventListener('click', async function(ev) {
     var btn = ev.target.closest('.emitir-btn, .reintentar-btn');
     if (btn && !btn.disabled) {
       var cartId = btn.getAttribute('data-cart-id');
-      btn.disabled = true;
-      var textEl = btn.querySelector('.btn-text'), loadEl = btn.querySelector('.btn-loading');
-      if (textEl) textEl.classList.add('hidden');
-      if (loadEl) loadEl.classList.remove('hidden');
+      M.setLoading(btn, true);
       try {
-        var res = await fetch('/api/self-checkout/cart/' + cartId + '/confirm-pending/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' }, body: '{}', credentials: 'same-origin'
-        });
+        var res = await apiPost('/api/self-checkout/cart/' + cartId + '/confirm-pending/');
         var data = await res.json().catch(function() { return {}; });
         if (res.ok && data.ok) {
-          showToast('Comprobante emitido', false);
+          M.showToast('Comprobante emitido', { position: 'top' });
           btn.closest('.carrito-card').remove();
-        } else { showToast(data.error || 'Error', true); btn.disabled = false; }
-      } catch(e) { showToast('Error de conexión', true); btn.disabled = false; }
-      if (textEl) textEl.classList.remove('hidden');
-      if (loadEl) loadEl.classList.add('hidden');
+          updateCount();
+        } else {
+          M.showToast(data.error || 'Error', { error: true, position: 'top' });
+          M.setLoading(btn, false);
+        }
+      } catch(e) {
+        M.showToast('Error de conexión', { error: true, position: 'top' });
+        M.setLoading(btn, false);
+      }
       return;
     }
+
     var mpBtn = ev.target.closest('.buscar-mp-btn');
     if (mpBtn && !mpBtn.disabled) {
       var cid = mpBtn.getAttribute('data-cart-id');
-      mpBtn.disabled = true;
+      M.setLoading(mpBtn, true);
       try {
-        var r = await fetch('/api/self-checkout/cart/' + cid + '/buscar-pago-mp/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' }, body: '{}', credentials: 'same-origin'
-        });
+        var r = await apiPost('/api/self-checkout/cart/' + cid + '/buscar-pago-mp/');
         var d = await r.json().catch(function() { return {}; });
-        if (r.ok && d.ok) { showToast('Comprobante emitido', false); mpBtn.closest('.carrito-card').remove(); }
-        else { showToast(d.error || 'No se encontró pago', true); mpBtn.disabled = false; }
-      } catch(e) { showToast('Error de conexión', true); mpBtn.disabled = false; }
+        if (r.ok && d.ok) {
+          M.showToast('Comprobante emitido', { position: 'top' });
+          mpBtn.closest('.carrito-card').remove();
+          updateCount();
+        } else {
+          M.showToast(d.error || 'No se encontró pago', { error: true, position: 'top' });
+          M.setLoading(mpBtn, false);
+        }
+      } catch(e) {
+        M.showToast('Error de conexión', { error: true, position: 'top' });
+        M.setLoading(mpBtn, false);
+      }
       return;
     }
+
     var delBtn = ev.target.closest('.eliminar-btn');
     if (delBtn && !delBtn.disabled) {
       if (!confirm('¿Eliminar este carrito?')) return;
       var did = delBtn.getAttribute('data-cart-id');
       delBtn.disabled = true;
       try {
-        var dr = await fetch('/api/self-checkout/cart/' + did + '/cancel/', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' }, body: '{}', credentials: 'same-origin'
-        });
+        var dr = await apiPost('/api/self-checkout/cart/' + did + '/cancel/');
         var dd = await dr.json().catch(function() { return {}; });
-        if (dr.ok && dd.ok) { showToast('Carrito eliminado', false); delBtn.closest('.carrito-card').remove(); }
-        else { showToast(dd.error || 'Error', true); }
-      } catch(e) { showToast('Error de conexión', true); }
+        if (dr.ok && dd.ok) {
+          M.showToast('Carrito eliminado', { position: 'top' });
+          delBtn.closest('.carrito-card').remove();
+          updateCount();
+        } else {
+          M.showToast(dd.error || 'Error', { error: true, position: 'top' });
+        }
+      } catch(e) {
+        M.showToast('Error de conexión', { error: true, position: 'top' });
+      }
       delBtn.disabled = false;
     }
   });
@@ -189,6 +238,12 @@
   var searchInput = document.getElementById('carritos-search');
   var filterEstado = document.getElementById('carritos-filter-estado');
   var countEl = document.getElementById('carritos-count');
+
+  function updateCount() {
+    var visible = document.querySelectorAll('.carrito-card:not([style*="display: none"])').length;
+    if (countEl) countEl.textContent = visible;
+  }
+
   function applyFilters() {
     var q = (searchInput?.value || '').trim().toLowerCase();
     var estado = (filterEstado?.value || '').trim();
@@ -202,6 +257,7 @@
     });
     if (countEl) countEl.textContent = visible;
   }
+
   if (searchInput) searchInput.addEventListener('input', applyFilters);
   if (filterEstado) filterEstado.addEventListener('change', applyFilters);
 })();

@@ -1,11 +1,9 @@
 {% extends "self_checkout/kiosco.html" %}
 {% comment %}
   Template mobile para el kiosco/TPV.
-  Hereda TODO el contenido (HTML + Alpine.js + modales) del template desktop
-  mediante herencia multi-nivel de Django.
-  Solo sobreescribe el bloque CSS para agregar overrides mobile que
-  transforman el layout 2-columnas a single-column con barra inferior sticky,
-  touch targets amplios y modales fullscreen.
+  Herencia multi-nivel: extiende kiosco.html (desktop) y solo sobreescribe CSS
+  para layout single-column, bottom-sheet carrito, touch targets y accesibilidad.
+  0 duplicación de HTML/JS/Alpine.js.
 {% endcomment %}
 
 {% block extra_css %}
@@ -13,14 +11,23 @@
 <style>
 /* ========== MOBILE TPV OVERRIDES ========== */
 
-/* Root: sin border-radius ni sombra, viewport completo */
+/* Respetar preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Root: viewport completo sin bordes decorativos */
 body.kiosk-client-mode .kiosk-card {
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
 }
 
-/* Forzar columna única siempre en mobile (sin media query) */
+/* Columna única siempre (sin media query — este template solo se sirve en mobile) */
 .kiosk-main-two-cols {
   flex-direction: column !important;
   overflow: hidden !important;
@@ -36,30 +43,56 @@ body.kiosk-client-mode .kiosk-card {
   width: 100% !important;
   min-height: 0 !important;
   overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
   border-right: none !important;
 }
 
-/* Columna derecha (carrito): bottom sheet */
+/* Columna derecha (carrito): bottom sheet con handle visual */
 .kiosk-col-right {
   width: 100% !important;
   flex: none !important;
   max-height: 45vh !important;
   min-height: 0 !important;
   overflow-y: auto !important;
-  transition: max-height 0.3s ease;
+  -webkit-overflow-scrolling: touch;
   border-radius: 1rem 1rem 0 0 !important;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.1) !important;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.12) !important;
+  position: relative;
 }
 
-/* Touch targets mínimo 44px */
+@media (prefers-reduced-motion: no-preference) {
+  .kiosk-col-right {
+    transition: max-height 0.3s ease;
+  }
+}
+
+/* Handle del bottom sheet (visual affordance) */
+.kiosk-col-right::before {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 0.25rem;
+  background: #94a3b8;
+  border-radius: 9999px;
+  margin: 0.5rem auto 0.25rem;
+  opacity: 0.5;
+}
+
+/* Touch targets: mínimo 44px (WCAG 2.5.5 AAA / 2.5.8 AA) */
 .touch-manipulation { touch-action: manipulation; }
 button, a, [role="button"] { min-height: 2.75rem; }
 
-/* Inputs más grandes para evitar zoom en iOS (font-size >= 16px) */
+/* Focus visible: anillo de alta visibilidad para navegación por teclado */
+:focus-visible {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
+/* Inputs: font-size >= 16px para evitar zoom en iOS */
 input[type="text"], input[type="number"], input[type="email"],
 input[type="search"], input[type="tel"], select, textarea {
   font-size: 1rem !important;
-  min-height: 3rem !important;
+  min-height: 2.75rem !important;
 }
 
 /* Modales: fullscreen en mobile para maximizar área útil */
@@ -75,7 +108,7 @@ input[type="search"], input[type="tel"], select, textarea {
 button[title="Pantalla completa"],
 .btn-fullscreen { display: none !important; }
 
-/* Barra de botones de acciones: scroll horizontal */
+/* Barras de botones: scroll horizontal sin scrollbar visible */
 .flex.items-center.gap-2.overflow-x-auto,
 .flex.gap-2.overflow-x-auto {
   -webkit-overflow-scrolling: touch;
@@ -87,8 +120,11 @@ button[title="Pantalla completa"],
 /* Tablas dentro de modales: scroll horizontal */
 .overflow-x-auto { -webkit-overflow-scrolling: touch; }
 
-/* Padding lateral reducido en mobile */
-.px-4.sm\:px-6.lg\:px-8 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+/* Padding lateral reducido */
+.px-4.sm\:px-6.lg\:px-8 {
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
 
 /* Texto de totales más grande para visibilidad */
 .kiosk-col-right .text-2xl { font-size: 1.75rem !important; }
@@ -97,5 +133,18 @@ button[title="Pantalla completa"],
 /* Grid de resultados: 1 columna en mobile */
 .grid.grid-cols-1.sm\:grid-cols-2 { grid-template-columns: 1fr !important; }
 .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+
+/* Mejora de contraste para badges de estado */
+.bg-emerald-100 { background-color: #d1fae5 !important; }
+.text-emerald-700 { color: #047857 !important; }
+.bg-amber-100 { background-color: #fef3c7 !important; }
+.text-amber-700 { color: #b45309 !important; }
+
+/* Safe area insets para dispositivos con notch */
+@supports (padding: max(0px)) {
+  .kiosk-col-right {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+  }
+}
 </style>
 {% endblock %}
