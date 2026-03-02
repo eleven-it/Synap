@@ -3555,11 +3555,8 @@ class QueryRunnerService:
                 "(spr.anulado IS NULL OR spr.anulado = 'No')",
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
-<<<<<<< HEAD
-=======
                 "spr.Fecha >= %s AND spr.Fecha <= %s",
                 "(a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')",
->>>>>>> 46afb735 (Reportes BO: filtro tipo_art <> Gasto, lista_precio en filtros, depósitos incluidos (IN), filters_applied, docs SQL_VISTAS y COMPARATIVA)
             ]
             params_bo_rows = [fecha_inicio, fecha_fin]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
