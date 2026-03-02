@@ -2853,7 +2853,7 @@ class QueryRunnerService:
         - Facturación: cuentacliente (FA/FB/FC/FE/FM menos NC*)
         - Remitos no facturados: comp_ped (TipoComprobante='REM', Estado='Pendiente')
         - Backorder: comp_ped (TipoComprobante='PED') + stockp (renglones definitivos)
-        - Stock: stock_deposito (saldo, oc_pendiente); Reservado: stockp+comp_ped (Estado En preparación/Preparado)
+        - Reservado: stockp+comp_ped (Estado En preparación/Preparado; NO Pendiente ni Parcial)
         - Maestros: articulo + rubro
         
         RESPUESTAS OBLIGATORIAS (Backorder detalle row-level):
@@ -2915,14 +2915,34 @@ class QueryRunnerService:
             elif not isinstance(puntos_venta, list):
                 puntos_venta = []
             
-            depositos_excluidos = filters.get("depositos_excluidos", [])
-            if isinstance(depositos_excluidos, str):
-                depositos_excluidos = [depositos_excluidos] if depositos_excluidos else []
-            elif not isinstance(depositos_excluidos, list):
-                depositos_excluidos = []
-            depositos_excluidos = [int(x) for x in depositos_excluidos if str(x).strip() and str(x).replace("-", "").isdigit()]
+            depositos_incluidos = filters.get("depositos_incluidos", [])
+            if isinstance(depositos_incluidos, str):
+                depositos_incluidos = [depositos_incluidos] if depositos_incluidos else []
+            elif not isinstance(depositos_incluidos, list):
+                depositos_incluidos = []
+            depositos_incluidos = [int(x) for x in depositos_incluidos if str(x).strip() and str(x).replace("-", "").isdigit()]
             
             clientes_excluidos = self._parse_clientes_excluidos(filters)
+            
+            # Lista de precio para valorización (como VB6 Info_Stock: 0=Costo, 1=Lista Oficial/PNOficial, 2-6=Lista 1-5/Precio1V..Precio5V)
+            lista_precio = filters.get("lista_precio")
+            if lista_precio is None:
+                lista_precio = 2  # default Lista 1 (Precio1V)
+            try:
+                lista_precio = int(lista_precio)
+            except (TypeError, ValueError):
+                lista_precio = 2
+            if lista_precio not in range(0, 7):
+                lista_precio = 2
+            # Expresión SQL para precio según lista (valor literal seguro 0-6)
+            precio_segun_lista_sql = (
+                f"CASE {lista_precio} "
+                "WHEN 0 THEN a.PrecioCosto "
+                "WHEN 1 THEN a.PNOficial "
+                "WHEN 2 THEN a.Precio1V WHEN 3 THEN a.Precio2V WHEN 4 THEN a.Precio3V "
+                "WHEN 5 THEN a.Precio4V WHEN 6 THEN a.Precio5V "
+                "ELSE a.Precio1V END"
+            )
             
             # Conectar a MySQL
             mysql_config = settings.DATABASES['mysql']
@@ -3120,10 +3140,10 @@ class QueryRunnerService:
             # Renglones definitivos de PED en stockp (VB6); comp_ped para cabecera y estados.
             bo_estados = "('Pendiente')"
 
-            # Depósitos excluidos: no sumar su saldo en stock_actual/disponible
+            # Depósitos incluidos: si se seleccionan, solo se suman esos al stock_actual/disponible; si no se selecciona ninguno, todos
             sd_where_excl = ""
-            if depositos_excluidos:
-                sd_where_excl = " WHERE id_deposito NOT IN (" + ",".join(str(d) for d in depositos_excluidos) + ")"
+            if depositos_incluidos:
+                sd_where_excl = " WHERE id_deposito IN (" + ",".join(str(d) for d in depositos_incluidos) + ")"
             clientes_excl_bo = ""
             reservado_excl_clause = ""
             if clientes_excluidos:
@@ -3133,7 +3153,7 @@ class QueryRunnerService:
             # Detalle BO por producto con cálculo de cobertura
             # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.
             # oc_pendiente = CALCULADO desde stockp+cuentaproveedor (OC Estado=Pendiente). NO usar stock_deposito.saldo_pedido_proveedor.
-            # stock_reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). NO usar stock_deposito.saldo_pedido_cliente.
+            # stock_reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado; NO Pendiente ni Parcial). NO usar stock_deposito.saldo_pedido_cliente.
             sql_bo_detalle = f"""
                 SELECT /*+ MAX_EXECUTION_TIME(90000) */
                     sp.IDArt AS id_art,
@@ -3145,7 +3165,9 @@ class QueryRunnerService:
                     COALESCE(sd.stock_total, 0) AS stock_actual,
                     COALESCE(reservado_sub.reservado, 0) AS stock_reservado,
                     GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(reservado_sub.reservado, 0)) AS disponible,
-                    GREATEST(0, COALESCE(oc_pendiente_sub.oc_pendiente, 0)) AS oc_pendiente
+                    GREATEST(0, COALESCE(oc_pendiente_sub.oc_pendiente, 0)) AS oc_pendiente,
+                    COALESCE(MAX(a.PrecioCosto), 0) AS costo,
+                    (COALESCE(sd.stock_total, 0) * COALESCE(MAX({precio_segun_lista_sql}), 0)) AS saldo_valorizado
                 FROM stockp sp
                 INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                 LEFT JOIN articulo a ON a.IDArt = sp.IDArt
@@ -3177,7 +3199,7 @@ class QueryRunnerService:
                         AND (sp_res.Comprobante = 'PED' OR sp_res.Comprobante IS NULL)
                         AND cp_res.Anulado = 'No'
                         AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
-                        AND cp_res.Estado IN ('En preparación', 'Preparado', 'Parcial')
+                        AND cp_res.Estado IN ('En preparación', 'Preparado')
                         AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){reservado_excl_clause}
                     GROUP BY sp_res.IDArt
                 ) reservado_sub ON reservado_sub.id_articulo = sp.IDArt
@@ -3186,12 +3208,14 @@ class QueryRunnerService:
                     AND cp.Anulado = 'No'
                     AND (sp.anulado IS NULL OR sp.anulado = 'No')
                     AND cp.Estado IN {bo_estados}
-                    AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                    AND sp.CodigoMovimiento IS NOT NULL
+                    AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
+                    AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
                 GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
             """
-            cursor.execute(sql_bo_detalle)
+            cursor.execute(sql_bo_detalle, [fecha_inicio, fecha_fin])
             bo_rows = cursor.fetchall()
             logger.info("📊 [BO] Detalle BO (producto) OK (%d filas)", len(bo_rows))
 
@@ -3213,6 +3237,8 @@ class QueryRunnerService:
                 stock_reservado = float(row[7] or 0)
                 disponible = float(row[8] or 0)
                 oc_pendiente = float(row[9] or 0)
+                costo = float(row[10] or 0)
+                saldo_valorizado = float(row[11] or 0)
                 
                 # Clasificación por qty:
                 # - Stock cubre primero reservado; disponible = max(0, stock - reservado).
@@ -3255,6 +3281,8 @@ class QueryRunnerService:
                     "stock_reservado": stock_reservado,
                     "disponible": disponible,
                     "oc_pendiente": oc_pendiente,
+                    "costo": costo,
+                    "saldo_valorizado": saldo_valorizado,
                     "con_stock_qty": con_stock_qty,
                     "con_stock_importe": con_stock_importe,
                     "con_ingreso_qty": con_ingreso_qty,
@@ -3371,8 +3399,8 @@ class QueryRunnerService:
                 for r in backorder_detalle:
                     r["bo_detalle"] = []
 
-            # Reservado detalle (para tooltip en columna Reservado): PED En preparación/Preparado/Parcial (NO Pendiente), fecha, nro, cliente, estado, cantidad
-            reservado_estados = "('En preparación', 'Preparado', 'Parcial')"
+            # Reservado detalle (para tooltip en columna Reservado): PED En preparación/Preparado (NO Pendiente ni Parcial), fecha, nro, cliente, estado, cantidad
+            reservado_estados = "('En preparación', 'Preparado')"
             try:
                 sql_reservado_detalle = f"""
                     SELECT /*+ MAX_EXECUTION_TIME(15000) */
@@ -3440,12 +3468,12 @@ class QueryRunnerService:
                         ORDER BY d.CodDeposito
                     """)
                     depositos_all = cursor.fetchall()
-                    depositos = [(cod, nom) for cod, nom in depositos_all if cod not in depositos_excluidos] if depositos_excluidos else depositos_all
-                    sd_where_excl = " AND sd.id_deposito NOT IN (" + ",".join(str(d) for d in depositos_excluidos) + ")" if depositos_excluidos else ""
+                    depositos = [(cod, nom) for cod, nom in depositos_all if cod in depositos_incluidos] if depositos_incluidos else depositos_all
+                    sd_where_dep_tooltip = " AND sd.id_deposito IN (" + ",".join(str(d) for d in depositos_incluidos) + ")" if depositos_incluidos else ""
                     cursor.execute(f"""
                         SELECT sd.id_articulo, sd.id_deposito, COALESCE(sd.saldo, 0)
                         FROM stock_deposito sd
-                        WHERE sd.id_articulo IN ({ph}){sd_where_excl}
+                        WHERE sd.id_articulo IN ({ph}){sd_where_dep_tooltip}
                     """, ids_art)
                     sd_rows = cursor.fetchall()
                     # Map: (id_art, id_deposito) -> saldo
@@ -3527,8 +3555,13 @@ class QueryRunnerService:
                 "(spr.anulado IS NULL OR spr.anulado = 'No')",
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
+<<<<<<< HEAD
+=======
+                "spr.Fecha >= %s AND spr.Fecha <= %s",
+                "(a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')",
+>>>>>>> 46afb735 (Reportes BO: filtro tipo_art <> Gasto, lista_precio en filtros, depósitos incluidos (IN), filters_applied, docs SQL_VISTAS y COMPARATIVA)
             ]
-            params_bo_rows = []
+            params_bo_rows = [fecha_inicio, fecha_fin]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
@@ -3655,16 +3688,26 @@ class QueryRunnerService:
                 f"Facturación neta: ${facturacion_neta:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
-                "Reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado/Parcial; NO Pendiente). No usar stock_deposito.saldo_pedido_cliente.",
-                "Backorder: renglones desde stockp + comp_ped. CON INGRESO = OC pendientes (calculado desde stockp+cuentaproveedor). OC cubre primero faltante reservado, el resto cubre BO. No usar stock_deposito.saldo_pedido_proveedor.",
+                "Reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado; NO Pendiente ni Parcial). No usar stock_deposito.saldo_pedido_cliente.",
+                "Backorder: renglones desde stockp + comp_ped, filtrado por stockp.Fecha en el período (alineado con VB6). bo_importe = PrecioNetoxR. CON INGRESO = OC pendientes (calculado desde stockp+cuentaproveedor). OC cubre primero faltante reservado, el resto cubre BO. No usar stock_deposito.saldo_pedido_proveedor.",
+                "Artículos tipo 'Gasto' (articulo.tipo_art = 'Gasto') se excluyen del detalle BO y del detalle por renglón, alineado con VB6 (Lista existencias valorizado, TPV).",
+                "Valorización de stock: costo = articulo.PrecioCosto; saldo_valorizado = stock_actual × precio según parámetro lista_precio (0=Costo, 1=PNOficial, 2-6=Precio1V..Precio5V; mismo criterio que VB6 Info_Stock).",
                 f"Backorder detalle: {len(backorder_detalle_rows)} renglones.",
                 "Facturación por cliente: % ventas = (sub_total_cliente / facturacion_neta_total) * 100. Última compra = MAX(fecha) dentro del período.",
                 "Facturación: reporte consolidado (todos los depósitos/clientes salvo exclusiones). Tab mostrando primeros " + str(len(facturacion_por_cliente)) + f" clientes (límite {FAC_CLI_LIMIT}).",
             ]
-            if depositos_excluidos:
-                notes.append(f"Depósitos excluidos: {len(depositos_excluidos)} depósito(s) (stock y disponible sin estos depósitos).")
+            if depositos_incluidos:
+                notes.append(f"Depósitos incluidos: {len(depositos_incluidos)} depósito(s) (stock y disponible solo de estos depósitos).")
             if clientes_excluidos:
                 notes.append(f"Clientes excluidos: {len(clientes_excluidos)} cliente(s) (facturación, remitos y backorder NOT IN).")
+            lista_precio_labels = ["Costo", "Lista Oficial", "Lista 1", "Lista 2", "Lista 3", "Lista 4", "Lista 5"]
+            notes.append(f"Saldo valorizado según lista de precio: {lista_precio_labels[lista_precio]} (parámetro lista_precio={lista_precio}).")
+            filters_applied = {
+                "lista_precio": lista_precio,
+                "lista_precio_label": lista_precio_labels[lista_precio],
+                "depositos_incluidos": depositos_incluidos,
+                "clientes_excluidos": clientes_excluidos,
+            }
             if num_depositos > 1:
                 notes.append(
                     f"Hay {num_depositos} depósitos en la base. Stock y reservado se muestran agregados por artículo (todos los depósitos). "
@@ -3710,6 +3753,7 @@ class QueryRunnerService:
                     "category": report.category,
                     "version": report.version,
                     "extra": extra,
+                    "filters_applied": filters_applied,
                 },
                 data=resumen_data,
                 totals=totals,

@@ -6453,21 +6453,21 @@ if (dashboardRoot) {
         });
         if (depositosResponse.ok) {
           const depositosData = await depositosResponse.json();
-          const depositosSelect = document.getElementById("depositos_excluidos");
+          const depositosSelect = document.getElementById("depositos_incluidos");
           if (depositosSelect) {
             depositosSelect.innerHTML = "";
             (depositosData.depositos || []).forEach((dep) => {
               const option = document.createElement("option");
               option.value = dep.value;
               option.textContent = dep.label;
-              if (savedFilters && savedFilters.depositos_excluidos && Array.isArray(savedFilters.depositos_excluidos)) {
-                if (savedFilters.depositos_excluidos.includes(String(dep.value))) {
+              if (savedFilters && savedFilters.depositos_incluidos && Array.isArray(savedFilters.depositos_incluidos)) {
+                if (savedFilters.depositos_incluidos.includes(String(dep.value))) {
                   option.selected = true;
                 }
               }
               depositosSelect.appendChild(option);
             });
-            initializeTagsFilter("depositos_excluidos", "depositos");
+            initializeTagsFilter("depositos_incluidos", "depositos");
           }
         }
       }
@@ -7362,10 +7362,10 @@ if (dashboardRoot) {
       }
 
       // Depósitos a excluir (solo BO Stock Facturación)
-      if (reportSlug === "bo-stock-facturacion" && filters.depositos_excluidos && Array.isArray(filters.depositos_excluidos)) {
-        const depositosSelect = document.getElementById("depositos_excluidos");
+      if (reportSlug === "bo-stock-facturacion" && filters.depositos_incluidos && Array.isArray(filters.depositos_incluidos)) {
+        const depositosSelect = document.getElementById("depositos_incluidos");
         if (depositosSelect) {
-          filters.depositos_excluidos.forEach((value) => {
+          filters.depositos_incluidos.forEach((value) => {
             const val = String(value ?? "").trim();
             if (!val) return;
             const option = depositosSelect.querySelector(`option[value="${val}"]`);
@@ -7376,6 +7376,17 @@ if (dashboardRoot) {
           setTimeout(() => {
             depositosSelect.dispatchEvent(new Event("change", { bubbles: true }));
           }, 150);
+        }
+      }
+
+      // Lista de precio (solo BO Stock Facturación)
+      if (reportSlug === "bo-stock-facturacion" && filters.lista_precio !== undefined && filters.lista_precio !== null) {
+        const listaPrecioSelect = document.getElementById("lista_precio");
+        if (listaPrecioSelect) {
+          const v = String(filters.lista_precio);
+          if (listaPrecioSelect.querySelector(`option[value="${v}"]`)) {
+            listaPrecioSelect.value = v;
+          }
         }
       }
     }
@@ -7528,7 +7539,7 @@ if (dashboardRoot) {
       const fechaFin = document.getElementById("fecha_fin")?.value;
       const puntoVentaSelect = document.getElementById("punto_venta");
       const sucursalesSelect = document.getElementById("sucursales");
-      const depositosExcluidosSelect = document.getElementById("depositos_excluidos");
+      const depositosIncluidosSelect = document.getElementById("depositos_incluidos");
       const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
@@ -7541,13 +7552,18 @@ if (dashboardRoot) {
         const selectedSucursales = Array.from(sucursalesSelect.selectedOptions).map((opt) => opt.value).filter((v) => v);
         if (selectedSucursales.length > 0) filters.sucursales = selectedSucursales;
       }
-      if (depositosExcluidosSelect) {
-        const selectedDepositos = Array.from(depositosExcluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
-        filters.depositos_excluidos = selectedDepositos;
+      if (depositosIncluidosSelect) {
+        const selectedDepositos = Array.from(depositosIncluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
+        if (selectedDepositos.length > 0) filters.depositos_incluidos = selectedDepositos;
       }
       if (clientesExcluidosSelect) {
         const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
         filters.clientes_excluidos = selectedClientes;
+      }
+      const listaPrecioSelect = document.getElementById("lista_precio");
+      if (listaPrecioSelect) {
+        const v = listaPrecioSelect.value;
+        if (v !== "" && v !== undefined) filters.lista_precio = parseInt(v, 10);
       }
     } else if (currentReportSlug === "cash_flow_waterfall" || currentReportSlug === "cash_flow_by_account") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
@@ -7685,6 +7701,15 @@ if (dashboardRoot) {
             meta: payload.meta || {},
             notes: payload.notes || []
           };
+          const filtersApplied = (payload.meta && payload.meta.filters_applied) ? payload.meta.filters_applied : {};
+          const boFiltersSummaryEl = document.getElementById("bo-filters-summary");
+          if (boFiltersSummaryEl) {
+            const parts = [];
+            if (filtersApplied.lista_precio_label) parts.push("Lista de precio: " + filtersApplied.lista_precio_label);
+            if (filtersApplied.depositos_incluidos && filtersApplied.depositos_incluidos.length) parts.push(filtersApplied.depositos_incluidos.length + " depósito(s) incluidos");
+            if (filtersApplied.clientes_excluidos && filtersApplied.clientes_excluidos.length) parts.push(filtersApplied.clientes_excluidos.length + " cliente(s) excluidos");
+            boFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
+          }
           if (window.boStockFacturacionHandler && typeof window.boStockFacturacionHandler.processData === 'function') {
             window.boStockFacturacionHandler.processData(boResponse);
           }
@@ -7961,10 +7986,10 @@ if (dashboardRoot) {
               filters.sucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value);
             }
             if (reportSlug === 'bo-stock-facturacion') {
-              const depositosExcluidosSelect = filtersContainer.querySelector('select[name="depositos_excluidos"]');
+              const depositosIncluidosSelect = filtersContainer.querySelector('select[name="depositos_incluidos"]');
               const clientesExcluidosSelect = filtersContainer.querySelector('select[name="clientes_excluidos"]');
-              if (depositosExcluidosSelect && depositosExcluidosSelect.selectedOptions.length) {
-                filters.depositos_excluidos = Array.from(depositosExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+              if (depositosIncluidosSelect && depositosIncluidosSelect.selectedOptions.length) {
+                filters.depositos_incluidos = Array.from(depositosIncluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
               }
               if (clientesExcluidosSelect && clientesExcluidosSelect.selectedOptions.length) {
                 filters.clientes_excluidos = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
