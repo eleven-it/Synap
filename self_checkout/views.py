@@ -10,6 +10,7 @@ from django.core.exceptions import PermissionDenied
 
 from .permissions import has_any_self_checkout_permission, has_permission
 from .db import get_base_empresa_from_request, mysql_cursor
+from core.utils.template_selector import get_template_for_device
 
 
 def has_self_checkout_admin(user, base_empresa: str) -> bool:
@@ -62,7 +63,8 @@ def index_view(request):
     base, err = _require_base_and_permission(request)
     if err:
         return err
-    return render(request, 'self_checkout/selector_kiosco.html', {
+    tpl = get_template_for_device(request, 'self_checkout/selector_kiosco.html')
+    return render(request, tpl, {
         'base_empresa': base,
     })
 
@@ -90,7 +92,8 @@ def kiosco_view(request, kiosk_id):
     enviar_factura_email = bool(kiosk_config.get('enviar_factura_email', 1) if kiosk_config else True)
     from self_checkout.services.empresa_fiscal_service import emisor_emite_solo_factura_c
     solo_factura_c = emisor_emite_solo_factura_c(base)
-    return render(request, 'self_checkout/kiosco.html', {
+    tpl = get_template_for_device(request, 'self_checkout/kiosco.html')
+    return render(request, tpl, {
         'kiosk_id': kiosk_id,
         'base_empresa': {'logo': logo_url},
         'use_virtual_keyboard': use_virtual_keyboard,
@@ -119,7 +122,8 @@ def config_list(request):
     for k in kiosks:
         k['nombre_sucursal'] = sucursales_by_id.get(k['id_sucursal'], str(k['id_sucursal']))
         k['nro_pv'] = pv_by_id.get(k['id_punto_venta'], str(k['id_punto_venta']))
-    return render(request, 'self_checkout/config_list.html', {
+    tpl = get_template_for_device(request, 'self_checkout/config_list.html')
+    return render(request, tpl, {
         'kiosks': kiosks,
     })
 
@@ -145,7 +149,8 @@ def talonarios_list(request):
             if p.get('id_punto_venta') == id_pv:
                 id_sucursal_pv = p.get('id_sucursal')
                 break
-    return render(request, 'self_checkout/talonarios_list.html', {
+    tpl = get_template_for_device(request, 'self_checkout/talonarios_list.html')
+    return render(request, tpl, {
         'puntos_venta': pvs,
         'id_punto_venta': id_pv,
         'id_sucursal_pv': id_sucursal_pv,
@@ -365,7 +370,8 @@ def carritos_pendientes_view(request):
             c['created_at_str'] = c['created_at'].strftime('%d/%m/%Y %H:%M') if hasattr(c['created_at'], 'strftime') else str(c['created_at'])
         else:
             c['created_at_str'] = '—'
-    return render(request, 'self_checkout/carritos_pendientes.html', {
+    tpl = get_template_for_device(request, 'self_checkout/carritos_pendientes.html')
+    return render(request, tpl, {
         'carritos': carritos,
         'mysql_connection_error': mysql_connection_error,
     })
