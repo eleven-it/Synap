@@ -375,7 +375,7 @@ class ExportService:
         )
         currency_headers = {
             "importe", "sub_total", "subtotal_desc", "bo_importe", "con_stock_importe",
-            "con_ingreso_importe", "sin_stock_importe", "precio_x_renglon",
+            "con_ingreso_importe", "sin_stock_importe", "precio_x_renglon", "costo", "saldo_valorizado",
         }
 
         def sanitize_sheet_name(name: str) -> str:
@@ -447,6 +447,8 @@ class ExportService:
                     "stock_actual": "Stock actual",
                     "stock_reservado": "Stock reservado",
                     "disponible": "Disponible",
+                    "costo": "Costo",
+                    "saldo_valorizado": "Saldo valorizado",
                     "oc_pendiente": "OC pendiente",
                     "con_stock_qty": "Con stock cant.",
                     "con_stock_importe": "Con stock importe",
