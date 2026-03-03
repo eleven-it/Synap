@@ -167,12 +167,12 @@
 
     function buildReservadoDetalleTooltipHtml(reservado_detalle) {
         if (!reservado_detalle || reservado_detalle.length === 0) {
-            return '<div class="font-bold text-sm text-white mb-0.5">Reservado (PED En preparación/Preparado/Parcial)</div>' +
+            return '<div class="font-bold text-sm text-white mb-0.5">Reservado (PED En preparación/Preparado)</div>' +
                 '<div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
         }
         var n = reservado_detalle.length;
         var header = '<div class="font-bold text-sm text-white mb-1">Reservado por comprobante</div>' +
-            '<div class="text-sky-300 text-[10px] font-medium mb-1">' + n + ' comprobante' + (n !== 1 ? 's' : '') + ' (PED En preparación/Preparado/Parcial)</div>';
+            '<div class="text-sky-300 text-[10px] font-medium mb-1">' + n + ' comprobante' + (n !== 1 ? 's' : '') + ' (PED En preparación/Preparado)</div>';
         var lines = reservado_detalle.map(function (d) {
             var fecha = escHtml(d.fecha || '-');
             var nro = escHtml(d.nro_comprobante || '-');
@@ -729,7 +729,7 @@
             var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
             var headerCells = config.columns.map(function (colKey) {
                 var col = (config.dimensions || []).find(function (d) { return d.key === colKey; }) || (config.metrics || []).find(function (m) { return m.key === colKey; });
-                var label = col ? col.label : colKey;
+                var label = (config.columnLabels && config.columnLabels[colKey]) || (col ? col.label : colKey);
                 var align = (config.metrics || []).some(function (m) { return m.key === colKey; }) ? ' text-right' : ' text-left';
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
@@ -776,7 +776,7 @@
         tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
-            '<th class="' + th + ' text-right">BO qty</th><th class="' + th + ' text-right">BO importe</th>' +
+            '<th class="' + th + ' text-right">Cant. Pendientes</th><th class="' + th + ' text-right">Pendiente valorizado</th>' +
             '<th class="' + th + ' text-right">Stock</th><th class="' + th + ' text-right">Reservado</th><th class="' + th + ' text-right">Disponible</th>' +
             '<th class="' + th + ' text-right">Con stock qty</th><th class="' + th + ' text-right">Con stock importe</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -829,7 +829,7 @@
             var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
             var headerCells = config.columns.map(function (colKey) {
                 var col = (config.dimensions || []).find(function (d) { return d.key === colKey; }) || (config.metrics || []).find(function (m) { return m.key === colKey; });
-                var label = col ? col.label : colKey;
+                var label = (config.columnLabels && config.columnLabels[colKey]) || (col ? col.label : colKey);
                 var align = (config.metrics || []).some(function (m) { return m.key === colKey; }) ? ' text-right' : ' text-left';
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
@@ -879,7 +879,7 @@
             '<table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
-            '<th class="' + th + ' text-right">BO qty</th><th class="' + th + ' text-right">BO importe</th>' +
+            '<th class="' + th + ' text-right">Cant. Pendientes</th><th class="' + th + ' text-right">Pendiente valorizado</th>' +
             '<th class="' + th + ' text-right">Stock</th><th class="' + th + ' text-right">Reservado</th><th class="' + th + ' text-right">Disponible</th>' +
             '<th class="' + th + ' text-right" title="OC aprobadas pend. entrega">OC pend. qty</th>' +
             '<th class="' + th + ' text-right">Con ingreso qty</th><th class="' + th + ' text-right">Con ingreso importe</th>' +
@@ -932,7 +932,7 @@
             var th = 'px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50';
             var headerCells = config.columns.map(function (colKey) {
                 var col = (config.dimensions || []).find(function (d) { return d.key === colKey; }) || (config.metrics || []).find(function (m) { return m.key === colKey; });
-                var label = col ? col.label : colKey;
+                var label = (config.columnLabels && config.columnLabels[colKey]) || (col ? col.label : colKey);
                 var align = (config.metrics || []).some(function (m) { return m.key === colKey; }) ? ' text-right' : ' text-left';
                 return '<th class="' + th + align + '">' + label + '</th>';
             }).join('');
@@ -980,7 +980,7 @@
         tablePartHtml = '<div class="overflow-x-auto max-h-[420px] overflow-y-auto"><table class="w-full border-collapse text-sm">' +
             '<thead class="sticky top-0"><tr>' +
             '<th class="' + th + ' text-left">Código</th><th class="' + th + ' text-left">Artículo</th><th class="' + th + ' text-left">Categoría</th>' +
-            '<th class="' + th + ' text-right">BO qty</th><th class="' + th + ' text-right">BO importe</th>' +
+            '<th class="' + th + ' text-right">Cant. Pendientes</th><th class="' + th + ' text-right">Pendiente valorizado</th>' +
             '<th class="' + th + ' text-right">Stock</th><th class="' + th + ' text-right">Reservado</th><th class="' + th + ' text-right">Disponible</th><th class="' + th + ' text-right">OC pend. qty</th>' +
             '<th class="' + th + ' text-right">Sin stock qty</th><th class="' + th + ' text-right">Sin stock importe</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -1025,6 +1025,7 @@
                 { key: 'con_stock_importe', label: 'Con stock importe', format: 'currency' }
             ],
             metricKeys: ['con_stock_qty', 'con_stock_importe'],
+            columnLabels: { bo_qty: 'Cant. Pendientes', bo_importe: 'Pendiente valorizado' },
             columns: ['codigo', 'articulo', 'categoria', 'bo_qty', 'bo_importe', 'stock_actual', 'stock_reservado', 'disponible', 'con_stock_qty', 'con_stock_importe']
         },
         con_ingreso: {
@@ -1039,6 +1040,7 @@
                 { key: 'con_ingreso_importe', label: 'Con ingreso importe', format: 'currency' }
             ],
             metricKeys: ['oc_pendiente', 'con_ingreso_qty', 'con_ingreso_importe'],
+            columnLabels: { bo_qty: 'Cant. Pendientes', bo_importe: 'Pendiente valorizado' },
             columns: ['codigo', 'articulo', 'categoria', 'bo_qty', 'bo_importe', 'stock_actual', 'stock_reservado', 'disponible', 'oc_pendiente', 'con_ingreso_qty', 'con_ingreso_importe']
         },
         sin_stock: {
@@ -1052,6 +1054,7 @@
                 { key: 'sin_stock_importe', label: 'Sin stock importe', format: 'currency' }
             ],
             metricKeys: ['sin_stock_qty', 'sin_stock_importe'],
+            columnLabels: { bo_qty: 'Cant. Pendientes', bo_importe: 'Pendiente valorizado' },
             columns: ['codigo', 'articulo', 'categoria', 'bo_qty', 'bo_importe', 'stock_actual', 'stock_reservado', 'disponible', 'oc_pendiente', 'sin_stock_qty', 'sin_stock_importe']
         },
         facturacion: {
@@ -1090,7 +1093,7 @@
                 { key: 'fecha', label: 'Fecha' }
             ],
             metrics: [
-                { key: 'precio_x_renglon', label: 'Precio x renglón', format: 'currency' },
+                { key: 'precio_x_renglon', label: 'Pendiente valorizado', format: 'currency' },
                 { key: 'cant_pend', label: 'Cant. pend', format: 'number' }
             ],
             metricKeys: ['precio_x_renglon', 'cant_pend'],
@@ -1585,7 +1588,7 @@
         }).join('');
         var totalRows = BO_LAST_BACKORDER_DATA ? BO_LAST_BACKORDER_DATA.length : data.length;
         var leyenda = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' renglones de backorder' : 'Mostrando ' + data.length + ' renglones de backorder';
-        tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="' + th + ' text-center">Fecha</th><th class="' + th + ' text-left">Nro comp</th><th class="' + th + ' text-left">Descripción</th><th class="' + th + ' text-left">Cod. manual</th><th class="' + th + ' text-right">Cant. pend</th><th class="' + th + ' text-left">Cliente</th><th class="' + th + ' text-right">Precio x renglón</th><th class="' + th + ' text-left">Rubro</th><th class="' + th + ' text-left">Subrubro</th><th class="' + th + ' text-left">Vendedor</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyenda + '</p>';
+        tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="' + th + ' text-center">Fecha</th><th class="' + th + ' text-left">Nro comp</th><th class="' + th + ' text-left">Descripción</th><th class="' + th + ' text-left">Cod. manual</th><th class="' + th + ' text-right">Cant. pend</th><th class="' + th + ' text-left">Cliente</th><th class="' + th + ' text-right">Pendiente valorizado</th><th class="' + th + ' text-left">Rubro</th><th class="' + th + ' text-left">Subrubro</th><th class="' + th + ' text-left">Vendedor</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyenda + '</p>';
         if (contentOnlyBo(tablePartHtml)) return;
         boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
         attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
