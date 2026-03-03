@@ -1,0 +1,328 @@
+# Manual de usuario – Módulo MPR (Producción)
+
+Este manual describe el uso del módulo MPR en Synap: tablero, demanda, OPT (Pedidos de producción), parte de producción (OPP), Lista de materiales, armado, reclasificación, configuración y reportes.
+
+**Requisitos:** Usuario con acceso al módulo MPR y **empresa activa** seleccionada en sesión (base de datos AdministraNET). Sin empresa activa, el sistema redirige al dashboard.
+
+**Referencias:** Glosario de términos en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Análisis y flujo en [ANALISIS_MPR_PROPUESTA_MVP.md](ANALISIS_MPR_PROPUESTA_MVP.md).
+
+---
+
+## 1. Acceso al módulo
+
+- Desde el menú de Synap, ingresar a **Producción (MPR)**.
+- La pantalla inicial es el **Tablero** (`/mpr/`).
+
+---
+
+## 2. Tablero de control
+
+**Ruta:** Producción → Tablero (`/mpr/`).
+
+### Qué muestra
+
+- **KPIs:** OP en progreso, OP atrasadas, Unidades pendientes, Ítems urgentes (según demanda y stock).
+- **Top urgencias:** Tabla con artículo, descripción, stock terminado, demanda y estado (Warning/Ok). Enlace “Ver todo” a la lista de OP.
+
+**Cuándo un ítem es urgente:** Un ítem aparece como **urgente** (estado **Warning**) cuando el **stock terminado es menor que la demanda** (pendiente de producción). Es decir, cuando hay cantidad pendiente de fabricar: la cantidad a fabricar = max(0, demanda − stock terminado) es mayor que 0. La tabla se ordena por esa cantidad a fabricar (los que más faltante tienen aparecen primero).
+
+| Situación | Estado en tablero |
+|-----------|-------------------|
+| Stock terminado **≥** Demanda (pendiente) | **Ok** (no urgente) |
+| Stock terminado **<** Demanda (pendiente) | **Warning** (urgente) |
+
+Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Warning (faltan 60); stock suficiente para cubrir la demanda → Ok. En la Pedido producción trabajo (OPT), la columna **Cant. urgente** muestra stock terminado − pendiente; si es negativa, indica faltante.
+
+- **Movimientos recientes:** Últimos movimientos de stock tipo OPT, OPP o Armado (comprobante, detalle, fecha).
+
+**Qué se muestra en Movimientos recientes:** La lista se obtiene de la base de datos: últimos movimientos de stock **no anulados** de tipo OPT (Pedido producción), OPP (Parte producción) o Armado, ordenados por número de movimiento (más recientes primero). Por cada movimiento se muestra: **(1) Icono** según el tipo (OPT → liberación, OPP → parte, Armado → armado); **(2) Título:** “OPT liberada”, “OPP registrada”, “Armado completado” o “Movimiento stock”; **(3) Detalle:** por defecto “Comp.” seguido del número de comprobante, o el texto del campo detalle del movimiento (recortado a 50 caracteres) si existe; **(4) Fecha:** fecha del movimiento en formato dd-MM-yyyy (si no hay fecha se muestra “—”). Sirve para ver de un vistazo las últimas liberaciones OPT, partes OPP y armados realizados.
+
+- **OPT en progreso:** Hasta 5 ítems con pendiente; enlace “Ver” al detalle de la OP y “Liberar” al tablero/acciones.
+- **OPT a cerrar:** OPs con pendiente total 0 y aún en proceso; botón “Cerrar OPT” por cada una (POST que marca la OP como cerrada).
+
+### Acciones rápidas (header)
+
+- **Armado (Lista de materiales):** Lleva al listado de conjuntos de armado (Lista de materiales).
+- **Ver demanda:** Lleva a la Pedido producción trabajo (OPT) (demanda por artículo con stock y cantidad a fabricar).
+
+---
+
+## 3. Demanda
+
+### 3.1 Pedido producción trabajo (OPT) / Ventana Unidades
+
+**Ruta:** Producción → desde Tablero “Ver demanda”, o menú Demanda → Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/`).
+
+**Vista Pack / Unidades:** Toggle para alternar etiquetas (misma data).
+
+**Qué muestra (tabla):**
+
+- Artículo (código y descripción).
+- Stock terminado (suma en depósitos con `suma_stock = 'Si'`).
+- Pend. producción.
+- Cant. a fabricar (máximo entre 0 y demanda − stock terminado).
+- Cant. urgente (stock terminado − pendiente; negativo = faltante).
+- Stock reserva / Brecha (si existe `articulo.stock_reserva`).
+
+**Acciones:**
+
+- **Checkbox por fila:** Marque los artículos a incluir. **Cant. a fabricar** es editable por fila.
+- **Continuar:** Envía la selección a la pantalla **Confirmar OPT** (desglose por unidades/componentes de recetas).
+- **Crear OPT (una fila):** Enlace “Crear OPT” que abre Nueva OPT con el artículo preseleccionado.
+- **Nueva OPT (header):** Crear una orden nueva sin preselección.
+
+### 3.1.1 Confirmar OPT (agrupar)
+
+**Ruta:** Tras marcar artículos y pulsar **Continuar** en Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/agrupar/`).
+
+Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Stock, Cant. Pedida, **Cant. a fabricar** (editable), Urgente. El usuario puede ajustar las cantidades y pulsar **Generar OPT** para **crear** la OPT (se insertan las líneas en lista_produccion_agrupada con las cantidades indicadas). Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace desde ese detalle con **Liberar (OPT)** (véase 4.4).
+
+### 3.2 Pedidos a fábrica
+
+**Ruta:** Demanda → Pedidos a fábrica (`/mpr/demanda/pedidos-fabrica/`).
+
+Listado de pedidos de venta (PED) con estado de producción (Pendiente, Produccion, Terminado). Filtro opcional por estado de producción. La única fuente de demanda para fabricación son los pedidos en estado Pendiente. Solo lectura; sirve de contexto para la demanda que alimenta las OP.
+
+---
+
+## 4. OPT (Pedidos de producción)
+
+### 4.0 Asistente de producción (wizard)
+
+**Ruta:** Producción → Asistente de producción (`/mpr/wizard/`).
+
+Flujo guiado: **1. Crear orden (OPT)** → **2. Confirmar** (crear OPT y liberar a producción en un solo paso, con depósito de producción configurado) → **3. Crear OPP** (cantidades por depósito destino; solo >0 generan movimiento) → **4. Armado** (condicional) → **5. Cierre**. El **depósito de producción** debe estar configurado en Config. Depósitos; al confirmar el stock se registra allí sin pedir selección.
+
+**Pasos del asistente:**
+
+1. **Paso 1 – Crear orden de producción (OPT):** Artículo, cantidad pedida y opcionales (depósito de producción opcional, prioridad, fecha objetivo). Al continuar no se guarda aún en base de datos.
+2. **Paso 2 – Confirmar orden:** Resumen (artículo, cantidad, depósito de producción). Al pulsar **Confirmar y liberar a producción** se crea la OPT en base de datos y se ejecuta la liberación (movimiento OPT) usando el depósito de producción configurado en Config. Depósitos. No se elige depósito en pantalla.
+3. **Paso 3 – Crear OPP:** Tabla con cada depósito destino (excepto el de producción) y un campo Cantidad. Solo las cantidades > 0 generan movimiento (Producción → Terminado, Producción → Semielaborado, Producción → Scrap, etc.). La suma no puede superar el pendiente.
+4. **Paso 4 – Armado (condicional):** Solo si el artículo tiene lista de materiales. Ejecutar armado (cantidad, depósitos) u omitir y continuar.
+5. **Paso 5 – Cierre:** Resumen, enlaces a **Registrar OPP**, **Ver detalle de la OPT** y **Cerrar OPT** (si pendiente = 0). **Finalizar asistente** limpia el wizard y lleva al detalle o al tablero.
+
+En cualquier paso puede **Salir del asistente**; se limpia el estado sin modificar lo ya guardado.
+
+**Nota:** En AdministraNET, "OP" corresponde a Orden de Pago; en MPR se usa solo **OPT** (Pedido de producción / orden de producción).
+
+---
+
+### 4.1 Lista de OPT
+
+**Ruta:** Producción → Lista de OPTT (`/mpr/opt/`).
+
+**Filtros:**
+
+- **Estado:** Todos / En proceso / Pendiente (según `en_proceso_produccion`).
+- **ID artículo:** Opcional; filtra por artículo.
+
+**Tabla:** Nº lista, Código, Artículo, Estado (En proceso / Pendiente), Cant. pedida, Cant. pendiente, Acciones (Ver, Liberar).
+
+**Acciones:**
+
+- **Ver:** Ir al detalle de la OP.
+- **Liberar:** Lleva al tablero; desde el detalle de la OP se puede “Liberar OPT (solo en wizard; la OPT ya se crea en producción)”.
+
+### 4.2 Nueva OPT
+
+**Ruta:** Órdenes → Nueva OPT o “Nueva OPT” desde Pedido producción trabajo (OPT) / Tablero (`/mpr/ordenes/nueva/`).
+
+**Pasos:**
+
+1. **Artículo:** Seleccionar de la lista (opcionalmente preseleccionado si se llegó desde Pedido producción trabajo (OPT) con artículo).
+2. **Cantidad pedida:** Número entero positivo (por defecto 1).
+3. **Opcionales** (si la base lo permite): Depósito de producción, Prioridad, Fecha objetivo.
+4. Pulsar **“Crear orden de producción”**.
+
+Se crea una línea en `lista_produccion_agrupada` y se redirige al **Detalle de la OP** recién creada.
+
+### 4.3 Detalle de una OP
+
+**Ruta:** Desde Lista de OPT → “Ver” en una fila (`/mpr/ordenes/<id_lista>/`).
+
+**Qué muestra:**
+
+- Número de OP (id_lista) y totales: cantidad pedida, pendiente, porcentaje completado.
+- Líneas: artículo, cantidad pedida, cantidad pendiente por línea.
+
+**Tarjetas de acción:**
+
+- **Liberar (OPT):** Solo si la OP tiene id_lista. Lleva al formulario “Liberar a producción (OPT)”.
+- **Armado (Lista de materiales):** Listado de listas de materiales. Si alguna línea de la OP es un artículo armado (tiene lista de materiales), aparece “Armado desde esta OP” con enlace al armado preseleccionando lista de materiales y cantidad.
+- **Registrar OPP:** Solo si la OP tiene id_lista. Lleva al formulario “Registrar parte de producción (OPP)”.
+- **Cerrar OPT:** Visible cuando el **pendiente total es 0**. Botón que envía POST para marcar la OP como cerrada (`en_proceso_produccion = 'No'`).
+
+### 4.4 Liberar a producción (OPT)
+
+**Ruta:** Desde Detalle de OP → “Liberar (OPT)” (`/mpr/ordenes/<id_lista>/liberar-opt/`).
+
+**Qué hace:** Registra la **ejecución** de la OPT (equivalente al botón "Generar" en CargaMovStock con motivo "Pedido producción" en VB6): genera el movimiento de stock tipo OPT, actualiza saldos y descuenta el pendiente de la OP. Para **trazabilidad** se escribe en `lista_produccion_historico` con `id_articulo` e `id_articulo_formula` (siempre informados).
+
+**Pasos:**
+
+1. **Unidad de medida:** Unidad / Display / Bulto.
+2. **Cantidad a liberar:** En la unidad elegida. Si se elige Display o Bulto, aparecen:
+   - **Unidades por display** o **Unidades por bulto:** Factor para convertir a unidades (cantidad final = cantidad × factor).
+3. **Depósito destino:** Donde se registra la entrada (ej. depósito de producción). Obligatorio.
+
+Al confirmar se genera un movimiento de stock tipo **OPT** (Pedido producción), se actualiza stock y se descuenta el pendiente de la OP. La OP queda “En proceso”.
+
+### 4.5 Registrar parte de producción (OPP)
+
+**Ruta:** Desde Detalle de OP → “Registrar OPP” (`/mpr/ordenes/<id_lista>/registrar-opp/`).
+
+**Pasos:**
+
+1. **Cantidad** a registrar (producto terminado).
+2. **Depósito origen:** Donde sale el producto (ej. producción).
+3. **Depósito destino:** Donde entra el producto terminado (terminados, 2da selección o scrap).
+4. **Clasificación / calidad (opcional):** Primera (terminado), 2da selección o Scrap. Debe coincidir con el depósito destino elegido.
+
+Al confirmar se genera un movimiento tipo **OPP** (Parte producción), se descuenta el pendiente de la OP y se actualizan saldos. Si el pendiente total llega a 0, se puede **Cerrar OPT** desde el detalle o el tablero.
+
+### 4.6 Cerrar OPT
+
+Disponible cuando el **pendiente total de la OP es 0**.
+
+- **Desde Detalle de OP:** Bloque verde con botón “Cerrar OPT” (POST a `/mpr/ordenes/<id_lista>/cerrar/`).
+- **Desde Tablero:** En “OPs a cerrar”, botón “Cerrar OPT” por cada OP listada.
+
+Al cerrar, la OP pasa a `en_proceso_produccion = 'No'`.
+
+### 4.7 Guardrails de proceso
+
+El sistema aplica **restricciones entre pasos** para mantener la coherencia del flujo:
+
+| Acción | Restricción | Mensaje si no se cumple |
+|--------|-------------|-------------------------|
+| **Liberar OPT (solo en wizard; la OPT ya se crea en producción)** | La cantidad a liberar no puede superar el **pendiente** de la OP. Depósito destino obligatorio. | "La cantidad a liberar no puede superar el pendiente (X unidades)." |
+| **Registrar OPP** | La OP debe estar **liberada** (en proceso). No se puede registrar OPP sin haber ejecutado antes Liberar OPT (solo en wizard; la OPT ya se crea en producción). | "Debe liberar la OP (OPT) antes de registrar la parte de producción (OPP)." |
+| **Registrar OPP** | La cantidad a registrar no puede superar el **pendiente** de la OP. | "No hay cantidad a registrar para las líneas indicadas." |
+| **Cerrar OPT** | El **pendiente total** de la OP debe ser **0**. | "No se puede cerrar la OP con pendiente mayor a 0. Libere OPT y registre OPP hasta completar." |
+
+Orden recomendado: **Crear OPT** → **Liberar OPT (solo en wizard; la OPT ya se crea en producción)** → (opcionalmente Armado) → **Registrar OPP** hasta pendiente 0 → **Cerrar OPT**.
+
+---
+
+## 5. Lista de materiales (recetas)
+
+### 5.1 Listado de conjuntos
+
+**Ruta:** Producción → Lista de materiales o “Armado (Lista de materiales)” desde Tablero (`/mpr/bom/`).
+
+Lista de conjuntos de armado (en_abm): ID, nombre, estado (activo/anulado), cantidad de componentes. Filtro “Solo activos”. Acciones: **Ver**, **Editar**.
+
+### 5.2 Nuevo conjunto
+
+**Ruta:** Lista de materiales → “Nuevo conjunto” (`/mpr/bom/nuevo/`).
+
+- Ingresar **nombre** y opcionalmente **detalle**.
+- Confirmar. Se crea el conjunto y se redirige a **Editar** para agregar componentes y, si aplica, **artículo armado**.
+
+### 5.3 Detalle de un conjunto
+
+**Ruta:** Lista de materiales → “Ver” en una fila (`/mpr/bom/<id_en_abm>/`).
+
+Muestra cabecera (nombre, ID, detalle, estado), **artículo armado** (si está asignado) y tabla de **componentes** (código, artículo, cantidad, unidad). Acciones: **Editar**, **Ejecutar armado**, **Volver al listado**.
+
+### 5.4 Editar conjunto
+
+**Ruta:** Lista de materiales → “Editar” o desde Detalle (`/mpr/bom/<id_en_abm>/editar/`).
+
+**Cabecera:**
+
+- Nombre, Estado (Activo/Anulado), Detalle. Botón “Guardar cabecera”.
+
+**Artículo armado:**
+
+- Selector para asignar o desasignar el **artículo resultante** del armado (debe ser un artículo con `ensamblado = 'Si'` y `id_en_abm` = este conjunto). Sin artículo armado asignado no se puede ejecutar armado desde este conjunto.
+
+**Componentes:**
+
+- Tabla de componentes con opción “Anular” por fila.
+- **Añadir componente:** Artículo, cantidad, unidad (opcional). Botón “Añadir”.
+
+### 5.5 Ejecutar armado (desde Lista de materiales)
+
+**Ruta:** Desde Detalle de conjunto → “Ejecutar armado”, o Armado con conjunto preseleccionado (`/mpr/armado/` o `/mpr/armado/<id_en_abm>/`).
+
+**Pasos:**
+
+1. **Conjunto (Lista de materiales):** Seleccionar el conjunto. Si se entró con id_en_abm (p. ej. desde “Armado desde esta OP”), ya viene preseleccionado.
+2. **Cantidad a armar (unidades):** Número entero. Si se llegó desde el detalle de una OP con artículo armado, la cantidad puede venir preseleccionada por URL (`?cantidad=X`).
+3. **Depósito origen:** Donde están los componentes (se descontará stock).
+4. **Depósito destino:** Donde entrará el producto armado.
+
+Al confirmar se genera un movimiento de stock tipo **Armado**: salidas de componentes desde origen y entrada del artículo armado en destino. Debe haber stock suficiente de cada componente en el depósito origen.
+
+---
+
+## 6. Armado (pantalla general)
+
+**Ruta:** Menú Armado o “Armado desde esta OP” desde Detalle de OP (`/mpr/armado/` o `/mpr/armado/<id_en_abm>/`).
+
+Misma pantalla que “Ejecutar armado” de la Lista de materiales: selección de conjunto, cantidad, depósito origen y depósito destino. Si se accede con `id_en_abm` (y opcionalmente `?cantidad=X`), el conjunto y la cantidad pueden venir preseleccionados.
+
+---
+
+## 7. Reclasificación
+
+**Ruta:** Producción → Reclasificación (`/mpr/reclasificacion/`).
+
+Para mover artículo entre depósitos con motivo **Reclasificación** (p. ej. producto a 2da selección o scrap):
+
+1. **Artículo:** Seleccionar de la lista.
+2. **Cantidad:** Entero positivo.
+3. **Depósito origen** y **Depósito destino.**
+4. **Detalle (opcional).**
+
+Al confirmar se genera movimiento de stock tipo Reclasificación (salida en origen, entrada en destino).
+
+---
+
+## 8. Configuración: Depósitos
+
+**Ruta:** Producción → Config. Depósitos (`/mpr/config/depositos/`).
+
+- **Depósito de producción:** Selector único por empresa. Es el depósito donde se registra el stock al **confirmar** la orden en el Asistente de producción (paso 2). Debe estar configurado para que el asistente pueda crear la OPT y liberar a producción; si no, se muestra un mensaje indicando configurarlo aquí.
+- **Suma stock:** Por cada depósito se puede cambiar Sí / No. Solo los depósitos con “Suma stock = Sí” entran en el cálculo de **stock terminado**. Depósitos de tránsito, scrap o 2da selección suelen tener “No” según criterio de negocio.
+
+---
+
+## 9. Reportes MPR
+
+**Ruta:** Producción → Reportes (`/mpr/reportes/`).
+
+Pestañas de solo lectura:
+
+- **Pendiente:** Órdenes/líneas con pendiente de producción (por OP, artículo, cantidades).
+- **WIP:** En progreso (en_proceso_produccion = 'Si' con pendiente > 0).
+- **Stock:** Stock por artículo y depósito (saldos).
+- **Bajo mínimo:** Artículos con stock total (en depósitos que suman) por debajo del mínimo configurado (deposito_reposicion o articulo.stock_minimo).
+
+---
+
+## 10. Flujo resumido (proceso completo)
+
+1. **Demanda:** Ver en Pedido producción trabajo (OPT) o Pedidos a fábrica qué hay que fabricar.
+2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera con depósito de producción configurado) → Paso 3 Crear OPP (cantidades por depósito) → Armado (opcional) → Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
+3. **Liberar (OPT):** En el asistente va incluido en “Confirmar”. Fuera del asistente, desde el detalle de la OPT con “Liberar (OPT)” (cantidad y depósito destino).
+4. **Armado (si aplica):** Ejecutar armado eligiendo conjunto, cantidad y depósitos origen/destino.
+5. **Registrar OPP:** En el detalle de la OPT, “Registrar OPP” (cantidad y depósitos). En el asistente, paso 3 permite cargar cantidades por cada depósito destino (solo >0 generan movimiento).
+6. **Cerrar OPT:** Cuando el pendiente total sea 0, “Cerrar OPT” desde el detalle o desde el tablero (OPT a cerrar).
+
+Para mantener las listas de materiales actualizadas: usar **Lista de materiales** → listado, nuevo conjunto, editar (cabecera, **artículo armado**, componentes). Luego ejecutar armado desde **Armado** o desde el detalle de una OP con “Armado desde esta OP”.
+
+---
+
+## 11. Mensajes y errores frecuentes
+
+- **“No se pudo determinar la empresa activa.”** Seleccionar una empresa/base de datos antes de usar MPR.
+- **“No hay artículo armado asociado a este conjunto.”** En Editar conjunto, asignar el artículo armado antes de ejecutar armado.
+- **“Stock insuficiente de componente…”** En armado, no hay saldo suficiente del componente en el depósito origen; revisar stock o depósito.
+- **“Indique cantidad a liberar (entero positivo) y depósito destino.”** Completar cantidad y depósito en Liberar OPT (solo en wizard; la OPT ya se crea en producción).
+- Lista de OPT vacía con datos en la base: comprobar que la empresa activa sea la correcta y que existan filas con `cantidad_pendiente_prod > 0` en `lista_produccion_agrupada`.
+
+---
+
+*Documento: Manual de usuario MPR. Proyecto Synap. Actualizado según pantallas y flujos del módulo MPR.*

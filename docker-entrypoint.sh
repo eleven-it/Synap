@@ -84,15 +84,6 @@ python manage.py setup_reports_installation || {
     echo "   Puedes ejecutar manualmente: python manage.py setup_reports_installation"
 }
 
-# Sincronizar permisos SIA a MySQL de administraNET (automático y tolerante a errores)
-echo ""
-echo "🔐 Sincronizando permisos SIA a administraNET MySQL..."
-python manage.py sync_sia_permissions_to_adminet --auto || {
-    echo "⚠️  Advertencia: No se pudieron sincronizar permisos SIA a MySQL"
-    echo "   Esto no es crítico si MySQL no está disponible o está configurado después"
-    echo "   Puedes ejecutar manualmente: python manage.py sync_sia_permissions_to_adminet --auto"
-}
-
 # Recolectar archivos estáticos (si es necesario)
 if [ "$COLLECTSTATIC" != "false" ]; then
     echo ""

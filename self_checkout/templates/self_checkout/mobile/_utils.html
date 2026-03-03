@@ -1,0 +1,87 @@
+{% comment %}
+  Utilidades JS compartidas para templates mobile del TPV.
+  Se incluye con {% include "self_checkout/mobile/_utils.html" %} al final del bloque content.
+  Provee: SynapMobile.getCookie, SynapMobile.showToast, SynapMobile.csrfFetch, SynapMobile.setLoading
+{% endcomment %}
+<script>
+window.SynapMobile = (function() {
+  'use strict';
+
+  var _toastTimer = null;
+
+  function getCookie(name) {
+    var match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return match ? match.pop() : '';
+  }
+
+  function showToast(msg, opts) {
+    opts = opts || {};
+    var isError = opts.error !== undefined ? opts.error : false;
+    var duration = opts.duration || 5000;
+    var el = document.getElementById(opts.target || 'synap-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.setAttribute('role', 'alert');
+    el.setAttribute('aria-live', 'assertive');
+    el.className = 'fixed z-[200] rounded-xl px-4 py-3 text-sm font-semibold shadow-lg transition-opacity duration-300 ' +
+      (opts.position === 'top'
+        ? 'top-4 left-4 right-4'
+        : 'bottom-4 left-4 right-4') + ' ' +
+      (isError
+        ? 'bg-red-600 text-white'
+        : 'bg-emerald-600 text-white');
+    el.classList.remove('hidden', 'opacity-0');
+    el.classList.add('opacity-100');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function() {
+      el.classList.replace('opacity-100', 'opacity-0');
+      setTimeout(function() { el.classList.add('hidden'); }, 300);
+    }, duration);
+  }
+
+  function csrfFetch(url, opts) {
+    opts = opts || {};
+    var headers = opts.headers || {};
+    headers['X-CSRFToken'] = getCookie('csrftoken');
+    if (!headers['Content-Type'] && opts.method && opts.method !== 'GET') {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (!headers['Accept']) headers['Accept'] = 'application/json';
+    return fetch(url, Object.assign({}, opts, {
+      credentials: 'same-origin',
+      headers: headers
+    }));
+  }
+
+  function setLoading(btn, loading) {
+    if (!btn) return;
+    btn.disabled = loading;
+    var textEl = btn.querySelector('.btn-text');
+    var loadEl = btn.querySelector('.btn-loading');
+    if (textEl) textEl.classList.toggle('hidden', loading);
+    if (loadEl) loadEl.classList.toggle('hidden', !loading);
+    if (loading) {
+      btn.setAttribute('aria-busy', 'true');
+    } else {
+      btn.removeAttribute('aria-busy');
+    }
+  }
+
+  function showUrlError() {
+    var params = new URLSearchParams(window.location.search);
+    var err = params.get('error');
+    if (err) {
+      showToast(decodeURIComponent(err), { error: true });
+      try { history.replaceState({}, '', window.location.pathname); } catch (e) {}
+    }
+  }
+
+  return {
+    getCookie: getCookie,
+    showToast: showToast,
+    csrfFetch: csrfFetch,
+    setLoading: setLoading,
+    showUrlError: showUrlError
+  };
+})();
+</script>

@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "synap-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/sparedes/.openclaw/workspace/Synap"
+      ]
+    },
+    "synap-playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,188 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Seleccionar autoservicio · Self-Checkout{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-10">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold">Self-Checkout</p>
+      <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+        Seleccionar autoservicio
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+        Un autoservicio solo puede estar abierto en una máquina. Elegí el que vas a usar.
+      </p>
+    </header>
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
+      <div class="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <p class="text-sm text-slate-600 dark:text-slate-300" id="status-msg">Cargando autoservicios…</p>
+      </div>
+      <ul id="kiosk-list" class="divide-y divide-slate-200 dark:divide-slate-700">
+        <!-- Se llena por JS -->
+      </ul>
+      <div id="empty-state" class="hidden p-12 text-center text-slate-500 dark:text-slate-400">
+        <p class="text-sm">No hay autoservicios configurados.</p>
+        <p class="text-xs mt-1">Un administrador debe configurarlos en Configuración Self-Checkout.</p>
+      </div>
+    </div>
+
+    <div id="error-toast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded-xl px-4 py-3 bg-red-600 text-white text-sm font-medium shadow-lg max-w-md text-center"></div>
+  </div>
+</section>
+
+<script>
+(function() {
+  const statusEl = document.getElementById('status-msg');
+  const listEl = document.getElementById('kiosk-list');
+  const emptyEl = document.getElementById('empty-state');
+  const toastEl = document.getElementById('error-toast');
+
+  function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+
+  function showError(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.remove('hidden');
+    setTimeout(function() { toastEl.classList.add('hidden'); }, 5000);
+  }
+
+  function loadKiosks() {
+    fetch('/api/self-checkout/kiosks/', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' }
+    })
+      .then(function(r) {
+        return r.json().then(function(data) {
+          if (!r.ok) {
+            var msg = (data && data.error) ? data.error : 'Error al cargar autoservicios';
+            statusEl.textContent = '';
+            emptyEl.classList.remove('hidden');
+            emptyEl.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">' + (msg.replace(/</g, '&lt;')) + '</p>' +
+              (data && data.code === 'NO_EMPRESA' ? '<p class="text-xs mt-2 text-slate-500 dark:text-slate-400">Seleccioná una empresa/sucursal en la barra superior (ej. Casa Matríz) y volvé a cargar.</p>' : '');
+            listEl.innerHTML = '';
+            return;
+          }
+          statusEl.textContent = data.kiosks && data.kiosks.length ? 'Elegí un autoservicio para abrir:' : '';
+          listEl.innerHTML = '';
+          if (!data.kiosks || !data.kiosks.length) {
+            emptyEl.classList.remove('hidden');
+            emptyEl.innerHTML = '<p class="text-sm">No hay autoservicios configurados.</p><p class="text-xs mt-1">Un administrador debe configurarlos en Configuración Self-Checkout.</p>';
+            return;
+          }
+          emptyEl.classList.add('hidden');
+          data.kiosks.forEach(function(k) {
+          const li = document.createElement('li');
+          li.className = 'flex items-center justify-between gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50';
+          const enUso = k.en_uso;
+          const esMiSesion = k.es_mi_sesion;
+          const kioskUrl = '{% url "self_checkout:kiosco" kiosk_id="__ID__" %}'.replace('__ID__', encodeURIComponent(k.kiosk_id || ''));
+
+          const leftDiv = document.createElement('div');
+          leftDiv.className = 'flex-1 min-w-0';
+          leftDiv.innerHTML = '<span class="font-medium text-slate-900 dark:text-white">' + (k.kiosk_id || '') + '</span>' +
+            '<span class="text-slate-500 dark:text-slate-400 text-sm ml-2">PV ' + (k.id_punto_venta || '') + ' · Suc. ' + (k.id_sucursal || '') + '</span>';
+          li.appendChild(leftDiv);
+
+          const actionsDiv = document.createElement('div');
+          actionsDiv.className = 'flex items-center gap-2 shrink-0';
+
+          if (esMiSesion) {
+            leftDiv.innerHTML += ' <span class="inline-flex items-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 ml-2">Sesión abierta por vos</span>';
+            const linkIr = document.createElement('a');
+            linkIr.href = kioskUrl;
+            linkIr.className = 'rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all inline-block';
+            linkIr.textContent = 'Ir al autoservicio';
+            const btnCerrar = document.createElement('button');
+            btnCerrar.type = 'button';
+            btnCerrar.className = 'rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 transition-all';
+            btnCerrar.textContent = 'Cerrar sesión';
+            btnCerrar.addEventListener('click', function() { releaseKiosk(k.kiosk_id); });
+            actionsDiv.appendChild(btnCerrar);
+            actionsDiv.appendChild(linkIr);
+          } else if (enUso) {
+            const span = document.createElement('span');
+            span.className = 'rounded-xl px-4 py-2 text-sm font-semibold bg-slate-200 dark:bg-slate-700 text-slate-500 cursor-not-allowed';
+            span.textContent = 'En uso en otra máquina';
+            actionsDiv.appendChild(span);
+          } else {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'rounded-xl px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all';
+            btn.textContent = 'Abrir';
+            btn.addEventListener('click', function() { openKiosk(k.kiosk_id); });
+            actionsDiv.appendChild(btn);
+          }
+          li.appendChild(actionsDiv);
+          listEl.appendChild(li);
+        });
+      });
+    })
+      .catch(function() {
+        statusEl.textContent = 'Error al cargar autoservicios.';
+        showError('No se pudieron cargar los autoservicios.');
+      });
+  }
+
+  function releaseKiosk(kioskId) {
+    fetch('/api/self-checkout/kiosk/' + encodeURIComponent(kioskId) + '/release/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({})
+    })
+      .then(function() { loadKiosks(); })
+      .catch(function() { loadKiosks(); });
+  }
+
+  function openKiosk(kioskId) {
+    statusEl.textContent = 'Abriendo…';
+    fetch('/api/self-checkout/kiosk/' + encodeURIComponent(kioskId) + '/acquire/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: JSON.stringify({})
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        if (res.ok && res.data.acquired) {
+          window.location.href = '{% url "self_checkout:kiosco" kiosk_id="__ID__" %}'.replace('__ID__', encodeURIComponent(kioskId));
+          return;
+        }
+        if (res.data && res.data.code === 'KIOSK_IN_USE') {
+          showError('Este autoservicio está abierto en otra máquina. No se puede abrir en dos lugares.');
+          loadKiosks();
+          return;
+        }
+        showError(res.data && res.data.error ? res.data.error : 'Error al abrir autoservicio.');
+        loadKiosks();
+      })
+      .catch(function() {
+        showError('Error de conexión.');
+        loadKiosks();
+      });
+  }
+
+  loadKiosks();
+
+  (function showUrlError() {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('error');
+    if (err) {
+      showError(decodeURIComponent(err));
+      try { history.replaceState({}, '', window.location.pathname); } catch (e) {}
+    }
+  })();
+})();
+</script>
+{% endblock %}

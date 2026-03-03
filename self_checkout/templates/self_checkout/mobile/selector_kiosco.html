@@ -1,0 +1,167 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Seleccionar autoservicio · Self-Checkout{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-6 transition-colors duration-500"
+         aria-labelledby="selector-heading">
+  <div class="w-full px-4">
+    <header class="mb-6">
+      <p class="text-xs uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold"
+         aria-hidden="true">Self-Checkout</p>
+      <h1 id="selector-heading"
+          class="text-xl font-semibold text-slate-900 dark:text-white tracking-tight mt-1">
+        Seleccionar autoservicio
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+        Elegí el autoservicio que vas a usar.
+      </p>
+    </header>
+
+    <div id="status-msg" class="text-sm text-slate-600 dark:text-slate-300 mb-4"
+         role="status" aria-live="polite">Cargando autoservicios…</div>
+
+    <div id="kiosk-skeleton" class="space-y-3" aria-hidden="true">
+      <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 animate-pulse">
+        <div class="h-5 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-3"></div>
+        <div class="h-4 w-48 bg-slate-100 dark:bg-slate-800 rounded mb-3"></div>
+        <div class="h-12 bg-slate-100 dark:bg-slate-800 rounded-xl"></div>
+      </div>
+      <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 animate-pulse">
+        <div class="h-5 w-28 bg-slate-200 dark:bg-slate-700 rounded mb-3"></div>
+        <div class="h-4 w-40 bg-slate-100 dark:bg-slate-800 rounded mb-3"></div>
+        <div class="h-12 bg-slate-100 dark:bg-slate-800 rounded-xl"></div>
+      </div>
+    </div>
+
+    <div id="kiosk-list" class="space-y-3" role="list" aria-label="Autoservicios disponibles">
+    </div>
+
+    <div id="empty-state" class="hidden rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center text-slate-500 dark:text-slate-400 mt-4"
+         role="status">
+      <p class="text-sm">No hay autoservicios configurados.</p>
+      <p class="text-xs mt-1">Un administrador debe configurarlos.</p>
+    </div>
+
+    <div id="synap-toast" class="hidden fixed bottom-4 left-4 right-4 z-[200] rounded-xl px-4 py-3 text-sm font-semibold shadow-lg text-center"
+         role="alert" aria-live="assertive"></div>
+  </div>
+</section>
+
+{% include "self_checkout/mobile/_utils.html" %}
+<script>
+(function() {
+  var M = window.SynapMobile;
+  var statusEl = document.getElementById('status-msg');
+  var listEl = document.getElementById('kiosk-list');
+  var emptyEl = document.getElementById('empty-state');
+  var skeletonEl = document.getElementById('kiosk-skeleton');
+
+  function hideSkeleton() {
+    if (skeletonEl) skeletonEl.remove();
+  }
+
+  function loadKiosks() {
+    M.csrfFetch('/api/self-checkout/kiosks/', { method: 'GET' })
+      .then(function(r) {
+        return r.json().then(function(data) {
+          hideSkeleton();
+          if (!r.ok) {
+            var msg = (data && data.error) ? data.error : 'Error al cargar autoservicios';
+            statusEl.textContent = '';
+            emptyEl.classList.remove('hidden');
+            emptyEl.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">' + msg.replace(/</g, '&lt;') + '</p>';
+            listEl.innerHTML = '';
+            return;
+          }
+          statusEl.textContent = data.kiosks && data.kiosks.length ? 'Elegí un autoservicio:' : '';
+          listEl.innerHTML = '';
+          if (!data.kiosks || !data.kiosks.length) {
+            emptyEl.classList.remove('hidden');
+            return;
+          }
+          emptyEl.classList.add('hidden');
+          data.kiosks.forEach(function(k) {
+            var card = document.createElement('div');
+            card.className = 'rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md p-4 focus-within:ring-2 focus-within:ring-sky-400';
+            card.setAttribute('role', 'listitem');
+            var enUso = k.en_uso;
+            var esMiSesion = k.es_mi_sesion;
+            var kioskUrl = '{% url "self_checkout:kiosco" kiosk_id="__ID__" %}'.replace('__ID__', encodeURIComponent(k.kiosk_id || ''));
+
+            var html = '<div class="flex items-center justify-between mb-3">';
+            html += '<div><span class="font-semibold text-slate-900 dark:text-white text-base">' + (k.kiosk_id || '') + '</span>';
+            html += '<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">PV ' + (k.id_punto_venta || '') + ' · Suc. ' + (k.id_sucursal || '') + '</p></div>';
+            if (esMiSesion) {
+              html += '<span class="inline-flex rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">Tu sesión</span>';
+            } else if (enUso) {
+              html += '<span class="inline-flex rounded-full bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">En uso</span>';
+            }
+            html += '</div>';
+
+            if (esMiSesion) {
+              html += '<div class="flex gap-2">';
+              html += '<button type="button" class="release-btn flex-1 min-h-[2.75rem] rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 active:scale-[0.98] transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-slate-400" data-kiosk="' + (k.kiosk_id || '') + '" aria-label="Cerrar sesión en ' + (k.kiosk_id || '') + '">Cerrar sesión</button>';
+              html += '<a href="' + kioskUrl + '" class="flex-1 min-h-[2.75rem] rounded-xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg text-center flex items-center justify-center active:scale-[0.98] transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2" aria-label="Ir al autoservicio ' + (k.kiosk_id || '') + '">Ir al autoservicio</a>';
+              html += '</div>';
+            } else if (enUso) {
+              html += '<div class="rounded-xl px-4 py-3 text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-400 text-center" aria-label="En uso en otra máquina">En uso en otra máquina</div>';
+            } else {
+              html += '<button type="button" class="open-btn w-full min-h-[2.75rem] rounded-xl px-4 py-3 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg active:scale-[0.98] transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2" data-kiosk="' + (k.kiosk_id || '') + '" aria-label="Abrir autoservicio ' + (k.kiosk_id || '') + '"><span class="btn-text">Abrir</span><span class="btn-loading hidden">Abriendo…</span></button>';
+            }
+
+            card.innerHTML = html;
+            listEl.appendChild(card);
+          });
+
+          listEl.querySelectorAll('.release-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { releaseKiosk(btn.getAttribute('data-kiosk')); });
+          });
+          listEl.querySelectorAll('.open-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() { openKiosk(btn); });
+          });
+        });
+      })
+      .catch(function() {
+        hideSkeleton();
+        statusEl.textContent = 'Error al cargar autoservicios.';
+        M.showToast('No se pudieron cargar los autoservicios.', { error: true });
+      });
+  }
+
+  function releaseKiosk(kioskId) {
+    M.csrfFetch('/api/self-checkout/kiosk/' + encodeURIComponent(kioskId) + '/release/', {
+      method: 'POST', body: JSON.stringify({})
+    }).then(function() { loadKiosks(); }).catch(function() { loadKiosks(); });
+  }
+
+  function openKiosk(btn) {
+    var kioskId = btn.getAttribute('data-kiosk');
+    M.setLoading(btn, true);
+    statusEl.textContent = 'Abriendo…';
+    M.csrfFetch('/api/self-checkout/kiosk/' + encodeURIComponent(kioskId) + '/acquire/', {
+      method: 'POST', body: JSON.stringify({})
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+      if (res.ok && res.data.acquired) {
+        window.location.href = '{% url "self_checkout:kiosco" kiosk_id="__ID__" %}'.replace('__ID__', encodeURIComponent(kioskId));
+        return;
+      }
+      M.showToast(res.data && res.data.error ? res.data.error : 'Error al abrir autoservicio.', { error: true });
+      M.setLoading(btn, false);
+      loadKiosks();
+    })
+    .catch(function() {
+      M.showToast('Error de conexión.', { error: true });
+      M.setLoading(btn, false);
+      loadKiosks();
+    });
+  }
+
+  loadKiosks();
+  M.showUrlError();
+})();
+</script>
+{% endblock %}

@@ -1,6 +1,22 @@
 # Archivos de entorno y credenciales
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 firebase_credentials.json
+
+# Código VB6 (AdministraNET legacy)
+administranet_vb6/
+*.bas
+*.frm
+*.frx
+*.vbp
+*.vbw
+*.cls
+*.ctl
+*.ctx
 
 # Python
 *.pyc
@@ -45,11 +61,16 @@ test_db.sqlite3
 test_invoice.png
 ultimo_usuario_creado.txt
 
-    # Documentación (mantener solo README_REPORTS.md y README_INSTALLATION.md)
+    # Documentación (mantener solo README_REPORTS.md y README_INSTALLATION.md; docs/ solo en rama Desarrollo)
     *.md
     !README_REPORTS.md
     !README.md
     !README_INSTALLATION.md
+    !docs/README.md
+    !docs/**/*.md
+    !docs/**/*.sql
+    !docs/**/*.txt
+    !reports/docs/README.md
 
 # Scripts de fix y test
 misc/fix/

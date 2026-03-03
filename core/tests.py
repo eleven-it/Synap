@@ -4,37 +4,22 @@ from core.utils.utils import APPS_MENU
 from core.models import UsuarioExtendido
 from django.contrib.auth.models import Permission
 
-# Test para verificar las URLs del navbar de accounting
+# Test para verificar las URLs del navbar de accounting (módulo accounting eliminado)
 class NavbarAccountingURLsTest(TestCase):
     """
-    Testea que todos los ítems del navbar de la app accounting tengan URLs válidas y accesibles.
-    Si alguna URL no existe o no es accesible, el test lo informa y falla.
+    La app accounting fue eliminada del sistema; el test se omite.
     """
     def setUp(self):
-        # Crear usuario con todos los permisos de accounting
         self.user = UsuarioExtendido.objects.create_user(email='testuser@synap.com', nombre='Test User', password='testpass')
-        perms = Permission.objects.filter(codename__startswith='accounting')
-        self.user.user_permissions.set(perms)
         self.user.is_staff = True
-        self.user.is_superuser = True  # Para evitar problemas de permisos
         self.user.save()
-        
-        # Autenticar usuario
         self.client.force_login(self.user)
     
     def test_accounting_navbar_urls(self):
-        """Testea que todas las URLs del navbar de accounting sean accesibles"""
-        # Obtener la app accounting del menú global
-        accounting_app = None
-        for app in APPS_MENU:
-            if app["id"] == "accounting":
-                accounting_app = app
-                break
-        
-        # Verificar que la app existe
-        self.assertIsNotNone(accounting_app, "La app 'accounting' no está definida en APPS_MENU")
-        
-        if not accounting_app:
+        """La app accounting ya no está en APPS_MENU; test omitido."""
+        accounting_app = next((app for app in APPS_MENU if app.get("id") == "accounting"), None)
+        if accounting_app is None:
+            self.skipTest("La app 'accounting' fue eliminada de APPS_MENU")
             return
         
         # Recorrer todos los submenús de accounting

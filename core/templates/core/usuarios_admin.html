@@ -3,6 +3,15 @@
 
 {% block admin_content %}
   <div class="max-w-7xl mx-auto">
+    {% if messages %}
+      <div class="mb-4">
+        {% for message in messages %}
+          <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% elif message.tags == 'warning' %}bg-amber-500{% else %}bg-green-500{% endif %} text-xs">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-gray-800">Administración de Usuarios</h1>
       <div class="flex gap-2">

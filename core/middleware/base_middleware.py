@@ -116,92 +116,14 @@ def get_usuario_extendiendo_desde_sesion(request):
                 return False
                 
             def get_permisos_totales(self):
-                """Obtiene todos los permisos del usuario basado en puesto/rol de administraNET"""
-                # Solo el usuario 'supervisor' (por cod_usuario) tiene acceso total
-                if self.is_admin():
-                    return {"*"}
-                
-                # Consultar permisos desde la base de datos de administraNET
-                permisos = set()
-                
-                # Obtener base_empresa de la sesión o del usuario
-                base_empresa = getattr(self, 'base_empresa', None)
-                id_puesto = getattr(self, 'id_puesto', None)
-                
-                if base_empresa and id_puesto:
-                    try:
-                        # Usar conexión MySQL directa (compatible con MySQL 5.7+)
-                        import MySQLdb
-                        from django.conf import settings
-                        mysql_config = settings.DATABASES['mysql']
-                        
-                        conn = MySQLdb.connect(
-                            host=mysql_config['HOST'],
-                            port=int(mysql_config['PORT']),
-                            user=mysql_config['USER'],
-                            passwd=mysql_config['PASSWORD'],
-                            db=base_empresa,
-                            charset='latin1'
-                        )
-                        cursor = conn.cursor()
-                        
-                        # Consultar permisos desde permiso_sistema_puesto
-                        # Obtener el valor_permiso más reciente para cada permiso del puesto
-                        cursor.execute("""
-                            SELECT ps.key_permiso, psp.valor_permiso
-                            FROM permiso_sistema ps
-                            INNER JOIN (
-                                SELECT psp1.id_permiso_sistema, psp1.valor_permiso
-                                FROM permiso_sistema_puesto psp1
-                                INNER JOIN (
-                                    SELECT id_permiso_sistema, MAX(id_permiso_sistema_puesto) as max_id
-                                    FROM permiso_sistema_puesto
-                                    WHERE id_puesto = %s
-                                    GROUP BY id_permiso_sistema
-                                ) psp2 ON psp1.id_permiso_sistema = psp2.id_permiso_sistema 
-                                       AND psp1.id_permiso_sistema_puesto = psp2.max_id
-                                WHERE psp1.id_puesto = %s
-                            ) psp ON ps.id_permiso_sistema = psp.id_permiso_sistema
-                            WHERE psp.valor_permiso = 'Si'
-                        """, [id_puesto, id_puesto])
-                        
-                        results = cursor.fetchall()
-                        for row in results:
-                            key_permiso = row[0]
-                            if key_permiso:
-                                permisos.add(key_permiso)
-                        
-                        cursor.close()
-                        conn.close()
-                    except Exception as e:
-                        logger.warning(f"Error al obtener permisos desde MySQL para puesto {id_puesto}: {e}")
-                
-                # Agregar permisos de Synap (Reports) para:
-                # 1. Usuario "supervisor" (por cod_usuario) - aunque ya debería tener "*" arriba
-                # 2. Puesto "Supervisor" (por nombre_puesto)
-                cod_usuario_lower = (getattr(self, 'cod_usuario', '') or '').lower().strip()
-                nombre_puesto_lower = (getattr(self, 'nombre_puesto', '') or '').lower().strip()
-                
-                # Log de depuración para verificar valores
-                logger.debug(f"🔍 Verificando permisos Reports: cod_usuario='{cod_usuario_lower}', nombre_puesto='{nombre_puesto_lower}'")
-                
-                if cod_usuario_lower == 'supervisor' or nombre_puesto_lower == 'supervisor':
-                    # Agregar permisos de Synap al set existente (no reemplazar)
-                    permisos.update({
-                        "reports.ver",
-                        "reports.*",
-                        "reports.view_operational",
-                        "reports.view_managerial",
-                        "reports.dashboard",
-                        "reports.exportar",
-                        "reports.builder",
-                        "reports.programar",
-                    })
-                    logger.debug(f"✅ Permisos Reports agregados para usuario '{cod_usuario_lower}' con puesto '{nombre_puesto_lower}'")
-                else:
-                    logger.debug(f"⚠️  Usuario '{cod_usuario_lower}' con puesto '{nombre_puesto_lower}' NO tiene permisos Reports automáticos")
-                
-                return permisos
+                """Obtiene todos los permisos del usuario desde AdministraNET (MySQL). Única fuente: core.services.administranet_permisos_usuario."""
+                from core.services.administranet_permisos_usuario import get_permisos_totales_administranet
+                return get_permisos_totales_administranet(
+                    base_empresa=getattr(self, 'base_empresa', None) or '',
+                    id_puesto=getattr(self, 'id_puesto', None),
+                    cod_usuario=getattr(self, 'cod_usuario', None),
+                    nombre_puesto=getattr(self, 'nombre_puesto', None),
+                )
                 
             def tiene_permiso_modulo(self, modulo):
                 """Verifica si el usuario tiene algún permiso de un módulo específico"""

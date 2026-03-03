@@ -2,15 +2,93 @@
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_protect
 from core.models import Permiso, Rol
 from core.decorators import tiene_permiso
 from core.constantes_permisos import PERMISOS_POR_MODULO
 from core.utils import permisos_contextuales
 from core.services.administranet_users import AdministraNETUserService
+from core.services.administranet_sucursales import AdministraNETSucursalesService
+from core.services.administranet_empresas import AdministraNETEmpresaService
 from core.services.administranet_validacion_puestos import AdministraNETValidacionPuestosService
 import logging
+
+
+def _int_or_none(val):
+    if val is None or (isinstance(val, str) and val.strip() == ''):
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _float_or_none(val):
+    if val is None or (isinstance(val, str) and val.strip() == ''):
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _datos_usuario_desde_post(request, es_supervisor=False):
+    """Construye el diccionario datos_usuario desde POST (paridad CargaUsuario.frm)."""
+    data = {}
+    if not es_supervisor:
+        data['cod_usuario'] = request.POST.get('cod_usuario', '').strip().lower()
+        data['nombre_usuario'] = request.POST.get('nombre_usuario', '').strip()
+        data['apellido_usuario'] = request.POST.get('apellido_usuario', '').strip()
+        data['id_puesto'] = _int_or_none(request.POST.get('id_puesto'))
+        data['id_sucursal'] = _int_or_none(request.POST.get('id_sucursal'))
+        data['id_punto_venta'] = _int_or_none(request.POST.get('id_punto_venta'))
+        data['id_deposito'] = _int_or_none(request.POST.get('id_deposito'))
+        data['id_caja'] = _int_or_none(request.POST.get('id_caja'))
+        data['pv'] = _int_or_none(request.POST.get('pv'))
+        data['pvc'] = _int_or_none(request.POST.get('pvc'))
+        data['tipo_busq'] = request.POST.get('tipo_busq', '').strip()
+        data['id_caja_cheque'] = _int_or_none(request.POST.get('id_caja_cheque'))
+        data['id_caja_tarjeta'] = _int_or_none(request.POST.get('id_caja_tarjeta'))
+        data['id_punto_ventac'] = _int_or_none(request.POST.get('id_punto_ventac'))
+        data['id_caja_cheque_deposito'] = _int_or_none(request.POST.get('id_caja_cheque_deposito'))
+        data['id_caja_deposito'] = _int_or_none(request.POST.get('id_caja_deposito'))
+        data['id_caja_tarjeta_deposito'] = _int_or_none(request.POST.get('id_caja_tarjeta_deposito'))
+        data['baja_usuario'] = 'Si' if request.POST.get('baja_usuario') == 'Si' else 'No'
+        data['tipo_busqueda_defecto'] = _int_or_none(request.POST.get('tipo_busqueda_defecto')) or 0
+        data['permiso_supervisor_venta'] = 'Si' if request.POST.get('permiso_supervisor_venta') == 'Si' else 'No'
+        data['vendedor_web'] = 'Si' if request.POST.get('vendedor_web') == 'Si' else 'No'
+        data['CodViajante'] = _int_or_none(request.POST.get('CodViajante'))
+        data['resol_principal'] = request.POST.get('resol_principal', '').strip()
+        data['entrega_defecto'] = request.POST.get('entrega_defecto', '').strip()
+        data['utiliza_reporte_local'] = 'Si' if request.POST.get('utiliza_reporte_local') == 'Si' else 'No'
+        data['utiliza_certificado_local'] = 'Si' if request.POST.get('utiliza_certificado_local') == 'Si' else 'No'
+        data['ruta_reporte_local'] = request.POST.get('ruta_reporte_local', '').strip()
+        data['ruta_certificado_local'] = request.POST.get('ruta_certificado_local', '').strip()
+        data['carpeta_documentos'] = request.POST.get('carpeta_documentos', '').strip()
+        data['fuente_nombre'] = request.POST.get('fuente_nombre', '').strip()
+        data['fuente_tamano'] = _float_or_none(request.POST.get('fuente_tamano')) or 8.25
+        data['color_formulario'] = request.POST.get('color_formulario', '').strip()
+        data['tipo_boton'] = request.POST.get('tipo_boton', '').strip()
+        data['zoom_reportes'] = _int_or_none(request.POST.get('zoom_reportes')) or 100
+        if data.get('pv') is None and data.get('id_punto_venta') is not None:
+            data['pv'] = data['id_punto_venta']
+    password = request.POST.get('password', '')
+    if password:
+        data['password'] = password
+    return data
+
+
+def _contexto_listas_usuarios(user_service, sucursales_service, base_empresa, id_sucursal=None):
+    """Contexto con puestos, sucursales, depósitos, cajas por tipo (alineado CargaUsuario.frm), puntos de venta y viajantes."""
+    cajas_form = user_service.obtener_cajas_usuario_formulario(base_empresa, id_sucursal)
+    return {
+        'puestos': user_service.obtener_puestos(base_empresa),
+        'sucursales': user_service.obtener_sucursales(base_empresa),
+        'depositos': user_service.obtener_depositos(base_empresa),
+        **cajas_form,
+        'puntos_venta': user_service.obtener_puntos_venta(base_empresa, id_sucursal),
+        'viajantes': sucursales_service.obtener_viajantes(base_empresa),
+    }
 
 logger = logging.getLogger(__name__)
 
@@ -37,32 +115,39 @@ def usuarios_admin_view(request):
     # Inicializar servicio
     user_service = AdministraNETUserService()
     
-    # Búsqueda
-    q = request.GET.get("q", "").strip()
+    # Cargar usuarios una sola vez (solo filtro activos); la búsqueda por texto se hace en el cliente
     solo_activos = request.GET.get("activos", "true").lower() == "true"
     
-    # Obtener usuarios desde MySQL de administraNET
     usuarios = user_service.listar_usuarios(
         base_empresa=base_empresa,
         id_empresa=id_empresa,
-        busqueda=q if q else None,
+        busqueda=None,
         solo_activos=solo_activos
     )
     
-    # Paginación manual
-    paginator = Paginator(usuarios, 15)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    # Normalizar sucursal para agrupación
+    for u in usuarios:
+        u["nombre_sucursal_display"] = (u.get("nombre_sucursal") or "").strip() or "Sin sucursal"
+    
+    usuarios_sorted = sorted(
+        usuarios,
+        key=lambda x: (
+            (x.get("nombre_sucursal_display") or "").lower(),
+            (x.get("nombre_usuario") or "").lower(),
+        ),
+    )
+    
+    total_sucursales = len(set(u.get("nombre_sucursal_display") for u in usuarios_sorted))
     
     # Obtener puestos y sucursales para formularios
     puestos = user_service.obtener_puestos(base_empresa)
     sucursales = user_service.obtener_sucursales(base_empresa)
 
     context.update({
-        "usuarios": page_obj,
+        "usuarios_list": usuarios_sorted,
+        "total_sucursales": total_sucursales,
         "puestos": puestos,
         "sucursales": sucursales,
-        "q": q,
         "solo_activos": solo_activos,
         "base_empresa": base_empresa,
         "id_empresa": id_empresa,
@@ -86,111 +171,63 @@ def crear_usuario_view(request):
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:usuarios")
     
-    # Inicializar servicio
     user_service = AdministraNETUserService()
-    
+    sucursales_service = AdministraNETSucursalesService()
+
+    def _ctx_crear():
+        empresa_service = AdministraNETEmpresaService()
+        empresa = empresa_service.obtener_empresa(base_empresa)
+        nombre_empresa = (empresa.get('Nombre') or '').strip() if empresa else base_empresa
+        return {
+            **_contexto_listas_usuarios(user_service, sucursales_service, base_empresa),
+            'base_empresa': base_empresa,
+            'nombre_empresa': nombre_empresa,
+        }
+
     if request.method == "POST":
         cod_usuario = request.POST.get("cod_usuario", "").strip().lower()
         nombre_usuario = request.POST.get("nombre_usuario", "").strip()
-        apellido_usuario = request.POST.get("apellido_usuario", "").strip()
         password = request.POST.get("password", "")
         confirm_password = request.POST.get("confirmar_password", "")
-        id_puesto = request.POST.get("id_puesto")
-        id_sucursal = request.POST.get("id_sucursal")
-        
-        # Validaciones
+
         if not cod_usuario or not password or not confirm_password or not nombre_usuario:
-            messages.error(request, "Completa todos los campos obligatorios.")
-            puestos = user_service.obtener_puestos(base_empresa)
-            sucursales = user_service.obtener_sucursales(base_empresa)
-            return render(request, "core/usuarios_crear.html", {
-                'puestos': puestos,
-                'sucursales': sucursales,
-                'base_empresa': base_empresa,
-            })
-        
+            messages.error(request, "Completa todos los campos obligatorios (código, nombre, contraseña y confirmación).")
+            return render(request, "core/usuarios_crear.html", _ctx_crear())
+
         if password != confirm_password:
             messages.error(request, "Las contraseñas no coinciden.")
-            puestos = user_service.obtener_puestos(base_empresa)
-            sucursales = user_service.obtener_sucursales(base_empresa)
-            return render(request, "core/usuarios_crear.html", {
-                'puestos': puestos,
-                'sucursales': sucursales,
-                'base_empresa': base_empresa,
-            })
-        
-        # Verificar si el usuario ya existe
+            return render(request, "core/usuarios_crear.html", _ctx_crear())
+
         usuarios_existentes = user_service.listar_usuarios(base_empresa, id_empresa, busqueda=cod_usuario, solo_activos=False)
-        if any(u['cod_usuario'].lower() == cod_usuario.lower() for u in usuarios_existentes):
+        if any(u.get('cod_usuario', '').lower() == cod_usuario.lower() for u in usuarios_existentes):
             messages.error(request, f"El usuario '{cod_usuario}' ya existe.")
-            puestos = user_service.obtener_puestos(base_empresa)
-            sucursales = user_service.obtener_sucursales(base_empresa)
-            return render(request, "core/usuarios_crear.html", {
-                'puestos': puestos,
-                'sucursales': sucursales,
-                'base_empresa': base_empresa,
-            })
-        
-        # Preparar datos del usuario
-        datos_usuario = {
-            'cod_usuario': cod_usuario,
-            'nombre_usuario': nombre_usuario,
-            'apellido_usuario': apellido_usuario,
-            'password': password,
-            'id_puesto': int(id_puesto) if id_puesto else None,
-            'id_sucursal': int(id_sucursal) if id_sucursal else None,
-            'baja_usuario': 'No',
-            'tipo_busqueda_defecto': 0,
-            'permiso_supervisor_venta': 'No',
-            'vendedor_web': 'No',
-            'zoom_reportes': 100,
-        }
-        
-        # Validar integridad del puesto antes de crear el usuario
+            return render(request, "core/usuarios_crear.html", _ctx_crear())
+
+        datos_usuario = _datos_usuario_desde_post(request, es_supervisor=False)
+        datos_usuario.setdefault('baja_usuario', 'No')
+        datos_usuario.setdefault('tipo_busqueda_defecto', 0)
+        datos_usuario.setdefault('permiso_supervisor_venta', 'No')
+        datos_usuario.setdefault('vendedor_web', 'No')
+        datos_usuario.setdefault('zoom_reportes', 100)
+
+        id_puesto = datos_usuario.get('id_puesto')
         if id_puesto:
             validacion_service = AdministraNETValidacionPuestosService()
-            validacion = validacion_service.validar_integridad_puesto(base_empresa, int(id_puesto))
-            
+            validacion = validacion_service.validar_integridad_puesto(base_empresa, id_puesto)
             if not validacion['valido']:
-                messages.error(request, f"⚠️ El puesto seleccionado tiene problemas de integridad: {', '.join(validacion['errores'])}")
-                puestos = user_service.obtener_puestos(base_empresa)
-                sucursales = user_service.obtener_sucursales(base_empresa)
-                return render(request, "core/usuarios_crear.html", {
-                    'puestos': puestos,
-                    'sucursales': sucursales,
-                    'base_empresa': base_empresa,
-                })
-            
-            if validacion['advertencias']:
-                for advertencia in validacion['advertencias']:
-                    messages.warning(request, f"⚠️ {advertencia}")
-        
-        # Crear usuario
+                messages.error(request, f"⚠️ El puesto tiene problemas de integridad: {', '.join(validacion['errores'])}")
+                return render(request, "core/usuarios_crear.html", _ctx_crear())
+            for advertencia in validacion.get('advertencias', []):
+                messages.warning(request, f"⚠️ {advertencia}")
+
         nuevo_id = user_service.crear_usuario(base_empresa, id_empresa, datos_usuario)
-        
         if nuevo_id:
             messages.success(request, f"✅ Usuario '{cod_usuario}' creado correctamente.")
             return redirect("core:usuarios")
-        else:
-            messages.error(request, "Error al crear el usuario. Por favor intente nuevamente.")
-            puestos = user_service.obtener_puestos(base_empresa)
-            sucursales = user_service.obtener_sucursales(base_empresa)
-            return render(request, "core/usuarios_crear.html", {
-                'puestos': puestos,
-                'sucursales': sucursales,
-                'base_empresa': base_empresa,
-            })
-    
-    # GET - mostrar formulario
-    puestos = user_service.obtener_puestos(base_empresa)
-    sucursales = user_service.obtener_sucursales(base_empresa)
-    
-    context = {
-        'puestos': puestos,
-        'sucursales': sucursales,
-        'base_empresa': base_empresa,
-    }
-    return render(request, "core/usuarios_crear.html", context)
+        messages.error(request, "Error al crear el usuario. Por favor intente nuevamente.")
+        return render(request, "core/usuarios_crear.html", _ctx_crear())
+
+    return render(request, "core/usuarios_crear.html", _ctx_crear())
 
 
 @tiene_permiso("administrar.usuarios")
@@ -212,89 +249,51 @@ def editar_usuario_view(request, id_usuario):
     # Inicializar servicio
     user_service = AdministraNETUserService()
     
-    # Obtener usuario existente
     usuario = user_service.obtener_usuario(base_empresa, id_usuario)
     if not usuario:
         messages.error(request, "Usuario no encontrado.")
         return redirect("core:usuarios")
-    
-    # No permitir editar el usuario Supervisor (id_usuario = 1) excepto contraseña
+
     es_supervisor = id_usuario == 1
-    
+    sucursales_service = AdministraNETSucursalesService()
+    id_sucursal = usuario.get('id_sucursal')
+
+    def _ctx_editar():
+        return {
+            'usuario': usuario,
+            'base_empresa': base_empresa,
+            'es_supervisor': es_supervisor,
+            **_contexto_listas_usuarios(user_service, sucursales_service, base_empresa, id_sucursal),
+        }
+
     if request.method == "POST":
-        # Preparar datos a actualizar
-        datos_usuario = {}
-        
-        # Campos editables (excepto supervisor)
-        if not es_supervisor:
-            datos_usuario['cod_usuario'] = request.POST.get("cod_usuario", "").strip().lower()
-            datos_usuario['nombre_usuario'] = request.POST.get("nombre_usuario", "").strip()
-            datos_usuario['apellido_usuario'] = request.POST.get("apellido_usuario", "").strip()
-            datos_usuario['id_puesto'] = int(request.POST.get("id_puesto")) if request.POST.get("id_puesto") else None
-            datos_usuario['id_sucursal'] = int(request.POST.get("id_sucursal")) if request.POST.get("id_sucursal") else None
-        
-        # Contraseña (siempre editable)
         password = request.POST.get("password", "")
         confirm_password = request.POST.get("confirmar_password", "")
-        if password and confirm_password:
+        if password or confirm_password:
             if password != confirm_password:
                 messages.error(request, "Las contraseñas no coinciden.")
-                puestos = user_service.obtener_puestos(base_empresa)
-                sucursales = user_service.obtener_sucursales(base_empresa)
-                return render(request, "core/usuarios_editar.html", {
-                    'usuario': usuario,
-                    'puestos': puestos,
-                    'sucursales': sucursales,
-                    'base_empresa': base_empresa,
-                    'es_supervisor': es_supervisor,
-                })
-            datos_usuario['password'] = password
-        
-        # Validar integridad del puesto si se está cambiando
-        if 'id_puesto' in datos_usuario and datos_usuario['id_puesto']:
-            nuevo_id_puesto = datos_usuario['id_puesto']
-            puesto_actual = usuario.get('id_puesto')
-            
-            # Solo validar si el puesto cambió
-            if nuevo_id_puesto != puesto_actual:
-                validacion_service = AdministraNETValidacionPuestosService()
-                validacion = validacion_service.validar_integridad_puesto(base_empresa, nuevo_id_puesto)
-                
-                if not validacion['valido']:
-                    messages.error(request, f"⚠️ El puesto seleccionado tiene problemas de integridad: {', '.join(validacion['errores'])}")
-                    puestos = user_service.obtener_puestos(base_empresa)
-                    sucursales = user_service.obtener_sucursales(base_empresa)
-                    return render(request, "core/usuarios_editar.html", {
-                        'usuario': usuario,
-                        'puestos': puestos,
-                        'sucursales': sucursales,
-                        'base_empresa': base_empresa,
-                        'es_supervisor': es_supervisor,
-                    })
-                
-                if validacion['advertencias']:
-                    for advertencia in validacion['advertencias']:
-                        messages.warning(request, f"⚠️ {advertencia}")
-        
-        # Actualizar usuario
+                return render(request, "core/usuarios_editar.html", _ctx_editar())
+
+        datos_usuario = _datos_usuario_desde_post(request, es_supervisor=es_supervisor)
+        if not es_supervisor and 'id_sucursal' not in datos_usuario:
+            datos_usuario['id_sucursal'] = id_sucursal
+
+        if not es_supervisor and datos_usuario.get('id_puesto'):
+            validacion_service = AdministraNETValidacionPuestosService()
+            validacion = validacion_service.validar_integridad_puesto(base_empresa, datos_usuario['id_puesto'])
+            if not validacion['valido']:
+                messages.error(request, f"⚠️ El puesto tiene problemas de integridad: {', '.join(validacion['errores'])}")
+                return render(request, "core/usuarios_editar.html", _ctx_editar())
+            for advertencia in validacion.get('advertencias', []):
+                messages.warning(request, f"⚠️ {advertencia}")
+
         if user_service.actualizar_usuario(base_empresa, id_usuario, datos_usuario):
-            messages.success(request, f"✅ Usuario actualizado correctamente.")
+            messages.success(request, "✅ Usuario actualizado correctamente.")
             return redirect("core:usuarios")
-        else:
-            messages.error(request, "Error al actualizar el usuario.")
-    
-    # GET - mostrar formulario
-    puestos = user_service.obtener_puestos(base_empresa)
-    sucursales = user_service.obtener_sucursales(base_empresa)
-    
-    context = {
-        'usuario': usuario,
-        'puestos': puestos,
-        'sucursales': sucursales,
-        'base_empresa': base_empresa,
-        'es_supervisor': es_supervisor,
-    }
-    return render(request, "core/usuarios_editar.html", context)
+        messages.error(request, "Error al actualizar el usuario.")
+        return render(request, "core/usuarios_editar.html", _ctx_editar())
+
+    return render(request, "core/usuarios_editar.html", _ctx_editar())
 
 
 @tiene_permiso("administrar.usuarios")

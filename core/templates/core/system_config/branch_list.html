@@ -69,32 +69,22 @@
                                 <td class="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">{{ sucursal.domicilio_sucursal|default:"-" }}</td>
                                 <td class="px-4 py-3 text-xs text-gray-700 dark:text-gray-300">{{ sucursal.desc_sucursal|default:"-"|truncatewords:10 }}</td>
                                 <td class="px-4 py-3 whitespace-nowrap">
-                                    {% if sucursal.activa %}
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                            <span class="material-icons text-sm mr-1">check_circle</span>
-                                            Activa
-                                        </span>
-                                    {% else %}
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                            <span class="material-icons text-sm mr-1">cancel</span>
-                                            Anulada
-                                        </span>
-                                    {% endif %}
+                                    <form method="post" action="{% url 'core:branch_toggle_estado' empresa_id=1 branch_id=sucursal.id_sucursal %}" class="inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-purple-500
+                                            {% if sucursal.activa %}bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900 dark:text-green-200 dark:hover:bg-green-800{% else %}bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800{% endif %}"
+                                            title="{% if sucursal.activa %}Clic para desactivar{% else %}Clic para activar{% endif %}">
+                                            <span class="material-icons text-sm mr-1">{% if sucursal.activa %}check_circle{% else %}cancel{% endif %}</span>
+                                            {% if sucursal.activa %}Activa{% else %}Anulada{% endif %}
+                                        </button>
+                                    </form>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap text-right text-xs font-medium">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <a href="{% url 'core:branch_edit' empresa_id=1 branch_id=sucursal.id_sucursal %}" 
-                                           class="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 transition" 
-                                           title="Editar">
-                                            <span class="material-icons text-base">edit</span>
-                                        </a>
-                                        <a href="{% url 'core:branch_delete' empresa_id=1 branch_id=sucursal.id_sucursal %}" 
-                                           class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition" 
-                                           onclick="return confirm('¿Está seguro que desea eliminar esta sucursal?');"
-                                           title="Eliminar">
-                                            <span class="material-icons text-base">delete</span>
-                                        </a>
-                                    </div>
+                                    <a href="{% url 'core:branch_edit' empresa_id=1 branch_id=sucursal.id_sucursal %}" 
+                                       class="inline-flex items-center text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 transition" 
+                                       title="Editar">
+                                        <span class="material-icons text-base">edit</span>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}

@@ -20,7 +20,7 @@ def get_dynamic_menu(context):
     if not user or not getattr(user, 'is_authenticated', False):
         return []
     
-    return apps_visibles_para_usuario(user)
+    return apps_visibles_para_usuario(user, request)
 
 @register.simple_tag(takes_context=True)
 def get_current_module(context):
@@ -34,9 +34,13 @@ def get_current_module(context):
     app_name = request.resolver_match.app_name
     if app_name == 'core':
         return 'settings'
-    elif app_name in ['sales', 'purchases', 'inventory', 'accounting', 'tiendanube']:
+    elif app_name == 'compras':
+        return 'stock'
+    elif app_name == 'stock':
         return app_name
-    
+    elif app_name == 'mpr':
+        return 'mpr'
+
     return None
 
 @register.simple_tag(takes_context=True)
@@ -80,11 +84,7 @@ def has_module_permission(user, module_id):
     
     # Mapeo de módulos a permisos
     module_permissions = {
-        'sales': 'sales.ver',
-        'purchases': 'purchases.ver',
-        'inventory': 'inventory.ver',
-        'accounting': 'accounting.ver',
-        'tiendanube': 'tiendanube.access',
+        'stock': 'stock.ver',
         'settings': 'core.admin_access',
     }
     

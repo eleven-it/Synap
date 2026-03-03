@@ -1,48 +1,22 @@
-"""Conexión a MySQL por base_empresa."""
-import logging
-from contextlib import contextmanager
+"""
+Conexión a MySQL por base_empresa.
+Usa el pool de core (origen único). Para transacciones largas usar get_mysql_connection como context manager.
+"""
 from typing import Optional
 
-import MySQLdb
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+from core.mysql_pool import get_connection, mysql_cursor
 
-
-def get_mysql_connection(base_empresa: str):
-    """Obtiene conexión MySQL a la base de la empresa."""
-    mysql_config = settings.DATABASES['mysql']
-    return MySQLdb.connect(
-        host=mysql_config['HOST'],
-        port=int(mysql_config.get('PORT', 3306)),
-        user=mysql_config['USER'],
-        passwd=mysql_config['PASSWORD'],
-        db=base_empresa,
-        charset='latin1',
-    )
-
-
-@contextmanager
-def mysql_cursor(base_empresa: str, dict_cursor: bool = False):
-    """Context manager para cursor MySQL."""
-    conn = get_mysql_connection(base_empresa)
-    try:
-        cursor_class = MySQLdb.cursors.DictCursor if dict_cursor else MySQLdb.cursors.Cursor
-        cursor = conn.cursor(cursor_class)
-        yield cursor
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
-        conn.close()
+# Re-exportar para que los imports existentes sigan funcionando
+get_mysql_connection = get_connection  # context manager: with get_mysql_connection(base) as conn
+__all__ = ['get_mysql_connection', 'mysql_cursor', 'get_base_empresa_from_request']
 
 
 def get_base_empresa_from_request(request) -> Optional[str]:
     """
-    Obtiene base_empresa de la sesión (elegida en el login desde la base 'empresas' del servidor).
-    Si la sesión no tiene base_empresa, usa la base configurada en .env (DATABASES['mysql']['NAME']).
+    Obtiene base_empresa de la sesión (elegida en el login desde la base 'empresas').
+    Si no hay base_empresa en sesión, usa la base configurada en settings (mysql NAME).
     """
     base = request.session.get('user', {}).get('base_empresa')
     if base:

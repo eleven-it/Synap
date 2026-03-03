@@ -222,21 +222,7 @@ class ModuleConfig(models.Model):
         """
         Devuelve los submenús para este módulo (puede ser extendido por cada app)
         """
-        if self.name == 'logistics':
-            return [
-                {'label': 'Vehicles', 'url': '/logistics/vehicles/'},
-                {'label': 'Drivers', 'url': '/logistics/drivers/'},
-                {'label': 'Delivery Routes', 'url': '/logistics/deliveryroutes/'},
-                {'label': 'Delivery Stops', 'url': '/logistics/deliverystops/'},
-                {'label': 'Delivery Events', 'url': '/logistics/deliveryevents/'},
-            ]
-        elif self.name == 'finance':
-            return [
-                {'label': 'Accounts Receivable', 'url': '/finance/accounts-receivable/'},
-                {'label': 'Credit Limit Logs', 'url': '/finance/credit-limit-logs/'},
-                {'label': 'Financial Reports', 'url': '/finance/financial-reports/'},
-            ]
-        elif self.name == 'tiendanube_administranet':
+        if self.name == 'tiendanube_administranet':
             return [
                 {'label': 'Dashboard', 'url': '/tiendanube_administranet/'},
                 {'label': 'Customer Mappings', 'url': '/tiendanube_administranet/customer-mappings/'},
