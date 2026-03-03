@@ -1,0 +1,41 @@
+{% comment %}
+Barra de estado (paridad Principal.frm VB6 StatusBar).
+Muestra: fecha/hora servidor, empresa, sucursal, puesto, usuario. No expone id_sesion ni base_empresa.
+{% endcomment %}
+{% if user and user.is_authenticated %}
+<footer id="status-bar" class="fixed bottom-0 left-0 right-0 z-30 h-8 flex items-center justify-between px-4 bg-slate-700 text-slate-200 text-xs shadow-inner">
+    <div class="flex items-center gap-4 flex-wrap">
+        <span id="status-fecha-hora" class="font-mono">
+            {% if fecha_servidor %}{{ fecha_servidor.fecha }} {{ fecha_servidor.hora }}{% else %}--{% endif %}
+        </span>
+        {% if empresa_activa %}
+        <span>{{ empresa_activa.nombre|default:"—" }}</span>
+        {% endif %}
+        {% if branch_activa %}
+        <span>{{ branch_activa.name|default:"—" }}</span>
+        {% endif %}
+        {% if user.nombre_puesto %}
+        <span>{{ user.nombre_puesto }}</span>
+        {% endif %}
+        <span>{{ user.nombre_completo|default:user.cod_usuario|default:user.get_username|default:"—" }}</span>
+    </div>
+</footer>
+<script>
+(function() {
+    var el = document.getElementById('status-fecha-hora');
+    if (!el) return;
+    var initial = '{{ fecha_servidor.fecha|default:"" }} {{ fecha_servidor.hora|default:"" }}'.trim();
+    if (initial) el.textContent = initial;
+    setInterval(function() {
+        var d = new Date();
+        var h = ('0' + d.getHours()).slice(-2);
+        var m = ('0' + d.getMinutes()).slice(-2);
+        var s = ('0' + d.getSeconds()).slice(-2);
+        var y = d.getFullYear();
+        var mo = ('0' + (d.getMonth() + 1)).slice(-2);
+        var day = ('0' + d.getDate()).slice(-2);
+        el.textContent = y + '-' + mo + '-' + day + ' ' + h + ':' + m + ':' + s;
+    }, 1000);
+})();
+</script>
+{% endif %}

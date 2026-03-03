@@ -16,7 +16,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Seguridad
 SECRET_KEY = config('SECRET_KEY', default='insecure-placeholder')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar,n8n.estrategiasdenegocios.ar,beardlike-unsavingly-candra.ngrok-free.dev,192.168.68.106', cast=Csv())
+ALLOWED_HOSTS = list(config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar', cast=Csv()))
+# Permitir peticiones desde Support en Docker (host.docker.internal) para RAG /core/api/support/conocimiento/
+if 'host.docker.internal' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('host.docker.internal')
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
@@ -43,8 +46,10 @@ INSTALLED_APPS = [
     'login',
     'dashboard',
     'reports',
-    'sia',  # Strategic Insights & Alignment
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
+    'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
+    'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
+    'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
     # 'administraNET_integration',  # No necesario
@@ -275,6 +280,11 @@ CACHES = {
         }
     }
 }
+
+# Sincronización automática de permisos Synap → permiso_sistema (AdministraNET) tras login
+SYNAP_AUTO_SYNC_PERMISSIONS = config('SYNAP_AUTO_SYNC_PERMISSIONS', default=True, cast=bool)
+# TTL en segundos para no repetir sync por empresa (default 24h)
+SYNAP_AUTO_SYNC_PERMISSIONS_TTL = config('SYNAP_AUTO_SYNC_PERMISSIONS_TTL', default=86400, cast=int)
 
 # Configuración de logging - Sin módulos específicos
 LOGGING['loggers'] = {

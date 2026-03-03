@@ -1,0 +1,2616 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load menu_tags %}
+{% get_media_prefix as MEDIA_URL %}
+{% get_administranet_logo as logo_path %}
+{% comment %}
+  Self-Checkout con mismo estilo UX/UI que el módulo de reportes (base_app, slate, tarjetas rounded-3xl).
+{% endcomment %}
+
+{% block title %}Self-Checkout · Synap{% endblock %}
+
+{% block extra_css %}
+<style>[x-cloak]{display:none!important}</style>
+<!-- 2 columnas 50/50 desde 1024px (más espacio para el carrito en TPV) -->
+<style>
+@media (min-width: 1024px) {
+  .kiosk-main-two-cols { flex-direction: row !important; min-height: 0 !important; }
+  .kiosk-col-left { flex: none !important; width: 50% !important; border-right: 1px solid #e2e8f0; min-height: 0 !important; overflow-y: auto !important; }
+  .kiosk-col-right { flex: none !important; width: 50% !important; min-height: 0 !important; }
+}
+/* Modo autoservicio cliente: layout 100% viewport, contenido adaptable con scroll interno */
+body.kiosk-client-mode header.w-full.fixed { display: none !important; }
+body.kiosk-client-mode .pt-16 { padding-top: 0 !important; }
+body.kiosk-client-mode .kiosk-root { height: 100vh !important; min-height: 100vh !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+body.kiosk-client-mode .kiosk-card { flex: 1 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+body.kiosk-client-mode .kiosk-main-two-cols { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
+body.kiosk-client-mode .kiosk-col-left { min-height: 0 !important; overflow-y: auto !important; }
+body.kiosk-client-mode .kiosk-col-right { max-height: none !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+/* Pantalla completa: mismo efecto de viewport */
+body.kiosk-fullscreen header.w-full.fixed { display: none !important; }
+body.kiosk-fullscreen .pt-16 { padding-top: 0 !important; }
+body.kiosk-fullscreen .kiosk-root { height: 100vh !important; min-height: 100vh !important; }
+body.kiosk-fullscreen .kiosk-main-two-cols { min-height: 0 !important; flex: 1 !important; overflow: hidden !important; }
+body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
+/* Indicador de espera: círculo verde con pulso */
+@keyframes kiosk-waiting-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  50% { opacity: 0.85; transform: scale(1.1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+.kiosk-waiting-dot {
+  animation: kiosk-waiting-pulse 1.5s ease-in-out infinite;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<script>document.body.classList.add('kiosk-client-mode');</script>
+<section class="kiosk-root min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+  <div class="flex flex-1 flex-col min-h-0 w-full px-4 sm:px-6 lg:px-8 py-2 sm:py-4">
+    <div
+      x-data="kioscoApp()"
+      @keydown.escape.window="cerrarModales()"
+      class="kiosk-card rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden relative"
+      :class="{ 'opacity-70 pointer-events-none': estado === 'scanning' || estado === 'confirming' || (afipOffline && !modalSupervisorCaea) }"
+    >
+      <!-- Overlay AFIP fuera de línea: bloquea operación hasta reconexión o Pasar a CAEA -->
+      <div x-show="afipOffline" x-cloak
+           class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 dark:bg-slate-950/98 rounded-3xl p-6 text-center">
+        <div class="rounded-2xl bg-amber-500/20 border border-amber-400/50 px-6 py-4 mb-4">
+          <p class="text-lg font-semibold text-amber-200">Fuera de servicio</p>
+          <p class="text-sm text-slate-300 mt-1">Conexión con AFIP caída. No se permiten operaciones hasta que se restaure la conexión o un supervisor habilite modo CAEA.</p>
+        </div>
+        <p class="text-sm text-slate-400 flex items-center gap-2">
+          <span class="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse" aria-hidden="true"></span>
+          Reintentando conexión en <span class="font-mono font-semibold text-amber-300" x-text="reintentoEnSegundos"></span> s
+        </p>
+        <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+          <button type="button" x-on:click="isSupervisor ? activarModoCaea() : (modalSupervisorCaea = true)"
+                  class="rounded-xl px-6 py-3 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-900 focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors">
+            Pasar a CAEA
+          </button>
+          <button type="button" x-on:click="solicitarAsistencia()"
+                  class="rounded-xl px-6 py-3 text-sm font-semibold bg-slate-600 hover:bg-slate-500 text-white focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-colors">
+            Solicitar asistencia
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 mt-2" x-show="!isSupervisor">Pasar a CAEA requiere autorización de supervisor</p>
+      </div>
+      <!-- Modal login supervisor para CAEA (solo si no es supervisor) -->
+      <div x-show="modalSupervisorCaea" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/98 rounded-3xl p-4"
+           x-transition>
+        <div class="w-full max-w-sm rounded-2xl bg-slate-800 border border-slate-600 p-6 shadow-xl">
+          <p class="text-sm font-medium text-slate-200 mb-4">Ingresá como supervisor para habilitar modo CAEA</p>
+          <input type="text" x-model="supervisorCod" placeholder="Usuario"
+                 class="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-slate-100 placeholder:text-slate-400 mb-3 focus:ring-2 focus:ring-amber-500">
+          <input type="password" x-model="supervisorPass" placeholder="Contraseña"
+                 class="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-slate-100 placeholder:text-slate-400 mb-3 focus:ring-2 focus:ring-amber-500">
+          <p class="text-xs text-red-400 mb-2" x-show="supervisorLoginError" x-text="supervisorLoginError"></p>
+          <div class="flex gap-2">
+            <button type="button" x-on:click="modalSupervisorCaea = false; supervisorLoginError = ''"
+                    class="flex-1 rounded-lg border border-slate-600 py-2 text-sm font-medium text-slate-300 hover:bg-slate-700">Cancelar</button>
+            <button type="button" x-on:click="autorizarSupervisorYCaea()"
+                    class="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-600">Autorizar</button>
+          </div>
+        </div>
+      </div>
+      <!-- Modal Fuera de servicio: cuando la confirmación falla por no poder obtener CAE/CAEA -->
+      <div x-show="modalFueraDeServicio" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/98 rounded-3xl p-4"
+           x-transition>
+        <div class="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-600 p-6 shadow-xl text-center">
+          <p class="text-lg font-semibold text-amber-200">Fuera de servicio</p>
+          <p class="text-sm text-slate-300 mt-2">No se pudo completar la operación (no se obtuvo autorización AFIP). Stock y numeraciones no fueron afectados.</p>
+          <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <button type="button" x-on:click="modalFueraDeServicio = false; estado = 'idle';"
+                    class="rounded-xl px-6 py-3 text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-slate-900 focus:ring-2 focus:ring-amber-400 transition-colors">
+              Solicitar asistencia
+            </button>
+            <button type="button" x-on:click="modalFueraDeServicio = false; estado = 'idle';"
+                    class="rounded-xl px-6 py-3 text-sm font-medium border border-slate-500 text-slate-300 hover:bg-slate-700 transition-colors">
+              Cerrar
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-3">Solicitar asistencia: funcionalidad a definir</p>
+        </div>
+      </div>
+      <!-- Modal Selección de números de serie (artículos seriados) -->
+      <div x-show="modalSeries" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/90 rounded-3xl p-4" x-transition
+           x-init="$watch('modalSeries', v => v && cargarModalSeries())">
+        <div class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 shadow-xl max-h-[90vh] flex flex-col">
+          <div class="flex-shrink-0 px-5 py-4 border-b border-slate-200 dark:border-slate-600">
+            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Números de serie</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400" x-text="modalSeriesNombreItem || 'Artículo seriado'"></p>
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-300">Seleccioná exactamente <span class="font-semibold" x-text="modalSeriesCantidad"></span> número(s) de serie.</p>
+          </div>
+          <div class="flex-1 overflow-y-auto px-5 py-3">
+            <p class="text-sm text-red-600 dark:text-red-400 mb-2" x-show="modalSeriesError" x-text="modalSeriesError"></p>
+            <template x-if="modalSeriesLoading">
+              <p class="text-sm text-slate-500">Cargando…</p>
+            </template>
+            <template x-if="!modalSeriesLoading && modalSeriesDisponibles.length === 0 && !modalSeriesError">
+              <p class="text-sm text-slate-500">No hay series disponibles para este artículo en el depósito.</p>
+            </template>
+            <div class="space-y-1.5" x-show="!modalSeriesLoading && modalSeriesDisponibles.length > 0">
+              <template x-for="s in modalSeriesDisponibles" :key="s.id_serie_entrada">
+                <label class="flex items-center gap-2 py-2 px-3 rounded-lg border cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                       :class="modalSeriesSeleccionados.includes(s.id_serie_entrada) ? 'border-sky-500 bg-sky-50/50 dark:bg-sky-900/20' : 'border-slate-200 dark:border-slate-600'">
+                  <input type="checkbox" :checked="modalSeriesSeleccionados.includes(s.id_serie_entrada)"
+                         x-on:change="toggleSerie(s.id_serie_entrada)"
+                         class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                  <span class="text-sm font-mono text-slate-700 dark:text-slate-200" x-text="s.nro_serie || ('#' + s.id_serie_entrada)"></span>
+                  <span class="text-xs text-slate-500" x-show="s.vto_serie" x-text="'Vto: ' + (s.vto_serie || '')"></span>
+                </label>
+              </template>
+            </div>
+          </div>
+          <div class="flex-shrink-0 px-5 py-4 border-t border-slate-200 dark:border-slate-600 flex justify-between gap-3">
+            <span class="text-xs text-slate-500 self-center" x-text="'Seleccionados: ' + modalSeriesSeleccionados.length + ' / ' + modalSeriesCantidad"></span>
+            <div class="flex gap-2">
+              <button type="button" x-on:click="cerrarModalSeries()"
+                      class="rounded-xl px-4 py-2 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Cancelar</button>
+              <button type="button" x-on:click="aplicarSeries()"
+                      class="rounded-xl px-4 py-2 text-sm font-semibold bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      x-bind:disabled="modalSeriesSeleccionados.length !== modalSeriesCantidad">
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Cabecera compacta: logo responsive (sin marco) + título -->
+      <div class="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2 sm:py-3 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+        <div class="flex items-center gap-3 min-h-[2.5rem] sm:min-h-[3rem]">
+          {% if logo_path %}
+          <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-8 sm:h-10 md:h-12 w-auto shrink-0 object-contain object-center" />
+          {% endif %}
+          <div class="flex flex-col justify-center">
+            <p class="text-[10px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-400 dark:text-slate-500 font-semibold leading-tight" x-text="modoTpv ? 'PUNTO DE VENTA' : 'Self-Checkout'"></p>
+            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+              <h1 class="text-lg sm:text-xl md:text-2xl font-semibold text-slate-900 dark:text-white tracking-tight leading-tight" x-text="modoTpv && sessionNroPv ? ('PV ' + sessionNroPv) : 'Autoservicio'"></h1>
+              {% if modo_homologacion %}
+              <span class="inline-flex rounded-full px-2.5 py-0.5 text-[10px] sm:text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 uppercase tracking-wide">Homologación</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            x-show="!isFullscreen"
+            x-transition
+            class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all duration-200"
+            x-on:click="toggleFullscreen()"
+            title="Pantalla completa"
+          >
+            <span aria-hidden="true">⛶</span>
+            <span class="hidden sm:inline">Pantalla completa</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main: dos columnas (búsqueda + opciones | carrito + pago); flex-1 min-h-0 para scroll interno -->
+      <main class="kiosk-main-two-cols flex w-full flex-1 flex-col gap-0 min-h-0 bg-slate-50/30 dark:bg-slate-900/50 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5" x-show="estado !== 'success'" x-cloak>
+    <!-- COLUMNA IZQUIERDA: dos secciones (búsqueda + opciones extra) -->
+    <div class="kiosk-col-left flex flex-1 flex-col gap-4">
+      <!-- Feedback agregado / error / stock: visible en ambos modos (self-checkout y TPV) -->
+      <template x-if="scanSuccess || scanError || stockBlockedMsg">
+        <div
+          class="rounded-xl p-4 border-2"
+          x-bind:class="scanSuccess ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-900/20' : 'border-red-500 bg-red-50/80 dark:bg-red-900/20'"
+        >
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" x-text="scanSuccess ? 'Agregado' : (stockBlockedMsg ? 'Stock insuficiente' : 'Error')"></p>
+          <p class="mt-1 min-w-0 truncate text-xl font-bold text-slate-900 dark:text-white" x-text="scanSuccess || scanError || stockBlockedMsg"></p>
+          <p class="mt-1 text-sm text-slate-500 dark:text-slate-400" x-show="scanSuccess && items && items.length && items[items.length-1]" x-text="ultimoItemLineaTexto()" x-cloak></p>
+        </div>
+      </template>
+
+      <!-- SECCIÓN 1: Búsqueda por código de barras (solo self-checkout; en TPV se usa la búsqueda predictiva más abajo) -->
+      <section x-show="!modoTpv" x-cloak class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 shadow-sm md:p-6" aria-label="Búsqueda de productos">
+        <div class="border-t border-slate-200 dark:border-slate-700 my-2"></div>
+
+        <div class="mb-4 flex gap-2">
+          <input
+            x-ref="scanInput"
+            x-model="scanInput"
+            x-on:keydown.enter.prevent="agregarPorCodigo()"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="Código de barras"
+            class="h-12 flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+          />
+          <button
+            type="button"
+            class="h-12 min-w-[120px] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+            x-on:click="agregarPorCodigo()"
+            x-bind:disabled="estado === 'paying' || estado === 'confirming'"
+          >
+            Agregar producto
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="kiosk-waiting-dot inline-flex h-3 w-3 shrink-0 rounded-full bg-emerald-500"></span>
+          <span class="text-sm font-medium text-slate-600 dark:text-slate-300" x-show="!scanSuccess && !scanError">Esperando que escanees tu próximo ítem…</span>
+          <span class="text-sm font-medium text-slate-600 dark:text-slate-300" x-show="scanSuccess || scanError" x-cloak>Escaneá el código o apoyá el producto en el lector</span>
+        </div>
+      </section>
+
+      <!-- Barra TPV: Cliente, Lista de precio, Vendedor, Descuentos y voucher -->
+      <section x-show="modoTpv" x-cloak class="rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-3 shadow-sm" aria-label="Selección venta TPV">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">Venta TPV</p>
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <button type="button"
+                  class="flex flex-col items-center justify-center min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-left hover:border-sky-400 dark:hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 active:scale-[0.98] transition-all duration-200 touch-manipulation"
+                  x-on:click="tpvClienteBusqueda = ''; tpvClienteResultados = []; tpvClienteError = ''; modalTpvCliente = true"
+                  aria-label="Cambiar cliente">
+            <span class="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400 w-full">Cliente</span>
+            <span class="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-center" x-text="tpvCliente.nombre_cliente || '—'"></span>
+          </button>
+          <button type="button"
+                  class="flex flex-col items-center justify-center min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-left hover:border-sky-400 dark:hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 active:scale-[0.98] transition-all duration-200 touch-manipulation"
+                  x-on:click="abrirModalListaPrecio()"
+                  aria-label="Cambiar lista de precio">
+            <span class="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400 w-full">Lista precio</span>
+            <span class="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-center" x-text="tpvListaPrecio.nombre || '—'"></span>
+          </button>
+          <button type="button"
+                  class="flex flex-col items-center justify-center min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-left hover:border-sky-400 dark:hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 active:scale-[0.98] transition-all duration-200 touch-manipulation"
+                  x-on:click="abrirModalVendedor()"
+                  aria-label="Cambiar vendedor">
+            <span class="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400 w-full">Vendedor</span>
+            <span class="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-center" x-text="tpvVendedor.nombre || '—'"></span>
+          </button>
+          <button type="button"
+                  class="flex flex-col items-center justify-center min-h-[3.5rem] rounded-xl border-2 px-3 py-2 text-left focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 active:scale-[0.98] transition-all duration-200 touch-manipulation"
+                  :class="cartVoucherPct ? 'border-amber-400 dark:border-amber-500 bg-amber-50/80 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-sky-400 dark:hover:border-sky-500'"
+                  x-on:click="abrirModalVouchers()"
+                  aria-label="Descuentos y voucher"
+                  title="Lista de programa de descuentos y voucher">
+            <span class="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400 w-full">Descuentos y voucher</span>
+            <span class="text-sm font-semibold truncate w-full text-center" :class="cartVoucherPct ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-white'" x-text="cartVoucherPct ? (cartVoucherPct + '% desc.') : '—'"></span>
+          </button>
+          <button type="button" x-show="tpvCliente.id_cliente != 1" x-cloak
+                  class="flex flex-col items-center justify-center min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-left hover:border-sky-400 dark:hover:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 active:scale-[0.98] transition-all duration-200 touch-manipulation"
+                  x-on:click="abrirCuentaCorriente()"
+                  aria-label="Ver cuenta corriente"
+                  title="Ver cuenta corriente del cliente">
+            <span class="text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400 w-full">Cta. corriente</span>
+            <span class="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-center">Ver</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Modal Cuenta corriente (como TPV administraNET: Ver cuenta corriente) -->
+      <div x-show="modalCuentaCorriente" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/90 rounded-3xl p-4" x-transition
+           x-init="$watch('modalCuentaCorriente', v => v && cargarCuentaCorriente())">
+        <div class="w-full max-w-4xl rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 shadow-xl max-h-[90vh] flex flex-col">
+          <div class="flex-shrink-0 px-5 py-4 border-b border-slate-200 dark:border-slate-600 flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Cuenta corriente</h3>
+              <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400" x-text="cuentaCorrienteData.nombre_cliente || tpvCliente.nombre_cliente || '—'"></p>
+              <p class="mt-1 text-sm font-semibold" :class="(cuentaCorrienteData.saldo || 0) >= 0 ? 'text-slate-700 dark:text-slate-200' : 'text-red-600 dark:text-red-400'">
+                Saldo: <span x-text="'$' + (cuentaCorrienteData.saldo != null ? formatoMoneda(cuentaCorrienteData.saldo) : '—')"></span>
+              </p>
+            </div>
+            <button type="button" x-on:click="modalCuentaCorriente = false" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Cerrar">✕</button>
+          </div>
+          <div class="flex-1 overflow-auto px-5 py-3">
+            <p class="text-sm text-red-600 dark:text-red-400 mb-2" x-show="cuentaCorrienteError" x-text="cuentaCorrienteError"></p>
+            <p class="text-sm text-slate-500" x-show="cuentaCorrienteLoading">Cargando…</p>
+            <template x-if="!cuentaCorrienteLoading && (cuentaCorrienteData.movimientos || []).length === 0 && !cuentaCorrienteError">
+              <p class="text-sm text-slate-500">No hay movimientos.</p>
+            </template>
+            <div class="overflow-x-auto" x-show="!cuentaCorrienteLoading && (cuentaCorrienteData.movimientos || []).length > 0">
+              <table class="w-full min-w-[520px] text-left text-xs border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Fecha</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Tipo</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Nro</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Imp. venta</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Imp. cobro</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Saldo</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Estado</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <template x-for="m in (cuentaCorrienteData.movimientos || [])" :key="m.id_cuentacliente">
+                    <tr class="align-baseline" :class="m.anulado === 'Si' ? 'opacity-60' : ''">
+                      <td class="px-2 py-1.5 text-slate-700 dark:text-slate-300" x-text="m.Fecha"></td>
+                      <td class="px-2 py-1.5 font-medium" x-text="m.TipoComprobante"></td>
+                      <td class="px-2 py-1.5 font-mono" x-text="m.NroCompBusq || m.NroComprobante"></td>
+                      <td class="px-2 py-1.5 text-right" x-text="m.ImporteVenta ? ('$' + formatoMoneda(m.ImporteVenta)) : '—'"></td>
+                      <td class="px-2 py-1.5 text-right" x-text="m.Importecobro ? ('$' + formatoMoneda(m.Importecobro)) : '—'"></td>
+                      <td class="px-2 py-1.5 text-right font-medium" x-text="'$' + formatoMoneda(m.Saldo)"></td>
+                      <td class="px-2 py-1.5"><span x-text="m.Estado"></span><span x-show="m.anulado === 'Si'" class="ml-1 text-red-600 dark:text-red-400">(Anul.)</span></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="flex-shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-600">
+            <button type="button" x-on:click="modalCuentaCorriente = false" class="rounded-xl px-4 py-2 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECCIÓN: Búsqueda predictiva tipo dropdown (modo TPV). ↑↓ para elegir, Enter agrega. -->
+      <section x-show="modoTpv" x-cloak class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 shadow-sm overflow-hidden flex flex-col min-h-0" aria-label="Búsqueda de productos">
+        <label class="sr-only" for="tpv-busqueda-producto">Escanear o buscar por código o nombre</label>
+        <div class="relative mb-3">
+          <input id="tpv-busqueda-producto" type="text" x-model="searchProductos"
+                 placeholder="Escanear o buscar por código de barras, código o nombre… (↑↓ para elegir)"
+                 class="w-full min-h-[3rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-base text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 touch-manipulation"
+                 x-on:input.debounce.280ms="onBusquedaProductosInput()"
+                 x-on:keydown="onBusquedaProductosKeydown($event)"
+                 x-on:keydown.enter.prevent="onBusquedaProductosEnter()"
+                 :disabled="estado === 'paying' || estado === 'confirming'"/>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-2" x-show="tpvListaPrecio && tpvListaPrecio.nombre">Precios: <span x-text="tpvListaPrecio.nombre"></span></p>
+        </div>
+        <div x-ref="busquedaDropdownList"
+             :tabindex="(articulosGrid.length > 0 && !articulosGridLoading) ? 0 : -1"
+             x-show="articulosGrid.length > 0 && !articulosGridLoading"
+             x-cloak
+             x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             class="flex-1 min-h-0 overflow-auto border border-slate-200 dark:border-slate-700 rounded-xl shadow-inner bg-slate-50/50 dark:bg-slate-800/30 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-inset"
+             role="listbox"
+             aria-label="Resultados de búsqueda. Flechas para mover, Enter para agregar, Esc para volver al buscador."
+             x-on:focus="onFocusTablaBusqueda()"
+             x-on:keydown="onTablaBusquedaKeydown($event)"
+             x-on:keydown.enter.prevent.capture="onBusquedaProductosEnter()">
+          <table class="w-full text-left border-collapse" aria-label="Resultados de búsqueda">
+            <thead class="sticky top-0 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-600 z-10">
+              <tr>
+                <th class="py-2 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Código</th>
+                <th class="py-2 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Nombre</th>
+                <th class="py-2 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase text-right">Stock</th>
+                <th class="py-2 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase text-right">Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(art, index) in articulosGrid" :key="art.id_articulo">
+                <tr :data-search-index="index"
+                    role="option"
+                    :aria-selected="selectedSearchIndex === index"
+                    class="border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors"
+                    :class="{
+                      'bg-sky-200 dark:bg-sky-800/70 text-slate-900 dark:text-white': selectedSearchIndex === index,
+                      'hover:bg-sky-50 dark:hover:bg-slate-800/80': selectedSearchIndex !== index && estado !== 'paying' && estado !== 'confirming',
+                      'opacity-60 pointer-events-none': estado === 'paying' || estado === 'confirming'
+                    }"
+                    x-on:click="estado !== 'paying' && estado !== 'confirming' && (selectedSearchIndex = index, agregarArticuloDesdeTile(art))">
+                  <td class="py-2.5 px-2 text-sm font-medium" x-text="art.codigo_articulo || art.id_articulo || '—'"></td>
+                  <td class="py-2.5 px-2 text-sm" x-text="art.descripcion || '—'"></td>
+                  <td class="py-2.5 px-2 text-sm text-right" x-text="art.stock_disponible != null ? art.stock_disponible : '—'"></td>
+                  <td class="py-2.5 px-2 text-sm font-semibold text-sky-600 dark:text-sky-400 text-right">
+                    <span x-show="(art.promocion || '').toString().toLowerCase() === 'si'" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 mr-1">Promo</span>
+                    <span x-text="'$' + formatoMoneda(art.precio||0)"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="articulosGridLoading" x-cloak>Cargando…</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="!articulosGridLoading && searchProductos.length && articulosGrid.length === 0" x-cloak>No hay coincidencias en la búsqueda. Si es código de barras o código de artículo, tocá <strong>Enter</strong> para agregar al carrito.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="!articulosGridLoading && !searchProductos.length" x-cloak>Escribí o escaneá código / nombre. ↑↓ para mover por la tabla, Enter para agregar. Tab para ir a la tabla, Esc para volver al buscador.</p>
+      </section>
+
+      <div class="min-h-0 flex-1"></div>
+
+      <!-- SECCIÓN 2: Opciones extras (una sola línea para ganar espacio a la búsqueda) -->
+      <section class="shrink-0 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-3 sm:p-4 md:p-5" aria-label="Opciones extras">
+        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Opciones extra</p>
+        <div class="flex flex-wrap items-stretch gap-2 sm:gap-3">
+          <button type="button" class="flex flex-1 min-w-0 min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 shadow-sm hover:border-slate-300 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1 transition-all duration-200 active:scale-[0.99]" x-on:click="toastMsg='Función en desarrollo'; toastOk=false; setTimeout(()=>{toastMsg=''}, 2500)">
+            <span class="text-lg text-slate-700 dark:text-slate-200 shrink-0" aria-hidden="true">🎁</span>
+            <span class="text-xs font-medium text-slate-900 dark:text-white truncate">Usar Gift Card</span>
+          </button>
+          <button type="button" class="flex flex-1 min-w-0 min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 shadow-sm hover:border-slate-300 dark:hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1 transition-all duration-200 active:scale-[0.99]" x-on:click="toastMsg='Llamando a un asistente…'; toastOk=true; setTimeout(()=>{toastMsg=''}, 2500)">
+            <span class="text-lg text-slate-700 dark:text-slate-200 shrink-0" aria-hidden="true">👤</span>
+            <span class="text-xs font-medium text-slate-900 dark:text-white truncate">Solicitar asistencia</span>
+          </button>
+          <button type="button" class="flex flex-1 min-w-0 min-h-[44px] flex-row items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 shadow-sm hover:border-red-300 dark:hover:border-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-all duration-200 active:scale-[0.99]" x-on:click="cartId=null; items=[]; total=0; crearObtenerCarrito()">
+            <span class="text-lg text-red-600 dark:text-red-400 shrink-0" aria-hidden="true">✕</span>
+            <span class="text-xs font-medium text-red-600 dark:text-red-400 truncate">Cancelar compra</span>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- SECCIÓN 3: Lista de ítems y pago — card estilo reportes -->
+    <aside class="kiosk-col-right flex w-full min-h-0 flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden" aria-label="Lista de ítems y pago">
+      <div class="shrink-0 border-b border-slate-200 dark:border-slate-800 px-4 py-3 bg-slate-50/50 dark:bg-slate-800/30">
+        <div class="flex items-center gap-2">
+          <h2 class="text-base font-bold text-slate-900 dark:text-white">Tus productos</h2>
+          <span class="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-sky-500 px-2 text-xs font-bold text-white" x-show="items && items.length > 0" x-text="items.length" x-cloak></span>
+        </div>
+      </div>
+
+      <div class="min-h-0 flex-1 overflow-auto">
+        <template x-if="!items || items.length === 0">
+          <div class="flex flex-col items-center justify-center py-12 px-4">
+            <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-2xl">🛒</div>
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Tu carrito está vacío</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Escaneá un producto para comenzar</p>
+          </div>
+        </template>
+        <!-- Vista TPV: grilla extendida (una fila = todos los datos del renglón) -->
+        <div x-show="modoTpv && items && items.length > 0" x-cloak class="overflow-x-auto">
+          <table class="w-full min-w-[640px] text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 whitespace-nowrap">Cod. manual</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Nombre</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-center">Cant.</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-center">% IVA</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">P. unit.</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-center">% desc.</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Subtotal</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Promo</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Series</th>
+                <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 w-24">Acciones</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+              <template x-for="(item, idx) in items" :key="item.id">
+                <tr :class="idx === items.length - 1 ? 'bg-sky-50/50 dark:bg-sky-900/20' : ''" class="align-baseline">
+                  <td class="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400" x-text="item.codigo_articulo || item.codigo_barras || '—'"></td>
+                  <td class="px-2 py-1.5 text-slate-900 dark:text-white" x-text="item.descripcion || item.codigo_articulo || 'Artículo'"></td>
+                  <td class="px-2 py-1.5 text-center font-medium tabular-nums" x-text="(parseFloat(item.cantidad) || 0).toFixed(2)"></td>
+                  <td class="px-2 py-1.5 text-center" x-text="(item.alicuota_porcentaje != null ? item.alicuota_porcentaje : item.alicuota_iva) || 0"></td>
+                  <td class="px-2 py-1.5 text-right" x-text="'$' + formatoMoneda(item.precio_unitario_bruto != null ? item.precio_unitario_bruto : item.precio_unitario||0)"></td>
+                  <td class="px-2 py-1.5 text-center min-w-[4rem]">
+                    <template x-if="itemDescuentoEditId !== item.id">
+                      <button type="button" class="w-full py-1 px-2 rounded border border-transparent hover:border-sky-400 hover:bg-sky-50 dark:hover:bg-sky-900/30 text-xs font-medium tabular-nums" x-text="item.porcentaje_descuento || 0" x-on:click="abrirEditarDescuento(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" title="Clic para editar descuento %"></button>
+                    </template>
+                    <template x-if="itemDescuentoEditId === item.id">
+                      <div class="flex items-center gap-1" x-on:click.stop>
+                        <input type="number" min="0" max="100" step="0.5" class="w-14 py-1 px-2 rounded border border-sky-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs text-right tabular-nums" x-model="descuentoInputVal" x-ref="descuentoInput" x-on:keydown.enter.prevent="aplicarDescuentoItem(item)" x-on:keydown.escape.prevent="itemDescuentoEditId = null" x-on:blur="aplicarDescuentoItem(item)">
+                        <span class="text-xs text-slate-500">%</span>
+                      </div>
+                    </template>
+                  </td>
+                  <td class="px-2 py-1.5 text-right font-semibold" x-text="'$' + formatoMoneda(item.subtotal != null ? item.subtotal : item.importe_total||0)"></td>
+                  <td class="px-2 py-1.5 max-w-[80px]">
+                    <span x-show="(item.promocion || '').toString().toLowerCase() === 'si'" x-cloak class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">Promo</span>
+                    <span x-show="(item.promocion || '').toString().toLowerCase() !== 'si'" class="text-slate-400">—</span>
+                  </td>
+                  <td class="px-2 py-1.5 max-w-[100px]">
+                    <template x-if="(item.serie || '').toString().toLowerCase() === 'si'">
+                      <div class="flex items-center gap-1 flex-wrap">
+                        <span class="truncate text-xs text-slate-600 dark:text-slate-400 max-w-[80px]" x-text="(item.desc_serie || '—').substring(0, 30) + ((item.desc_serie || '').length > 30 ? '…' : '')" x-bind:title="(item.desc_serie || '')"></span>
+                        <button type="button" class="rounded border border-sky-500 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 px-2 py-1 text-xs font-medium hover:bg-sky-100 dark:hover:bg-sky-900/50" x-on:click="abrirModalSeries(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" title="Editar números de serie">Series</button>
+                      </div>
+                    </template>
+                    <span x-show="(item.serie || '').toString().toLowerCase() !== 'si'" class="text-slate-400">—</span>
+                  </td>
+                  <td class="px-2 py-1.5">
+                    <div class="flex items-center gap-0.5 touch-manipulation">
+                      <button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold min-w-[2rem] min-h-[2rem]" x-on:click="menosCantidad(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" aria-label="Disminuir">−</button>
+                      <button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold min-w-[2rem] min-h-[2rem]" x-on:click="masCantidad(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" aria-label="Aumentar">+</button>
+                      <button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 min-w-[2rem] min-h-[2rem] touch-manipulation" x-on:click="confirmarEliminar(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" title="Quitar" aria-label="Quitar"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <!-- Vista compacta (self-checkout): fila resumida con opción de expandir detalle -->
+        <div x-show="!modoTpv && items && items.length > 0" x-cloak class="divide-y divide-slate-200 dark:divide-slate-700">
+          <template x-for="(item, idx) in items" :key="item.id">
+            <div class="px-4 py-3" :class="idx === items.length - 1 ? 'bg-sky-50/50 dark:bg-sky-900/20 border-l-4 border-l-sky-500' : ''">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="item.descripcion || item.codigo_articulo || 'Artículo'"></p>
+                  <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400" x-text="item.cantidad > 1 ? (formatoMoneda(item.precio_unitario_bruto != null ? item.precio_unitario_bruto : item.precio_unitario||0) + ' × ' + (parseFloat(item.cantidad) || 0).toFixed(2)) : ('$' + formatoMoneda(item.precio_unitario_bruto != null ? item.precio_unitario_bruto : item.precio_unitario||0))"></p>
+                </div>
+                <p class="shrink-0 text-sm font-bold text-slate-900 dark:text-white" x-text="'$' + formatoMoneda(item.importe_total||item.subtotal||0)"></p>
+              </div>
+              <div x-show="itemExpandidoId === item.id" x-cloak class="mt-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-xs space-y-1">
+                <p><span class="text-slate-500">Cod. manual:</span> <span x-text="item.codigo_articulo || item.codigo_barras || '—'"></span></p>
+                <p><span class="text-slate-500">% Alicuota:</span> <span x-text="(item.alicuota_porcentaje != null ? item.alicuota_porcentaje : item.alicuota_iva) || 0"></span></p>
+                <p class="flex items-center gap-2 flex-wrap">
+                  <span class="text-slate-500">Descuento %:</span>
+                  <input type="number" min="0" max="100" step="0.5" class="w-16 py-1 px-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-right tabular-nums text-xs" x-model="descuentoInputVal" x-on:keydown.enter.prevent="aplicarDescuentoItem(item)" placeholder="0">
+                  <button type="button" class="rounded border border-sky-500 bg-sky-500 text-white px-2 py-1 text-xs font-medium hover:bg-sky-600" x-on:click="aplicarDescuentoItem(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Aplicar</button>
+                </p>
+                <p x-show="item.promocion"><span class="text-slate-500">Promo:</span> <span x-text="item.promocion"></span></p>
+                <p x-show="item.detalle"><span class="text-slate-500">Detalle:</span> <span x-text="item.detalle"></span></p>
+              </div>
+              <div class="mt-2 flex items-center gap-1">
+                <button type="button" class="flex h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 transition-all duration-200 touch-manipulation" x-on:click="menosCantidad(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" aria-label="Disminuir">−</button>
+                <span class="min-w-[1.25rem] text-center text-sm font-semibold text-slate-700 dark:text-slate-300 tabular-nums" x-text="(parseFloat(item.cantidad) || 0).toFixed(2)"></span>
+                <button type="button" class="flex h-10 w-10 min-w-[2.5rem] min-h-[2.5rem] items-center justify-center rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 transition-all duration-200 touch-manipulation" x-on:click="masCantidad(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'" aria-label="Aumentar">+</button>
+                <button type="button" class="rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 transition-all duration-200 touch-manipulation" x-on:click="itemExpandidoId = itemExpandidoId === item.id ? null : item.id; if (itemExpandidoId === item.id) descuentoInputVal = String(item.porcentaje_descuento || 0)" x-bind:disabled="estado === 'paying' || estado === 'confirming'"><span x-text="itemExpandidoId === item.id ? 'Ocultar' : 'Ver detalle'"></span></button>
+                <button type="button" class="ml-auto rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 transition-all duration-200 touch-manipulation min-h-[2.5rem]" x-on:click="confirmarEliminar(item)" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Quitar</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="shrink-0 border-t border-slate-200 dark:border-slate-700"></div>
+
+      <!-- Descuento masivo al pie (solo TPV): input % + Aplicar; o texto si ya hay descuento -->
+      <div class="shrink-0 border-b border-slate-200 dark:border-slate-700 px-4 py-3" x-show="modoTpv" x-cloak>
+        <template x-if="descuentoPieEditando">
+          <div class="flex flex-wrap items-center gap-2" x-on:click.stop>
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Descuento general %</span>
+            <input type="number" min="0" max="100" step="0.5" class="w-20 py-1.5 px-2 rounded-lg border border-sky-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm text-right tabular-nums" x-model="descuentoPieInputVal" x-ref="descuentoPieInput" placeholder="0" x-on:keydown.enter.prevent="aplicarDescuentoPie()" x-on:keydown.escape.prevent="descuentoPieEditando = false">
+            <button type="button" class="rounded-lg bg-sky-500 text-white px-3 py-1.5 text-sm font-semibold hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500" x-on:click="aplicarDescuentoPie()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Aplicar</button>
+            <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" x-on:click="descuentoPieEditando = false">Cancelar</button>
+          </div>
+        </template>
+        <template x-if="!descuentoPieEditando">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-amber-500" aria-hidden="true">*</span>
+            <span class="flex-1 text-sm font-medium text-slate-900 dark:text-white" x-text="cartVoucherPct != null ? (cartIdSpCupon ? 'Descuento voucher' : 'Descuento general') : 'Descuento general'"></span>
+            <template x-if="cartVoucherPct != null && cartVoucherPct > 0">
+              <span class="text-sm font-semibold text-amber-600 dark:text-amber-400" x-text="(cartVoucherPct || 0) + '%'"></span>
+            </template>
+            <template x-if="cartVoucherPct == null || cartVoucherPct === 0">
+              <button type="button" class="text-sm font-medium text-sky-600 dark:text-sky-400 hover:underline" x-on:click="descuentoPieEditando = true; descuentoPieInputVal = ''" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Aplicar %</button>
+            </template>
+            <button type="button" x-show="cartVoucherPct != null && cartVoucherPct > 0" x-cloak class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline ml-1" x-on:click="quitarVoucher()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Quitar</button>
+          </div>
+        </template>
+      </div>
+      <div class="shrink-0 border-b border-slate-200 dark:border-slate-700 px-4 py-3" x-show="!modoTpv">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-amber-500" aria-hidden="true">*</span>
+          <span class="flex-1 text-sm font-medium text-slate-900 dark:text-white">Ahorros membresía</span>
+          <span class="text-sm font-medium text-slate-500 dark:text-slate-400">—</span>
+        </div>
+      </div>
+
+      <div class="shrink-0 border-t border-slate-200 dark:border-slate-700"></div>
+
+      <div class="shrink-0 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+        <div class="flex items-baseline justify-between">
+          <span class="text-base font-bold text-slate-900 dark:text-white">Total</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-white" x-text="'$' + formatoMoneda(total || 0)"></span>
+        </div>
+      </div>
+
+      <div class="shrink-0 rounded-b-2xl bg-slate-100 dark:bg-slate-800/50 p-4 border-t border-slate-200 dark:border-slate-700">
+        <p class="mb-3 text-sm font-bold text-slate-900 dark:text-white">¿Listo para pagar?</p>
+        <button
+          type="button"
+          class="flex h-14 w-full items-center justify-center gap-2 rounded-xl text-base font-bold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/30 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          x-on:click="irAPago()"
+          x-bind:disabled="estado === 'paying' || !items || items.length === 0 || !!stockBlocked"
+        >
+          Pagar <span x-text="'$' + formatoMoneda(total || 0)"></span>
+          <span class="text-lg">→</span>
+        </button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- PANTALLA ÉXITO — estilo reportes -->
+  <main class="flex w-full flex-1 items-center justify-center p-6" x-show="estado === 'success'" x-cloak>
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center shadow-xl">
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-3xl text-emerald-600 dark:text-emerald-400">✓</div>
+      <h2 class="text-xl font-bold text-slate-900 dark:text-white">¡Compra realizada!</h2>
+      <p class="mt-2 font-mono text-base text-sky-600 dark:text-sky-400" x-text="comprobanteTexto"></p>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Gracias por su compra</p>
+      <div class="mt-6 flex flex-col gap-3">
+        <button type="button" class="w-full rounded-xl py-3 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/30 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200 flex items-center justify-center gap-2" x-on:click="imprimirTicket()">
+          <span>🖨️</span> Imprimir ticket
+        </button>
+        <div class="flex gap-3">
+          <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="mostrarReceipt = true">Ver comprobante</button>
+          <button type="button" class="flex-1 rounded-xl border border-emerald-500 py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all duration-200" x-on:click="nuevaCompra()">Nueva compra</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal factura: 1) Elegir Factura A o Consumidor Final  2) Datos (CUIT+email o solo email). Pantalla táctil/teclado; teclado virtual configurable. -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalEmail" x-cloak x-transition>
+    <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+      <!-- Paso 1: elegir tipo de factura (touch-friendly) -->
+      <template x-if="tipoFactura === null">
+        <div>
+          <h3 class="text-lg font-bold text-slate-900 dark:text-white" x-text="soloFacturaC ? 'Factura' : '¿Qué tipo de factura?'"></h3>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="soloFacturaC">Emitimos Factura C (Monotributo). Continuá para pagar.</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="!soloFacturaC">Elegí una opción para continuar</p>
+          <div class="mt-4 flex flex-col gap-3">
+            <button type="button" class="min-h-[3.5rem] w-full rounded-xl border-2 border-sky-200 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/30 py-3 px-4 text-base font-semibold text-sky-800 dark:text-sky-200 hover:bg-sky-100 dark:hover:bg-sky-900/50 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation"
+                    x-show="!soloFacturaC"
+                    x-on:click="tipoFactura = 'FA'; cuit = ''; cuitConsulta = {}; email = '';">
+              Ticket Factura
+            </button>
+            <button type="button" class="min-h-[3.5rem] w-full rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 py-3 px-4 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation"
+                    x-on:click="tipoFactura = 'CF'; cuit = ''; cuitConsulta = {}; email = ''; if (!enviarFacturaEmail) { $nextTick(() => enviarAPago()); }">
+              <span x-text="soloFacturaC ? 'Continuar' : 'Consumidor Final'"></span>
+            </button>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation" x-on:click="modalEmail = false">Cancelar</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Paso 2a: Ticket Factura (FA) — CUIT y luego email (solo si no se recuperó) -->
+      <template x-if="tipoFactura === 'FA'">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Ticket Factura</h3>
+            <button type="button" class="text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" x-on:click="tipoFactura = null">Cambiar</button>
+          </div>
+          <div class="mt-3">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">CUIT</label>
+            <input type="text" x-model="cuit"
+                   placeholder="20-12345678-9 o 11 dígitos"
+                   maxlength="14"
+                   x-on:blur="consultarCuit()"
+                   x-on:input="cuitConsulta = {}"
+                   class="mt-1 min-h-[2.75rem] w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 touch-manipulation"
+                   inputmode="numeric">
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Buscar por CUIT en clientes de administraNET. Validamos en AFIP.</p>
+            <div class="mt-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm min-h-[2.5rem]" x-show="cuitConsulta.loading || cuitConsulta.denominacion || cuitConsulta.error || cuitConsulta.datos_difieren || cuitConsulta.aviso" x-cloak>
+              <p class="text-slate-500 dark:text-slate-400" x-show="cuitConsulta.loading">Consultando administraNET y AFIP…</p>
+              <template x-if="!cuitConsulta.loading && cuitConsulta.denominacion && !cuitConsulta.datos_difieren && !cuitConsulta.aviso">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-slate-200"><span x-text="'Razón social: ' + (cuitConsulta.denominacion || '')"></span></p>
+                  <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400" x-show="cuitConsulta.id_cliente">Cliente dado de alta en administraNET.</p>
+                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Confirmá los datos o corregí el CUIT.</p>
+                </div>
+              </template>
+              <template x-if="!cuitConsulta.loading && cuitConsulta.datos_difieren">
+                <div class="space-y-2">
+                  <p class="font-medium text-amber-700 dark:text-amber-400">El padrón AFIP tiene datos distintos al cliente en administraNET.</p>
+                  <p class="text-xs text-slate-600 dark:text-slate-300"><span class="font-medium">En administraNET:</span> <span x-text="cuitConsulta.denominacion_administranet || ''"></span></p>
+                  <p class="text-xs text-slate-600 dark:text-slate-300"><span class="font-medium">En AFIP:</span> <span x-text="cuitConsulta.denominacion_afip || ''"></span></p>
+                  <div class="flex gap-2 mt-2">
+                    <button type="button" class="flex-1 rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-900/20 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200 touch-manipulation" x-on:click="actualizarClienteDesdeAfip()">Actualizar con datos AFIP</button>
+                    <button type="button" class="flex-1 rounded-lg border border-slate-200 dark:border-slate-600 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 touch-manipulation" x-on:click="mantenerDatosActuales()">Mantener datos actuales</button>
+                  </div>
+                </div>
+              </template>
+              <p class="text-amber-600 dark:text-amber-400 text-sm" x-show="!cuitConsulta.loading && cuitConsulta.aviso" x-text="cuitConsulta.aviso || ''"></p>
+              <p class="text-red-600 dark:text-red-400 text-sm" x-show="!cuitConsulta.loading && cuitConsulta.error" x-text="cuitConsulta.error || ''"></p>
+            </div>
+          </div>
+          <!-- Email: solo se pide si está habilitado para el PV y no se recuperó; siempre editable -->
+          <div class="mt-3" x-show="enviarFacturaEmail && cuitConsulta.denominacion && !cuitConsulta.datos_difieren">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email para la factura</label>
+            <p class="text-xs text-slate-500 dark:text-slate-400" x-show="cuitConsulta.email">Recuperado del cliente. Podés editarlo si cambió.</p>
+            <p class="text-xs text-amber-600 dark:text-amber-400" x-show="cuitConsulta.id_cliente && !cuitConsulta.email" x-cloak>Este cliente no tiene email en administraNET. Ingresalo para que te enviemos la factura.</p>
+            <input type="email" x-model="email"
+                   class="mt-1 min-h-[2.75rem] w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 touch-manipulation"
+                   :class="{ 'border-emerald-500': email && email.includes('@') && !emailError, 'border-red-500': emailError }"
+                   placeholder="tu@email.com"
+                   x-on:keydown.enter="enviarAPago()" x-ref="emailInputFa"
+                   inputmode="email">
+            <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="emailError" x-text="emailError" x-cloak></p>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation" x-on:click="tipoFactura = null">Atrás</button>
+            <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200 touch-manipulation" x-on:click="enviarAPago()">Continuar</button>
+          </div>
+        </div>
+      </template>
+
+      <!-- Paso 2b (skip): Consumidor Final sin envío por correo — no mostrar mensaje, solo brevemente "Continuando..." mientras se avanza al pago -->
+      <template x-if="tipoFactura === 'CF' && !enviarFacturaEmail">
+        <div class="py-4 text-center">
+          <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Continuando…</p>
+        </div>
+      </template>
+      <!-- Paso 2b: Consumidor Final — solo si envío por correo está habilitado (email opcional). Si no está habilitado, el click en "Consumidor Final" ya dispara enviarAPago() y no se muestra este bloque. -->
+      <template x-if="tipoFactura === 'CF' && enviarFacturaEmail">
+        <div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">Consumidor Final</h3>
+            <button type="button" class="text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" x-on:click="tipoFactura = null">Cambiar</button>
+          </div>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Opcional: si ingresás email te enviaremos la factura por correo.</p>
+          <div class="mt-3">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email <span class="text-slate-400 font-normal">(opcional)</span></label>
+            <input type="email" x-model="email"
+                   class="mt-1 min-h-[2.75rem] w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-sm text-slate-900 dark:text-white outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 touch-manipulation"
+                   :class="{ 'border-emerald-500': email && email.includes('@') && !emailError, 'border-red-500': emailError }"
+                   placeholder="tu@email.com (opcional)"
+                   x-on:keydown.enter="enviarAPago()" x-ref="emailInputCf"
+                   inputmode="email">
+            <p class="mt-1 text-xs text-red-600 dark:text-red-400" x-show="emailError" x-text="emailError" x-cloak></p>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation" x-on:click="tipoFactura = null">Atrás</button>
+            <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200 touch-manipulation" x-on:click="enviarAPago()">Continuar</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Modal RFID -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalRfid" x-cloak x-transition>
+    <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">Detectamos <span x-text="rfidPropuesta.length"></span> productos</h3>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Revisá cantidades y confirmá</p>
+      <div class="mt-3 space-y-2">
+        <template x-for="(rfidItem, idx) in rfidPropuesta" :key="idx">
+          <div class="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700 py-2">
+            <span class="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-300" x-text="rfidItem.descripcion || rfidItem.codigo"></span>
+            <input type="number" min="0" x-model.number="rfidItem.cantidad" class="h-10 w-16 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-center text-sm text-slate-900 dark:text-white">
+          </div>
+        </template>
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="cancelarRfid()">Cancelar</button>
+        <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="cancelarRfid()">Reintentar</button>
+        <button type="button" class="flex-1 rounded-xl py-2 text-xs font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200" x-on:click="confirmarRfid()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal eliminar -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalConfirmEliminar" x-cloak x-transition>
+    <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">¿Eliminar producto?</h3>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="itemAEliminar" x-text="itemAEliminar ? (itemAEliminar.descripcion || itemAEliminar.codigo_articulo || 'Este ítem') : ''" x-cloak></p>
+      <div class="mt-4 flex gap-2">
+        <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="modalConfirmEliminar = false; itemAEliminar = null">Cancelar</button>
+        <button type="button" class="flex-1 rounded-xl py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-600 to-red-700 shadow-lg shadow-red-500/30 focus:outline-none focus:ring-2 focus:ring-red-400 transition-all duration-200" x-on:click="confirmarEliminarOk()">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal pago: elegir método; en modo TPV se muestran Efectivo, Tarjeta y Mercado Pago -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalPago" x-cloak x-transition
+       x-init="$watch('modalPago', v => { if (v) { pagoModo = 'elegir'; pagoTipoCobro = ''; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'; pagoRedondeoTipo = 'Arriba'; pagoMediosError = ''; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; cargarMediosDePago(); } detenerPollingPago(); })">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">Elegí cómo pagar</h3>
+      <div class="mt-3 text-center">
+        <p class="text-2xl font-bold text-sky-600 dark:text-sky-400" x-text="'$' + formatoMoneda(total || 0)"></p>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" x-show="!modoTpv">Pago seguro con MercadoPago</p>
+      </div>
+
+      <!-- Paso 1: elegir método -->
+      <div class="mt-5 space-y-3" x-show="pagoEstado === 'pendiente' && pagoModo === 'elegir'">
+        <!-- TPV: Efectivo y Tarjeta → abren Medios de cobro con dropdown Tipo cobro (como administraNET) -->
+        <template x-if="modoTpv">
+          <div class="space-y-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+            <button type="button"
+                    class="flex w-full min-h-[3rem] items-center justify-center gap-3 rounded-xl py-3.5 text-base font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 touch-manipulation"
+                    x-on:click="pagoModo = 'medio_multi'; pagoTipoCobro = 'efectivo'; pagoImporteEfectivo = format2(total || 0); pagoImporteCobradoEfectivo = format2(total || 0); pagoImporteTarjeta = '0.00'; pagoRedondeo = '0.00'">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white/20">💵</span>
+              <span>Efectivo</span>
+            </button>
+            <button type="button"
+                    class="flex w-full min-h-[3rem] items-center justify-center gap-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation"
+                    x-on:click="pagoModo = 'medio_multi'; pagoTipoCobro = 'tarjeta'; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = format2(total || 0); pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = format2(total || 0); pagoImporteParcial = '0.00'">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">💳</span>
+              <span>Tarjeta</span>
+            </button>
+            <button type="button"
+                    class="flex w-full min-h-[3rem] items-center justify-center gap-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation"
+                    x-on:click="pagoModo = 'medio_multi'; pagoTipoCobro = 'mixto'; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">💵💳</span>
+              <span>Efectivo + Tarjeta</span>
+            </button>
+          </div>
+        </template>
+        <!-- Mercado Pago (QR y dispositivo) -->
+        <button type="button"
+                class="flex w-full min-h-[3rem] items-center justify-center gap-3 rounded-xl py-3.5 text-base font-semibold text-white bg-[#009ee3] hover:bg-[#0088c7] shadow-lg focus:outline-none focus:ring-2 focus:ring-[#009ee3] focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+                x-on:click="pagarConQR()"
+                :disabled="pagoMpLoading">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/20" x-show="!pagoMpLoading">📱</span>
+          <span class="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" x-show="pagoMpLoading" x-cloak></span>
+          <span x-text="pagoMpLoading ? 'Generando QR…' : 'Pago con QR (Mercado Pago)'"></span>
+        </button>
+        <button type="button"
+                class="flex w-full min-h-[3rem] items-center justify-center gap-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 py-3.5 text-base font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation">
+          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700">💳</span>
+          <span x-on:click="pagoEnDispositivo()">Pago en dispositivo (tarjeta/celular al lector)</span>
+        </button>
+        <button type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation">
+          <span aria-hidden="true">🧪</span>
+          <span x-on:click="simularPagoAprobado()">Simular pago (pruebas)</span>
+        </button>
+        <button type="button"
+                class="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200 touch-manipulation"
+                x-on:click="modalPago = false; pagoModo = 'elegir'; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; detenerPollingPago()">
+          ← Volver al carrito
+        </button>
+      </div>
+
+      <!-- TPV: Medios de cobro — según Tipo cobro (como administraNET) -->
+      <div class="mt-5 space-y-4" x-show="pagoEstado === 'pendiente' && pagoModo === 'medio_multi'" x-cloak>
+        <h4 class="text-base font-semibold text-slate-900 dark:text-white">Medios de cobro</h4>
+        <p class="text-sm text-slate-500 dark:text-slate-400">Total a pagar: <span class="font-semibold text-slate-900 dark:text-white" x-text="'$' + formatoMoneda(total || 0)"></span></p>
+
+        <!-- Dropdown Tipo cobro (como administraNET) -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Tipo cobro:</label>
+          <select x-model="pagoTipoCobro"
+                  class="w-full min-h-[2.75rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base font-semibold text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 touch-manipulation">
+            <option value="efectivo">Efectivo</option>
+            <option value="tarjeta">Tarjeta</option>
+            <option value="mixto">Efectivo + Tarjeta</option>
+          </select>
+        </div>
+
+        <!-- Panel Detalle Efectivo (visible si Efectivo o Mixto) -->
+        <div class="space-y-2 rounded-xl border border-slate-200 dark:border-slate-600 p-4 bg-slate-50/50 dark:bg-slate-800/30"
+             x-show="pagoTipoCobro === 'efectivo' || pagoTipoCobro === 'mixto'">
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Detalle Efectivo</p>
+          <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Importe cobrado:</label>
+          <input type="text" inputmode="decimal" x-model="pagoImporteCobradoEfectivo"
+                 x-on:blur="if (pagoImporteCobradoEfectivo !== '') pagoImporteCobradoEfectivo = format2(pagoImporteCobradoEfectivo)"
+                 class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 touch-manipulation"
+                 placeholder="0.00">
+          <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Efectivo (importe a aplicar):</label>
+          <input type="text" inputmode="decimal" x-model="pagoImporteEfectivo"
+                 x-on:blur="pagoImporteEfectivo = format2(pagoImporteEfectivo)"
+                 class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 touch-manipulation"
+                 placeholder="0.00">
+          <p class="text-xs text-slate-500 dark:text-slate-400">Cambio: <span class="font-semibold" x-text="'$' + formatoMoneda(Math.max(0, round2((parseFloat(pagoImporteCobradoEfectivo) || 0) - (parseFloat(pagoImporteEfectivo) || 0))))"></span></p>
+          <div class="grid grid-cols-[1fr_auto] gap-2 items-end">
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Redondeo:</label>
+              <input type="text" inputmode="decimal" x-model="pagoRedondeo"
+                     x-on:blur="pagoRedondeo = format2(pagoRedondeo)"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500"
+                     placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Dirección</label>
+              <select x-model="pagoRedondeoTipo"
+                      class="min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500">
+                <option value="Arriba">Arriba</option>
+                <option value="Abajo">Abajo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Detalle Tarjeta (visible si Tarjeta o Mixto) — como administraNET -->
+        <div class="space-y-3 rounded-xl border border-slate-200 dark:border-slate-600 p-4 bg-slate-50/50 dark:bg-slate-800/30"
+             x-show="pagoTipoCobro === 'tarjeta' || pagoTipoCobro === 'mixto'">
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Detalle Tarjeta</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Tarjeta:</label>
+              <input type="text" x-model="pagoTarjetaNombre" placeholder="ej. American Express"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Plan:</label>
+              <input type="text" x-model="pagoPlanNombre" placeholder="ej. American Express"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Importe tarjeta:</label>
+              <input type="text" inputmode="decimal" x-model="pagoImporteTarjeta"
+                     x-on:blur="pagoImporteTarjeta = format2(pagoImporteTarjeta)"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                     placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Cuotas:</label>
+              <input type="number" min="1" step="1" x-model.number="pagoCuotas"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                     placeholder="1">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Nro. tarjeta:</label>
+              <input type="text" x-model="pagoNroTarjeta" placeholder="0"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Nro. cupón:</label>
+              <input type="text" x-model="pagoNroCupon" placeholder="0"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Nro. lote:</label>
+              <input type="text" x-model="pagoNroLote" placeholder="0"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Intereses:</label>
+              <input type="text" inputmode="decimal" x-model="pagoIntereses"
+                     x-on:blur="pagoIntereses = format2(pagoIntereses)"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                     placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Valor cuota:</label>
+              <input type="text" inputmode="decimal" x-model="pagoValorCuota"
+                     x-on:blur="pagoValorCuota = format2(pagoValorCuota)"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                     placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-600 dark:text-slate-400">Imp. parcial:</label>
+              <input type="text" inputmode="decimal" x-model="pagoImporteParcial"
+                     x-on:blur="pagoImporteParcial = format2(pagoImporteParcial)"
+                     class="w-full min-h-[2.75rem] rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 text-base text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                     placeholder="0.00">
+            </div>
+          </div>
+        </div>
+
+        <!-- Totales (como administraNET) -->
+        <div class="rounded-xl px-4 py-3 border-2"
+             :class="(Math.abs((parseFloat(pagoImporteEfectivo) || 0) + (parseFloat(pagoImporteTarjeta) || 0) - (total || 0)) <= 0.02) ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-600'">
+          <p class="text-sm"><span class="text-slate-600 dark:text-slate-400">Efectivo: </span><span class="font-semibold" x-text="'$' + formatoMoneda(parseFloat(pagoImporteEfectivo) || 0)"></span></p>
+          <p class="text-sm"><span class="text-slate-600 dark:text-slate-400">Tarjeta: </span><span class="font-semibold" x-text="'$' + formatoMoneda(parseFloat(pagoImporteTarjeta) || 0)"></span></p>
+          <p class="text-sm mt-1"><span class="text-slate-600 dark:text-slate-400">Suma medios: </span><span class="font-semibold" x-text="'$' + formatoMoneda((parseFloat(pagoImporteEfectivo) || 0) + (parseFloat(pagoImporteTarjeta) || 0))"></span></p>
+          <p class="text-sm mt-0.5" x-show="Math.abs((parseFloat(pagoImporteEfectivo) || 0) + (parseFloat(pagoImporteTarjeta) || 0) - (total || 0)) > 0.02">
+            <span class="text-amber-700 dark:text-amber-400">Pendiente: </span>
+            <span class="font-semibold text-amber-700 dark:text-amber-400" x-text="'$' + formatoMoneda((total || 0) - (parseFloat(pagoImporteEfectivo) || 0) - (parseFloat(pagoImporteTarjeta) || 0))"></span>
+          </p>
+        </div>
+        <p class="text-sm text-red-600 dark:text-red-400" x-show="pagoMediosError" x-text="pagoMediosError" x-cloak></p>
+        <div class="flex gap-2">
+          <button type="button" class="flex-1 rounded-xl py-3 text-base font-semibold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+                  x-on:click="confirmarVentaMediosMixto()"
+                  :disabled="Math.abs((parseFloat(pagoImporteEfectivo) || 0) + (parseFloat(pagoImporteTarjeta) || 0) - (total || 0)) > 0.02 || ((parseFloat(pagoImporteEfectivo) || 0) + (parseFloat(pagoImporteTarjeta) || 0)) <= 0">
+            Confirmar
+          </button>
+          <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 py-3 px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 touch-manipulation"
+                  x-on:click="pagoModo = 'elegir'; pagoMediosError = ''">
+            Volver
+          </button>
+        </div>
+      </div>
+
+      <!-- Paso 2a: QR en pantalla (cliente escanea con app MP) -->
+      <div class="mt-5" x-show="pagoEstado === 'pendiente' && pagoModo === 'qr'" x-cloak>
+        <p class="text-center text-sm font-medium text-slate-700 dark:text-slate-300">Escaneá con la app de Mercado Pago</p>
+        <div class="mt-3 flex justify-center rounded-xl bg-white p-4">
+          <img x-show="pagoQrUrl" :src="'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=' + encodeURIComponent(pagoQrUrl)" alt="QR para pagar" class="h-60 w-60 object-contain"/>
+        </div>
+        <p class="mt-3 text-center">
+          <a x-show="pagoQrUrl" :href="pagoQrUrl" target="_blank" rel="noopener" class="text-sm font-medium text-[#009ee3] hover:underline">Abrir en navegador</a>
+        </p>
+        <p class="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">Al pagar, el estado se actualizará automáticamente.</p>
+        <button type="button" class="mt-4 w-full rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="pagoModo = 'elegir'; pagoQrUrl = ''; detenerPollingPago()">Volver</button>
+      </div>
+
+      <!-- Paso 2b: dispositivo físico (terminal Point) -->
+      <div class="mt-5" x-show="pagoEstado === 'pendiente' && pagoModo === 'dispositivo'" x-cloak>
+        
+        <!-- Estado: Enviando cobro al terminal -->
+        <div x-show="pagoMpLoading && !pagoOrderId" x-cloak>
+          <p class="text-center text-sm font-medium text-slate-700 dark:text-slate-300">Acercá tu tarjeta o celular al lector</p>
+          <div class="mt-3 flex flex-col items-center gap-3">
+            <div class="relative">
+              <span class="inline-flex h-20 w-20 animate-spin rounded-full border-4 border-sky-500 border-t-transparent"></span>
+              <span class="absolute inset-0 flex items-center justify-center text-4xl">💳</span>
+            </div>
+            <p class="text-center text-sm font-medium text-sky-600 dark:text-sky-400 animate-pulse">Enviando cobro al lector…</p>
+          </div>
+        </div>
+
+        <!-- Estado: Esperando pago en el dispositivo (sin error) -->
+        <div x-show="pagoOrderId && !pagoMpLoading && !pagoMpError" x-cloak>
+          <p class="text-center text-sm font-medium text-slate-700 dark:text-slate-300">Acercá tu tarjeta o celular al lector</p>
+          <div class="mt-3 flex flex-col items-center gap-3">
+            <div class="relative">
+              <span class="inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-indigo-100 dark:from-sky-900/30 dark:to-indigo-900/30 text-4xl animate-pulse shadow-lg">💳</span>
+              <span class="absolute -top-1 -right-1 flex h-6 w-6">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-6 w-6 bg-green-500 items-center justify-center">
+                  <span class="text-white text-xs font-bold">✓</span>
+                </span>
+              </span>
+            </div>
+            <p class="text-center text-sm font-medium text-green-600 dark:text-green-400">Esperando pago en el dispositivo…</p>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span class="inline-flex h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span>Terminal listo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estado: Error (cancelado/rechazado/expirado) -->
+        <div x-show="pagoMpError" x-cloak>
+          <div class="mt-3 flex flex-col items-center gap-3">
+            <div class="relative">
+              <span class="inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-900/30 text-4xl">❌</span>
+            </div>
+            <p class="text-center text-sm font-semibold text-red-600 dark:text-red-400" x-text="pagoMpError"></p>
+            <div class="w-full mt-2 p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <p class="text-xs text-slate-600 dark:text-slate-400 text-center">
+                <span class="font-semibold">¿Qué podés hacer?</span><br>
+                • Reintentar el pago en el mismo dispositivo<br>
+                • Cambiar a otro método de pago (QR)<br>
+                • Volver y revisar el carrito
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-col gap-2">
+            <button type="button" class="w-full rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200" x-on:click="pagoMpError = ''; pagarEnDispositivoFisico()">Reintentar en dispositivo</button>
+            <button type="button" class="w-full rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="volverPagoDispositivo()">Cambiar método de pago</button>
+          </div>
+        </div>
+
+        <!-- Botón Volver (solo cuando no hay error) -->
+        <button type="button" class="mt-4 w-full rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-show="!pagoMpError" x-on:click="volverPagoDispositivo()">Volver</button>
+      </div>
+
+      <div class="mt-4 flex gap-2" x-show="pagoEstado === 'aprobado'" x-cloak>
+        <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200" x-on:click="confirmarVenta(); modalPago = false">Confirmar compra</button>
+        <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="modalPago = false">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal comprobante -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="mostrarReceipt" x-cloak x-transition>
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+      <div class="text-center mb-4">
+        <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-2xl">🧾</div>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Comprobante emitido</h3>
+        <p class="mt-1 font-mono text-lg text-sky-600 dark:text-sky-400 font-semibold" x-text="comprobanteTexto"></p>
+      </div>
+      
+      <!-- Detalle del comprobante -->
+      <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 mb-4 text-sm" x-show="resultadoConfirm">
+        <div class="grid grid-cols-2 gap-2 text-slate-600 dark:text-slate-400">
+          <span>Código movimiento:</span>
+          <span class="font-mono text-slate-900 dark:text-white" x-text="resultadoConfirm?.codigo_movimiento"></span>
+          <span>Total:</span>
+          <span class="font-semibold text-emerald-600 dark:text-emerald-400" x-text="'$' + formatoMoneda(resultadoConfirm?.total || 0)"></span>
+          <template x-if="resultadoConfirm?.cae">
+            <span>CAE:</span>
+          </template>
+          <template x-if="resultadoConfirm?.cae">
+            <span class="font-mono text-slate-900 dark:text-white text-xs" x-text="resultadoConfirm?.cae"></span>
+          </template>
+        </div>
+      </div>
+      
+      <p class="text-xs text-slate-500 dark:text-slate-400 text-center mb-4">
+        La factura se envió por email a <span class="font-semibold" x-text="email"></span>
+      </p>
+      
+      <div class="flex flex-col gap-2">
+        <button type="button" class="w-full rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200 flex items-center justify-center gap-2" x-on:click="imprimirTicket()">
+          <span>🖨️</span> Imprimir ticket
+        </button>
+        <div class="flex gap-2">
+          <button type="button" class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="mostrarReceipt = false">Cerrar</button>
+          <button type="button" class="flex-1 rounded-xl border border-emerald-500 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all duration-200" x-on:click="mostrarReceipt = false; nuevaCompra()">Nueva compra</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modales TPV: Cliente, Lista de precio, Vendedor -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvCliente" x-cloak x-transition
+       x-on:click.self="modalTpvCliente = false">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[85vh] flex flex-col"
+         x-on:click.stop>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Cliente</h3>
+      <button type="button" class="w-full rounded-xl py-2.5 px-4 text-left text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.99] transition mb-3"
+              x-on:click="seleccionarTpvClienteCF()">
+        Consumidor Final
+      </button>
+      <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Buscar por nombre o CUIT</label>
+      <input type="text" autocomplete="off"
+             class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-2.5 px-3 text-sm focus:ring-2 focus:ring-sky-500 focus:border-sky-500 mb-1"
+             placeholder="Escribí nombre o CUIT… (Enter con 11 dígitos = consulta AFIP)"
+             x-model="tpvClienteBusqueda"
+             x-on:input="tpvClienteError = ''; buscarTpvClientePredictivo()"
+             x-on:keydown.enter="buscarTpvClientePorCuit()"
+             :disabled="tpvClienteConsultando">
+      <p class="text-sm font-medium text-sky-600 dark:text-sky-400 mb-2 flex items-center gap-2 min-h-[1.5rem]" x-show="tpvClienteConsultando" x-cloak>
+        <span class="inline-block h-4 w-4 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" aria-hidden="true"></span>
+        Consultando padrón AFIP…
+      </p>
+      <p class="text-xs text-red-600 dark:text-red-400 mb-2 min-h-[1rem]" x-show="tpvClienteError && !tpvClienteConsultando" x-text="tpvClienteError"></p>
+      <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 pr-1" x-show="tpvClienteResultados.length > 0 && !tpvClienteConsultando">
+        <template x-for="c in tpvClienteResultados" :key="c.id_cliente">
+          <button type="button"
+                  class="w-full rounded-xl py-2.5 px-3 text-left text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.99] transition"
+                  x-on:click="seleccionarTpvClienteDesdeBusqueda(c)"
+                  x-text="c.nombre_cliente + (c.cuit ? ' — ' + c.cuit : '')"></button>
+        </template>
+      </div>
+      <button type="button" class="mt-3 w-full rounded-xl py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              x-on:click="modalTpvCliente = false">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvListaPrecio" x-cloak x-transition
+       x-on:click.self="modalTpvListaPrecio = false">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
+         x-on:click.stop>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Lista de precio</h3>
+      <input type="text" autocomplete="off"
+             class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-2.5 px-3 text-sm focus:ring-2 focus:ring-sky-500 mb-3"
+             placeholder="Buscar lista…"
+             x-model="tpvFiltroLista">
+      <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-1">
+        <template x-for="lst in listasPrecio.filter(function(l){ var f = (tpvFiltroLista || '').toLowerCase(); return !f || (l.nombre || '').toLowerCase().includes(f) || String(l.id_lista).toLowerCase().includes(f); })" :key="lst.id_lista">
+          <button type="button"
+                  class="w-full rounded-xl py-3 px-4 text-left text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.99] transition"
+                  x-on:click="seleccionarListaPrecio(lst)"
+                  x-text="lst.nombre || ('Lista ' + lst.id_lista)"></button>
+        </template>
+      </div>
+      <button type="button" class="mt-4 w-full rounded-xl py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              x-on:click="modalTpvListaPrecio = false">Cerrar</button>
+    </div>
+  </div>
+
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvVendedor" x-cloak x-transition
+       x-on:click.self="modalTpvVendedor = false">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
+         x-on:click.stop>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Vendedor</h3>
+      <input type="text" autocomplete="off"
+             class="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-2.5 px-3 text-sm focus:ring-2 focus:ring-sky-500 mb-3"
+             placeholder="Buscar vendedor…"
+             x-model="tpvFiltroVendedor">
+      <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-1">
+        <template x-for="v in vendedoresList.filter(function(v){ var f = (tpvFiltroVendedor || '').toLowerCase(); return !f || (v.nombre || '').toLowerCase().includes(f) || String(v.cod_viajante || '').toLowerCase().includes(f); })" :key="v.cod_viajante">
+          <button type="button"
+                  class="w-full rounded-xl py-3 px-4 text-left text-sm font-semibold bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.99] transition"
+                  x-on:click="seleccionarVendedor(v)"
+                  x-text="v.nombre || ('Vendedor ' + v.cod_viajante)"></button>
+        </template>
+      </div>
+      <button type="button" class="mt-4 w-full rounded-xl py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              x-on:click="modalTpvVendedor = false">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Modal Descuentos y voucher (programa de descuentos como TPV VB6) -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalVouchers" x-cloak x-transition
+       x-on:click.self="modalVouchers = false">
+    <div class="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[85vh] flex flex-col"
+         x-on:click.stop>
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Descuentos y voucher disponibles</h3>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-3" x-show="cartVoucherPct">Voucher aplicado: <span class="font-semibold text-amber-600 dark:text-amber-400" x-text="cartVoucherPct + '% desc.'"></span></p>
+      <div class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-1 mb-4">
+        <p class="text-sm text-slate-500 dark:text-slate-400" x-show="vouchersCargando" x-cloak>Cargando…</p>
+        <template x-for="v in vouchersDisponibles" :key="v.id_sp_cupon">
+          <div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white truncate" x-text="v.nombre_sp_desc || 'Voucher'"></p>
+              <p class="text-xs text-slate-500 dark:text-slate-400" x-text="(v.nro_voucher_serie ? 'Nº ' + v.nro_voucher_serie + ' · ' : '') + (v.monto_descuento || 0) + '% desc.'"></p>
+            </div>
+            <button type="button"
+                    class="shrink-0 rounded-xl py-2 px-4 text-sm font-semibold bg-sky-500 text-white hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
+                    x-on:click="aplicarVoucher(v)"
+                    :disabled="voucherAplicando"
+                    x-text="voucherAplicando ? '…' : 'Aplicar'">Aplicar</button>
+          </div>
+        </template>
+        <p class="text-sm text-slate-500 dark:text-slate-400" x-show="!vouchersCargando && vouchersDisponibles.length === 0" x-cloak>No hay vouchers disponibles para este cliente.</p>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                x-show="cartVoucherPct" x-on:click="quitarVoucher()" x-cloak>Quitar voucher</button>
+        <button type="button" class="flex-1 rounded-xl py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                x-on:click="modalVouchers = false">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal conexión -->
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalConnectionError" x-cloak x-transition>
+    <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">Problemas de conexión</h3>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-text="connectionErrorHost ? 'No se pudo conectar con el servidor (' + connectionErrorHost + ')' : 'No se pudo conectar con el servidor.'"></p>
+      <div class="mt-4">
+        <button type="button" class="w-full rounded-xl py-2 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200" x-on:click="reintentarConexion()">Reintentar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast — centrado en pantalla -->
+  <div class="fixed top-1/2 left-1/2 z-[200] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-lg transition-all duration-300"
+       :class="toastOk ? 'bg-emerald-600 text-white' : 'bg-red-600 dark:bg-red-700 text-white'"
+       x-show="toastMsg" x-text="toastMsg" x-cloak x-transition></div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('kioscoApp', () => ({
+    kioskId: '{{ kiosk_id|escapejs }}',
+    cartId: null,
+    items: [],
+    total: 0,
+    scanInput: '',
+    scanSuccess: '',
+    scanError: '',
+    stockBlocked: '',
+    stockBlockedMsg: '',
+    email: '',
+    emailError: '',
+    cuit: '',
+    cuitConsulta: {},
+    tipoFactura: null,
+    enviarFacturaEmail: {% if enviar_factura_email %}true{% else %}false{% endif %},
+    soloFacturaC: {% if solo_factura_c %}true{% else %}false{% endif %},
+    useVirtualKeyboard: {% if use_virtual_keyboard %}true{% else %}false{% endif %},
+    toastMsg: '',
+    toastOk: false,
+    estado: 'idle',
+    modalEmail: false,
+    modalRfid: false,
+    modalPago: false,
+    modalConnectionError: false,
+    mostrarReceipt: false,
+    modalConfirmEliminar: false,
+    itemAEliminar: null,
+    rfidPropuesta: [],
+    pagoEstado: 'pendiente',
+    pagoModo: 'elegir',
+    pagoTipoCobro: '', // 'efectivo' | 'tarjeta' | 'mixto' — como administraNET Tipo cobro
+    pagoImporteEfectivo: '0.00',
+    pagoImporteCobradoEfectivo: '',
+    pagoImporteTarjeta: '0.00',
+    pagoCuotas: 1,
+    pagoTarjetaNombre: '',
+    pagoPlanNombre: '',
+    pagoNroTarjeta: '',
+    pagoNroCupon: '',
+    pagoNroLote: '',
+    pagoIntereses: '0.00',
+    pagoValorCuota: '0.00',
+    pagoImporteParcial: '0.00',
+    pagoRedondeo: '0.00',
+    pagoRedondeoTipo: 'Arriba', // 'Arriba' | 'Abajo' como administraNET
+    pagoMediosError: '',
+    pagoQrUrl: '',
+    pagoOrderId: null,
+    pagoPollingInterval: null,
+    pagoPollingStartedAt: null,
+    pagoPointTimeoutMs: 10 * 60 * 1000,
+    pagoMpLoading: false,
+    pagoMpError: '',
+    comprobanteTexto: '',
+    resultadoConfirm: null,
+    confirmedCartId: null,
+    connectionErrorHost: '',
+    isFullscreen: false,
+    sessionAcquired: false,
+    _heartbeatTimer: null,
+    afipOnline: true,
+    caeaMode: false,
+    reintentoEnSegundos: 10,
+    _afipHealthInterval: null,
+    _afipRetryInterval: null,
+    modalFueraDeServicio: false,
+    modalSupervisorCaea: false,
+    supervisorCod: '',
+    supervisorPass: '',
+    supervisorLoginError: '',
+    isSupervisor: {% if is_supervisor %}true{% else %}false{% endif %},
+    modoTpv: false,
+    sessionNroPv: '',
+    itemExpandidoId: null,
+    itemDescuentoEditId: null,
+    descuentoInputVal: '',
+    paymentMethodsList: [],
+    articulosGrid: [],
+    articulosGridLoading: false,
+    searchProductos: '',
+    selectedSearchIndex: -1,
+    // TPV: selección cliente, lista de precio, vendedor (botón + modal)
+    tpvCliente: { id_cliente: 1, nombre_cliente: 'Consumidor Final' },
+    tpvListaPrecio: { id_lista: 1, nombre: 'Lista 1' },
+    tpvVendedor: { cod_viajante: null, nombre: '—' },
+    tpvIdDeposito: null,
+    modalTpvCliente: false,
+    modalTpvListaPrecio: false,
+    modalTpvVendedor: false,
+    modalCuentaCorriente: false,
+    cuentaCorrienteLoading: false,
+    cuentaCorrienteData: {},
+    cuentaCorrienteError: '',
+    listasPrecio: [],
+    vendedoresList: [],
+    tpvClienteConsultando: false,
+    tpvClienteError: '',
+    tpvFiltroLista: '',
+    tpvFiltroVendedor: '',
+    tpvClienteBusqueda: '',
+    tpvClienteResultados: [],
+    // Series (números de serie) para artículos seriados
+    modalSeries: false,
+    modalSeriesItemId: null,
+    modalSeriesCantidad: 1,
+    modalSeriesNombreItem: '',
+    modalSeriesDisponibles: [],
+    modalSeriesAsignadas: [],
+    modalSeriesSeleccionados: [],
+    modalSeriesLoading: false,
+    modalSeriesError: '',
+    tpvClienteBusquedaDebounce: null,
+    // Descuentos y voucher (programa de descuentos como TPV VB6)
+    cartVoucherPct: null,
+    cartIdSpCupon: null,
+    descuentoPieEditando: false,
+    descuentoPieInputVal: '',
+    modalVouchers: false,
+    vouchersDisponibles: [],
+    vouchersCargando: false,
+    voucherAplicando: false,
+
+    get afipOffline() { return !this.afipOnline && !this.caeaMode; },
+
+    formatoMoneda(n) {
+      const num = parseFloat(n) || 0;
+      const [entera, decimal] = num.toFixed(2).split('.');
+      const conMiles = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return decimal ? conMiles + ',' + decimal : conMiles;
+    },
+    // Redondea a 2 decimales (evita 213000.0001 → 213000.00)
+    round2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; },
+    format2(n) { return (Math.round((parseFloat(n) || 0) * 100) / 100).toFixed(2); },
+
+    ultimoItemLineaTexto() {
+      if (!this.items || !this.items.length) return '';
+      const item = this.items[this.items.length - 1];
+      const q = parseFloat(item.cantidad) || 1;
+      const pu = item.precio_unitario_bruto != null ? item.precio_unitario_bruto : (item.precio_unitario || 0);
+      const tot = item.importe_total || 0;
+      return q + ' × $' + this.formatoMoneda(pu) + ' = $' + this.formatoMoneda(tot);
+    },
+
+    async init() {
+      await this.acquireSession();
+      if (!this.sessionAcquired) return;
+      const params = new URLSearchParams(window.location.search);
+      const mpReturn = params.get('mp_return');
+      const cartIdFromUrl = params.get('cart_id');
+      if (mpReturn === '1' && cartIdFromUrl) {
+        this.cartId = parseInt(cartIdFromUrl, 10);
+        await this.recargarCarrito();
+        const { ok, data } = await this.fetch('/api/self-checkout/cart/' + this.cartId + '/');
+        if (ok && data.cart && data.cart.estado === 'pago_aprobado') {
+          this.modalPago = true;
+          this.pagoEstado = 'aprobado';
+          this.email = (data.cart.email || '').trim();
+          this._setupFullscreen();
+          this._setupSessionHeartbeat();
+          this._setupSessionRelease();
+          await this.confirmarVenta();
+          return;
+        }
+      }
+      if (mpReturn === '0' && cartIdFromUrl) {
+        this.cartId = parseInt(cartIdFromUrl, 10);
+        await this.recargarCarrito();
+        this.toastMsg = 'El pago no se completó. Podés intentar de nuevo.';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 4000);
+      }
+      await this.crearObtenerCarrito();
+      if (this.modoTpv) await this.cargarArticulos();
+      this.$nextTick(() => (this.modoTpv ? document.getElementById('tpv-busqueda-producto')?.focus() : this.$refs.scanInput?.focus()));
+      this._setupFullscreen();
+      this._setupSessionHeartbeat();
+      this._setupSessionRelease();
+      this._startAfipHealthCheck();
+      this.checkAfipHealth();
+    },
+
+    async checkAfipHealth() {
+      const { ok } = await this.fetch('/api/self-checkout/afip-health/');
+      if (ok) {
+        this.afipOnline = true;
+        this.caeaMode = false;
+        this._clearAfipRetry();
+        return;
+      }
+      this.afipOnline = false;
+      this.reintentoEnSegundos = 10;
+      this._startAfipRetry();
+    },
+    _startAfipHealthCheck() {
+      this._clearAfipHealthCheck();
+      this._afipHealthInterval = setInterval(() => this.checkAfipHealth(), 60 * 1000);
+    },
+    _clearAfipHealthCheck() {
+      if (this._afipHealthInterval) { clearInterval(this._afipHealthInterval); this._afipHealthInterval = null; }
+    },
+    _startAfipRetry() {
+      this._clearAfipRetry();
+      const self = this;
+      this._afipRetryInterval = setInterval(() => {
+        if (self.caeaMode || self.afipOnline) return;
+        if (self.reintentoEnSegundos > 0) {
+          self.reintentoEnSegundos--;
+        } else {
+          self.reintentoEnSegundos = 10;
+          self.checkAfipHealth();
+        }
+      }, 1000);
+    },
+    _clearAfipRetry() {
+      if (this._afipRetryInterval) { clearInterval(this._afipRetryInterval); this._afipRetryInterval = null; }
+    },
+    async activarModoCaea() {
+      const { ok } = await this.fetch('/api/self-checkout/afip-caea-mode/', { method: 'POST', body: { enable: true } });
+      if (ok) { this.caeaMode = true; this._clearAfipRetry(); }
+    },
+    async autorizarSupervisorYCaea() {
+      this.supervisorLoginError = '';
+      const { ok, data } = await this.fetch('/api/self-checkout/supervisor-authorize-caea/', {
+        method: 'POST',
+        body: { cod_usuario: this.supervisorCod, password: this.supervisorPass }
+      });
+      if (!ok) {
+        this.supervisorLoginError = (data && data.error) || 'Usuario o contraseña incorrectos';
+        return;
+      }
+      const resCaea = await this.fetch('/api/self-checkout/afip-caea-mode/', { method: 'POST', body: { enable: true } });
+      if (resCaea.ok) {
+        this.caeaMode = true;
+        this.modalSupervisorCaea = false;
+        this.supervisorCod = '';
+        this.supervisorPass = '';
+        this._clearAfipRetry();
+      }
+    },
+    solicitarAsistencia() {
+      // Funcionalidad a definir: notificar a un asistente de la tienda
+      console.warn('Solicitar asistencia: funcionalidad a definir');
+    },
+
+    async acquireSession() {
+      const { ok, data, status } = await this.fetch(
+        '/api/self-checkout/kiosk/' + encodeURIComponent(this.kioskId) + '/acquire/',
+        { method: 'POST', body: {} }
+      );
+      if (ok && data.acquired) {
+        this.sessionAcquired = true;
+        this.modoTpv = !!data.modo_tpv;
+        this.sessionNroPv = (data.nro_punto_venta != null) ? String(data.nro_punto_venta) : '';
+        if (this.modoTpv && data.cod_viajante != null) {
+          this.tpvVendedor = { cod_viajante: data.cod_viajante, nombre: 'Vendedor ' + data.cod_viajante };
+        }
+        if (this.modoTpv && data.id_deposito != null) {
+          this.tpvIdDeposito = data.id_deposito;
+        }
+        return;
+      }
+      const selectorUrl = '{% url "self_checkout:index" %}';
+      const errMsg = (data && data.error) ? encodeURIComponent(data.error) : (status === 409 ? 'Este autoservicio está en uso en otra máquina.' : 'No se pudo reservar el autoservicio.');
+      window.location.replace(selectorUrl + (selectorUrl.indexOf('?') >= 0 ? '&' : '?') + 'error=' + errMsg);
+    },
+
+    _setupSessionHeartbeat() {
+      const self = this;
+      const intervalMs = 60 * 1000;
+      self._heartbeatTimer = setInterval(() => {
+        if (!self.sessionAcquired) return;
+        self.fetch('/api/self-checkout/kiosk/' + encodeURIComponent(self.kioskId) + '/heartbeat/', { method: 'POST', body: {} });
+      }, intervalMs);
+    },
+
+    _setupSessionRelease() {
+      const kioskId = this.kioskId;
+      const releaseUrl = '/api/self-checkout/kiosk/' + encodeURIComponent(kioskId) + '/release/';
+      const csrf = this.getCsrf();
+      const acquired = this.sessionAcquired;
+      let released = false;
+      const release = () => {
+        if (!acquired || released) return;
+        released = true;
+        fetch(releaseUrl, {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' }
+        }).catch(() => {});
+      };
+      window.addEventListener('pagehide', release);
+      window.addEventListener('beforeunload', release);
+    },
+
+    async cerrarAutoservicio() {
+      if (!this.sessionAcquired) {
+        window.location.href = '{% url "self_checkout:index" %}';
+        return;
+      }
+      const releaseUrl = '/api/self-checkout/kiosk/' + encodeURIComponent(this.kioskId) + '/release/';
+      try {
+        await this.fetch(releaseUrl, { method: 'POST', body: {} });
+      } catch (e) {}
+      this.sessionAcquired = false;
+      window.location.href = '{% url "self_checkout:index" %}';
+    },
+
+    _setupFullscreen() {
+      const self = this;
+      const updateFullscreenClass = () => {
+        self.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (self.isFullscreen) document.body.classList.add('kiosk-fullscreen');
+        else document.body.classList.remove('kiosk-fullscreen');
+      };
+      document.addEventListener('fullscreenchange', updateFullscreenClass);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenClass);
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'E' && e.ctrlKey && e.shiftKey) {
+          e.preventDefault();
+          if (document.fullscreenElement || document.webkitFullscreenElement) {
+            (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+          }
+        }
+      });
+      updateFullscreenClass();
+    },
+
+    toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)?.call(document.documentElement);
+      } else {
+        (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+      }
+    },
+
+    getCsrf() { return document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''; },
+
+    async fetch(url, options = {}) {
+      const opts = {
+        ...options,
+        headers: { 'X-CSRFToken': this.getCsrf(), 'Content-Type': 'application/json', ...options.headers }
+      };
+      if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+        opts.body = JSON.stringify(opts.body);
+      }
+      try {
+        const r = await fetch(url, opts);
+        const data = r.ok ? await r.json().catch(() => ({})) : await r.json().catch(() => ({}));
+        return { ok: r.ok, data, status: r.status };
+      } catch (e) {
+        this.connectionErrorHost = window.location.host || 'servidor';
+        this.modalConnectionError = true;
+        return { ok: false, data: { error: 'Error de conexión' } };
+      }
+    },
+
+    async crearObtenerCarrito() {
+      if (this.cartId) return;
+      const { ok, data } = await this.fetch('/api/self-checkout/cart/', { method: 'POST', body: { kiosk_id: this.kioskId } });
+      if (ok && data.cart_id) {
+        this.cartId = data.cart_id;
+        await this.recargarCarrito();
+      } else if (!ok) {
+        this.scanError = data.error || 'No se pudo crear carrito';
+        if (data.code === 'E_KIOSK_NOT_CONFIGURED') this.connectionErrorHost = '';
+        if (data.code === 'CART_CREATE_FAILED' && data.error) {
+          this.toastMsg = data.error;
+          this.toastOk = false;
+          setTimeout(() => { this.toastMsg = ''; }, 5000);
+        }
+      }
+    },
+
+    async recargarCarrito() {
+      if (!this.cartId) return;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/`);
+      if (ok && data.cart) {
+        this.items = data.items || [];
+        this.total = this.round2(data.cart.total || 0);
+        const v = data.cart.monto_descuento_voucher;
+        this.cartVoucherPct = (v != null && v !== '') ? parseFloat(v) : null;
+        this.cartIdSpCupon = data.cart.id_sp_cupon != null ? data.cart.id_sp_cupon : null;
+        this.evaluarStockBlocked();
+      }
+    },
+
+    evaluarStockBlocked() {
+      this.stockBlocked = '';
+      this.stockBlockedMsg = '';
+    },
+
+    async agregarPorCodigo() {
+      this.scanSuccess = '';
+      this.scanError = '';
+      const codigo = (this.scanInput || '').trim();
+      if (!codigo) return;
+      if (!this.cartId) await this.crearObtenerCarrito();
+      this.estado = 'scanning';
+      const idListaScan = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+        method: 'POST',
+        body: { codigo, cantidad: 1, id_lista: idListaScan }
+      });
+      if (ok) {
+        this.scanInput = '';
+        await this.recargarCarrito();
+        if (data.requiere_series && data.item_id) {
+          const it = this.items.find(i => i.id === data.item_id);
+          this.modalSeriesItemId = data.item_id;
+          this.modalSeriesCantidad = it ? (parseInt(it.cantidad, 10) || 1) : 1;
+          this.modalSeriesNombreItem = it ? (it.descripcion || it.codigo_articulo || '') : '';
+          this.modalSeries = true;
+        }
+        if (this.modoTpv) document.getElementById('tpv-busqueda-producto')?.focus();
+        else this.$refs.scanInput?.focus();
+      } else {
+        const err = (data && data.error != null) ? String(data.error) : '';
+        this.toastMsg = (err.trim() && err !== '0') ? err : 'Error al agregar';
+        this.toastOk = false;
+        if (data.code === 'STOCK_INSUFFICIENT') {
+          this.stockBlockedMsg = this.toastMsg;
+          this.stockBlocked = true;
+        }
+        setTimeout(() => {
+          this.toastMsg = '';
+          this.scanInput = '';
+          this.scanError = '';
+          this.stockBlocked = '';
+          this.stockBlockedMsg = '';
+          if (this.modoTpv) document.getElementById('tpv-busqueda-producto')?.focus();
+          else this.$refs.scanInput?.focus();
+        }, 3000);
+      }
+      this.estado = 'idle';
+    },
+
+    async masCantidad(item) {
+      const cod = item.codigo_articulo || (item.id_articulo != null && item.id_articulo !== '' ? String(item.id_articulo) : null);
+      if (cod == null || cod === '') {
+        this.toastMsg = 'Falta código o ID del artículo';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+        return;
+      }
+      const idListaQty = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+        method: 'POST',
+        body: { codigo: cod, cantidad: 1, id_lista: idListaQty }
+      });
+      if (ok) {
+        await this.recargarCarrito();
+        if (data.requiere_series && data.item_id) {
+          const it = this.items.find(i => i.id === data.item_id);
+          this.modalSeriesItemId = data.item_id;
+          this.modalSeriesCantidad = it ? (parseInt(it.cantidad, 10) || 1) : 1;
+          this.modalSeriesNombreItem = it ? (it.descripcion || it.codigo_articulo || '') : '';
+          this.modalSeries = true;
+        }
+      } else {
+        const err = (data && data.error != null) ? String(data.error) : '';
+        this.toastMsg = (err.trim() && err !== '0') ? err : 'Error al agregar';
+        this.toastOk = false;
+        if (data.code === 'STOCK_INSUFFICIENT') this.stockBlockedMsg = this.toastMsg;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+      }
+    },
+
+    async menosCantidad(item) {
+      const qty = parseFloat(item.cantidad);
+      if (qty <= 1) return this.confirmarEliminar(item);
+      await this.quitarItem(item.id);
+      const cod = item.codigo_articulo || (item.id_articulo != null && item.id_articulo !== '' ? String(item.id_articulo) : null);
+      if (cod == null || cod === '') {
+        await this.recargarCarrito();
+        return;
+      }
+      const idListaMenos = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+        method: 'POST',
+        body: { codigo: cod, cantidad: qty - 1, id_lista: idListaMenos }
+      });
+      await this.recargarCarrito();
+    },
+
+    confirmarEliminar(item) {
+      this.itemAEliminar = item;
+      this.modalConfirmEliminar = true;
+    },
+
+    async confirmarEliminarOk() {
+      if (this.itemAEliminar) {
+        await this.quitarItem(this.itemAEliminar.id);
+        this.modalConfirmEliminar = false;
+        this.itemAEliminar = null;
+      }
+    },
+
+    async quitarItem(itemId) {
+      const { ok } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/${itemId}/`, { method: 'DELETE' });
+      if (ok) await this.recargarCarrito();
+    },
+
+    abrirEditarDescuento(item) {
+      if (this.estado === 'paying' || this.estado === 'confirming') return;
+      this.itemDescuentoEditId = item.id;
+      this.descuentoInputVal = String(item.porcentaje_descuento || 0);
+      this.$nextTick(() => this.$refs.descuentoInput?.focus());
+    },
+
+    async aplicarDescuentoItem(item) {
+      if (this.itemDescuentoEditId != null && this.itemDescuentoEditId !== item.id) return;
+      const raw = parseFloat(String(this.descuentoInputVal).replace(',', '.')) || 0;
+      const pct = Math.max(0, Math.min(100, raw));
+      this.itemDescuentoEditId = null;
+      const { ok } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/${item.id}/descuento/`, {
+        method: 'PATCH',
+        body: { porcentaje_descuento: pct }
+      });
+      if (ok) await this.recargarCarrito();
+    },
+
+    async cargarModalSeries() {
+      if (!this.modalSeriesItemId || !this.cartId) return;
+      this.modalSeriesError = '';
+      this.modalSeriesLoading = true;
+      const [disp, asig] = await Promise.all([
+        this.fetch(`/api/self-checkout/cart/${this.cartId}/items/${this.modalSeriesItemId}/series-disponibles/`),
+        this.fetch(`/api/self-checkout/cart/${this.cartId}/items/${this.modalSeriesItemId}/series/`)
+      ]);
+      this.modalSeriesLoading = false;
+      this.modalSeriesDisponibles = (disp.ok && disp.data.series) ? disp.data.series : [];
+      this.modalSeriesAsignadas = (asig.ok && asig.data.series) ? asig.data.series : [];
+      this.modalSeriesSeleccionados = this.modalSeriesAsignadas.map(s => s.id_serie_entrada);
+    },
+    toggleSerie(idSerie) {
+      const idx = this.modalSeriesSeleccionados.indexOf(idSerie);
+      if (idx >= 0) {
+        this.modalSeriesSeleccionados = this.modalSeriesSeleccionados.filter(id => id !== idSerie);
+      } else {
+        if (this.modalSeriesSeleccionados.length >= this.modalSeriesCantidad) return;
+        this.modalSeriesSeleccionados = [...this.modalSeriesSeleccionados, idSerie];
+      }
+    },
+    async aplicarSeries() {
+      if (this.modalSeriesSeleccionados.length !== this.modalSeriesCantidad) {
+        this.modalSeriesError = 'Debe seleccionar exactamente ' + this.modalSeriesCantidad + ' número(s) de serie.';
+        return;
+      }
+      this.modalSeriesError = '';
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/${this.modalSeriesItemId}/series/asignar/`, {
+        method: 'POST',
+        body: { id_serie_entrada: this.modalSeriesSeleccionados }
+      });
+      if (ok) {
+        await this.recargarCarrito();
+        this.cerrarModalSeries();
+      } else {
+        this.modalSeriesError = (data && data.error) ? data.error : 'Error al asignar series';
+      }
+    },
+    cerrarModalSeries() {
+      this.modalSeries = false;
+      this.modalSeriesItemId = null;
+      this.modalSeriesError = '';
+      this.modalSeriesSeleccionados = [];
+      this.modalSeriesDisponibles = [];
+      this.modalSeriesAsignadas = [];
+    },
+    abrirModalSeries(item) {
+      if (this.estado === 'paying' || this.estado === 'confirming') return;
+      this.modalSeriesItemId = item.id;
+      this.modalSeriesCantidad = parseInt(item.cantidad, 10) || 1;
+      this.modalSeriesNombreItem = item.descripcion || item.codigo_articulo || 'Artículo';
+      this.modalSeries = true;
+    },
+
+    irAPago() {
+      if (this.items.length === 0 || this.stockBlocked) return;
+      this.emailError = '';
+      this.cuit = '';
+      this.cuitConsulta = {};
+      this.email = '';
+      // Solo Factura C (Monotributo): no mostrar modal, ir directo al pago
+      if (this.soloFacturaC) {
+        this.tipoFactura = 'CF';
+        this.$nextTick(() => this.enviarAPago());
+        return;
+      }
+      this.modalEmail = true;
+      this.tipoFactura = null;
+    },
+
+    async consultarCuit() {
+      const raw = (this.cuit || '').replace(/-/g, '').replace(/\s/g, '').trim();
+      if (raw.length !== 11 || !/^\d+$/.test(raw)) {
+        this.cuitConsulta = {};
+        return;
+      }
+      this.cuitConsulta = { loading: true };
+      const { ok, data } = await this.fetch('/api/self-checkout/consultar-cuit/', {
+        method: 'POST',
+        body: { cuit: this.cuit }
+      });
+      if (ok && data && data.ok) {
+        if (data.email) this.email = data.email;
+        this.cuitConsulta = {
+          denominacion: data.denominacion || '',
+          tipo_comprobante: data.tipo_comprobante || 'FB',
+          id_cliente: data.id_cliente ?? null,
+          nombre_cliente: data.nombre_cliente ?? '',
+          email: data.email ?? null,
+          datos_difieren: !!data.datos_difieren,
+          denominacion_afip: data.denominacion_afip ?? '',
+          denominacion_administranet: data.denominacion_administranet ?? '',
+          aviso: data.aviso ?? ''
+        };
+      } else {
+        this.cuitConsulta = { error: (data && data.error) || 'Error al consultar cliente/AFIP' };
+      }
+    },
+
+    async actualizarClienteDesdeAfip() {
+      const id = this.cuitConsulta.id_cliente;
+      const denom = this.cuitConsulta.denominacion_afip;
+      if (!id || !denom) return;
+      const { ok, data } = await this.fetch('/api/self-checkout/cliente/' + id + '/actualizar-desde-afip/', {
+        method: 'POST',
+        body: { denominacion_afip: denom }
+      });
+      if (ok && data && data.ok) {
+        this.cuitConsulta = { ...this.cuitConsulta, datos_difieren: false, denominacion: data.nombre_cliente || denom, denominacion_administranet: '' };
+      } else {
+        this.cuitConsulta = { ...this.cuitConsulta, error: (data && data.error) || 'No se pudo actualizar' };
+      }
+    },
+
+    mantenerDatosActuales() {
+      this.cuitConsulta = { ...this.cuitConsulta, datos_difieren: false };
+    },
+
+    async enviarAPago() {
+      this.emailError = '';
+      if (this.tipoFactura === 'FA') {
+        const raw = (this.cuit || '').replace(/-/g, '').replace(/\s/g, '').trim();
+        if (raw.length !== 11 || !/^\d+$/.test(raw)) {
+          this.emailError = 'Ingresá un CUIT válido (11 dígitos) para Ticket Factura';
+          return;
+        }
+        if (!this.cuitConsulta.denominacion && !this.cuitConsulta.loading) {
+          this.emailError = 'Consultá el CUIT (salí del campo) antes de continuar';
+          return;
+        }
+        if (this.enviarFacturaEmail && (!this.email || !this.email.includes('@'))) {
+          this.emailError = 'Ingresá un email válido para enviar la factura';
+          return;
+        }
+      }
+      if (this.tipoFactura === 'CF' && this.email && this.email.trim() && !this.email.includes('@')) {
+        this.emailError = 'Si ingresás email, debe ser válido';
+        return;
+      }
+      // TPV o Consumidor Final sin email: usar placeholder para que confirm no devuelva 400 (email obligatorio)
+      const emailValido = (this.email && this.email.trim() && this.email.includes('@'));
+      const emailParaEnviar = emailValido ? this.email.trim() : (this.modoTpv || this.tipoFactura === 'CF' ? 'noreply@consumidorfinal.local' : (this.email || ''));
+      if (emailParaEnviar && !emailValido) this.email = emailParaEnviar;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/email/`, {
+        method: 'POST',
+        body: { email: emailParaEnviar }
+      });
+      if (ok) {
+        this.modalEmail = false;
+        this.modalPago = true;
+        this.pagoEstado = 'pendiente';
+      } else {
+        this.emailError = data.error || 'Error';
+      }
+    },
+
+    async crearPreferenciaMP() {
+      const baseUrl = window.location.origin + window.location.pathname;
+      const backSuccess = baseUrl + '?mp_return=1&cart_id=' + this.cartId;
+      const backFailure = baseUrl + '?mp_return=0&cart_id=' + this.cartId;
+      const { ok: okPi, data: dataPi } = await this.fetch('/api/self-checkout/cart/' + this.cartId + '/payment-intent/', {
+        method: 'POST',
+        body: { monto: this.total, kiosk_id: this.kioskId }
+      });
+      if (!okPi || !dataPi.payment_intent_id) {
+        return { error: dataPi?.error || 'No se pudo crear el pago' };
+      }
+      const { ok: okMp, data: dataMp, status: statusMp } = await this.fetch('/api/mercadopago/create-payment/', {
+        method: 'POST',
+        body: {
+          cart_id: this.cartId,
+          payment_intent_id: dataPi.payment_intent_id,
+          total: this.total,
+          id_sucursal: dataPi.id_sucursal,
+          id_punto_venta: dataPi.id_punto_venta,
+          kiosk_id: this.kioskId,
+          back_url_success: backSuccess,
+          back_url_failure: backFailure
+        }
+      });
+      if (okMp && dataMp.init_point) return { init_point: dataMp.init_point };
+      let errMsg = (dataMp && dataMp.error) ? (typeof dataMp.error === 'object' ? (dataMp.error.msg || dataMp.error.message || JSON.stringify(dataMp.error)) : String(dataMp.error)) : '';
+      if (!errMsg) errMsg = statusMp === 400 ? (dataMp?.detail ? (typeof dataMp.detail === 'string' ? dataMp.detail : JSON.stringify(dataMp.detail)) : 'Solicitud inválida. Revisar: empresa, Mercado Pago y carrito.') : 'Mercado Pago no configurado o error al crear el pago.';
+      return { error: errMsg };
+    },
+
+    detenerPollingPago() {
+      if (this.pagoPollingInterval) {
+        clearInterval(this.pagoPollingInterval);
+        this.pagoPollingInterval = null;
+      }
+      this.pagoPollingStartedAt = null;
+    },
+
+    async volverPagoDispositivo() {
+      this.detenerPollingPago();
+      if (this.pagoOrderId) {
+        try {
+          await this.fetch('/api/mercadopago/cancel-point-order/', {
+            method: 'POST',
+            body: { order_id: this.pagoOrderId, kiosk_id: this.kioskId }
+          });
+        } catch (e) { /* no bloquear: cancelar en terminal es best-effort */ }
+      }
+      this.pagoModo = 'elegir';
+      this.pagoOrderId = null;
+      this.pagoMpError = '';
+    },
+
+    async pagarConQR() {
+      this.pagoMpError = '';
+      this.pagoMpLoading = true;
+      const result = await this.crearPreferenciaMP();
+      this.pagoMpLoading = false;
+      if (result.error) {
+        this.pagoMpError = result.error;
+        return;
+      }
+      this.pagoQrUrl = result.init_point;
+      this.pagoModo = 'qr';
+      this.detenerPollingPago();
+      this.pagoPollingInterval = setInterval(async () => {
+        const { ok, data } = await this.fetch('/api/self-checkout/cart/' + this.cartId + '/');
+        if (ok && data.cart && data.cart.estado === 'pago_aprobado') {
+          this.detenerPollingPago();
+          this.pagoEstado = 'aprobado';
+          await this.confirmarVenta();
+        }
+      }, 2500);
+    },
+
+    pagoEnDispositivo() {
+      this.pagoModo = 'dispositivo';
+      this.pagarEnDispositivoFisico();
+    },
+
+    async pagarEnDispositivoFisico() {
+      this.pagoMpError = '';
+      this.pagoMpLoading = true;
+      this.pagoOrderId = null;
+      this.detenerPollingPago();
+      const { ok: okPi, data: dataPi } = await this.fetch('/api/self-checkout/cart/' + this.cartId + '/payment-intent/', {
+        method: 'POST',
+        body: { monto: this.total, kiosk_id: this.kioskId }
+      });
+      if (!okPi || !dataPi.payment_intent_id) {
+        this.pagoMpLoading = false;
+        this.pagoMpError = (dataPi && dataPi.error) || 'No se pudo crear el pago';
+        return;
+      }
+      const { ok: okOrder, data: dataOrder, status: statusOrder } = await this.fetch('/api/mercadopago/create-point-order/', {
+        method: 'POST',
+        body: {
+          cart_id: this.cartId,
+          payment_intent_id: dataPi.payment_intent_id,
+          total: this.total,
+          id_sucursal: dataPi.id_sucursal,
+          id_punto_venta: dataPi.id_punto_venta,
+          kiosk_id: this.kioskId
+        }
+      });
+      this.pagoMpLoading = false;
+      if (!okOrder || !dataOrder.order_id) {
+        this.pagoMpError = (dataOrder && dataOrder.error) || (statusOrder === 400 ? 'Revisá que el terminal Point esté configurado para este autoservicio.' : 'Error al enviar el cobro al lector.');
+        return;
+      }
+      this.pagoOrderId = dataOrder.order_id;
+      this.detenerPollingPago();
+      this.pagoPollingStartedAt = Date.now();
+      this.pagoPollingInterval = setInterval(async () => {
+        if (this.pagoPointTimeoutMs && this.pagoPollingStartedAt && (Date.now() - this.pagoPollingStartedAt) > this.pagoPointTimeoutMs) {
+          this.detenerPollingPago();
+          this.pagoMpError = 'Tiempo de pago vencido.';
+          return;
+        }
+        // 1) Estado del pedido en la terminal (MercadoPago Point)
+        const { ok, data } = await this.fetch('/api/mercadopago/point-order-status/?order_id=' + encodeURIComponent(this.pagoOrderId) + '&kiosk_id=' + encodeURIComponent(this.kioskId || ''));
+        const status = (ok && data && data.status) ? String(data.status).toLowerCase() : 'pendiente';
+        const aprobadoApi = ['aprobado', 'approved', 'paid', 'completed', 'done'].includes(status);
+        const rechazado = ['rechazado', 'rejected', 'expirado', 'expired', 'cancelado', 'cancelled', 'cancelled_by_user', 'refunded'].includes(status);
+        if (aprobadoApi) {
+          this.detenerPollingPago();
+          this.pagoEstado = 'aprobado';
+          await this.confirmarVenta();
+          return;
+        }
+        if (rechazado) {
+          this.detenerPollingPago();
+          this.pagoMpError = (status === 'rechazado' || status === 'rejected') ? 'Pago rechazado.' : (status === 'expirado' || status === 'expired') ? 'Tiempo de pago vencido.' : 'Pago cancelado.';
+          return;
+        }
+        // 2) Fallback: si el backend ya marcó el carrito como pago_aprobado (webhook/callback de MP), avanzar igual
+        const resCart = await this.fetch('/api/self-checkout/cart/' + this.cartId + '/');
+        if (resCart.ok && resCart.data && resCart.data.cart && resCart.data.cart.estado === 'pago_aprobado') {
+          this.detenerPollingPago();
+          this.pagoEstado = 'aprobado';
+          await this.confirmarVenta();
+        }
+      }, 2500);
+    },
+
+    async pagarConMercadoPago() {
+      this.pagoMpError = '';
+      this.pagoMpLoading = true;
+      const result = await this.crearPreferenciaMP();
+      this.pagoMpLoading = false;
+      if (result.error) {
+        this.pagoMpError = result.error;
+        return;
+      }
+      if (result.init_point) window.location.href = result.init_point;
+    },
+
+    simularPagoAprobado() {
+      this.pagoEstado = 'aprobado';
+      this.confirmarVenta();
+    },
+
+    onBusquedaProductosInput() {
+      const q = (this.searchProductos || '').trim();
+      if (!q.length) {
+        this.articulosGrid = [];
+        this.selectedSearchIndex = -1;
+        return;
+      }
+      this.cargarArticulos();
+    },
+    async cargarArticulos() {
+      if (!this.modoTpv) return;
+      const search = (this.searchProductos || '').trim();
+      if (!search.length) {
+        this.articulosGrid = [];
+        this.selectedSearchIndex = -1;
+        return;
+      }
+      this.articulosGridLoading = true;
+      const idLista = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      let url = '/api/self-checkout/articulos/?limit=25&id_lista=' + encodeURIComponent(idLista) + '&search=' + encodeURIComponent(search);
+      if (this.tpvIdDeposito != null) url += '&id_deposito=' + encodeURIComponent(this.tpvIdDeposito);
+      const { ok, data } = await this.fetch(url);
+      this.articulosGrid = (ok && data.articulos) ? data.articulos : [];
+      this.articulosGridLoading = false;
+      this.selectedSearchIndex = this.articulosGrid.length > 0 ? 0 : -1;
+      this.$nextTick(() => this.scrollBusquedaSeleccionado());
+    },
+    onBusquedaProductosKeydown(e) {
+      if (this.estado === 'paying' || this.estado === 'confirming') return;
+      const k = e.key;
+      if (k === 'ArrowDown') {
+        e.preventDefault();
+        this.navegarBusqueda(1);
+        return;
+      }
+      if (k === 'ArrowUp') {
+        e.preventDefault();
+        this.navegarBusqueda(-1);
+        return;
+      }
+      // Enter se maneja con x-on:keydown.enter.prevent en el template
+    },
+    onTablaBusquedaKeydown(e) {
+      if (this.estado === 'paying' || this.estado === 'confirming') return;
+      const k = e.key;
+      if (k === 'ArrowDown') {
+        e.preventDefault();
+        this.navegarBusqueda(1);
+        return;
+      }
+      if (k === 'ArrowUp') {
+        e.preventDefault();
+        this.navegarBusqueda(-1);
+        return;
+      }
+      // Enter se maneja con x-on:keydown.enter.prevent en el contenedor de la tabla
+      if (k === 'Escape') {
+        e.preventDefault();
+        document.getElementById('tpv-busqueda-producto')?.focus();
+      }
+    },
+    navegarBusqueda(delta) {
+      if (this.articulosGrid.length === 0) return;
+      let next = this.selectedSearchIndex + delta;
+      if (next < 0) next = 0;
+      if (next >= this.articulosGrid.length) next = this.articulosGrid.length - 1;
+      this.selectedSearchIndex = next;
+      this.$nextTick(() => this.scrollBusquedaSeleccionado());
+    },
+    onFocusTablaBusqueda() {
+      if (this.articulosGrid.length && this.selectedSearchIndex < 0) {
+        this.selectedSearchIndex = 0;
+        this.$nextTick(() => this.scrollBusquedaSeleccionado());
+      }
+    },
+    scrollBusquedaSeleccionado() {
+      const el = this.$refs.busquedaDropdownList;
+      if (!el || this.selectedSearchIndex < 0) return;
+      const row = el.querySelector('[data-search-index="' + this.selectedSearchIndex + '"]');
+      if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+    async onBusquedaProductosEnter() {
+      if (this.estado === 'paying' || this.estado === 'confirming') return;
+      const idx = this.selectedSearchIndex;
+      const hayResultados = this.articulosGrid && this.articulosGrid.length > 0;
+      const filaValida = hayResultados && idx >= 0 && idx < this.articulosGrid.length;
+      const art = filaValida ? this.articulosGrid[idx] : null;
+      if (art && (art.codigo_articulo || art.id_articulo)) {
+        await this.agregarArticuloDesdeTile(art);
+        this.$nextTick(() => document.getElementById('tpv-busqueda-producto')?.focus());
+        return;
+      }
+      await this.agregarPorCodigoDesdeBusqueda();
+      this.$nextTick(() => document.getElementById('tpv-busqueda-producto')?.focus());
+    },
+    async agregarPorCodigoDesdeBusqueda() {
+      const codigo = (this.searchProductos || '').trim();
+      if (!codigo || !this.cartId || this.estado === 'paying' || this.estado === 'confirming') return;
+      const idLista = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+        method: 'POST',
+        body: { codigo, cantidad: 1, id_lista: idLista }
+      });
+      if (ok) {
+        this.searchProductos = '';
+        this.articulosGrid = [];
+        this.selectedSearchIndex = -1;
+        await this.recargarCarrito();
+        if (data.requiere_series && data.item_id) {
+          const it = this.items.find(i => i.id === data.item_id);
+          this.modalSeriesItemId = data.item_id;
+          this.modalSeriesCantidad = it ? (parseInt(it.cantidad, 10) || 1) : 1;
+          this.modalSeriesNombreItem = it ? (it.descripcion || it.codigo_articulo || '') : '';
+          this.modalSeries = true;
+        }
+        this.scanSuccess = 'Agregado';
+        this.scanError = '';
+        setTimeout(() => { this.scanSuccess = ''; }, 3500);
+      } else {
+        this.scanError = (data && data.error) ? data.error : 'No encontrado';
+        this.scanSuccess = '';
+      }
+      if (this.scanError) setTimeout(() => { this.scanError = ''; }, 3500);
+    },
+    async agregarArticuloDesdeTile(art) {
+      if (!this.cartId || !art || this.estado === 'paying' || this.estado === 'confirming') return;
+      const codigo = (art.codigo_articulo != null && art.codigo_articulo !== '') ? art.codigo_articulo : (art.id_articulo != null && art.id_articulo !== '' ? String(art.id_articulo) : '');
+      if (!codigo) {
+        this.toastMsg = 'Artículo sin código o ID';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+        return;
+      }
+      const idListaTile = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+        method: 'POST',
+        body: { codigo, cantidad: 1, id_lista: idListaTile }
+      });
+      if (ok) {
+        await this.recargarCarrito();
+        if (data.requiere_series && data.item_id) {
+          const it = this.items.find(i => i.id === data.item_id);
+          this.modalSeriesItemId = data.item_id;
+          this.modalSeriesCantidad = it ? (parseInt(it.cantidad, 10) || 1) : 1;
+          this.modalSeriesNombreItem = it ? (it.descripcion || it.codigo_articulo || '') : (art.descripcion || codigo);
+          this.modalSeries = true;
+        }
+        this.scanSuccess = art.descripcion || codigo;
+        this.scanError = '';
+        setTimeout(() => { this.scanSuccess = ''; }, 3500);
+      } else {
+        const msg = (data && data.error) ? String(data.error) : 'No se pudo agregar';
+        this.scanError = msg;
+        this.scanSuccess = '';
+        if (data && data.code === 'STOCK_INSUFFICIENT') this.stockBlockedMsg = msg;
+        setTimeout(() => { this.scanError = ''; this.stockBlockedMsg = ''; }, 4000);
+      }
+    },
+    async cargarMediosDePago() {
+      if (!this.modoTpv) return;
+      try {
+        const { ok, data } = await this.fetch('/api/self-checkout/payment-methods/?kiosk_id=' + encodeURIComponent(this.kioskId));
+        if (ok && data.payment_methods) this.paymentMethodsList = data.payment_methods;
+      } catch (e) {}
+    },
+    async abrirModalListaPrecio() {
+      this.tpvFiltroLista = '';
+      if (this.listasPrecio.length === 0) {
+        const { ok, data } = await this.fetch('/api/self-checkout/price-lists/');
+        this.listasPrecio = (ok && data.listas) ? data.listas : [];
+      }
+      this.modalTpvListaPrecio = true;
+    },
+    async abrirModalVendedor() {
+      this.tpvFiltroVendedor = '';
+      if (this.vendedoresList.length === 0) {
+        const { ok, data } = await this.fetch('/api/self-checkout/vendedores/');
+        this.vendedoresList = (ok && data.vendedores) ? data.vendedores : [];
+      }
+      this.modalTpvVendedor = true;
+    },
+    abrirCuentaCorriente() {
+      this.cuentaCorrienteError = '';
+      this.cuentaCorrienteData = {};
+      this.modalCuentaCorriente = true;
+    },
+    async cargarCuentaCorriente() {
+      const id = this.tpvCliente?.id_cliente;
+      if (!id || id === 1) {
+        this.cuentaCorrienteError = 'Cliente no válido para cuenta corriente.';
+        this.cuentaCorrienteLoading = false;
+        return;
+      }
+      this.cuentaCorrienteLoading = true;
+      this.cuentaCorrienteError = '';
+      try {
+        const { ok, data } = await this.fetch('/api/self-checkout/cliente/' + id + '/cuenta-corriente/');
+        this.cuentaCorrienteLoading = false;
+        if (ok && data) {
+          this.cuentaCorrienteData = {
+            nombre_cliente: data.nombre_cliente,
+            saldo: data.saldo,
+            movimientos: data.movimientos || []
+          };
+          if (data.error) this.cuentaCorrienteError = data.error;
+        } else {
+          this.cuentaCorrienteData = {};
+          this.cuentaCorrienteError = (data && data.error) || 'No se pudo cargar la cuenta corriente.';
+        }
+      } catch (e) {
+        this.cuentaCorrienteLoading = false;
+        this.cuentaCorrienteData = {};
+        this.cuentaCorrienteError = 'Error al cargar la cuenta corriente.';
+      }
+    },
+    buscarTpvClientePredictivo() {
+      const self = this;
+      if (self.tpvClienteBusquedaDebounce) clearTimeout(self.tpvClienteBusquedaDebounce);
+      const q = (self.tpvClienteBusqueda || '').trim();
+      if (q.length < 2) {
+        self.tpvClienteResultados = [];
+        return;
+      }
+      self.tpvClienteBusquedaDebounce = setTimeout(async () => {
+        self.tpvClienteBusquedaDebounce = null;
+        const { ok, data } = await self.fetch('/api/self-checkout/clientes/?q=' + encodeURIComponent(q));
+        self.tpvClienteResultados = (ok && data.clientes) ? data.clientes : [];
+      }, 280);
+    },
+    seleccionarTpvClienteDesdeBusqueda(c) {
+      this.tpvCliente = {
+        id_cliente: c.id_cliente,
+        nombre_cliente: (c.nombre_cliente || '').trim() || 'Cliente',
+        cuit: (c.cuit || '').trim()
+      };
+      this.modalTpvCliente = false;
+      this.tpvClienteBusqueda = '';
+      this.tpvClienteResultados = [];
+      this.tpvClienteError = '';
+    },
+    seleccionarTpvClienteCF() {
+      this.tpvCliente = { id_cliente: 1, nombre_cliente: 'Consumidor Final', cuit: '' };
+      this.modalTpvCliente = false;
+      this.tpvClienteBusqueda = '';
+      this.tpvClienteResultados = [];
+      this.tpvClienteError = '';
+    },
+    async buscarTpvClientePorCuit() {
+      const cuit = (this.tpvClienteBusqueda || '').trim().replace(/\s/g, '').replace(/-/g, '');
+      if (!cuit || cuit.length < 10) {
+        if (cuit.length > 0) this.tpvClienteError = 'Para consultar AFIP ingresá un CUIT completo (11 dígitos)';
+        return;
+      }
+      this.tpvClienteConsultando = true;
+      this.tpvClienteError = '';
+      try {
+        const { ok, data } = await this.fetch('/api/self-checkout/consultar-cuit/', { method: 'POST', body: { cuit } });
+        if (!ok || !data.denominacion) {
+          this.tpvClienteError = (data && data.error) ? data.error : 'No se encontró el cliente';
+          return;
+        }
+        this.tpvCliente = {
+          id_cliente: data.id_cliente || 1,
+          nombre_cliente: (data.nombre_cliente || data.denominacion || '').trim() || 'Cliente',
+          cuit: cuit
+        };
+        this.modalTpvCliente = false;
+        this.tpvClienteBusqueda = '';
+        this.tpvClienteResultados = [];
+        this.tpvClienteError = '';
+      } catch (e) {
+        this.tpvClienteError = 'Error al consultar. Revisá la conexión e intentá de nuevo.';
+      } finally {
+        this.tpvClienteConsultando = false;
+      }
+    },
+    seleccionarListaPrecio(lst) {
+      this.tpvListaPrecio = { id_lista: lst.id_lista, nombre: lst.nombre || ('Lista ' + lst.id_lista) };
+      this.modalTpvListaPrecio = false;
+      if (this.modoTpv && this.articulosGrid.length) this.cargarArticulos();
+    },
+    seleccionarVendedor(v) {
+      this.tpvVendedor = { cod_viajante: v.cod_viajante, nombre: v.nombre || ('Vendedor ' + v.cod_viajante) };
+      this.modalTpvVendedor = false;
+    },
+    async abrirModalVouchers() {
+      this.modalVouchers = true;
+      this.vouchersDisponibles = [];
+      if (!this.cartId) await this.crearObtenerCarrito();
+      if (!this.cartId) return;
+      this.vouchersCargando = true;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/vouchers-disponibles/`);
+      this.vouchersCargando = false;
+      if (ok && data.vouchers) this.vouchersDisponibles = data.vouchers;
+    },
+    async aplicarVoucher(v) {
+      if (!this.cartId || this.voucherAplicando) return;
+      this.voucherAplicando = true;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/aplicar-voucher/`, {
+        method: 'POST',
+        body: { id_sp_cupon: v.id_sp_cupon }
+      });
+      this.voucherAplicando = false;
+      if (ok) {
+        this.cartVoucherPct = (data && data.monto_descuento != null) ? parseFloat(data.monto_descuento) : (v.monto_descuento || 0);
+        await this.recargarCarrito();
+        this.toastMsg = 'Voucher aplicado: ' + (this.cartVoucherPct || 0) + '% de descuento';
+        this.toastOk = true;
+        setTimeout(() => { this.toastMsg = ''; }, 2500);
+        this.modalVouchers = false;
+      } else {
+        this.toastMsg = (data && data.error) || 'No se pudo aplicar el voucher';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+      }
+    },
+    async quitarVoucher() {
+      if (!this.cartId) return;
+      const { ok } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/quitar-voucher/`, { method: 'POST' });
+      if (ok) {
+        this.cartVoucherPct = null;
+        this.cartIdSpCupon = null;
+        this.descuentoPieEditando = false;
+        await this.recargarCarrito();
+        this.toastMsg = 'Descuento quitado';
+        this.toastOk = true;
+        setTimeout(() => { this.toastMsg = ''; }, 2000);
+        this.modalVouchers = false;
+      }
+    },
+    async aplicarDescuentoPie() {
+      if (!this.cartId) return;
+      const raw = parseFloat(String(this.descuentoPieInputVal).replace(',', '.')) || 0;
+      const pct = Math.min(100, Math.max(0, raw));
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/descuento-pie/`, {
+        method: 'POST',
+        body: { porcentaje_descuento: pct }
+      });
+      this.descuentoPieEditando = false;
+      if (ok) {
+        this.cartVoucherPct = (data && data.porcentaje_descuento != null) ? parseFloat(data.porcentaje_descuento) : pct;
+        this.cartIdSpCupon = null;
+        await this.recargarCarrito();
+        this.toastMsg = pct > 0 ? ('Descuento general ' + pct + '% aplicado') : 'Descuento quitado';
+        this.toastOk = true;
+        setTimeout(() => { this.toastMsg = ''; }, 2500);
+      } else {
+        this.toastMsg = (data && data.error) || 'No se pudo aplicar el descuento';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+      }
+    },
+    async confirmarVentaMediosMixto() {
+      this.pagoMediosError = '';
+      const totalNum = this.round2(this.total);
+      const impEf = this.round2(this.pagoImporteEfectivo);
+      const impTar = this.round2(this.pagoImporteTarjeta);
+      if (Math.abs(impEf + impTar - totalNum) > 0.02) {
+        this.pagoMediosError = 'La suma de medios debe coincidir con el total.';
+        return;
+      }
+      const paymentMethod = impEf > 0 && impTar > 0 ? 'mixto' : (impEf > 0 ? 'efectivo' : 'tarjeta');
+      const importeCobrado = this.round2(this.pagoImporteCobradoEfectivo || impEf);
+      const cambio = this.round2(Math.max(0, importeCobrado - impEf));
+      const medios = {
+        tpv_importe_efectivo: impEf,
+        tpv_pago_efectivo: importeCobrado,
+        tpv_cambio_efectivo: cambio,
+        tpv_importe_tarjeta: impTar
+      };
+      if (impTar > 0) {
+        medios.tpv_tarjeta_nombre = (this.pagoTarjetaNombre || '').trim() || 'Tarjeta';
+        medios.tpv_plan_nombre = (this.pagoPlanNombre || '').trim() || 'Plan';
+        medios.tpv_cuotas = parseInt(this.pagoCuotas, 10) || 1;
+        medios.tpv_nro_tarjeta = (this.pagoNroTarjeta || '').trim();
+        medios.tpv_nro_cupon = (this.pagoNroCupon || '').trim();
+        medios.tpv_nro_lote = (this.pagoNroLote || '').trim();
+        medios.tpv_intereses = this.round2(this.pagoIntereses || 0);
+        medios.tpv_valor_cuota = this.round2(this.pagoValorCuota || 0);
+        medios.tpv_importe_parcial = this.round2(this.pagoImporteParcial || 0);
+      }
+      await this.confirmarVentaConMetodo(paymentMethod, medios);
+    },
+    async confirmarVentaConMetodo(paymentMethod, mediosOverride) {
+      this.estado = 'confirming';
+      if (this.pagoMediosError) this.pagoMediosError = '';
+      const idCliente = this.modoTpv ? (this.tpvCliente && this.tpvCliente.id_cliente) : (this.tipoFactura === 'FA' && this.cuitConsulta && this.cuitConsulta.id_cliente ? this.cuitConsulta.id_cliente : 1);
+      const cuitVal = this.modoTpv ? (this.tpvCliente && this.tpvCliente.cuit) : (this.tipoFactura === 'FA' ? (this.cuit || '').trim() : '');
+      const totalNum = this.round2(this.total);
+      const body = {
+        email: this.email,
+        id_cliente: idCliente || 1,
+        cuit: (cuitVal && cuitVal.length >= 10) ? cuitVal : undefined,
+        payment_method: paymentMethod
+      };
+      if (this.modoTpv && this.tpvVendedor && this.tpvVendedor.cod_viajante != null) body.cod_viajante = this.tpvVendedor.cod_viajante;
+      if (mediosOverride) {
+        if (mediosOverride.tpv_importe_efectivo != null) body.tpv_importe_efectivo = mediosOverride.tpv_importe_efectivo;
+        if (mediosOverride.tpv_pago_efectivo != null) body.tpv_pago_efectivo = mediosOverride.tpv_pago_efectivo;
+        if (mediosOverride.tpv_cambio_efectivo != null) body.tpv_cambio_efectivo = mediosOverride.tpv_cambio_efectivo;
+        if (mediosOverride.tpv_importe_tarjeta != null) body.tpv_importe_tarjeta = mediosOverride.tpv_importe_tarjeta;
+        if (mediosOverride.tpv_tarjeta_nombre != null) body.tpv_tarjeta_nombre = mediosOverride.tpv_tarjeta_nombre;
+        if (mediosOverride.tpv_plan_nombre != null) body.tpv_plan_nombre = mediosOverride.tpv_plan_nombre;
+        if (mediosOverride.tpv_cuotas != null) body.tpv_cuotas = mediosOverride.tpv_cuotas;
+        if (mediosOverride.tpv_nro_tarjeta != null) body.tpv_nro_tarjeta = mediosOverride.tpv_nro_tarjeta;
+        if (mediosOverride.tpv_nro_cupon != null) body.tpv_nro_cupon = mediosOverride.tpv_nro_cupon;
+        if (mediosOverride.tpv_nro_lote != null) body.tpv_nro_lote = mediosOverride.tpv_nro_lote;
+        if (mediosOverride.tpv_intereses != null) body.tpv_intereses = mediosOverride.tpv_intereses;
+        if (mediosOverride.tpv_valor_cuota != null) body.tpv_valor_cuota = mediosOverride.tpv_valor_cuota;
+        if (mediosOverride.tpv_importe_parcial != null) body.tpv_importe_parcial = mediosOverride.tpv_importe_parcial;
+      } else if (paymentMethod === 'efectivo' && this.modoTpv) {
+        const importeCobrado = this.round2(this.pagoImporteCobradoEfectivo || totalNum);
+        const cambio = this.round2(Math.max(0, importeCobrado - totalNum));
+        body.tpv_importe_efectivo = this.round2(totalNum);
+        body.tpv_pago_efectivo = importeCobrado;
+        body.tpv_cambio_efectivo = cambio;
+      } else if (paymentMethod === 'tarjeta' && this.modoTpv) {
+        body.tpv_importe_tarjeta = this.round2(this.pagoImporteTarjeta || totalNum);
+      }
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/confirm/`, { method: 'POST', body });
+      if (ok) {
+        this.resultadoConfirm = data.resultado;
+        this.confirmedCartId = this.cartId;
+        this.comprobanteTexto = `${data.resultado?.tipo_comprobante || ''} ${data.resultado?.nro_comprobante || ''}`.trim() || 'Comprobante generado';
+        this.estado = 'success';
+        this.modalPago = false;
+        this.cartId = null;
+        this.items = [];
+        this.total = 0;
+        await this.crearObtenerCarrito();
+      } else {
+        if (data && data.code === 'E_MEDIOS_COBRO' && data.error && this.pagoModo === 'medio_multi') {
+          this.pagoMediosError = data.error;
+        } else {
+          this.modalFueraDeServicio = true;
+          this.modalPago = false;
+        }
+      }
+      this.estado = 'idle';
+    },
+    async confirmarVenta() {
+      this.estado = 'confirming';
+      const idCliente = this.modoTpv ? (this.tpvCliente && this.tpvCliente.id_cliente) : (this.tipoFactura === 'FA' && this.cuitConsulta && this.cuitConsulta.id_cliente ? this.cuitConsulta.id_cliente : 1);
+      const cuitVal = this.modoTpv ? (this.tpvCliente && this.tpvCliente.cuit) : (this.tipoFactura === 'FA' ? (this.cuit || '').trim() : '');
+      const body = {
+        email: this.email,
+        id_cliente: idCliente || 1,
+        cuit: (cuitVal && cuitVal.length >= 10) ? cuitVal : undefined
+      };
+      if (this.modoTpv && this.tpvVendedor && this.tpvVendedor.cod_viajante != null) body.cod_viajante = this.tpvVendedor.cod_viajante;
+      const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/confirm/`, {
+        method: 'POST',
+        body
+      });
+      if (ok) {
+        this.resultadoConfirm = data.resultado;
+        this.confirmedCartId = this.cartId;
+        this.comprobanteTexto = `${data.resultado?.tipo_comprobante || ''} ${data.resultado?.nro_comprobante || ''}`.trim() || 'Comprobante generado';
+        this.estado = 'success';
+        this.modalPago = false;
+        this.cartId = null;
+        this.items = [];
+        this.total = 0;
+        await this.crearObtenerCarrito();
+      } else {
+        // Cualquier error de confirmación → fuera de servicio (sin detalles para el cliente)
+        this.modalFueraDeServicio = true;
+        this.modalPago = false;
+      }
+      this.estado = 'idle';
+    },
+
+    simularRfid() {
+      this.rfidPropuesta = [
+        { codigo: '789001', descripcion: 'Producto RFID 1', cantidad: 2 },
+        { codigo: '789002', descripcion: 'Producto RFID 2', cantidad: 1 }
+      ];
+      this.modalRfid = true;
+    },
+
+    cancelarRfid() {
+      this.modalRfid = false;
+      this.rfidPropuesta = [];
+    },
+
+    async confirmarRfid() {
+      if (!this.cartId) await this.crearObtenerCarrito();
+      const idListaRfid = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
+      for (const it of this.rfidPropuesta) {
+        if (it.cantidad <= 0) continue;
+        const codigo = (it.codigo != null && it.codigo !== '') ? it.codigo : (it.id_articulo != null && it.id_articulo !== '' ? String(it.id_articulo) : '');
+        if (!codigo) continue;
+        const { ok, data } = await this.fetch(`/api/self-checkout/cart/${this.cartId}/items/`, {
+          method: 'POST',
+          body: { codigo, cantidad: it.cantidad, id_lista: idListaRfid }
+        });
+        if (!ok) {
+          this.toastMsg = data.error || 'Error al agregar';
+          this.toastOk = false;
+          if (data.code === 'STOCK_INSUFFICIENT') this.stockBlockedMsg = data.error;
+          setTimeout(() => { this.toastMsg = ''; }, 3000);
+        }
+      }
+      this.modalRfid = false;
+      this.rfidPropuesta = [];
+      await this.recargarCarrito();
+    },
+
+    nuevaCompra() {
+      this.estado = 'idle';
+      this.mostrarReceipt = false;
+      this.comprobanteTexto = '';
+      this.confirmedCartId = null;
+      this.resultadoConfirm = null;
+      if (this.modoTpv) document.getElementById('tpv-busqueda-producto')?.focus();
+      else this.$refs.scanInput?.focus();
+    },
+
+    imprimirTicket() {
+      if (!this.confirmedCartId) {
+        this.toastMsg = 'No hay comprobante para imprimir';
+        this.toastOk = false;
+        setTimeout(() => { this.toastMsg = ''; }, 3000);
+        return;
+      }
+      const ticketUrl = `/self_checkout/ticket/${this.confirmedCartId}/?print=1`;
+      window.open(ticketUrl, '_blank', 'width=400,height=700,menubar=no,toolbar=no,location=no,status=no');
+    },
+
+    cerrarModales() {
+      if (!this.modalPago) this.modalEmail = false;
+      this.modalRfid = false;
+      this.mostrarReceipt = false;
+      this.modalConfirmEliminar = false;
+      this.cerrarModalSeries();
+    },
+
+    reintentarConexion() {
+      this.modalConnectionError = false;
+      this.crearObtenerCarrito();
+    }
+  }));
+});
+</script>
+{% csrf_token %}
+{% endblock %}

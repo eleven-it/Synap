@@ -1,5 +1,4 @@
 {% extends 'core/core_app_base.html' %}
-{% load i18n %}
 
 {% block admin_content %}
 <div class="flex flex-col bg-gray-50 dark:bg-gray-900 min-h-0">
@@ -7,9 +6,9 @@
     <div class="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{% trans 'Companies' %}</h1>
+                <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Empresas</h1>
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-                    {{ empresas.count }} {% trans 'company' %}{{ empresas.count|pluralize }}
+                    {{ empresas|length }} empresa{{ empresas|length|pluralize }}
                 </span>
             </div>
             <a href="{% url 'core:empresa_nueva' %}" class="btn-primary">
@@ -17,7 +16,7 @@
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                   </svg>
-                  <span>{% trans 'New Company' %}</span>
+                  <span>Nueva empresa</span>
                 </span>
             </a>
         </div>
@@ -50,7 +49,7 @@
                                         <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                         </svg>
-                                        <span class="estado-texto">{% trans 'Active' %}</span>
+                                        <span class="estado-texto">Activa</span>
                                     </span>
                                 </div>
                             </div>
@@ -86,13 +85,13 @@
                                 </div>
                                 <div class="flex flex-col sm:flex-row items-center justify-between mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 gap-y-2">
                                     <div class="flex gap-x-2 w-full sm:w-auto justify-end items-center">
-                                        <a href="{% url 'core:empresa_detalle' empresa_id=1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="{% trans 'Edit company' %}">
+                                        <a href="{% url 'core:empresa_detalle' empresa_id=empresa.id_empresa|default:1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="Editar empresa">
                                             <span class="material-icons text-base">edit</span>
-                                            <span class="sr-only">{% trans 'Edit' %}</span>
+                                            <span class="sr-only">Editar</span>
                                         </a>
-                                        <a href="{% url 'core:branch_list' empresa_id=1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="{% trans 'View branches' %}">
+                                        <a href="{% url 'core:branch_list' empresa_id=empresa.id_empresa|default:1 %}" class="btn-secondary flex items-center gap-x-1 px-3 py-1.5 group" title="Ver sucursales">
                                             <span class="material-icons text-base">store</span>
-                                            <span class="sr-only">{% trans 'Branches' %}</span>
+                                            <span class="sr-only">Sucursales</span>
                                         </a>
                                     </div>
                                 </div>
@@ -101,7 +100,12 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <!-- Estado vacío -->
+                <!-- Estado vacío: aviso solo aquí para no mostrarlo en otras páginas (ej. detalle) -->
+                {% if sin_datos_administranet %}
+                <div class="mb-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200" role="alert">
+                    <p class="text-sm font-medium">No se encontró información de empresa en la base de datos «{{ base_empresa|default:"administranet" }}». Puede que la tabla DatosEmpresa esté vacía o no exista.</p>
+                </div>
+                {% endif %}
                 <div class="flex flex-col items-center justify-center py-12">
                     <div class="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
                         <svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,17 +113,17 @@
                         </svg>
                     </div>
                     <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                        {% trans 'No companies registered' %}
+                        No hay empresas cargadas
                     </h3>
                     <p class="text-gray-500 dark:text-gray-400 text-center mb-6 max-w-md">
-                        {% trans 'Start by creating your first company to manage your business efficiently.' %}
+                        Comience creando su primera empresa para gestionar su negocio, o verifique la conexión con la base de AdministraNET.
                     </p>
                     <a href="{% url 'core:empresa_nueva' %}" class="btn-primary">
                         <span class="flex items-center gap-x-1">
                           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                           </svg>
-                          <span>{% trans 'Create First Company' %}</span>
+                          <span>Crear primera empresa</span>
                         </span>
                     </a>
                 </div>
@@ -177,7 +181,7 @@
 
 <script>
 function confirmarEliminacion(empresaId, empresaNombre) {
-    if (confirm(`{% trans 'Are you sure you want to delete the company' %} "${empresaNombre}"? {% trans 'This action cannot be undone.' %}`)) {
+    if (confirm(`¿Está seguro de eliminar la empresa "${empresaNombre}"? Esta acción no se puede deshacer.`)) {
         window.location.href = `/core/empresa/${empresaId}/eliminar/`;
     }
 }
@@ -204,16 +208,16 @@ function toggleEmpresaActiva(checkbox) {
     })
     .then(response => response.ok ? response.text() : Promise.reject(response))
     .then(() => {
-        showToast(activa ? '{% trans "Company activated" %}' : '{% trans "Company deactivated" %}', 'success');
+        showToast(activa ? 'Empresa activada' : 'Empresa desactivada', 'success');
         // Actualizar badge de estado
         const badge = document.getElementById(`estado-empresa-${empresaId}`);
         if (badge) {
             badge.className = `inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium gap-x-1 transition-colors ${activa ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`;
-            badge.querySelector('.estado-texto').textContent = activa ? '{% trans "Active" %}' : '{% trans "Inactive" %}';
+            badge.querySelector('.estado-texto').textContent = activa ? 'Activa' : 'Inactiva';
         }
     })
     .catch(() => {
-        showToast('{% trans "Error updating status" %}', 'error');
+        showToast('Error al actualizar el estado', 'error');
         checkbox.checked = !activa;
     });
 }

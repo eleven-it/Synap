@@ -1,91 +1,196 @@
-<div class="bg-white rounded-lg shadow-md overflow-hidden">
-  <!-- Búsqueda -->
-  <div class="p-4 border-b">
-    <form method="get" class="flex gap-2">
-      <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nombre, apellido o usuario..." 
-             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
-      <label class="flex items-center gap-2 text-xs">
-        <input type="checkbox" name="activos" value="true" {% if solo_activos %}checked{% endif %} 
-               class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
-        Solo activos
-      </label>
-      <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
-        <span class="material-icons text-base">search</span>
-      </button>
-    </form>
+<div class="space-y-4">
+  <!-- Búsqueda predictiva -->
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+    <div class="p-4 border-b border-gray-200 dark:border-gray-600">
+      <form method="get" id="form-busqueda-usuarios" class="flex gap-2 items-center">
+        <div class="flex-1 relative">
+          <input type="text" id="input-q-usuarios" placeholder="Buscar en la lista (nombre, apellido o código)..." 
+                 class="w-full px-3 py-2 pl-9 border border-gray-300 dark:border-gray-600 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500 dark:bg-gray-700 dark:text-gray-100"
+                 autocomplete="off">
+          <span class="material-icons text-base text-gray-400 absolute left-2 top-2 pointer-events-none">search</span>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+          <input type="hidden" name="activos" value="false">
+          <input type="checkbox" name="activos" id="check-activos-usuarios" value="true" {% if solo_activos %}checked{% endif %} 
+                 class="rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+          Solo activos
+        </label>
+      </form>
+    </div>
   </div>
 
-  <table class="min-w-full divide-y divide-gray-200">
-    <thead class="bg-gray-50">
-      <tr>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Código</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Apellido</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Empresa</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sucursal</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
-        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
-      </tr>
-    </thead>
-    <tbody class="bg-white divide-y divide-gray-200">
-      {% for usuario in usuarios %}
-      <tr class="{% if usuario.baja_usuario == 'Si' %}opacity-50{% endif %}">
-        <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-gray-900">{{ usuario.cod_usuario }}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-900">{{ usuario.nombre_usuario }}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-900">{{ usuario.apellido_usuario }}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{{ usuario.nombre_empresa|default:"-" }}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{{ usuario.nombre_sucursal|default:"-" }}</td>
-        <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{{ usuario.nombre_puesto|default:"-" }}</td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          {% if usuario.baja_usuario == 'Si' %}
-            <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Inactivo</span>
-          {% else %}
-            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Activo</span>
-          {% endif %}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-          <div class="flex justify-end gap-2">
-            <a href="{% url 'core:editar_usuario' usuario.id_usuario %}" 
-               class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded transition-colors" title="Editar">
-              <span class="material-icons text-base">edit</span>
-            </a>
-            {% if usuario.id_usuario != 1 %}
-            <form method="post" action="{% url 'core:eliminar_usuario' usuario.id_usuario %}" 
-                  onsubmit="return confirm('¿Está seguro de dar de baja este usuario?');" class="inline">
-              {% csrf_token %}
-              <button type="submit" class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-900 hover:bg-red-50 rounded transition-colors" title="Eliminar">
-                <span class="material-icons text-base">delete</span>
-              </button>
-            </form>
-            {% endif %}
-          </div>
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="8" class="px-6 py-4 text-center text-xs text-gray-500">No se encontraron usuarios</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <!-- Paginación -->
-  {% if usuarios.has_other_pages %}
-  <div class="px-6 py-4 border-t flex items-center justify-between">
-    <div class="text-xs text-gray-700">
-      Mostrando {{ usuarios.start_index }} a {{ usuarios.end_index }} de {{ usuarios.paginator.count }} usuarios
+  <!-- Controles de agrupación (mismo estilo que permisos) -->
+  <div class="flex items-center justify-between">
+    <div class="text-xs text-gray-600 dark:text-gray-400">
+      Total: <span class="font-semibold" id="total-usuarios-count">{{ usuarios_list|length }}</span> usuario{{ usuarios_list|length|pluralize:"s" }} en <span class="font-semibold">{{ total_sucursales }}</span> sucursal{{ total_sucursales|pluralize:"es" }}
     </div>
     <div class="flex gap-2">
-      {% if usuarios.has_previous %}
-      <a href="?page={{ usuarios.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if solo_activos %}&activos=true{% endif %}" 
-         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Anterior</a>
-      {% endif %}
-      {% if usuarios.has_next %}
-      <a href="?page={{ usuarios.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if solo_activos %}&activos=true{% endif %}" 
-         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Siguiente</a>
-      {% endif %}
+      <button type="button" onclick="expandirTodasSucursales()" class="text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors">
+        Expandir Todos
+      </button>
+      <button type="button" onclick="colapsarTodasSucursales()" class="text-xs text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        Colapsar Todos
+      </button>
     </div>
   </div>
-  {% endif %}
+
+  <!-- Usuarios agrupados por sucursal; búsqueda solo en esta lista (sin nueva consulta a la DB) -->
+  <p id="usuarios-sin-resultados" class="hidden text-xs text-gray-500 dark:text-gray-400 py-4 text-center">Ningún usuario coincide con la búsqueda.</p>
+  {% regroup usuarios_list by nombre_sucursal_display as grupos_sucursal %}
+  {% for grupo in grupos_sucursal %}
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden tarjeta-sucursal-usuarios" data-sucursal-id="sucursal_usuarios_{{ forloop.counter0 }}">
+    <div class="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-b border-purple-200 dark:border-purple-800">
+      <button type="button" 
+              onclick="toggleSucursal('sucursal_usuarios_{{ forloop.counter0 }}')" 
+              class="w-full px-6 py-4 flex items-center justify-between hover:bg-purple-100 dark:hover:bg-purple-800/30 transition-colors focus:outline-none">
+        <div class="flex items-center gap-3">
+          <span class="material-icons text-purple-600 dark:text-purple-400 expand-icon-sucursal" id="icon_sucursal_usuarios_{{ forloop.counter0 }}">expand_more</span>
+          <div>
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ grupo.grouper }}</h3>
+            <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{{ grupo.list|length }} usuario{{ grupo.list|length|pluralize }}</p>
+          </div>
+        </div>
+      </button>
+    </div>
+    <div class="sucursal-contenido" id="sucursal_usuarios_{{ forloop.counter0 }}">
+      <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+        <thead class="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Código</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nombre</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Apellido</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Empresa</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Puesto</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Estado</th>
+            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-600">
+          {% for usuario in grupo.list %}
+          <tr class="fila-usuario {% if usuario.baja_usuario == 'Si' %}opacity-50{% endif %} hover:bg-gray-50 dark:hover:bg-gray-700/50" 
+              data-search="{{ usuario.cod_usuario|default:''|lower }} {{ usuario.nombre_usuario|default:''|lower }} {{ usuario.apellido_usuario|default:''|lower }}">
+            <td class="px-6 py-4 whitespace-nowrap text-xs font-medium text-gray-900 dark:text-gray-100">{{ usuario.cod_usuario }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100">{{ usuario.nombre_usuario }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100">{{ usuario.apellido_usuario }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ usuario.nombre_empresa|default:"-" }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ usuario.nombre_puesto|default:"-" }}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              {% if usuario.baja_usuario == 'Si' %}
+                <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">Inactivo</span>
+              {% else %}
+                <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200">Activo</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <div class="flex justify-end gap-2">
+                <a href="{% url 'core:editar_usuario' usuario.id_usuario %}" 
+                   class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded transition-colors" title="Editar">
+                  <span class="material-icons text-base">edit</span>
+                </a>
+                {% if usuario.id_usuario != 1 %}
+                <form method="post" action="{% url 'core:eliminar_usuario' usuario.id_usuario %}" 
+                      onsubmit="return confirm('¿Está seguro de dar de baja este usuario?');" class="inline">
+                  {% csrf_token %}
+                  <button type="submit" class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-red-900 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded transition-colors" title="Eliminar">
+                    <span class="material-icons text-base">delete</span>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% empty %}
+  <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+    <p class="text-xs text-gray-500 dark:text-gray-400">No se encontraron usuarios</p>
+  </div>
+  {% endfor %}
 </div>
+
+<script>
+(function() {
+  var form = document.getElementById('form-busqueda-usuarios');
+  var inputQ = document.getElementById('input-q-usuarios');
+  var checkActivos = document.getElementById('check-activos-usuarios');
+  var totalCountEl = document.getElementById('total-usuarios-count');
+  var sinResultadosEl = document.getElementById('usuarios-sin-resultados');
+  if (!inputQ) return;
+
+  // Búsqueda solo en los datos ya cargados (sin nueva consulta a la DB)
+  function filtrarUsuarios() {
+    var q = (inputQ.value || '').trim().toLowerCase();
+    var filas = document.querySelectorAll('.fila-usuario');
+    var tarjetas = document.querySelectorAll('.tarjeta-sucursal-usuarios');
+    var visibles = 0;
+    filas.forEach(function(tr) {
+      var search = (tr.getAttribute('data-search') || '').toLowerCase();
+      var match = !q || search.indexOf(q) !== -1;
+      tr.style.display = match ? '' : 'none';
+      if (match) visibles++;
+    });
+    tarjetas.forEach(function(tarjeta) {
+      var filasEnTarjeta = tarjeta.querySelectorAll('.fila-usuario');
+      var algunaVisible = Array.prototype.some.call(filasEnTarjeta, function(f) { return f.style.display !== 'none'; });
+      tarjeta.style.display = algunaVisible ? '' : 'none';
+    });
+    if (sinResultadosEl) sinResultadosEl.classList.toggle('hidden', visibles > 0 || !q);
+    if (totalCountEl) totalCountEl.textContent = visibles;
+  }
+
+  var debounceTimer;
+  inputQ.addEventListener('input', function() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function() { debounceTimer = null; filtrarUsuarios(); }, 150);
+  });
+  inputQ.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') e.preventDefault();
+  });
+
+  // "Solo activos" sí recarga desde la DB (submit)
+  if (form && checkActivos) {
+    checkActivos.addEventListener('change', function() {
+      form.submit();
+    });
+  }
+})();
+
+function toggleSucursal(sucursalId) {
+  var contenido = document.getElementById(sucursalId);
+  var icon = document.getElementById('icon_' + sucursalId);
+  if (contenido) {
+    if (contenido.style.display === 'none') {
+      contenido.style.display = 'block';
+      if (icon) { icon.textContent = 'expand_more'; icon.classList.remove('rotate-180'); }
+    } else {
+      contenido.style.display = 'none';
+      if (icon) { icon.textContent = 'chevron_right'; icon.classList.add('rotate-180'); }
+    }
+  }
+}
+function expandirTodasSucursales() {
+  document.querySelectorAll('.sucursal-contenido').forEach(function(el) { el.style.display = 'block'; });
+  document.querySelectorAll('.expand-icon-sucursal').forEach(function(icon) {
+    icon.textContent = 'expand_more';
+    icon.classList.remove('rotate-180');
+  });
+}
+function colapsarTodasSucursales() {
+  document.querySelectorAll('.sucursal-contenido').forEach(function(el) { el.style.display = 'none'; });
+  document.querySelectorAll('.expand-icon-sucursal').forEach(function(icon) {
+    icon.textContent = 'chevron_right';
+    icon.classList.add('rotate-180');
+  });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  expandirTodasSucursales();
+});
+</script>
+<style>
+.sucursal-contenido { display: block; }
+.expand-icon-sucursal { transition: transform 0.2s; }
+.expand-icon-sucursal.rotate-180 { transform: rotate(-90deg); }
+</style>

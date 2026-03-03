@@ -22,6 +22,53 @@ from .execution_engine import ReportExecutionEngine
 
 logger = logging.getLogger(__name__)
 
+
+def parse_fecha_bo_yyyymmdd(fecha_inicio: str, fecha_fin: str) -> Tuple[str, str]:
+    """
+    Convierte fechas a YYYYMMDD para filtro stockp.Fecha (INT en bases AdministraNET).
+    Evita inconsistencia agregado vs renglones (bo_importe 22M vs suma precio_x_renglon 32M)
+    cuando una consulta usaba YYYY-MM-DD y la otra YYYYMMDD. Ambas deben usar el mismo valor.
+    - Si ya vienen en YYYYMMDD (8 dígitos), se devuelven tal cual.
+    - Si vienen en YYYY-MM-DD, se convierten a YYYYMMDD.
+    - Si falla el parse, se devuelven las originales.
+    """
+    s1 = str(fecha_inicio).strip() if fecha_inicio is not None else ""
+    s2 = str(fecha_fin).strip() if fecha_fin is not None else ""
+    if len(s1) == 8 and s1.isdigit() and len(s2) == 8 and s2.isdigit():
+        return s1, s2
+    try:
+        d1 = datetime.strptime(s1[:10], "%Y-%m-%d")
+        d2 = datetime.strptime(s2[:10], "%Y-%m-%d")
+        return d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d")
+    except (TypeError, ValueError):
+        return fecha_inicio, fecha_fin
+
+
+def check_bo_agregado_vs_renglones_consistency(
+    backorder_detalle: List[Dict],
+    backorder_detalle_rows: List[Dict],
+    tolerance: float = 0.01,
+) -> List[Tuple[str, float, float, float]]:
+    """
+    Comprueba que para cada artículo la suma de precio_x_renglon (por cod_manual)
+    coincida con bo_importe del agregado. Devuelve lista de (codigo, bo_importe, sum_rows, diff)
+    donde hay diferencia por encima de tolerance.
+    """
+    sum_by_cod = {}
+    for row in backorder_detalle_rows:
+        cod = (row.get("cod_manual") or "").strip()
+        sum_by_cod[cod] = sum_by_cod.get(cod, 0.0) + float(row.get("precio_x_renglon") or 0)
+    inconsistencies = []
+    for item in backorder_detalle:
+        cod = (item.get("codigo") or "").strip()
+        bo_imp = float(item.get("bo_importe") or 0)
+        sum_rows = sum_by_cod.get(cod, 0.0)
+        diff = bo_imp - sum_rows
+        if abs(diff) > tolerance:
+            inconsistencies.append((cod, bo_imp, sum_rows, diff))
+    return inconsistencies
+
+
 # Cache locks para prevenir cache stampeding
 _cache_locks = {}
 
@@ -2858,7 +2905,7 @@ class QueryRunnerService:
         
         RESPUESTAS OBLIGATORIAS (Backorder detalle row-level):
         1) ID cliente: comp_ped.Codigo. Tabla maestra: cliente. Join: cliente cli ON cli.Codigo = cp.Codigo.
-        2) precio_x_renglon: stockp.PrecioVentaxR (total por renglón; no unitario).
+        2) precio_x_renglon: stockp.PrecioNetoxR (total por renglón; alineado con VB6).
         3) cant_pend: stockp.cantidad_pendiente.
         4) Subrubro: existe. Tabla subrubro, join articulo.IDSubRubro = subrubro.IDSubRubro. Vendedor: existe.
            Tabla viajantes, join comp_ped.CodViajante = viajantes.CodViajante. Sin match -> ''.
@@ -2943,7 +2990,11 @@ class QueryRunnerService:
                 "WHEN 5 THEN a.Precio4V WHEN 6 THEN a.Precio5V "
                 "ELSE a.Precio1V END"
             )
-            
+            # Fechas para filtro BO (stockp.Fecha): en bases AdministraNET puede ser INT YYYYMMDD.
+            # CORRECCIÓN INCONSISTENCIA: sql_bo_detalle y sql_bo_rows deben usar EXACTAMENTE las mismas
+            # fechas (fecha_inicio_bo, fecha_fin_bo). Si una usara YYYY-MM-DD y la otra YYYYMMDD,
+            # el agregado podría dar bo_importe ~22M y los renglones sumar ~32M (rango ampliado).
+            fecha_inicio_bo, fecha_fin_bo = parse_fecha_bo_yyyymmdd(fecha_inicio, fecha_fin)
             # Conectar a MySQL
             mysql_config = settings.DATABASES['mysql']
             
@@ -3151,7 +3202,8 @@ class QueryRunnerService:
                 reservado_excl_clause = " AND cp_res.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
 
             # Detalle BO por producto con cálculo de cobertura
-            # bo_importe = SUM(PrecioVentaxR). Sin fallback: si es 0 es correcto.
+            # bo_importe = SUM(PrecioNetoxR), alineado con VB6 (stock físico, disponibles y backorder).
+            # Backorder filtrado por stockp.Fecha en el intervalo (como VB6).
             # oc_pendiente = CALCULADO desde stockp+cuentaproveedor (OC Estado=Pendiente). NO usar stock_deposito.saldo_pedido_proveedor.
             # stock_reservado = CALCULADO desde stockp+comp_ped (PED En preparación/Preparado; NO Pendiente ni Parcial). NO usar stock_deposito.saldo_pedido_cliente.
             sql_bo_detalle = f"""
@@ -3161,7 +3213,7 @@ class QueryRunnerService:
                     a.NombreArticulo AS articulo,
                     COALESCE(r.NombreRubro, 'Sin Rubro') AS categoria,
                     SUM(sp.Cantidad) AS bo_qty,
-                    SUM(sp.PrecioVentaxR) AS bo_importe,
+                    SUM(sp.PrecioNetoxR) AS bo_importe,
                     COALESCE(sd.stock_total, 0) AS stock_actual,
                     COALESCE(reservado_sub.reservado, 0) AS stock_reservado,
                     GREATEST(0, COALESCE(sd.stock_total, 0) - COALESCE(reservado_sub.reservado, 0)) AS disponible,
@@ -3215,7 +3267,7 @@ class QueryRunnerService:
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
             """
-            cursor.execute(sql_bo_detalle, [fecha_inicio, fecha_fin])
+            cursor.execute(sql_bo_detalle, [fecha_inicio_bo, fecha_fin_bo])
             bo_rows = cursor.fetchall()
             logger.info("📊 [BO] Detalle BO (producto) OK (%d filas)", len(bo_rows))
 
@@ -3365,10 +3417,11 @@ class QueryRunnerService:
                         AND cp.Anulado = 'No'
                         AND (sp.anulado IS NULL OR sp.anulado = 'No')
                         AND cp.Estado IN {bo_estados}
-                        AND sp.CodigoMovimiento IS NOT NULL{clientes_excl_bo}
+                        AND sp.CodigoMovimiento IS NOT NULL
+                        AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                     ORDER BY sp.IDArt, cp.Fecha, cp.NroComprobante
                 """
-                cursor.execute(sql_bo_comp_detalle)
+                cursor.execute(sql_bo_comp_detalle, [fecha_inicio_bo, fecha_fin_bo])
                 bo_comp_rows = cursor.fetchall()
 
                 def _fmt_bo_date(d):
@@ -3545,8 +3598,8 @@ class QueryRunnerService:
             # =========================================================
             # 3b. BACKORDER DETALLE ROW-LEVEL (Excel-like, un renglón por fila)
             # Cabecera: comp_ped | Renglones: stockp | Cliente: cliente.Codigo | Vendedor: viajantes
-            # precio_x_renglon: stockp.PrecioVentaxR. cant_pend: stockp.cantidad_pendiente.
-            # Sin límite: se devuelve la cantidad real de renglones.
+            # precio_x_renglon: stockp.PrecioNetoxR (alineado con VB6). cant_pend: stockp.cantidad_pendiente.
+            # Filtro por spr.Fecha en el intervalo (como VB6). Sin límite: se devuelve la cantidad real de renglones.
             # =========================================================
             where_bo_rows = [
                 "cp.TipoComprobante = 'PED'",
@@ -3555,13 +3608,10 @@ class QueryRunnerService:
                 "(spr.anulado IS NULL OR spr.anulado = 'No')",
                 f"cp.Estado IN {bo_estados}",
                 "spr.CodigoMovimiento IS NOT NULL",
-<<<<<<< HEAD
-=======
                 "spr.Fecha >= %s AND spr.Fecha <= %s",
                 "(a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')",
->>>>>>> 46afb735 (Reportes BO: filtro tipo_art <> Gasto, lista_precio en filtros, depósitos incluidos (IN), filters_applied, docs SQL_VISTAS y COMPARATIVA)
             ]
-            params_bo_rows = [fecha_inicio, fecha_fin]
+            params_bo_rows = [fecha_inicio_bo, fecha_fin_bo]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
@@ -3580,7 +3630,7 @@ class QueryRunnerService:
                     cp.Estado AS estado,
                     COALESCE(cli.nombre_cliente, '') AS cliente,
                     cp.Codigo AS id_cliente,
-                    COALESCE(spr.PrecioVentaxR, 0) AS precio_x_renglon,
+                    COALESCE(spr.PrecioNetoxR, 0) AS precio_x_renglon,
                     COALESCE(r.NombreRubro, '') AS nombre_rubro,
                     COALESCE(sr.NombreSubRubro, '') AS nombre_sub_rubro,
                     COALESCE(v.Nombre, '') AS nombre_vendedor
@@ -3594,32 +3644,49 @@ class QueryRunnerService:
                 WHERE {where_bo_rows_clause}
                 ORDER BY cp.Fecha DESC, cp.NroComprobante ASC, COALESCE(spr.Descripcion, a.NombreArticulo, '') ASC
             """
-            cursor.execute(sql_bo_rows, params_bo_rows)
-            bo_row_rows = cursor.fetchall()
+            # DictCursor para leer por nombre de columna (precio_x_renglon = PrecioNetoxR) y evitar
+            # cualquier confusión por índice con PrecioVentaxR u otra columna.
+            dict_cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+            try:
+                dict_cursor.execute(sql_bo_rows, params_bo_rows)
+                bo_row_rows = dict_cursor.fetchall()
+            finally:
+                dict_cursor.close()
             logger.info("📊 [BO] Backorder detalle (row-level) OK (%d filas)", len(bo_row_rows))
 
             backorder_detalle_rows = []
             for r in bo_row_rows:
+                # Leer por nombre de columna (alias del SELECT): precio_x_renglon = COALESCE(spr.PrecioNetoxR, 0)
+                precio_x_renglon = float(r.get("precio_x_renglon") or 0)
                 backorder_detalle_rows.append({
-                    "fecha": r[0],
-                    "nro_comp": r[1],
-                    "descripcion": r[2] or "",
-                    "cod_manual": r[3] or "",
-                    "cantidad": float(r[4] or 0),
-                    "cant_pend": int(round(float(r[5] or 0))),
-                    "estado": r[6] or "",
-                    "cliente": r[7] or "",
-                    "id_cliente": r[8],
-                    "precio_x_renglon": float(r[9] or 0),
-                    "nombre_rubro": r[10] or "",
-                    "nombre_sub_rubro": r[11] or "",
-                    "nombre_vendedor": r[12] or "",
+                    "fecha": r.get("fecha"),
+                    "nro_comp": r.get("nro_comp") or "",
+                    "descripcion": r.get("descripcion") or "",
+                    "cod_manual": r.get("cod_manual") or "",
+                    "cantidad": float(r.get("cantidad") or 0),
+                    "cant_pend": int(round(float(r.get("cant_pend") or 0))),
+                    "estado": r.get("estado") or "",
+                    "cliente": r.get("cliente") or "",
+                    "id_cliente": r.get("id_cliente"),
+                    "precio_x_renglon": precio_x_renglon,
+                    "nombre_rubro": r.get("nombre_rubro") or "",
+                    "nombre_sub_rubro": r.get("nombre_sub_rubro") or "",
+                    "nombre_vendedor": r.get("nombre_vendedor") or "",
                 })
             
             if backorder_detalle_rows:
                 logger.info(
                     "📋 [BO] backorder_detalle_rows sample (3 filas): %s",
                     json.dumps(backorder_detalle_rows[:3], default=str, ensure_ascii=False),
+                )
+            # Consistencia agregado vs renglones: para cada artículo, suma(precio_x_renglon) por cod_manual debe igualar bo_importe
+            for cod, bo_imp, sum_rows, diff in check_bo_agregado_vs_renglones_consistency(
+                backorder_detalle, backorder_detalle_rows, tolerance=0.01
+            ):
+                logger.warning(
+                    "📊 [BO] Inconsistencia agregado vs renglones: codigo=%s bo_importe=%.2f sum(precio_x_renglon)=%.2f diff=%.2f. "
+                    "Verificar mismo filtro de fecha (stockp.Fecha YYYYMMDD) y estado en sql_bo_detalle y sql_bo_rows.",
+                    cod, bo_imp, sum_rows, diff,
                 )
 
             # Detectar si hay más de un depósito (para definición sobre stock_deposito)

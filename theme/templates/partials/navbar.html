@@ -85,7 +85,7 @@
   <a href="/" class="flex items-center">
     {% get_administranet_logo as logo_path %}
     {% if logo_path %}
-      <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="{% trans 'Logo' %}" class="h-12 w-auto mr-2" />
+      <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-12 w-auto mr-2" />
     {% endif %}
   </a>
 
@@ -119,7 +119,7 @@
             <div class="mt-8 text-center">
               <a href="{{ module.url }}" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow text-sm font-semibold transition">
                 <span class="material-icons mr-2">apps</span>
-                {% trans "Go to" %} {{ module.nombre }} {% trans "Dashboard" %}
+                Ir a {{ module.nombre }}
               </a>
             </div>
           </div>
@@ -198,7 +198,7 @@
         class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors duration-200"
       >
         <span class="material-icons text-base mr-1.5">location_on</span>
-        <span x-text="activeBranch ? activeBranch.name : '{% trans "No Branch" %}'" class="truncate max-w-[8rem]"></span>
+        <span x-text="activeBranch ? activeBranch.name : 'Sin sucursal'" class="truncate max-w-[8rem]"></span>
         <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
       </button>
       
@@ -215,8 +215,8 @@
         class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
       >
         <div class="p-3 border-b border-gray-200 dark:border-gray-700">
-          <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100">{% trans "Active Branch" %}</h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "Select the branch to work with" %}</p>
+          <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100">Sucursal activa</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Seleccione la sucursal con la que trabajar</p>
         </div>
         
         <div class="max-h-48 overflow-y-auto">
@@ -239,7 +239,7 @@
         </div>
         
         <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
-          {% trans "No branches available" %}
+          No hay sucursales disponibles
         </div>
       </div>
     </div>
@@ -249,7 +249,7 @@
     <div class="relative" x-data="{ userMenuOpen: false }">
       <button @click="userMenuOpen = !userMenuOpen" 
               class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 shadow-sm" 
-              aria-label="{% trans 'User Menu' %}"
+              aria-label="Menú de usuario"
               title="{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}Usuario{% endif %}">
         <span class="material-icons text-sm">person</span>
       </button>
@@ -290,31 +290,31 @@
           <a href="{% url 'core:perfil' %}" 
              class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
             <span class="material-icons text-sm mr-3">account_circle</span>
-            {% trans "My Profile" %}
+            Mi perfil
           </a>
           
           <a href="{% url 'core:historial' %}" 
              class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
             <span class="material-icons text-sm mr-3">history</span>
-            {% trans "Activity History" %}
+            Historial de actividad
           </a>
           
           {% if request.user.is_staff %}
           <a href="/admin/" 
              class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
             <span class="material-icons text-sm mr-3">admin_panel_settings</span>
-            {% trans "Admin Panel" %}
+            Panel de administración
           </a>
           {% endif %}
           
         </div>
         
-        <!-- Logout -->
+        <!-- Salir -->
         <div class="border-t border-gray-200 dark:border-gray-700 py-1">
           <a href="{% url 'login:logout' %}" 
              class="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-150">
             <span class="material-icons text-sm mr-3">logout</span>
-            {% trans "Logout" %}
+            Salir
           </a>
         </div>
       </div>

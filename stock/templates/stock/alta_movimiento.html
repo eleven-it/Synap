@@ -1,0 +1,1571 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}Ingreso Mov. Stock | Synap{% endblock %}
+{% block content %}
+{% csrf_token %}
+<div class="max-w-6xl mx-auto" x-data="ingresoMovStock()" x-init="init()">
+  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Ingreso Mov. Stock</h1>
+
+  <!-- Mensajes -->
+  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300" x-text="mensajeError"></div>
+  <div x-show="mensajeOk" x-cloak class="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
+    <p x-text="mensajeOk"></p>
+    <template x-if="nroComprobante">
+      <p class="mt-2">
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" class="font-medium underline">Descargar comprobante PDF</a>
+        <span class="mx-2">|</span>
+        <a href="{% url 'stock:alta_movimiento' %}" class="font-medium underline">Nuevo movimiento</a>
+      </p>
+    </template>
+  </div>
+
+  <!-- Tabs -->
+  <div class="mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist">
+    <div class="flex gap-1">
+      <button type="button" role="tab" :aria-selected="tabActivo === 'datos'" aria-controls="panel-datos" id="tab-datos"
+        @click="forzarCerrarTooltipRenglon(); tabActivo = 'datos'"
+        :class="tabActivo === 'datos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        Datos del movimiento
+      </button>
+      <button type="button" role="tab" :aria-selected="tabActivo === 'articulos'" aria-controls="panel-articulos" id="tab-articulos"
+        @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo()"
+        :class="tabActivo === 'articulos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        Artículos
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel: Datos del movimiento -->
+  <div x-show="tabActivo === 'datos'" role="tabpanel" id="panel-datos" aria-labelledby="tab-datos" class="mb-6">
+    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+      <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Datos del movimiento</h2>
+      <div class="space-y-4">
+        <!-- Fecha -->
+        <div class="max-w-xs">
+          <label for="fecha" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha</label>
+          <input type="date" id="fecha" x-model="cabecera.fecha" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+        </div>
+        <!-- Motivo | Depósito origen | Depósito destino | Vendedor (según motivo) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label for="motivo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Motivo</label>
+            <select id="motivo" x-model="cabecera.motivo_movimiento" @change="if(parseInt(cabecera.motivo_movimiento, 10) !== 6) cabecera.detalle = ''; setDefaultESDesdeMotivo()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Seleccione motivo</option>
+              <template x-for="m in motivos" :key="m.codigo">
+                <option :value="m.codigo" x-text="m.nombre"></option>
+              </template>
+            </select>
+            <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">Los movimientos <strong>Pedido producción (OPT)</strong>, <strong>Parte producción (OPP)</strong> y <strong>Armado</strong> se realizan desde el módulo <strong>Producción (MPR)</strong>.</p>
+          </div>
+          <div>
+            <label for="dep_origen" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito origen</label>
+            <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Seleccione depósito</option>
+              <template x-for="d in depositos" :key="d.CodDeposito">
+                <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
+              </template>
+            </select>
+          </div>
+          <div x-show="mostrarDepDestino" x-cloak>
+            <label for="dep_destino" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito destino</label>
+            <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Ninguno</option>
+              <template x-for="d in depositosDestino" :key="d.CodDeposito">
+                <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
+              </template>
+            </select>
+          </div>
+          <div x-show="mostrarVendedor" x-cloak>
+            <label for="vendedor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vendedor</label>
+            <select id="vendedor" x-model="cabecera.id_vendedor" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Sin asignar</option>
+              <template x-for="v in viajantes" :key="v.CodViajante">
+                <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+        <!-- Cliente (Mov. Interno Salida/Entrada) | Referencia -->
+        <div class="grid grid-cols-1 gap-4" :class="mostrarCliente ? 'md:grid-cols-2' : 'md:grid-cols-1'">
+          <div x-show="mostrarCliente" x-cloak>
+            <label for="cliente" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente</label>
+            <select id="cliente" x-model="cabecera.id_cliente" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Sin asignar</option>
+              <template x-for="c in clientes" :key="c.Codigo">
+                <option :value="c.Codigo" x-text="c.nombre_cliente || ('Cliente ' + c.Codigo)"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label for="ref" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Referencia</label>
+            <select id="ref" x-model="cabecera.id_ref_movstock" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Sin referencia</option>
+              <template x-for="r in refMovstock" :key="r.id_ref_movstock">
+                <option :value="r.id_ref_movstock" x-text="r.nombre_ref_movstock"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+        <!-- Operario | Máquina | Cantidad armado (solo Parte producción, OPT/OPP) -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3" x-show="mostrarDatosOPT" x-cloak>
+          <div>
+            <label for="operario" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Operario</label>
+            <select id="operario" x-model="cabecera.id_vendedor" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="">Sin asignar</option>
+              <template x-for="v in viajantes" :key="v.CodViajante">
+                <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label for="maquina" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Máquina</label>
+            <input type="text" id="maquina" x-model="cabecera.maquina" placeholder="Opcional" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+          </div>
+          <div x-show="mostrarCantidadArmado" x-cloak>
+            <label for="cantidad_armado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cantidad armado</label>
+            <select id="cantidad_armado" x-model="cabecera.cantidad_armado" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+              <option value="Unidad">Unidad</option>
+              <option value="Armado">Armado</option>
+            </select>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Indica si la cantidad a cargar es en unidades o en armados (OPT/OPP).</p>
+          </div>
+        </div>
+        <!-- Valor variable (solo Desarmado) | Pedidos internos a depósito | Proyecto -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div x-show="mostrarValorVariable" x-cloak>
+            <label for="valor_variable" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor variable (%)</label>
+            <input type="number" id="valor_variable" x-model.number="cabecera.valor_variable" placeholder="100" step="0.01" min="0" max="100" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+          </div>
+          <div x-show="mostrarBuscaPEDI" x-cloak>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pedidos internos a depósito</label>
+            <template x-if="!cabecera.nro_pedi">
+              <button type="button" @click="abrirModalPedidos()" :disabled="parseInt(cabecera.motivo_movimiento, 10) === 6 && !cabecera.deposito_destino" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                <span class="material-icons text-lg">list</span>
+                <span x-text="tituloBotonPedidos"></span>
+              </button>
+            </template>
+            <template x-if="cabecera.nro_pedi">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="pedidoSeleccionadoResumen ? (pedidoSeleccionadoResumen.tipo === 'PEDI' ? 'PEDI #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi) : 'Pedido #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi)) : ('#' + cabecera.nro_pedi)"></span>
+                <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
+                <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
+              </div>
+            </template>
+          </div>
+          <div x-show="activ_proyecto === 'Si'" x-cloak>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
+            <template x-if="!cabecera.id_proyecto || cabecera.id_proyecto === ''">
+              <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                <span class="material-icons text-lg">folder_open</span>
+                <span>Lista de proyectos</span>
+              </button>
+            </template>
+            <template x-if="cabecera.id_proyecto && cabecera.id_proyecto !== ''">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="proyectoSeleccionadoResumen ? proyectoSeleccionadoResumen.nombre_proyecto : ('#' + cabecera.id_proyecto)"></span>
+                <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
+                <button type="button" @click="cabecera.id_proyecto = ''; proyectoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
+              </div>
+            </template>
+          </div>
+        </div>
+        <!-- Detalle (texto largo, 3 líneas) -->
+        <div>
+          <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Detalle</label>
+          <textarea id="detalle" x-model="cabecera.detalle" rows="3" placeholder="Observaciones" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 resize-y"></textarea>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Panel: Artículos (tabla única con fila de búsqueda) -->
+  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6" x-cloak>
+    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Artículos</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
+      <div x-show="mostrarSaldoDeseado" x-cloak class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+        <label for="saldo_deseado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo deseado</label>
+        <div class="flex flex-wrap items-center gap-2">
+          <input type="number" id="saldo_deseado" x-model="saldoDeseado" min="0" step="0.001" placeholder="Saldo que desea dejar en depósito"
+            @blur="ejecutarCalculoSaldoDirecto()" @keydown.enter.prevent="ejecutarCalculoSaldoDirecto()"
+            class="w-32 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">
+          <span class="text-xs text-gray-500 dark:text-gray-400">Al salir del campo o Enter se calcula Entrada/Salida y cantidad según la diferencia con el saldo actual.</span>
+        </div>
+      </div>
+      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+        Complete los datos mínimos del movimiento (fecha, motivo, depósito origen<span x-show="mostrarDepDestino">, depósito destino</span>) para poder agregar artículos.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full table-fixed text-sm text-left text-gray-700 dark:text-gray-300">
+          <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100">
+            <tr>
+              <th class="px-3 py-2 w-24">Cod. Sistema</th>
+              <th class="px-3 py-2 w-24">Cod. Manual</th>
+              <th class="px-3 py-2 min-w-[120px]">Descripción</th>
+              <th class="px-3 py-2 w-[7.5rem]">Movimiento</th>
+              <th class="px-3 py-2 text-right w-24">Cantidad</th>
+              <th x-show="mostrarEmbalaje" class="px-3 py-2 w-[90px]">Embalaje</th>
+              <th x-show="mostrarUnidadPeso" class="px-3 py-2 text-right w-20">Peso</th>
+              <th class="px-3 py-2 w-28">Nro. Pedido int.</th>
+              <th class="px-3 py-2 w-24">Lote</th>
+              <th class="px-3 py-2 w-20 text-center">Series</th>
+              <th class="px-3 py-2 w-20 text-center rounded-tr">Eliminar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="r in renglones" :key="r.Orden">
+              <tr class="renglon-fila border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                  @mouseenter="mostrarTooltipRenglon($event, r)" @mouseleave="ocultarTooltipRenglon()"
+                  :data-renglon-tooltip="JSON.stringify({ Marca: r.marca || '', Lote: r.cod_lote || '', VtoLote: r.vto_lote || '', PresV: r.multiplicador_vta, PresC: r.cantidad_uni, Embalaje: r.tipo_unidad || '', Unidad: r.unidad_art_peso != null ? r.unidad_art_peso : '' })">
+                <td class="px-3 py-2 font-medium" x-text="r.CodigoArticulo || '—'"></td>
+                <td class="px-3 py-2" x-text="r.id_manual || '—'"></td>
+                <td class="px-3 py-2 max-w-[200px] truncate" x-text="r.Descripcion || '—'"></td>
+                <td class="px-3 py-2">
+                  <template x-if="puedeCambiarES">
+                    <select x-model="r.ES" @change="actualizarMovimientoCantidad(r)"
+                      class="w-full max-w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-2 pr-8 py-1 text-xs">
+                      <option value="E">Entrada</option>
+                      <option value="S">Salida</option>
+                    </select>
+                  </template>
+                  <template x-if="!puedeCambiarES">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="r.ES === 'E' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'" x-text="r.ES === 'E' ? 'Entrada' : 'Salida'"></span>
+                  </template>
+                </td>
+                <td class="px-3 py-2">
+                  <input type="number" x-model.number="r.Cantidad" @change="actualizarMovimientoCantidad(r)" min="1" step="1"
+                    class="w-20 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm">
+                </td>
+                <td x-show="mostrarEmbalaje" class="px-3 py-2">
+                  <select x-model="r.tipo_unidad" @change="actualizarMovimientoCantidad(r)"
+                    class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs min-w-[90px]">
+                    <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
+                      <option :value="opt.value" x-text="opt.label"></option>
+                    </template>
+                  </select>
+                </td>
+                <td x-show="mostrarUnidadPeso" class="px-3 py-2">
+                  <div class="flex items-center gap-1">
+                    <input type="number" x-model.number="r.unidad_art_peso" @change="actualizarMovimientoCantidad(r)" min="0" step="0.001" placeholder="0"
+                      class="w-16 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
+                    <button type="button" @click="abrirModalPeso(r)" class="p-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Ingresar peso (lista)"><span class="material-icons text-base">list</span></button>
+                  </div>
+                </td>
+                <td class="px-3 py-2" x-text="r.nro_pedi || '—'"></td>
+                <td class="px-3 py-2">
+                  <template x-if="r.lote_articulo === 'Si' && !r.id_lote && !r.cod_lote">
+                    <button type="button" @click="abrirModalLote(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Elegir lote"><span class="material-icons text-lg">inventory_2</span></button>
+                  </template>
+                  <template x-if="r.lote_articulo === 'Si' && (r.id_lote || r.cod_lote)">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class="text-xs font-medium text-gray-900 dark:text-white" x-text="r.cod_lote || '—'"></span>
+                      <span x-show="r.vto_lote" class="text-xs text-gray-500 dark:text-gray-400" x-text="'Vto: ' + r.vto_lote"></span>
+                      <span x-show="r.stock_lote != null" class="text-xs text-gray-500 dark:text-gray-400">Stock: <span x-text="formatoEntero(r.stock_lote)"></span></span>
+                      <button type="button" @click="abrirModalLote(r)" class="p-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Cambiar lote"><span class="material-icons text-base">edit</span></button>
+                    </div>
+                  </template>
+                  <template x-if="r.lote_articulo !== 'Si'">
+                    <span class="material-icons text-lg text-gray-400 cursor-default" title="Artículo sin lote">inventory_2</span>
+                  </template>
+                </td>
+                <td class="px-3 py-2 text-center">
+                  <template x-if="r.serie_articulo === 'Si'">
+                    <button type="button" @click="abrirModalSeries(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Números de serie"><span class="material-icons text-lg">layers</span></button>
+                  </template>
+                  <template x-if="r.serie_articulo !== 'Si'">
+                    <span class="material-icons text-lg text-gray-400 cursor-default" title="Artículo no seriado">layers</span>
+                  </template>
+                </td>
+                <td class="px-3 py-2 text-center">
+                  <button type="button" @click="quitarRenglon(r.Orden)" class="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" title="Eliminar"><span class="material-icons text-lg">delete</span></button>
+                </td>
+              </tr>
+            </template>
+            <!-- Fila de búsqueda (siempre al final) -->
+            <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/20">
+              <td colspan="3" class="px-3 py-2">
+                <div>
+                  <input type="text" x-ref="inputBusquedaArt" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true; actualizarPosicionDropdown()" :placeholder="(parseInt(cabecera.motivo_movimiento, 10) === 9 || parseInt(cabecera.motivo_movimiento, 10) === 10) ? 'Buscar por nombre o código, o * para ver todos los artículos ensamblados (Enter)' : 'Buscar por nombre o escanear código de barras (Enter)'"
+                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100">
+                  <p x-show="mensajeCodigoInexistente" x-cloak class="mt-1 text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
+                </div>
+              </td>
+              <td class="px-3 py-2">
+                <select x-model="filaBusqueda.ES" :disabled="!puedeCambiarES" class="w-full max-w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-2 pr-8 py-1.5 text-sm disabled:opacity-70"
+                  :title="puedeCambiarES ? 'Entrada o Salida' : 'Según motivo'">
+                  <option value="E">Entrada</option>
+                  <option value="S">Salida</option>
+                </select>
+              </td>
+              <td class="px-3 py-2">
+                <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" @change="filaBusqueda.cantidad = Math.max(1, Math.round(parseFloat(filaBusqueda.cantidad) || 1))" @keydown.enter.prevent="confirmarFilaBusqueda()"
+                  class="w-20 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm">
+              </td>
+              <td x-show="mostrarEmbalaje" class="px-3 py-2">
+                <select x-model="filaBusqueda.tipo_unidad" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm min-w-[90px]">
+                  <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
+                    <option :value="opt.value" x-text="opt.label"></option>
+                  </template>
+                </select>
+              </td>
+              <td x-show="mostrarUnidadPeso" class="px-3 py-2">
+                <input type="number" x-model.number="filaBusqueda.unidad_art_peso" min="0" step="0.001" placeholder="0"
+                  class="w-16 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm">
+              </td>
+              <td colspan="4" class="px-3 py-2">
+                <button type="button" @click="confirmarFilaBusqueda()" :disabled="agregando || !cabeceraMinimaCompleta || !filaBusqueda.articuloSeleccionado"
+                  class="rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 text-sm" title="Agregar">Agregar</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p x-show="renglones.length === 0 && !filaBusqueda.articuloSeleccionado" x-cloak class="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+        Escriba en la fila de búsqueda y pulse Enter para agregar.
+      </p>
+      <!-- Lista de resultados de búsqueda (un div por ítem con x-show para evitar problemas de x-if dentro de x-for) -->
+      <div x-ref="listaResultadosBusqueda" x-show="dropdownSugerencias.length > 0" x-cloak x-transition
+        @click.outside="cerrarDropdownSiFueraDeBusqueda($event)"
+        class="mt-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 shadow-lg max-h-80 overflow-y-auto min-h-[2rem]">
+        <template x-for="(a, i) in dropdownSugerencias" :key="'art-' + (a.IDArt || a.esMensajeSinResultados || i) + '-' + i">
+          <div class="border-b border-gray-100 dark:border-gray-600 last:border-0">
+            <div x-show="a.esMensajeSinResultados" class="w-full text-left px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 italic cursor-default" x-text="a.Descripcion || 'No hay artículos'"></div>
+            <button type="button" x-show="!a.esMensajeSinResultados" @click="seleccionarArticuloFilaBusqueda(a)" class="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm">
+              <div class="font-medium text-gray-900 dark:text-gray-100" x-text="(a.id_manual || a.CodigoArticulo || '') + ' · ' + (a.Descripcion || '')"></div>
+              <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400" x-show="a.PrecioCosto != null || a.Precio1V != null">
+                <span x-show="a.PrecioCosto != null">P. Costo: <span x-text="formatoMoneda(a.PrecioCosto)"></span></span>
+                <span x-show="a.PrecioCosto != null && a.Precio1V != null" class="mx-1">|</span>
+                <span x-show="a.Precio1V != null">PV 1: <span x-text="formatoMoneda(a.Precio1V)"></span></span>
+                <span x-show="(a.PrecioCosto != null || a.Precio1V != null) && a.Alicuota != null" class="mx-1">|</span>
+                <span x-show="a.Alicuota != null">Alic: <span x-text="a.Alicuota"></span>%</span>
+              </div>
+              <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400 space-y-0.5" x-show="a.stock_depositos && a.stock_depositos.length">
+                <span class="font-semibold text-gray-700 dark:text-gray-300">Stock:</span>
+                <template x-for="(sd, iDep) in (a.stock_depositos || [])" :key="'fb-' + sd.id_deposito + '-' + iDep">
+                  <div class="flex gap-1">
+                    <span class="font-semibold text-gray-800 dark:text-gray-200" x-text="sd.nombre_deposito"></span>
+                      <span>: </span>
+                      <span x-text="formatoEntero(sd.saldo)"></span>
+                  </div>
+                </template>
+              </div>
+            </button>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div>
+
+  <!-- Pie: Confirmar / Cancelar -->
+  <div class="flex flex-wrap gap-4">
+    <button type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
+      class="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition">
+      <span class="material-icons text-xl">save</span>
+      <span>Confirmar movimiento</span>
+    </button>
+    <button type="button" @click="cancelarYSalir()" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition">
+      <span class="material-icons text-xl">close</span>
+      <span>Cancelar</span>
+    </button>
+  </div>
+
+  <!-- Modal resumen -->
+  <div x-show="mostrarModalResumen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="mostrarModalResumen = false">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6" @click.outside="mostrarModalResumen = false">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Resumen del movimiento</h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Motivo:</strong> <span x-text="nombreMotivo"></span></p>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-2"><strong>Depósito origen:</strong> <span x-text="nombreDepOrigen"></span></p>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-2" x-show="cabecera.deposito_destino"><strong>Depósito destino:</strong> <span x-text="nombreDepDestino"></span></p>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><strong>Cantidad de ítems:</strong> <span x-text="renglones.length"></span></p>
+      <div class="flex gap-3">
+        <button type="button" @click="confirmarMovimiento()" :disabled="confirmando" class="inline-flex items-center gap-2 flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-lg">
+          <span class="material-icons">save</span>
+          <span x-show="!confirmando">Confirmar</span>
+          <span x-show="confirmando">Guardando…</span>
+        </button>
+        <button type="button" @click="mostrarModalResumen = false" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg">
+          <span class="material-icons">close</span>
+          Volver a editar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Detalle del artículo -->
+  <div x-show="renglonDetalle" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="renglonDetalle = null">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" @click.outside="renglonDetalle = null">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Detalle del artículo</h3>
+        <button type="button" @click="renglonDetalle = null" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <template x-if="renglonDetalle">
+        <dl class="space-y-2 text-sm">
+          <div><dt class="text-gray-500 dark:text-gray-400">Orden</dt><dd class="font-medium text-gray-900 dark:text-white" x-text="renglonDetalle.Orden"></dd></div>
+          <div><dt class="text-gray-500 dark:text-gray-400">Código</dt><dd class="font-medium text-gray-900 dark:text-white" x-text="renglonDetalle.CodigoArticulo"></dd></div>
+          <div><dt class="text-gray-500 dark:text-gray-400">Descripción</dt><dd class="text-gray-900 dark:text-white" x-text="renglonDetalle.Descripcion"></dd></div>
+          <div><dt class="text-gray-500 dark:text-gray-400">Cantidad</dt><dd class="text-gray-900 dark:text-white" x-text="formatoEntero(renglonDetalle.Cantidad)"></dd></div>
+          <div><dt class="text-gray-500 dark:text-gray-400">Entrada / Salida</dt><dd class="text-gray-900 dark:text-white" x-text="renglonDetalle.ES === 'E' ? 'Entrada' : 'Salida'"></dd></div>
+          <div><dt class="text-gray-500 dark:text-gray-400">Depósito</dt><dd class="text-gray-900 dark:text-white" x-text="renglonDetalle.CodDeposito"></dd></div>
+          <template x-if="renglonDetalle.cod_lote">
+            <div><dt class="text-gray-500 dark:text-gray-400">Lote</dt><dd class="text-gray-900 dark:text-white" x-text="renglonDetalle.cod_lote || '—'"></dd></div>
+          </template>
+          <template x-if="renglonDetalle.vto_lote">
+            <div><dt class="text-gray-500 dark:text-gray-400">Vto. lote</dt><dd class="text-gray-900 dark:text-white" x-text="renglonDetalle.vto_lote"></dd></div>
+          </template>
+        </dl>
+      </template>
+    </div>
+  </div>
+
+  <!-- Modal Ingresar peso (lista_unidad_art_peso) -->
+  <div x-show="renglonPesoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="cerrarModalPeso()">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-sm w-full p-6" @click.outside="cerrarModalPeso()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Ingresar peso</h3>
+        <button type="button" @click="cerrarModalPeso()" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <template x-if="renglonPesoModal">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" x-text="'Artículo: ' + (renglonPesoModal.Descripcion || renglonPesoModal.CodigoArticulo || '')"></p>
+      </template>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Peso (unidad)</label>
+        <input type="number" x-model="valorPesoModal" min="0" step="0.001" @keydown.enter.prevent="confirmarPesoModal()"
+          class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-gray-100">
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="cerrarModalPeso()" class="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Cancelar</button>
+        <button type="button" @click="confirmarPesoModal()" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Elegir lote -->
+  <div x-show="renglonLoteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="cerrarModalLote()">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6" @click.outside="cerrarModalLote()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Elegir lote</h3>
+        <button type="button" @click="cerrarModalLote()" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <template x-if="renglonLoteModal">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" x-text="'Artículo: ' + (renglonLoteModal.Descripcion || renglonLoteModal.CodigoArticulo || '')"></p>
+      </template>
+      <div x-show="loadingLotesRenglon" class="text-sm text-gray-500 dark:text-gray-400 py-4">Cargando lotes…</div>
+      <div x-show="!loadingLotesRenglon && lotesParaRenglon.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-4">No hay lotes con stock en el depósito origen.</div>
+      <div x-show="!loadingLotesRenglon && lotesParaRenglon.length > 0" class="max-h-64 overflow-y-auto space-y-1">
+        <template x-for="lt in lotesParaRenglon" :key="lt.id_lote">
+          <button type="button" @click="seleccionarLoteRenglon(lt)" class="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm">
+            <span class="font-medium text-gray-900 dark:text-white" x-text="lt.cod_lote"></span>
+            <span class="text-gray-600 dark:text-gray-400" x-show="lt.vto_lote" x-text="' (Vto: ' + lt.vto_lote + ')'"></span>
+            <span class="ml-2 text-gray-500 dark:text-gray-400">Stock: <span x-text="formatoEntero(lt.stock_lote)"></span></span>
+          </button>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Números de serie (ABMSeries) -->
+  <div x-show="renglonSerieModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="cerrarModalSeries()">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col p-6" @click.outside="cerrarModalSeries()">
+      <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Números de serie</h3>
+        <button type="button" @click="cerrarModalSeries()" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <template x-if="renglonSerieModal">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2" x-text="(renglonSerieModal.Descripcion || renglonSerieModal.CodigoArticulo || '') + ' — Cantidad: ' + (renglonSerieModal.Cantidad || 0)"></p>
+      </template>
+      <p x-show="renglonSerieModal && seriesRenglon.length !== parseInt(renglonSerieModal.Cantidad, 10)" class="text-amber-600 dark:text-amber-400 text-sm mb-2" x-text="'Debe haber ' + (renglonSerieModal ? renglonSerieModal.Cantidad : 0) + ' número(s) de serie. Actual: ' + (seriesRenglon ? seriesRenglon.length : 0)"></p>
+      <p x-show="errorSeriesRenglon" class="text-red-600 dark:text-red-400 text-sm mb-2" x-text="errorSeriesRenglon"></p>
+      <div x-show="loadingSeriesRenglon" class="py-4 text-center text-gray-500 dark:text-gray-400 text-sm">Cargando…</div>
+      <div x-show="!loadingSeriesRenglon" class="flex-1 min-h-0 overflow-auto space-y-2">
+        <template x-for="(s, idx) in seriesRenglon" :key="(s.id_temp || idx) + '-' + (s.nro_serie || '')">
+          <div class="flex items-center justify-between gap-2 py-1.5 px-2 rounded border border-gray-200 dark:border-gray-600">
+            <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="s.nro_serie || '—'"></span>
+            <span x-show="s.vto_serie" class="text-xs text-gray-500 dark:text-gray-400" x-text="'Vto: ' + s.vto_serie"></span>
+            <button type="button" @click="quitarSerieRenglon(s)" class="p-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar"><span class="material-icons text-sm">delete</span></button>
+          </div>
+        </template>
+        <!-- Agregar: Entrada -->
+        <template x-if="renglonSerieModal && renglonSerieModal.ES === 'E'">
+          <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Nº serie</label>
+              <input type="text" x-model="nuevoNroSerie" @keydown.enter.prevent="agregarSerieRenglon()" placeholder="Ej. SN001" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm w-32">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Vto. (opc.)</label>
+              <input type="date" x-model="nuevoVtoSerie" @keydown.enter.prevent="agregarSerieRenglon()" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm w-32">
+            </div>
+            <button type="button" @click="agregarSerieRenglon()" :disabled="!nuevoNroSerie || !nuevoNroSerie.trim()" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm">Agregar</button>
+          </div>
+        </template>
+        <!-- Agregar: Salida (elegir disponible) -->
+        <template x-if="renglonSerieModal && renglonSerieModal.ES === 'S'">
+          <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+            <div class="flex-1 min-w-[180px]">
+              <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Serie disponible</label>
+              <select x-model="serieSalidaSeleccionada" class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm">
+                <option value="">— Elegir —</option>
+                <template x-for="d in seriesDisponibles" :key="d.id_serie_entrada">
+                  <option :value="d.id_serie_entrada" x-text="(d.nro_serie || '') + (d.vto_serie ? ' (Vto: ' + d.vto_serie + ')' : '')"></option>
+                </template>
+              </select>
+            </div>
+            <button type="button" @click="agregarSerieRenglon()" :disabled="!serieSalidaSeleccionada" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm">Agregar</button>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Lista de pedidos pendientes -->
+  <div x-show="mostrarModalPedidosPendientes" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="cerrarModalPedidos()">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col p-6" @click.outside="cerrarModalPedidos()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="tituloModalPedidos"></h3>
+        <button type="button" @click="cerrarModalPedidos()" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <div x-show="loadingPedidosPendientes" class="py-8 text-center text-gray-500 dark:text-gray-400">Cargando…</div>
+      <div x-show="!loadingPedidosPendientes && errorPedidosPendientes" class="py-4 px-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm" x-text="errorPedidosPendientes"></div>
+      <div x-show="!loadingPedidosPendientes && !errorPedidosPendientes && pedidosPendientes.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400">No hay pedidos pendientes.</div>
+      <div x-show="!loadingPedidosPendientes && !errorPedidosPendientes && pedidosPendientes.length > 0" class="overflow-auto flex-1 min-h-0">
+        <table class="w-full text-sm text-left text-gray-700 dark:text-gray-300">
+          <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 sticky top-0">
+            <tr>
+              <th class="px-3 py-2">Nº comp.</th>
+              <th class="px-3 py-2">Cód. mov.</th>
+              <th class="px-3 py-2">Estado</th>
+              <th class="px-3 py-2" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6">Cliente</th>
+              <th class="px-3 py-2 w-24">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in pedidosPendientes" :key="p.CodigoMovimiento">
+              <tr class="border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td class="px-3 py-2" x-text="p.NroComprobante || '—'"></td>
+                <td class="px-3 py-2" x-text="p.CodigoMovimiento"></td>
+                <td class="px-3 py-2" x-text="p.Estado || '—'"></td>
+                <td class="px-3 py-2" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6" x-text="p.nombre_cliente || '—'"></td>
+                <td class="px-3 py-2">
+                  <button type="button" @click="seleccionarPedido(p)" class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex justify-end">
+        <button type="button" @click="cerrarModalPedidos()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500"><span class="material-icons text-lg">close</span>Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Lista de proyectos -->
+  <div x-show="mostrarModalProyectos" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="cerrarModalProyectos()">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col p-6" @click.outside="cerrarModalProyectos()">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Lista de proyectos</h3>
+        <button type="button" @click="cerrarModalProyectos()" class="p-1 rounded text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-600"><span class="material-icons">close</span></button>
+      </div>
+      <div x-show="loadingProyectos" class="py-8 text-center text-gray-500 dark:text-gray-400">Cargando…</div>
+      <div x-show="!loadingProyectos && errorProyectos" class="py-4 px-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm" x-text="errorProyectos"></div>
+      <div x-show="!loadingProyectos && !errorProyectos && proyectosLista.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400">No hay proyectos en curso.</div>
+      <div x-show="!loadingProyectos && !errorProyectos && proyectosLista.length > 0" class="overflow-auto flex-1 min-h-0">
+        <table class="w-full text-sm text-left text-gray-700 dark:text-gray-300">
+          <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 sticky top-0">
+            <tr>
+              <th class="px-3 py-2">Proyecto</th>
+              <th class="px-3 py-2">Estado</th>
+              <th class="px-3 py-2">Zona</th>
+              <th class="px-3 py-2">Cliente</th>
+              <th class="px-3 py-2 w-24">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template x-for="p in proyectosLista" :key="p.id_proyecto">
+              <tr class="border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td class="px-3 py-2 font-medium" x-text="p.nombre_proyecto || '—'"></td>
+                <td class="px-3 py-2" x-text="p.estado_proyecto || '—'"></td>
+                <td class="px-3 py-2" x-text="p.nombre_zona || '—'"></td>
+                <td class="px-3 py-2" x-text="p.nombre_cliente || '—'"></td>
+                <td class="px-3 py-2">
+                  <button type="button" @click="seleccionarProyecto(p)" class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex justify-end">
+        <button type="button" @click="cerrarModalProyectos()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-500"><span class="material-icons text-lg">close</span>Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', function() {
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+  Alpine.data('ingresoMovStock', function() {
+    return {
+      tabActivo: 'datos',
+      depositos: [],
+      refMovstock: [],
+      motivos: [],
+      viajantes: [],
+      clientes: [],
+      activ_proyecto: 'No',
+      renglones: [],
+      cabecera: {
+        fecha: new Date().toISOString().slice(0, 10),
+        motivo_movimiento: '',
+        deposito_origen: '',
+        deposito_destino: '',
+        id_vendedor: '',
+        id_cliente: '',
+        maquina: '',
+        id_ref_movstock: '',
+        valor_variable: '',
+        cantidad_armado: 'Unidad',
+        nro_pedi: '',
+        id_proyecto: '',
+        detalle: ''
+      },
+      busquedaArt: '',
+      sugerencias: [],
+      mostrarSugerenciasNueva: false,
+      nuevoRenglon: { IDArt: null, CodigoArticulo: '', Descripcion: '', cantidad: 1, ES: 'E' },
+      filaBusqueda: { texto: '', articuloSeleccionado: null, cantidad: 1, ES: 'E', tipo_unidad: 'Unidad', unidad_art_peso: null, sugerencias: [], mostrarSugerencias: false },
+      mensajeCodigoInexistente: false,
+      dropdownTop: 0,
+      dropdownLeft: 0,
+      dropdownWidth: 320,
+      mostrarDropdownArticulos: false,
+      /** Lista mostrada en el dropdown (nivel raíz para que Alpine reactive bien). Ver buscarArticulos / onEnterFilaBusqueda. */
+      dropdownSugerencias: [],
+      saldoDisponible: null,
+      agregando: false,
+      confirmando: false,
+      mostrarModalResumen: false,
+      renglonEditando: null,
+      edicionRenglon: null,
+      renglonDetalle: null,
+      mensajeError: '',
+      mensajeOk: '',
+      codigoMovimiento: null,
+      nroComprobante: '',
+      mostrarModalPedidosPendientes: false,
+      pedidosPendientes: [],
+      loadingPedidosPendientes: false,
+      errorPedidosPendientes: '',
+      pedidoSeleccionadoResumen: null,
+      mostrarModalProyectos: false,
+      proyectosLista: [],
+      loadingProyectos: false,
+      errorProyectos: '',
+      proyectoSeleccionadoResumen: null,
+      renglonLoteModal: null,
+      lotesParaRenglon: [],
+      loadingLotesRenglon: false,
+      calculo_stock_saldo: 'No',
+      saldoDeseado: '',
+      utiliza_bulto_cerrado: 'No',
+      utiliza_display: 'No',
+      tipo_unidad_defecto: 'Unidad',
+      usa_multiplica_bulto_promedio: 'No',
+      tipo_balanza: '',
+      pedidos_parte_produccion: 'No',
+      renglonPesoModal: null,
+      valorPesoModal: '',
+      renglonSerieModal: null,
+      seriesRenglon: [],
+      seriesDisponibles: [],
+      loadingSeriesRenglon: false,
+      errorSeriesRenglon: '',
+      nuevoNroSerie: '',
+      nuevoVtoSerie: '',
+      serieSalidaSeleccionada: '',
+      get mostrarDepDestino() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return m === 6 || m === 9 || m === 10 || m === 11 || m === 12;
+      },
+      get mostrarVendedor() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return m === 6 || m === 7 || m === 8;
+      },
+      get mostrarCliente() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return m === 7 || m === 8;
+      },
+      get mostrarDatosOPT() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return m === 12;
+      },
+      get mostrarCantidadArmado() {
+        return this.pedidos_parte_produccion === 'Si' && parseInt(this.cabecera.motivo_movimiento, 10) === 12;
+      },
+      get mostrarBuscaPEDI() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return m === 6 || m === 11 || m === 12;
+      },
+      get mostrarValorVariable() {
+        return parseInt(this.cabecera.motivo_movimiento, 10) === 10;
+      },
+      get esEntradaFija() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return [1, 4, 8].includes(m);
+      },
+      get esSalidaFija() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        return [3, 5, 6, 7, 12].includes(m);
+      },
+      get puedeCambiarES() {
+        return parseInt(this.cabecera.motivo_movimiento, 10) === 2;
+      },
+      get mostrarSaldoDeseado() {
+        return this.calculo_stock_saldo === 'Si' && this.cabecera.deposito_origen && this.filaBusqueda && this.filaBusqueda.articuloSeleccionado && parseInt(this.cabecera.motivo_movimiento, 10) === 2;
+      },
+      get mostrarEmbalaje() {
+        return this.utiliza_bulto_cerrado === 'Si' || this.utiliza_display === 'Si';
+      },
+      get opcionesTipoUnidad() {
+        const opciones = [{ value: 'Unidad', label: 'Unidad' }];
+        if (this.utiliza_display === 'Si') opciones.push({ value: 'Display', label: 'Display' });
+        if (this.utiliza_bulto_cerrado === 'Si') opciones.push({ value: 'Bulto', label: 'Bulto' });
+        return opciones;
+      },
+      get mostrarUnidadPeso() {
+        return this.usa_multiplica_bulto_promedio === 'Si' && this.tipo_balanza === 'Bascula';
+      },
+      get cabeceraMinimaCompleta() {
+        if (!this.cabecera.fecha || !this.cabecera.motivo_movimiento || !this.cabecera.deposito_origen) return false;
+        if (this.mostrarDepDestino && !this.cabecera.deposito_destino) return false;
+        return true;
+      },
+      getDefaultES() {
+        if (this.esEntradaFija) return 'E';
+        if (this.esSalidaFija) return 'S';
+        return 'E';
+      },
+      setDefaultESDesdeMotivo() {
+        const def = this.getDefaultES();
+        this.nuevoRenglon.ES = def;
+        if (this.filaBusqueda) this.filaBusqueda.ES = def;
+        if (this.cabecera.deposito_origen && this.nuevoRenglon.IDArt && this.nuevoRenglon.ES === 'S') this.actualizarSaldo();
+      },
+      get nombreMotivo() {
+        const m = this.motivos.find(x => String(x.codigo) === String(this.cabecera.motivo_movimiento));
+        return m ? m.nombre : '';
+      },
+      get nombreDepOrigen() {
+        const d = this.depositos.find(x => String(x.CodDeposito) === String(this.cabecera.deposito_origen));
+        return d ? (d.NombreDeposito || d.CodDeposito) : '';
+      },
+      get nombreDepDestino() {
+        const d = this.depositos.find(x => String(x.CodDeposito) === String(this.cabecera.deposito_destino));
+        return d ? (d.NombreDeposito || d.CodDeposito) : '';
+      },
+      get depositosDestino() {
+        const origen = this.cabecera.deposito_origen;
+        if (!origen) return this.depositos;
+        return this.depositos.filter(d => String(d.CodDeposito) !== String(origen));
+      },
+      get tituloModalPedidos() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        if (m === 6) return 'Lista de pedidos internos por depósito';
+        if (m === 11) return 'Pedidos pendientes para generar OPT';
+        if (m === 12) return 'Pedidos pendientes para produccion';
+        return 'Lista de pedidos pendientes';
+      },
+      get tituloBotonPedidos() {
+        const m = parseInt(this.cabecera.motivo_movimiento, 10);
+        if (m === 6) return 'Lista de pedidos internos por depósito';
+        if (m === 11) return 'Pedidos pendientes para generar OPT';
+        if (m === 12) return 'Pedidos pendientes para produccion';
+        return 'Lista de pedidos pendientes';
+      },
+      async abrirModalPedidos() {
+        const motivo = parseInt(this.cabecera.motivo_movimiento, 10);
+        if (motivo === 6 && !this.cabecera.deposito_destino) return;
+        this.errorPedidosPendientes = '';
+        this.pedidosPendientes = [];
+        this.mostrarModalPedidosPendientes = true;
+        this.loadingPedidosPendientes = true;
+        let url = '{% url "stock:api_ingreso_pedidos_pendientes" %}?motivo=' + motivo;
+        if (motivo === 6) url += '&deposito_destino=' + encodeURIComponent(this.cabecera.deposito_destino);
+        const r = await fetch(url, { headers: { 'X-CSRFToken': csrfToken } });
+        const d = await r.json().catch(() => ({}));
+        this.loadingPedidosPendientes = false;
+        if (!r.ok) { this.errorPedidosPendientes = d.error || 'Error al cargar la lista.'; return; }
+        this.pedidosPendientes = d.pedidos || [];
+      },
+      cerrarModalPedidos() {
+        this.mostrarModalPedidosPendientes = false;
+        this.pedidosPendientes = [];
+        this.errorPedidosPendientes = '';
+      },
+      seleccionarPedido(p) {
+        this.cabecera.nro_pedi = String(p.CodigoMovimiento);
+        this.pedidoSeleccionadoResumen = {
+          CodigoMovimiento: p.CodigoMovimiento,
+          NroComprobante: p.NroComprobante,
+          tipo: parseInt(this.cabecera.motivo_movimiento, 10) === 6 ? 'PEDI' : 'PED'
+        };
+        this.cerrarModalPedidos();
+      },
+      async abrirModalProyectos() {
+        this.errorProyectos = '';
+        this.proyectosLista = [];
+        this.mostrarModalProyectos = true;
+        this.loadingProyectos = true;
+        const r = await fetch('{% url "stock:api_ingreso_proyectos" %}', { headers: { 'X-CSRFToken': csrfToken } });
+        const d = await r.json().catch(() => ({}));
+        this.loadingProyectos = false;
+        if (!r.ok) { this.errorProyectos = d.error || 'Error al cargar la lista.'; return; }
+        this.proyectosLista = d.proyectos || [];
+      },
+      cerrarModalProyectos() {
+        this.mostrarModalProyectos = false;
+        this.proyectosLista = [];
+        this.errorProyectos = '';
+      },
+      seleccionarProyecto(p) {
+        this.cabecera.id_proyecto = p.id_proyecto;
+        this.proyectoSeleccionadoResumen = { id_proyecto: p.id_proyecto, nombre_proyecto: p.nombre_proyecto };
+        this.cerrarModalProyectos();
+      },
+      actualizarDetalleTransferencia() {
+        if (parseInt(this.cabecera.motivo_movimiento, 10) !== 6) return;
+        const origen = this.cabecera.deposito_origen;
+        const destino = this.cabecera.deposito_destino;
+        if (!origen || !destino) return;
+        const no = this.depositos.find(d => String(d.CodDeposito) === String(origen));
+        const nd = this.depositos.find(d => String(d.CodDeposito) === String(destino));
+        const nombreOrigen = no ? (no.NombreDeposito || no.CodDeposito) : String(origen);
+        const nombreDestino = nd ? (nd.NombreDeposito || nd.CodDeposito) : String(destino);
+        this.cabecera.detalle = 'Transferencia de ' + nombreOrigen + ' a ' + nombreDestino;
+      },
+      handleAtajoTeclado(e) {
+        // Atajos Fxx deshabilitados por el momento.
+      },
+      async init() {
+        this.mensajeError = '';
+        const r = await fetch('{% url "stock:api_ingreso_datos" %}', { headers: { 'X-CSRFToken': csrfToken } });
+        if (!r.ok) { this.mensajeError = 'No se pudieron cargar los datos.'; return; }
+        const d = await r.json();
+        this.depositos = d.depositos || [];
+        this.refMovstock = d.ref_movstock || [];
+        this.motivos = d.motivos || [];
+        this.viajantes = d.viajantes || [];
+        this.clientes = d.clientes || [];
+        this.activ_proyecto = d.activ_proyecto || 'No';
+        this.calculo_stock_saldo = d.calculo_stock_saldo || 'No';
+        this.utiliza_bulto_cerrado = d.utiliza_bulto_cerrado || 'No';
+        this.utiliza_display = d.utiliza_display || 'No';
+        this.tipo_unidad_defecto = d.tipo_unidad_defecto || 'Unidad';
+        this.usa_multiplica_bulto_promedio = d.usa_multiplica_bulto_promedio || 'No';
+        this.tipo_balanza = d.tipo_balanza || '';
+        this.pedidos_parte_produccion = d.pedidos_parte_produccion || 'No';
+        if (this.filaBusqueda) this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto;
+        const rR = await fetch('{% url "stock:api_ingreso_renglones" %}', { headers: { 'X-CSRFToken': csrfToken } });
+        if (rR.ok) { const dR = await rR.json(); this.renglones = this.normalizarRenglones(dR.renglones || []); }
+        const tooltipEl = document.createElement('div');
+        tooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl opacity-0 z-[9999] border border-slate-700 overflow-y-auto overflow-x-hidden');
+        tooltipEl.style.minWidth = '200px';
+        tooltipEl.style.maxWidth = '320px';
+        tooltipEl.style.maxHeight = '85vh';
+        tooltipEl.style.transition = 'opacity 0.2s ease-in-out';
+        tooltipEl.style.pointerEvents = 'none';
+        document.body.appendChild(tooltipEl);
+        this._tooltipRenglonEl = tooltipEl;
+        this._tooltipRenglonHide = null;
+        const self = this;
+        this._onBeforeUnload = function(e) {
+          if (window._ingresoCancelando) return;
+          if (self.renglones && self.renglones.length > 0) { e.preventDefault(); e.returnValue = ''; }
+        };
+        window.addEventListener('beforeunload', this._onBeforeUnload);
+      },
+      _escHtml(s) {
+        if (s == null || s === undefined) return '';
+        const t = String(s);
+        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      },
+      buildRenglonTooltipHtml(datos) {
+        if (!datos) return '';
+        const esc = this._escHtml.bind(this);
+        const line = (label, value) => '<div class="flex items-center justify-between gap-3 py-0.5 border-t border-slate-700 first:border-t-0 first:pt-0 pt-0.5"><span class="text-slate-400 text-[9px] shrink-0">' + esc(label) + '</span><span class="text-sky-300 text-xs text-right break-all max-w-[180px]">' + esc(value || '—') + '</span></div>';
+        return '<div class="font-bold text-sm text-white mb-1.5">Detalle línea</div>' +
+          line('Código', datos.CodigoArticulo) +
+          line('Cod. Manual', datos.id_manual) +
+          line('Descripción', datos.Descripcion) +
+          line('Cantidad', datos.Cantidad) +
+          line('Movimiento', datos.Movimiento) +
+          line('Nro. Pedido int.', datos.nro_pedi) +
+          line('Marca', datos.Marca) +
+          line('Lote', datos.Lote) +
+          line('Vto Lote', datos.VtoLote) +
+          line('Pres. V', datos.PresV) +
+          line('Pres. C', datos.PresC) +
+          line('Embalaje', datos.Embalaje) +
+          line('Unidad (peso)', datos.Unidad);
+      },
+      mostrarTooltipRenglon(ev, r) {
+        if (this._tooltipRenglonHide) { clearTimeout(this._tooltipRenglonHide); this._tooltipRenglonHide = null; }
+        if (!this._tooltipRenglonEl || !r) return;
+        const movimiento = r.ES === 'E' ? 'Entrada' : (r.ES === 'S' ? 'Salida' : (r.ES || '—'));
+        const datos = {
+          CodigoArticulo: r.CodigoArticulo || '',
+          id_manual: r.id_manual || '',
+          Descripcion: (r.Descripcion || '').substring(0, 40) + ((r.Descripcion || '').length > 40 ? '…' : ''),
+          Cantidad: r.Cantidad != null ? String(r.Cantidad) : '',
+          Movimiento: movimiento,
+          nro_pedi: r.nro_pedi || '',
+          Marca: r.marca || '',
+          Lote: r.cod_lote || '',
+          VtoLote: r.vto_lote != null ? String(r.vto_lote) : '',
+          PresV: r.multiplicador_vta != null ? String(r.multiplicador_vta) : '',
+          PresC: r.cantidad_uni != null ? String(r.cantidad_uni) : '',
+          Embalaje: r.tipo_unidad || '',
+          Unidad: r.unidad_art_peso != null ? String(r.unidad_art_peso) : ''
+        };
+        this._tooltipRenglonEl.innerHTML = this.buildRenglonTooltipHtml(datos);
+        const pad = 12;
+        const tooltipMaxW = 320;
+        const tooltipMaxH = Math.min(400, window.innerHeight - 40);
+        let left = ev.pageX + pad;
+        let top = ev.pageY - pad;
+        if (left + tooltipMaxW > window.innerWidth) left = ev.pageX - tooltipMaxW - pad;
+        if (left < pad) left = pad;
+        if (top + tooltipMaxH > window.innerHeight - pad) top = window.innerHeight - tooltipMaxH - pad;
+        if (top < pad) top = pad;
+        this._tooltipRenglonEl.style.left = left + 'px';
+        this._tooltipRenglonEl.style.top = top + 'px';
+        this._tooltipRenglonEl.style.opacity = '1';
+      },
+      ocultarTooltipRenglon() {
+        const self = this;
+        this._tooltipRenglonHide = setTimeout(function() { if (self._tooltipRenglonEl) self._tooltipRenglonEl.style.opacity = '0'; }, 150);
+      },
+      forzarCerrarTooltipRenglon() {
+        if (this._tooltipRenglonHide) { clearTimeout(this._tooltipRenglonHide); this._tooltipRenglonHide = null; }
+        if (this._tooltipRenglonEl) this._tooltipRenglonEl.style.opacity = '0';
+      },
+      _busquedaTimeout: null,
+      buscarArticulosDebounce() {
+        clearTimeout(this._busquedaTimeout);
+        this._busquedaTimeout = setTimeout(() => this.buscarArticulos(), 250);
+      },
+      /**
+       * Búsqueda de artículos para el dropdown de la fila de búsqueda.
+       * Cuándo se muestra el listado:
+       * - Cualquier motivo: si q tiene al menos 2 caracteres, se llama a la API y al recibir resultados se asigna dropdownSugerencias y mostrarDropdownArticulos=true.
+       * - Motivo Armado (9) o Desarmado (10): además se acepta q='*' (un solo carácter) para listar todos los ensamblados; si no hay resultados se muestra un ítem "No hay artículos ensamblados".
+       * Cuándo se oculta: q < 2 caracteres (y no es * en 9/10), error de red/API, click outside, seleccionar artículo, agregar fila, o Enter con código inexistente.
+       */
+      async buscarArticulos() {
+        const q = (this.filaBusqueda && this.filaBusqueda.texto != null ? this.filaBusqueda.texto : this.busquedaArt).trim();
+        const motivo = parseInt(this.cabecera.motivo_movimiento, 10);
+        const esArmadoDesarmado = motivo === 9 || motivo === 10;
+        const permitirAsterisco = esArmadoDesarmado && q === '*';
+        if (q.length < 2 && !permitirAsterisco) {
+          this.dropdownSugerencias = [];
+          this.mostrarDropdownArticulos = false;
+          if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
+          else this.sugerencias = [];
+          return;
+        }
+        const urlBase = '{% url "stock:api_ingreso_articulos" %}';
+        try {
+          const params = new URLSearchParams({ q: q, detalle: '1', limit: esArmadoDesarmado ? '50' : '15' });
+          if (this.cabecera.deposito_origen) params.set('id_deposito', String(this.cabecera.deposito_origen));
+          if (esArmadoDesarmado) params.set('solo_ensamblados', '1');
+          const url = urlBase + (urlBase.indexOf('?') >= 0 ? '&' : '?') + params.toString();
+          const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } });
+          if (!r.ok) {
+            this.dropdownSugerencias = [];
+            this.mostrarDropdownArticulos = false;
+            if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
+            else this.sugerencias = [];
+            return;
+          }
+          const d = await r.json();
+          let items = Array.isArray(d.articulos) ? d.articulos : [];
+          if (items.length === 0) {
+            if (d.solo_ensamblados) {
+              items = [{ esMensajeSinResultados: true, Descripcion: 'No hay artículos ensamblados' }];
+            } else {
+              items = [{ esMensajeSinResultados: true, Descripcion: 'No hay artículos que coincidan con la búsqueda' }];
+            }
+          }
+          this.dropdownSugerencias = items.slice ? items.slice() : [...items];
+          this.mostrarDropdownArticulos = true;
+          if (this.filaBusqueda) {
+            this.filaBusqueda.sugerencias = items;
+            this.filaBusqueda.mostrarSugerencias = items.length > 0;
+          } else this.sugerencias = items;
+          this.$nextTick(() => {
+            const el = this.$refs.listaResultadosBusqueda;
+            if (el && items.length > 0) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          });
+        } catch (err) {
+          this.dropdownSugerencias = [];
+          this.mostrarDropdownArticulos = false;
+          if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
+          else this.sugerencias = [];
+        }
+      },
+      seleccionarArticulo(a) {
+        this.nuevoRenglon = { IDArt: a.IDArt, CodigoArticulo: a.CodigoArticulo, Descripcion: a.Descripcion, cantidad: 1, ES: this.getDefaultES() };
+        this.busquedaArt = a.CodigoArticulo + ' - ' + a.Descripcion;
+        this.saldoDisponible = null;
+        if (this.cabecera.deposito_origen && this.nuevoRenglon.ES === 'S') this.actualizarSaldo();
+      },
+      actualizarPosicionDropdown() {
+        const input = this.$refs.inputBusquedaArt;
+        if (!input) return;
+        const r = input.getBoundingClientRect();
+        this.dropdownTop = r.bottom + 4;
+        this.dropdownLeft = r.left;
+        this.dropdownWidth = Math.max(r.width, 320);
+      },
+      cerrarDropdownSiFueraDeBusqueda(ev) {
+        const input = this.$refs.inputBusquedaArt;
+        if (input && (ev.target === input || input.contains(ev.target))) return;
+        this.dropdownSugerencias = [];
+        this.mostrarDropdownArticulos = false;
+        if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
+      },
+      formatoMoneda(val) {
+        const n = parseFloat(val);
+        if (isNaN(n)) return '0,00';
+        return (n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      },
+      formatoEntero(val) {
+        const n = parseFloat(val);
+        if (isNaN(n)) return '0';
+        return String(Math.round(n));
+      },
+      normalizarRenglones(list) {
+        if (!Array.isArray(list)) return [];
+        return list.map(function(r) {
+          const c = Math.round(parseFloat(r.Cantidad) || 0);
+          return Object.assign({}, r, { Cantidad: c < 1 ? 1 : c });
+        });
+      },
+      seleccionarArticuloFilaBusqueda(a) {
+        if (!this.filaBusqueda) return;
+        this.filaBusqueda.articuloSeleccionado = a;
+        this.filaBusqueda.texto = (a.id_manual || a.CodigoArticulo || '') + ' - ' + (a.Descripcion || '');
+        this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto || 'Unidad';
+        this.filaBusqueda.mostrarSugerencias = false;
+        this.filaBusqueda.sugerencias = [];
+        this.dropdownSugerencias = [];
+        this.mostrarDropdownArticulos = false;
+      },
+      async onEnterFilaBusqueda() {
+        const texto = (this.filaBusqueda && this.filaBusqueda.texto != null ? this.filaBusqueda.texto : '').trim();
+        if (!texto) {
+          if (this.filaBusqueda && this.filaBusqueda.articuloSeleccionado && this.cabeceraMinimaCompleta) this.confirmarFilaBusqueda();
+          return;
+        }
+        const motivo = parseInt(this.cabecera.motivo_movimiento, 10);
+        if ((motivo === 9 || motivo === 10) && texto === '*') {
+          await this.buscarArticulos();
+          if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = true;
+          this.$nextTick(() => this.actualizarPosicionDropdown());
+          return;
+        }
+        const urlBase = '{% url "stock:api_ingreso_articulos_por_codigo" %}';
+        const params = new URLSearchParams({ codigo: texto });
+        if (this.cabecera.deposito_origen) params.set('id_deposito', String(this.cabecera.deposito_origen));
+        const url = urlBase + (urlBase.indexOf('?') >= 0 ? '&' : '?') + params.toString();
+        try {
+          const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } });
+          const d = await r.json().catch(() => ({}));
+          const articulos = Array.isArray(d.articulos) ? d.articulos : [];
+          if (articulos.length === 1) {
+            this.seleccionarArticuloFilaBusqueda(articulos[0]);
+            this.dropdownSugerencias = [];
+            this.mostrarDropdownArticulos = false;
+            this.mensajeCodigoInexistente = false;
+            const self = this;
+            this.$nextTick(async function() {
+              if (self.cabeceraMinimaCompleta) await self.confirmarFilaBusqueda();
+              else self.mensajeError = 'Complete los datos mínimos del movimiento (fecha, motivo, depósito origen' + (self.mostrarDepDestino ? ', depósito destino' : '') + ') para agregar artículos.';
+            });
+          } else {
+            this.mensajeCodigoInexistente = true;
+            this.dropdownSugerencias = [];
+            this.mostrarDropdownArticulos = false;
+            if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
+            const self = this;
+            setTimeout(function() { self.mensajeCodigoInexistente = false; }, 3000);
+          }
+        } catch (err) {
+          this.mensajeCodigoInexistente = true;
+          this.dropdownSugerencias = [];
+          this.mostrarDropdownArticulos = false;
+          if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
+          const self = this;
+          setTimeout(function() { self.mensajeCodigoInexistente = false; }, 3000);
+        }
+      },
+      async actualizarSaldo() {
+        if (!this.nuevoRenglon.IDArt || !this.cabecera.deposito_origen) return;
+        const r = await fetch('{% url "stock:api_ingreso_saldo" %}?id_articulo=' + this.nuevoRenglon.IDArt + '&id_deposito=' + this.cabecera.deposito_origen);
+        if (r.ok) { const d = await r.json(); this.saldoDisponible = d.saldo; }
+      },
+      async ejecutarCalculoSaldoDirecto() {
+        if (!this.filaBusqueda || !this.filaBusqueda.articuloSeleccionado || !this.cabecera.deposito_origen) {
+          this.mensajeError = 'Seleccione primero un artículo y depósito origen.';
+          return;
+        }
+        const val = (this.saldoDeseado != null && this.saldoDeseado !== '') ? String(this.saldoDeseado).trim() : '';
+        if (val === '') {
+          this.mensajeError = 'Debe ingresar una cantidad en Saldo deseado.';
+          return;
+        }
+        const saldoDeseadoNum = parseFloat(val.replace(',', '.'));
+        if (isNaN(saldoDeseadoNum) || saldoDeseadoNum < 0) {
+          this.mensajeError = 'Debe ingresar una cantidad válida.';
+          return;
+        }
+        this.mensajeError = '';
+        const idArt = this.filaBusqueda.articuloSeleccionado.IDArt;
+        const url = '{% url "stock:api_ingreso_saldo" %}?id_articulo=' + idArt + '&id_deposito=' + this.cabecera.deposito_origen;
+        try {
+          const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } });
+          const d = await r.json().catch(function() { return {}; });
+          const saldoActual = parseFloat(d.saldo);
+          if (isNaN(saldoActual)) { this.mensajeError = 'No se pudo obtener el saldo actual.'; return; }
+          let cantidad = 0;
+          let es = 'E';
+          if (saldoDeseadoNum > saldoActual) {
+            es = 'E';
+            cantidad = saldoDeseadoNum - saldoActual;
+          } else if (saldoDeseadoNum < saldoActual) {
+            es = 'S';
+            cantidad = saldoActual - saldoDeseadoNum;
+          } else {
+            cantidad = saldoDeseadoNum;
+            es = this.filaBusqueda.ES || 'E';
+          }
+          this.filaBusqueda.cantidad = Math.round(cantidad * 1000) / 1000;
+          this.filaBusqueda.ES = es;
+          const self = this;
+          this.$nextTick(function() { const el = self.$refs.inputBusquedaArt; if (el) el.focus(); });
+        } catch (err) {
+          this.mensajeError = 'No se pudo obtener el saldo actual.';
+        }
+      },
+      async agregarRenglon() {
+        if (!this.nuevoRenglon.IDArt || !this.cabecera.deposito_origen) return;
+        this.agregando = true;
+        this.mensajeError = '';
+        const body = {
+          IDArt: this.nuevoRenglon.IDArt,
+          CodigoArticulo: this.nuevoRenglon.CodigoArticulo,
+          Descripcion: this.nuevoRenglon.Descripcion,
+          Cantidad: this.nuevoRenglon.cantidad,
+          ES: this.nuevoRenglon.ES,
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? this.cabecera.deposito_destino : null
+        };
+        if (this.cabecera.nro_pedi) body.nro_pedi = this.cabecera.nro_pedi;
+        const r = await fetch('{% url "stock:api_ingreso_renglon_add" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await r.json().catch(() => ({}));
+        this.agregando = false;
+        if (!r.ok) { this.mensajeError = d.error || 'Error al agregar.'; return; }
+        this.renglones = this.normalizarRenglones(d.renglones || []);
+        this.forzarCerrarTooltipRenglon();
+        this.nuevoRenglon = { IDArt: null, CodigoArticulo: '', Descripcion: '', cantidad: 1, ES: this.getDefaultES() };
+        this.busquedaArt = '';
+      },
+      async confirmarFilaBusqueda() {
+        if (!this.cabeceraMinimaCompleta) {
+          this.mensajeError = 'Complete los datos mínimos del movimiento (fecha, motivo, depósito origen' + (this.mostrarDepDestino ? ', depósito destino' : '') + ') para agregar artículos.';
+          return;
+        }
+        if (!this.filaBusqueda || !this.filaBusqueda.articuloSeleccionado) return;
+        const a = this.filaBusqueda.articuloSeleccionado;
+        const cantidad = Math.round(parseFloat(this.filaBusqueda.cantidad) || 1);
+        if (cantidad < 1) { this.mensajeError = 'La cantidad debe ser al menos 1.'; return; }
+        this.filaBusqueda.cantidad = cantidad;
+        this.agregando = true;
+        this.mensajeError = '';
+        const body = {
+          IDArt: a.IDArt,
+          CodigoArticulo: a.CodigoArticulo,
+          Descripcion: a.Descripcion,
+          id_manual: a.id_manual || null,
+          Cantidad: cantidad,
+          ES: this.filaBusqueda.ES,
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? this.cabecera.deposito_destino : null,
+          marca: a.marca || null,
+          multiplicador_vta: a.multiplicador_vta != null ? a.multiplicador_vta : null,
+          cantidad_uni: a.cantidad_uni != null ? a.cantidad_uni : null,
+          tipo_unidad: (this.filaBusqueda.tipo_unidad || this.tipo_unidad_defecto) || 'Unidad',
+          unidad_art_peso: this.filaBusqueda.unidad_art_peso != null && this.filaBusqueda.unidad_art_peso !== '' ? this.filaBusqueda.unidad_art_peso : (a.unidad_art_peso != null ? a.unidad_art_peso : null)
+        };
+        if (a.id_lote != null) body.id_lote = a.id_lote;
+        if (a.cod_lote) body.cod_lote = a.cod_lote;
+        if (a.vto_lote) body.vto_lote = a.vto_lote;
+        if (this.cabecera.nro_pedi) body.nro_pedi = this.cabecera.nro_pedi;
+        const r = await fetch('{% url "stock:api_ingreso_renglon_add" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await r.json().catch(() => ({}));
+        this.agregando = false;
+        if (!r.ok) { this.mensajeError = d.error || 'Error al agregar.'; return; }
+        this.renglones = this.normalizarRenglones(d.renglones || []);
+        this.forzarCerrarTooltipRenglon();
+        this.filaBusqueda.texto = '';
+        this.filaBusqueda.articuloSeleccionado = null;
+        this.filaBusqueda.cantidad = 1;
+        this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto || 'Unidad';
+        this.filaBusqueda.unidad_art_peso = null;
+        this.filaBusqueda.sugerencias = [];
+        this.dropdownSugerencias = [];
+        this.mostrarDropdownArticulos = false;
+        this.$nextTick(() => { const el = this.$refs.inputBusquedaArt; if (el) el.focus(); });
+      },
+      async actualizarMovimientoCantidad(r) {
+        if (!r || !this.cabecera.deposito_origen) return;
+        const es = this.puedeCambiarES ? (r.ES || 'E') : this.getDefaultES();
+        const cantidad = Math.round(parseFloat(r.Cantidad) || 0);
+        if (isNaN(cantidad) || cantidad <= 0) return;
+        r.Cantidad = cantidad;
+        const ent = es === 'E' ? cantidad : 0;
+        const sal = es === 'S' ? cantidad : 0;
+        const body = {
+          IDArt: r.IDArt,
+          CodigoArticulo: r.CodigoArticulo,
+          Descripcion: r.Descripcion,
+          Cantidad: cantidad,
+          ES: es,
+          entrada: ent,
+          salida: sal,
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? this.cabecera.deposito_destino : null,
+          id_manual: r.id_manual != null ? r.id_manual : null,
+          nro_pedi: r.nro_pedi != null ? r.nro_pedi : null,
+          id_lote: r.id_lote != null ? r.id_lote : null,
+          cod_lote: r.cod_lote || null,
+          vto_lote: r.vto_lote || null,
+          marca: r.marca || null,
+          multiplicador_vta: r.multiplicador_vta != null ? r.multiplicador_vta : null,
+          cantidad_uni: r.cantidad_uni != null ? r.cantidad_uni : null,
+          tipo_unidad: r.tipo_unidad || null,
+          unidad_art_peso: r.unidad_art_peso != null ? r.unidad_art_peso : null
+        };
+        const resp = await fetch('/stock/api/ingreso/renglones/' + r.Orden + '/', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) { this.mensajeError = d.error || 'Error al actualizar.'; return; }
+        this.renglones = this.normalizarRenglones(d.renglones || []);
+        this.forzarCerrarTooltipRenglon();
+      },
+      iniciarEdicion(r) {
+        this.renglonEditando = r.Orden;
+        this.edicionRenglon = {
+          IDArt: r.IDArt,
+          CodigoArticulo: r.CodigoArticulo,
+          Descripcion: r.Descripcion,
+          busquedaArt: r.CodigoArticulo + ' - ' + (r.Descripcion || ''),
+          cantidad: r.Cantidad,
+          ES: r.ES || 'E'
+        };
+        this.sugerencias = [];
+      },
+      seleccionarParaEdicion(a, orden) {
+        if (this.renglonEditando !== orden) return;
+        this.edicionRenglon.IDArt = a.IDArt;
+        this.edicionRenglon.CodigoArticulo = a.CodigoArticulo;
+        this.edicionRenglon.Descripcion = a.Descripcion;
+        this.edicionRenglon.busquedaArt = a.CodigoArticulo + ' - ' + a.Descripcion;
+        this.sugerencias = [];
+      },
+      cancelarEdicion() {
+        this.renglonEditando = null;
+        this.edicionRenglon = null;
+        this.sugerencias = [];
+      },
+      async guardarRenglon(orden) {
+        if (!this.edicionRenglon || !this.cabecera.deposito_origen) return;
+        const es = this.puedeCambiarES ? this.edicionRenglon.ES : this.getDefaultES();
+        const ent = es === 'E' ? this.edicionRenglon.cantidad : 0;
+        const sal = es === 'S' ? this.edicionRenglon.cantidad : 0;
+        const body = {
+          IDArt: this.edicionRenglon.IDArt,
+          CodigoArticulo: this.edicionRenglon.CodigoArticulo,
+          Descripcion: this.edicionRenglon.Descripcion,
+          Cantidad: this.edicionRenglon.cantidad,
+          ES: es,
+          entrada: ent,
+          salida: sal,
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? this.cabecera.deposito_destino : null
+        };
+        const r = await fetch('/stock/api/ingreso/renglones/' + orden + '/', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { this.mensajeError = d.error || 'Error al actualizar.'; return; }
+        this.renglones = this.normalizarRenglones(d.renglones || []);
+        this.forzarCerrarTooltipRenglon();
+        this.renglonEditando = null;
+        this.edicionRenglon = null;
+      },
+      abrirModalLote(r) {
+        if (!r || !this.cabecera.deposito_origen) return;
+        this.forzarCerrarTooltipRenglon();
+        this.renglonLoteModal = r;
+        this.lotesParaRenglon = [];
+        this.loadingLotesRenglon = true;
+        const url = '{% url "stock:api_ingreso_lotes_articulo" %}?id_articulo=' + r.IDArt + '&id_deposito=' + this.cabecera.deposito_origen;
+        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } })
+          .then(res => res.json())
+          .then(d => { this.lotesParaRenglon = d.lotes || []; this.loadingLotesRenglon = false; })
+          .catch(() => { this.lotesParaRenglon = []; this.loadingLotesRenglon = false; });
+      },
+      cerrarModalLote() {
+        this.renglonLoteModal = null;
+        this.lotesParaRenglon = [];
+      },
+      abrirModalPeso(r) {
+        if (!r) return;
+        this.forzarCerrarTooltipRenglon();
+        this.renglonPesoModal = r;
+        this.valorPesoModal = r.unidad_art_peso != null && r.unidad_art_peso !== '' ? String(r.unidad_art_peso) : '';
+      },
+      cerrarModalPeso() {
+        this.renglonPesoModal = null;
+        this.valorPesoModal = '';
+      },
+      async abrirModalSeries(r) {
+        if (!r || !this.cabecera.deposito_origen) return;
+        this.forzarCerrarTooltipRenglon();
+        this.renglonSerieModal = r;
+        this.seriesRenglon = [];
+        this.seriesDisponibles = [];
+        this.errorSeriesRenglon = '';
+        this.nuevoNroSerie = '';
+        this.nuevoVtoSerie = '';
+        this.serieSalidaSeleccionada = '';
+        this.loadingSeriesRenglon = true;
+        const esEntrada = r.ES === 'E';
+        const urlList = '{% url "stock:api_ingreso_series_renglon" %}?orden=' + r.Orden + '&id_articulo=' + r.IDArt + '&es_entrada=' + (esEntrada ? '1' : '0');
+        try {
+          const res = await fetch(urlList, { headers: { 'X-CSRFToken': csrfToken } });
+          const d = await res.json().catch(() => ({}));
+          this.seriesRenglon = d.series || [];
+          if (!esEntrada) {
+            const urlDisp = '{% url "stock:api_ingreso_series_disponibles" %}?id_articulo=' + r.IDArt + '&id_deposito=' + this.cabecera.deposito_origen;
+            const resD = await fetch(urlDisp, { headers: { 'X-CSRFToken': csrfToken } });
+            const dD = await resD.json().catch(() => ({}));
+            this.seriesDisponibles = dD.series || [];
+          }
+        } catch (e) {
+          this.errorSeriesRenglon = 'Error al cargar series.';
+        }
+        this.loadingSeriesRenglon = false;
+      },
+      cerrarModalSeries() {
+        this.renglonSerieModal = null;
+        this.seriesRenglon = [];
+        this.seriesDisponibles = [];
+        this.errorSeriesRenglon = '';
+      },
+      async agregarSerieRenglon() {
+        const r = this.renglonSerieModal;
+        if (!r || !this.cabecera.deposito_origen) return;
+        this.errorSeriesRenglon = '';
+        const esEntrada = r.ES === 'E';
+        const body = { orden: r.Orden, id_articulo: r.IDArt, id_deposito: this.cabecera.deposito_origen, es_entrada: esEntrada };
+        if (esEntrada) {
+          if (!this.nuevoNroSerie || !this.nuevoNroSerie.trim()) return;
+          body.nro_serie = this.nuevoNroSerie.trim();
+          if (this.nuevoVtoSerie) body.vto_serie = this.nuevoVtoSerie;
+        } else {
+          if (!this.serieSalidaSeleccionada) return;
+          body.id_serie_entrada = parseInt(this.serieSalidaSeleccionada, 10);
+        }
+        const resp = await fetch('{% url "stock:api_ingreso_serie_add" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) { this.errorSeriesRenglon = d.error || 'Error al agregar.'; return; }
+        this.seriesRenglon = d.series || [];
+        this.nuevoNroSerie = '';
+        this.nuevoVtoSerie = '';
+        this.serieSalidaSeleccionada = '';
+        if (!r.ES || r.ES !== 'E') {
+          const urlDisp = '{% url "stock:api_ingreso_series_disponibles" %}?id_articulo=' + r.IDArt + '&id_deposito=' + this.cabecera.deposito_origen;
+          const resD = await fetch(urlDisp, { headers: { 'X-CSRFToken': csrfToken } });
+          const dD = await resD.json().catch(() => ({}));
+          this.seriesDisponibles = dD.series || [];
+        }
+      },
+      async quitarSerieRenglon(s) {
+        const r = this.renglonSerieModal;
+        if (!r || !s || s.id_temp == null) return;
+        const tipo = r.ES === 'E' ? 'entrada' : 'salida';
+        const resp = await fetch('{% url "stock:api_ingreso_serie_remove" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ tipo: tipo, id_temp: s.id_temp })
+        });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) { this.errorSeriesRenglon = d.error || 'Error al quitar.'; return; }
+        this.seriesRenglon = this.seriesRenglon.filter(function(x) { return x.id_temp !== s.id_temp; });
+        if (r.ES && r.ES !== 'E') {
+          const urlDisp = '{% url "stock:api_ingreso_series_disponibles" %}?id_articulo=' + r.IDArt + '&id_deposito=' + this.cabecera.deposito_origen;
+          const resD = await fetch(urlDisp, { headers: { 'X-CSRFToken': csrfToken } });
+          const dD = await resD.json().catch(() => ({}));
+          this.seriesDisponibles = dD.series || [];
+        }
+      },
+      async confirmarPesoModal() {
+        const r = this.renglonPesoModal;
+        if (!r) { this.cerrarModalPeso(); return; }
+        const val = parseFloat(this.valorPesoModal);
+        if (!isNaN(val) && val >= 0) r.unidad_art_peso = val;
+        this.cerrarModalPeso();
+        await this.actualizarMovimientoCantidad(r);
+      },
+      async seleccionarLoteRenglon(lt) {
+        const r = this.renglonLoteModal;
+        if (!r) return;
+        r.id_lote = lt.id_lote;
+        r.cod_lote = lt.cod_lote;
+        r.vto_lote = lt.vto_lote || lt.fecha_vto_lote || null;
+        r.stock_lote = lt.stock_lote != null ? lt.stock_lote : null;
+        this.cerrarModalLote();
+        const es = this.puedeCambiarES ? (r.ES || 'E') : this.getDefaultES();
+        const cantidad = parseFloat(r.Cantidad) || 0;
+        const ent = es === 'E' ? cantidad : 0;
+        const sal = es === 'S' ? cantidad : 0;
+        const body = {
+          IDArt: r.IDArt,
+          CodigoArticulo: r.CodigoArticulo,
+          Descripcion: r.Descripcion,
+          Cantidad: cantidad,
+          ES: es,
+          entrada: ent,
+          salida: sal,
+          CodDeposito: this.cabecera.deposito_origen,
+          cod_deposito_destino: this.mostrarDepDestino ? this.cabecera.deposito_destino : null,
+          id_manual: r.id_manual != null ? r.id_manual : null,
+          nro_pedi: r.nro_pedi != null ? r.nro_pedi : null,
+          id_lote: r.id_lote,
+          cod_lote: r.cod_lote || null,
+          vto_lote: r.vto_lote || null,
+          marca: r.marca || null,
+          multiplicador_vta: r.multiplicador_vta != null ? r.multiplicador_vta : null,
+          cantidad_uni: r.cantidad_uni != null ? r.cantidad_uni : null,
+          tipo_unidad: r.tipo_unidad || null,
+          unidad_art_peso: r.unidad_art_peso != null ? r.unidad_art_peso : null
+        };
+        const resp = await fetch('/stock/api/ingreso/renglones/' + r.Orden + '/', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify(body)
+        });
+        const d = await resp.json().catch(() => ({}));
+        if (!resp.ok) { this.mensajeError = d.error || 'Error al actualizar lote.'; return; }
+        this.renglones = this.normalizarRenglones(d.renglones || []);
+        this.forzarCerrarTooltipRenglon();
+        const updated = this.renglones.find(function(x) { return x.Orden === r.Orden; });
+        if (updated) updated.stock_lote = lt.stock_lote != null ? lt.stock_lote : null;
+      },
+      async quitarRenglon(orden) {
+        const r = await fetch('/stock/api/ingreso/renglones/' + orden + '/remove/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken }
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok) { this.renglones = this.normalizarRenglones(d.renglones || []); this.forzarCerrarTooltipRenglon(); this.renglonDetalle = null; }
+      },
+      async cancelarYSalir() {
+        if (this._onBeforeUnload) window.removeEventListener('beforeunload', this._onBeforeUnload);
+        window._ingresoCancelando = true;
+        try {
+          await fetch('{% url "stock:api_ingreso_limpiar_temporales" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({})
+          });
+        } catch (e) { /* ignorar si falla la red */ }
+        window.location.href = '{% url "core:dashboard" %}';
+      },
+      abrirResumen() {
+        this.mensajeError = '';
+        this.forzarCerrarTooltipRenglon();
+        this.mostrarModalResumen = true;
+      },
+      async confirmarMovimiento() {
+        this.mensajeError = '';
+        if (this.mostrarDepDestino && this.cabecera.deposito_destino && String(this.cabecera.deposito_destino) === String(this.cabecera.deposito_origen)) {
+          this.mensajeError = 'El depósito destino no puede ser el mismo que el depósito origen.';
+          return;
+        }
+        const motivo = parseInt(this.cabecera.motivo_movimiento, 10);
+        if (motivo === 10) {
+          const v = this.cabecera.valor_variable;
+          if (v !== '' && v != null && !isNaN(Number(v)) && Number(v) < 0) {
+            this.mensajeError = 'El valor variable no puede ser negativo.';
+            return;
+          }
+        }
+        for (let i = 0; i < this.renglones.length; i++) {
+          const r = this.renglones[i];
+          if ((r.ES === 'S' || r.salida > 0) && r.id_lote && r.stock_lote != null) {
+            const cant = parseFloat(r.Cantidad);
+            const stock = parseFloat(r.stock_lote);
+            if (!isNaN(cant) && !isNaN(stock) && cant > stock) {
+              this.mensajeError = 'Renglón ' + (i + 1) + ': la cantidad (' + cant + ') supera el stock del lote (' + stock + ').';
+              return;
+            }
+          }
+        }
+        this.confirmando = true;
+        const r = await fetch('{% url "stock:api_ingreso_confirmar" %}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ cabecera: this.cabecera, renglones: this.renglones })
+        });
+        const d = await r.json().catch(() => ({}));
+        this.confirmando = false;
+        this.mostrarModalResumen = false;
+        if (!r.ok) { this.mensajeError = d.error || 'Error al confirmar.'; return; }
+        this.mensajeOk = d.mensaje || 'Movimiento generado.';
+        this.codigoMovimiento = d.codigo_movimiento;
+        this.nroComprobante = d.nro_comprobante;
+        this.renglones = [];
+        this.forzarCerrarTooltipRenglon();
+      }
+    };
+  });
+});
+</script>
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+{% endblock %}

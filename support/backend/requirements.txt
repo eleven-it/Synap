@@ -1,0 +1,24 @@
+# Synap Support Backend - dependencias
+# Python 3.10+
+
+Django>=4.2,<5
+djangorestframework>=3.14
+django-filter>=23
+django-cors-headers>=4.3
+django-environ>=0.11
+psycopg[binary]>=3.1
+pgvector>=0.2
+celery[redis]>=5.3
+redis>=5.0
+boto3>=1.33
+cryptography>=42
+PyJWT>=2.8
+requests>=2.31
+openai>=1.12
+langchain-core>=0.3
+langchain-openai>=0.2
+langchain-postgres>=0.0.6
+structlog>=24.1
+django-structlog>=3.0
+gunicorn>=21
+whitenoise>=6.6

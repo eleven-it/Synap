@@ -1,6 +1,25 @@
-from django.http import JsonResponse
+from pathlib import Path
+
+from django.conf import settings
 from django.db.models import Q
+from django.http import JsonResponse
+from django.utils import timezone
+
 from core.models import Contact, Country, FiscalResponsibility, State, Currency
+from core.services.support_conocimiento import build_conocimiento_items_from_docs
+
+
+def fecha_servidor_api(request):
+    """
+    GET /core/api/fecha-servidor/
+    Devuelve fecha y hora del servidor (para barra de estado, paridad con Principal VB6 Control_Fecha).
+    """
+    now = timezone.now()
+    return JsonResponse({
+        "fecha": now.strftime("%Y-%m-%d"),
+        "hora": now.strftime("%H:%M:%S"),
+        "iso": now.isoformat(),
+    })
 
 
 def contact_search_api(request):
@@ -144,28 +163,54 @@ def currency_search_api(request):
     ]
     return JsonResponse({'results': results})
 
-def provincias_api(request):
-    """API para obtener provincias desde administraNET Gestión"""
-    from core.services.administranet_empresas import AdministraNETEmpresaService
-    
+
+def proveedor_search_api(request):
+    """
+    GET /core/api/proveedores/search/?q=...
+    Búsqueda predictiva de proveedores por CUIT, nombre/razón social o código.
+    Requiere sesión con base_empresa. Devuelve { results: [ { Codigo, Nombre, CUIT, responsabilidad_iva, Tipo, saldo }, ... ] }.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
     session_user = request.session.get("user", {})
     base_empresa = session_user.get("base_empresa")
-    
+    if not base_empresa:
+        return JsonResponse({'error': 'Sin empresa activa.', 'results': []}, status=400)
+    q = (request.GET.get('q') or '').strip()
+    from core.services.administranet_compras import buscar_proveedores
+    results = buscar_proveedores(base_empresa, q, limite=15)
+    return JsonResponse({'results': results})
+
+
+def provincias_api(request):
+    """
+    API para obtener provincias desde la base de la empresa (administraNET).
+    Cascada como Empresa.frm: país → Provincia. Parámetro id_pais opcional.
+    """
+    from core.services.administranet_empresas import AdministraNETEmpresaService
+
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+
     if not base_empresa:
         return JsonResponse({'provincias': []}, status=400)
-    
+
     id_pais = request.GET.get('id_pais')
     empresa_service = AdministraNETEmpresaService()
-    
+
     if id_pais:
         provincias = empresa_service.obtener_provincias(base_empresa, int(id_pais))
     else:
         provincias = empresa_service.obtener_provincias(base_empresa)
-    
+
     return JsonResponse({'provincias': provincias})
 
+
 def departamentos_api(request):
-    """API para obtener departamentos desde administraNET Gestión"""
+    """
+    API para obtener departamentos desde la base de la empresa (administraNET).
+    Cascada como Empresa.frm: Provincia → Departamento. Parámetro cod_provincia opcional.
+    """
     from core.services.administranet_empresas import AdministraNETEmpresaService
     
     session_user = request.session.get("user", {})
@@ -182,4 +227,235 @@ def departamentos_api(request):
     else:
         departamentos = empresa_service.obtener_departamentos(base_empresa)
     
-    return JsonResponse({'departamentos': departamentos}) 
+    return JsonResponse({'departamentos': departamentos})
+
+
+def geocode_api(request):
+    """
+    GET: Geocodificación con Google Maps API (paridad con CargaSucursal.frm).
+    Parámetros: address (obligatorio), key (opcional; si no se envía se usa GOOGLE_GEOCODING_API_KEY de settings).
+    Devuelve { "lat": str, "lng": str } o { "error": "..." }.
+    """
+    import urllib.request
+    import urllib.parse
+    import json
+
+    address = request.GET.get('address', '').strip()
+    if not address:
+        return JsonResponse({'error': 'Falta el parámetro address.'}, status=400)
+
+    api_key = request.GET.get('key', '').strip()
+    if not api_key:
+        from django.conf import settings
+        api_key = getattr(settings, 'GOOGLE_GEOCODING_API_KEY', None) or ''
+    url = 'https://maps.googleapis.com/maps/api/geocode/json?address=' + urllib.parse.quote(address)
+    if api_key:
+        url += '&key=' + urllib.parse.quote(api_key)
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Synap/1.0'})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=502)
+
+    if data.get('status') != 'OK' or not data.get('results'):
+        return JsonResponse({
+            'error': data.get('error_message') or data.get('status') or 'Sin resultados para la dirección.'
+        }, status=404)
+
+    loc = data['results'][0].get('geometry', {}).get('location', {})
+    lat = loc.get('lat')
+    lng = loc.get('lng')
+    if lat is None or lng is None:
+        return JsonResponse({'error': 'Coordenadas no encontradas en la respuesta.'}, status=404)
+    return JsonResponse({'lat': str(lat), 'lng': str(lng)})
+
+
+# --- Tipos de envío por sucursal (paridad ABM_Sucursal_Envio / CargaSucursal_Envio VB6) ---
+
+def _base_empresa_from_request(request):
+    """Obtiene base_empresa de la sesión; devuelve (base_empresa, error_response)."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        return None, JsonResponse({'error': 'Sin empresa activa.'}, status=400)
+    return base_empresa, None
+
+
+def sucursal_tipos_envio_list_or_create_api(request, id_sucursal):
+    """
+    GET: Lista tipos de cobro por envío de la sucursal que se está editando.
+    POST: Crea un tipo de envío para esa misma sucursal.
+    id_sucursal viene de la URL (branch_id del formulario de edición). Paridad AdministraNET:
+    CargaSucursal_Envio.id_sucursales_envios = ABMSucursal.DataSucursal.Recordset.Fields!id_sucursal.
+    """
+    base_empresa, err = _base_empresa_from_request(request)
+    if err:
+        return err
+    from core.services.administranet_sucursales import AdministraNETSucursalesService
+    try:
+        id_suc = int(id_sucursal)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'id_sucursal inválido.'}, status=400)
+    svc = AdministraNETSucursalesService()
+    if request.method == 'GET':
+        lista = svc.listar_tipos_envio_sucursal(base_empresa, id_suc)
+        return JsonResponse({'tipos_envio': lista})
+    if request.method == 'POST':
+        import json
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Cuerpo JSON inválido.'}, status=400)
+        created = svc.crear_tipo_envio_sucursal(base_empresa, id_suc, data)
+        if created is None:
+            return JsonResponse({'error': 'No se pudo crear el tipo de envío.'}, status=500)
+        return JsonResponse({'ok': True, 'item': created})
+    return JsonResponse({'error': 'Método no permitido.'}, status=405)
+
+
+def sucursal_zonas_list_api(request):
+    """
+    GET: Lista zonas (erp_zona) para desplegable en el modal de tipo de envío.
+    Respuesta: { "zonas": [ { "id_zona": int, "nombre_zona": str }, ... ] }
+    """
+    base_empresa, err = _base_empresa_from_request(request)
+    if err:
+        return err
+    from core.services.administranet_sucursales import AdministraNETSucursalesService
+    svc = AdministraNETSucursalesService()
+    zonas = svc.listar_zonas(base_empresa)
+    return JsonResponse({'zonas': zonas})
+
+
+def sucursal_tipo_envio_update_or_delete_api(request, id_sucursal, id_tipo_envio):
+    """
+    PUT: Actualiza un tipo de envío. DELETE: Elimina un tipo de envío.
+    """
+    base_empresa, err = _base_empresa_from_request(request)
+    if err:
+        return err
+    try:
+        id_te = int(id_tipo_envio)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'id_tipo_envio inválido.'}, status=400)
+    from core.services.administranet_sucursales import AdministraNETSucursalesService
+    svc = AdministraNETSucursalesService()
+    if request.method == 'PUT':
+        import json
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Cuerpo JSON inválido.'}, status=400)
+        ok = svc.actualizar_tipo_envio_sucursal(base_empresa, id_te, data)
+        if not ok:
+            return JsonResponse({'error': 'No se pudo actualizar.'}, status=500)
+        return JsonResponse({'ok': True})
+    if request.method == 'DELETE':
+        ok = svc.eliminar_tipo_envio_sucursal(base_empresa, id_te)
+        if not ok:
+            return JsonResponse({'error': 'No se pudo eliminar.'}, status=500)
+        return JsonResponse({'ok': True})
+    return JsonResponse({'error': 'Método no permitido.'}, status=405)
+
+
+def movimiento_stock_alta_api(request):
+    """
+    POST /core/api/movimiento-stock/
+    Alta de movimiento de stock en una transacción.
+    Body: { "cabecera": { motivo_movimiento, fecha, deposito_origen, deposito_destino, detalle, id_ref_movstock, id_pv, ... }, "renglones": [ { IDArt, CodigoArticulo, Descripcion, Cantidad, entrada, salida, ES, CodDeposito }, ... ] }
+    Respuesta: { "ok": true, "codigo_movimiento": ..., "nro_comprobante": "...", "mensaje": "..." } o { "error": "..." }
+    Permisos: stock.crear_movimiento; el servicio revalida permisos de puesto en backend.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return JsonResponse({'error': 'No autenticado.'}, status=401)
+
+    session_user = request.session.get('user', {})
+    base_empresa = session_user.get('base_empresa')
+    id_usuario = session_user.get('id_usuario')
+    id_puesto = session_user.get('id_puesto')
+
+    if not base_empresa:
+        return JsonResponse({'error': 'No se pudo determinar la empresa activa.'}, status=400)
+    if not id_usuario:
+        return JsonResponse({'error': 'Sesión sin id_usuario.'}, status=400)
+
+    if hasattr(user, 'tiene_permiso') and not user.tiene_permiso('stock.crear_movimiento'):
+        if not (hasattr(user, 'is_admin') and user.is_admin()):
+            return JsonResponse({'error': 'Sin permiso para crear movimiento de stock.'}, status=403)
+
+    import json
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Cuerpo JSON inválido.'}, status=400)
+
+    cabecera = data.get('cabecera') or {}
+    renglones = data.get('renglones') or []
+    if not renglones:
+        return JsonResponse({'error': 'Debe enviar al menos un renglón en renglones.'}, status=400)
+
+    from core.services.administranet_stock import alta_movimiento
+    ok, codigo_mov, nro_comp, mensaje = alta_movimiento(
+        base_empresa=base_empresa,
+        id_usuario=int(id_usuario),
+        id_puesto=int(id_puesto) if id_puesto else None,
+        cabecera=cabecera,
+        renglones=renglones,
+    )
+    if not ok:
+        return JsonResponse({'error': mensaje or 'Error al grabar el movimiento.'}, status=400)
+    return JsonResponse({
+        'ok': True,
+        'codigo_movimiento': str(codigo_mov),
+        'nro_comprobante': nro_comp,
+        'mensaje': f'Comprobante MSTOCK-{nro_comp} generado.',
+    })
+
+
+def support_conocimiento_api(request):
+    """
+    GET /core/api/support/conocimiento/
+    Conocimiento funcional para RAG del módulo Support.
+    Lee docs/ desde disco (chunking por ## y tamaño), asigna sistema por carpeta
+    (docs/administranet_vb6/ → administranet, resto → synap). Incluye ítems intro fijos.
+    Proteger en producción (VPN, JWT o IP del servicio Support).
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    # Ítems intro fijos (siempre presentes)
+    items = [
+        {
+            'text': (
+                'AdministraNET es el ERP de Estrategias de Negocios. '
+                'Synap es la evolución web del ERP: reportes, stock, compras, self-checkout, integraciones.'
+            ),
+            'source_id': 'synap-intro',
+            'metadata': {'sistema': 'synap', 'file': 'intro', 'tipo': 'producto'},
+        },
+        {
+            'text': (
+                'Módulos principales en Synap: Core (empresas, sucursales, usuarios), '
+                'Reportes, Stock, Compras, Self-checkout (TPV/caja). '
+                'La configuración de empresas y permisos se gestiona desde el backoffice.'
+            ),
+            'source_id': 'synap-modulos',
+            'metadata': {'sistema': 'synap', 'file': 'intro', 'tipo': 'modulos'},
+        },
+        {
+            'text': (
+                'Para soporte técnico de AdministraNET o Synap contactar a Estrategias de Negocios. '
+                'El asistente de Support puede usar esta base de conocimiento para sugerir respuestas.'
+            ),
+            'source_id': 'synap-soporte',
+            'metadata': {'sistema': 'synap', 'file': 'intro', 'tipo': 'soporte'},
+        },
+    ]
+    docs_dir = Path(settings.BASE_DIR) / "docs"
+    items.extend(build_conocimiento_items_from_docs(docs_dir))
+    return JsonResponse({'items': items}) 

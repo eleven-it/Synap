@@ -1,0 +1,412 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}Remito de Compra | Synap{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto" data-csrf="{{ csrf_token }}" x-data="{
+  tabActivo: 'datos',
+  tipoComp: '{{ form.initial.tipo_comp|default:form.tipo_comp.value|default:"ord_compra" }}',
+  depositoMode: '{{ form.initial.deposito_seleccion|default:form.deposito_seleccion.value|default:"defecto_usuario" }}',
+  depositoGlobal: '{{ form.initial.id_deposito|default:form.id_deposito.value|default:"" }}',
+  proveedorBusqueda: '{{ form.initial.nombre_proveedor|default:form.nombre_proveedor.value|default:""|escapejs }}',
+  proveedorSugerencias: [],
+  proveedorDropdown: false,
+  codigoProveedor: '{{ form.initial.codigo_proveedor|default:form.codigo_proveedor.value|default:"" }}',
+  modalListaOpen: false,
+  modalTipo: 'oc',
+  modalTitulo: '',
+  modalComprobantes: [],
+  modalLoading: false,
+  modalError: '',
+  csrfToken: '',
+  titulosModal: { oc: 'Lista de órdenes de compra', factura: 'Lista de facturas de proveedor', importa_rem: 'Lista de remitos del proveedor para importar' },
+  async abrirModalLista(tipo) {
+    if (!this.codigoProveedor) { this.modalError = 'Seleccione un proveedor antes.'; this.modalListaOpen = true; this.modalTitulo = this.titulosModal[tipo] || ''; this.modalComprobantes = []; this.modalLoading = false; return; }
+    this.modalTipo = tipo;
+    this.modalTitulo = this.titulosModal[tipo] || 'Comprobantes';
+    this.modalListaOpen = true;
+    this.modalLoading = true;
+    this.modalError = '';
+    this.modalComprobantes = [];
+    const url = '{% url "compras:lista_comp_remito" %}?codigo_proveedor=' + encodeURIComponent(this.codigoProveedor) + '&tipo=' + encodeURIComponent(tipo) + '&format=json';
+    try {
+      const r = await fetch(url);
+      const data = await r.json();
+      if (!r.ok) { this.modalError = data.error || 'Error al cargar la lista.'; this.modalLoading = false; return; }
+      this.modalComprobantes = data.comprobantes || [];
+      if (data.titulo) this.modalTitulo = data.titulo;
+    } catch (e) {
+      this.modalError = 'No se pudo cargar la lista. Intente de nuevo.';
+    }
+    this.modalLoading = false;
+  },
+  formatoFechaModal(s) {
+    if (!s) return '—';
+    try { const d = new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' }); } catch (_) { return s; }
+  },
+  formatoImporteModal(s) {
+    if (s == null || s === '') return '0,00';
+    const n = parseFloat(s);
+    return isNaN(n) ? '0,00' : n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+  async fetchProveedores() {
+    const q = this.proveedorBusqueda.trim();
+    if (!q) { this.proveedorSugerencias = []; this.proveedorDropdown = false; return; }
+    const url = '{% url "core_api:proveedor_search" %}?q=' + encodeURIComponent(q);
+    try {
+      const r = await fetch(url);
+      const data = await r.json();
+      this.proveedorSugerencias = data.results || [];
+      this.proveedorDropdown = this.proveedorSugerencias.length > 0;
+    } catch (e) {
+      this.proveedorSugerencias = [];
+      this.proveedorDropdown = false;
+    }
+  },
+  seleccionarProveedor(p) {
+    this.proveedorBusqueda = p.Nombre || '';
+    this.codigoProveedor = String(p.Codigo ?? '');
+    this.proveedorDropdown = false;
+    this.proveedorSugerencias = [];
+  },
+  formatoSaldo(s) {
+    if (s == null || s === '') return '0,00';
+    const n = parseFloat(s);
+    return isNaN(n) ? '0,00' : n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+}" x-init="csrfToken = $el.getAttribute('data-csrf') || ''">
+  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Remito de Compra</h1>
+
+  {% if messages %}
+  <ul class="mb-4">
+    {% for message in messages %}
+    <li class="p-4 rounded-lg {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300{% endif %}">
+      {{ message }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <!-- Tabs -->
+  <div class="mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist">
+    <div class="flex gap-1">
+      <button type="button" role="tab" :aria-selected="tabActivo === 'datos'" aria-controls="panel-datos" id="tab-datos"
+        @click="tabActivo = 'datos'"
+        :class="tabActivo === 'datos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        Datos del comprobante
+      </button>
+      <button type="button" role="tab" :aria-selected="tabActivo === 'articulos'" aria-controls="panel-articulos" id="tab-articulos"
+        @click="tabActivo = 'articulos'"
+        :class="tabActivo === 'articulos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
+        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        Artículos
+      </button>
+    </div>
+  </div>
+
+  <!-- Form principal: solo cabecera y pie (Panel 1) -->
+  <form id="form-remito" method="post" action="{% url 'compras:remito_compra_form' %}">
+    {% csrf_token %}
+    <!-- Panel: Datos del comprobante -->
+    <div x-show="tabActivo === 'datos'" role="tabpanel" id="panel-datos" aria-labelledby="tab-datos" class="mb-6">
+      <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Encabezado de Comprobante</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label for="id_fecha" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha Comprobante</label>
+            {{ form.fecha }}
+          </div>
+          <div>
+            <label for="id_fecha_registro" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha Registro</label>
+            {{ form.fecha_registro }}
+          </div>
+          <div>
+            <label for="id_nro_suc" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nro. Suc.</label>
+            {{ form.nro_suc }}
+          </div>
+          <div>
+            <label for="id_nro" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nro. Comprobante</label>
+            {{ form.nro }}
+          </div>
+          <div>
+            <label for="id_tipo_comp" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo</label>
+            {{ form.tipo_comp }}
+          </div>
+          <div class="md:col-span-2 relative" @click.outside="proveedorDropdown = false">
+            <label for="input-proveedor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proveedor</label>
+            <input type="text" id="input-proveedor" x-model="proveedorBusqueda"
+              @input.debounce.300ms="fetchProveedores()"
+              @focus="if(proveedorBusqueda.trim()) fetchProveedores()"
+              autocomplete="off"
+              placeholder="Buscar por CUIT, nombre o código..."
+              class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-500">
+            <input type="hidden" name="codigo_proveedor" :value="codigoProveedor">
+            <div x-show="proveedorDropdown" x-cloak x-transition
+              class="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg max-h-72 overflow-y-auto">
+              <template x-for="(p, i) in proveedorSugerencias" :key="'prov-' + (p.Codigo || i)">
+                <button type="button" @click="seleccionarProveedor(p)"
+                  class="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 border-b border-gray-100 dark:border-gray-700 last:border-0 text-sm">
+                  <div class="font-medium text-gray-900 dark:text-gray-100" x-text="p.Nombre || '—'"></div>
+                  <div class="mt-1 text-xs text-gray-600 dark:text-gray-400 space-x-2 flex flex-wrap gap-x-2">
+                    <span x-show="p.CUIT">CUIT: <span x-text="p.CUIT"></span></span>
+                    <span x-show="p.responsabilidad_iva">IVA: <span x-text="p.responsabilidad_iva"></span></span>
+                    <span x-show="p.Tipo">Tipo: <span x-text="p.Tipo"></span></span>
+                    <span>Saldo: $ <span x-text="formatoSaldo(p.saldo)"></span></span>
+                  </div>
+                </button>
+              </template>
+            </div>
+          </div>
+          <div>
+            <label for="id_deposito_seleccion" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Modo depósito</label>
+            {{ form.deposito_seleccion }}
+          </div>
+          <div x-show="depositoMode === 'seleccionado'" x-cloak>
+            <label for="id_id_deposito" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito</label>
+            {{ form.id_deposito }}
+          </div>
+          <div class="md:col-span-4">
+            <label for="id_detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Detalle</label>
+            {{ form.detalle }}
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Pie de Comprobante</h2>
+        <div class="flex justify-end gap-4">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Total General:</label>
+          {{ form.importe_total }}
+        </div>
+        {{ form.exento }}{{ form.subtotal1 }}{{ form.subtotal2 }}{{ form.imp_desc1_1 }}{{ form.sub_total_desc1 }}{{ form.sub_total_desc2 }}
+        {{ form.iva1 }}{{ form.iva2 }}{{ form.iva3 }}{{ form.alic1 }}{{ form.alic2 }}{{ form.alic3 }}
+        {{ form.percep_ib }}{{ form.percep_ib_prov }}{{ form.percep_gan }}{{ form.percep_iva }}{{ form.otros_imp }}{{ form.impuesto_interno }}
+        {{ form.id_condcompra }}{{ form.cond_compra }}{{ form.coti_dolar }}{{ form.nro_cai }}{{ form.fecha_cai }}
+      </section>
+    </div>
+  </form>
+
+  <!-- Panel: Artículos (fuera del form principal; sin anidar forms) -->
+  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6" x-cloak>
+    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+      <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Renglones</h2>
+      <p class="text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-4">
+        Complete los datos del comprobante en la pestaña anterior. Debe cargar al menos un renglón para poder aceptar.
+      </p>
+      <div class="mb-4 flex flex-wrap gap-2">
+        <button type="button"
+                @click="abrirModalLista(tipoComp === 'factura' ? 'factura' : 'oc')"
+                :class="!codigoProveedor ? 'opacity-50 cursor-not-allowed' : 'hover:bg-indigo-700'"
+                class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg transition">
+          <span class="material-icons text-lg">list</span>
+          <span x-text="tipoComp === 'factura' ? 'Lista facturas' : 'Lista OC'"></span>
+        </button>
+        <button type="button"
+                @click="abrirModalLista('importa_rem')"
+                :class="!codigoProveedor ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-700'"
+                class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-600 text-white text-sm font-medium rounded-lg transition">
+          <span class="material-icons text-lg">file_download</span>
+          <span>Importar remito</span>
+        </button>
+      </div>
+      <div class="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Añadir renglón</p>
+        <form method="post" action="{% url 'compras:añadir_renglon' %}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          {% csrf_token %}
+          <input type="hidden" name="deposito_seleccion" :value="depositoMode">
+          <input type="hidden" name="id_deposito_global" :value="depositoGlobal">
+          {% if form_alta_renglon %}
+          <div>
+            <label for="id_codigo_articulo" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código artículo</label>
+            {{ form_alta_renglon.codigo_articulo }}
+            {% if form_alta_renglon.codigo_articulo.errors %}<p class="text-red-600 text-xs mt-1">{{ form_alta_renglon.codigo_articulo.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <label for="id_descripcion" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+            {{ form_alta_renglon.descripcion }}
+          </div>
+          <div>
+            <label for="id_cantidad" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad</label>
+            {{ form_alta_renglon.cantidad }}
+            {% if form_alta_renglon.cantidad.errors %}<p class="text-red-600 text-xs mt-1">{{ form_alta_renglon.cantidad.errors.0 }}</p>{% endif %}
+          </div>
+          <div x-show="depositoMode === 'por_articulo'" x-cloak>
+            <label for="id_id_deposito" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depósito</label>
+            {{ form_alta_renglon.id_deposito }}
+          </div>
+          <div>
+            <label for="id_precio_costo_u" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio x unidad</label>
+            {{ form_alta_renglon.precio_costo_u }}
+            {% if form_alta_renglon.precio_costo_u.errors %}<p class="text-red-600 text-xs mt-1">{{ form_alta_renglon.precio_costo_u.errors.0 }}</p>{% endif %}
+          </div>
+          <div>
+            <button type="submit" class="w-full px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">Añadir</button>
+          </div>
+          {% else %}
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Código artículo</label>
+            <input type="text" name="codigo_articulo" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2" placeholder="Código">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Descripción</label>
+            <input type="text" name="descripcion" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2" placeholder="Opcional">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad</label>
+            <input type="number" name="cantidad" required step="0.0001" min="0" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          </div>
+          <div x-show="depositoMode === 'por_articulo'" x-cloak>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Depósito</label>
+            <select name="id_deposito" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+              {% for d in depositos %}<option value="{{ d.CodDeposito }}">{{ d.NombreDeposito|default:d.CodDeposito }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Precio x unidad</label>
+            <input type="number" name="precio_costo_u" required step="0.0001" min="0" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2">
+          </div>
+          <div>
+            <button type="submit" class="w-full px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm">Añadir</button>
+          </div>
+          {% endif %}
+        </form>
+      </div>
+      {% if renglones %}
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Orden</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Código</th>
+              <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Descripción</th>
+              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Cantidad</th>
+              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Precio x U</th>
+              <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Total</th>
+              <th class="px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for r in renglones %}
+            <tr>
+              <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{{ r.Orden }}</td>
+              <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{{ r.CodigoArticulo|default:"" }}</td>
+              <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{{ r.Descripcion|default:"" }}</td>
+              <td class="px-4 py-2 text-sm text-right text-gray-900 dark:text-gray-100">{{ r.Cantidad }}</td>
+              <td class="px-4 py-2 text-sm text-right text-gray-900 dark:text-gray-100">{{ r.PrecioCostoxU }}</td>
+              <td class="px-4 py-2 text-sm text-right text-gray-900 dark:text-gray-100">{{ r.PrecioNetoxR }}</td>
+              <td class="px-4 py-2">
+                <form method="post" action="{% url 'compras:eliminar_renglon' %}" class="inline" onsubmit="return confirm('¿Desea eliminar el renglón?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="orden" value="{{ r.Orden }}">
+                  <input type="hidden" name="id_articulo" value="{{ r.IDArt|default:'' }}">
+                  <button type="submit" class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-gray-600 dark:text-gray-400">No hay renglones cargados. Agregue renglones con el formulario de arriba o use «Lista OC» / «Lista facturas» / «Importar remito» (seleccione proveedor antes).</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Botones Aceptar / Cancelar (siempre visibles, estilo stock) -->
+  <div class="flex flex-wrap gap-4">
+    <button type="submit" form="form-remito" class="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition">
+      <span class="material-icons text-xl">save</span>
+      <span>Aceptar</span>
+    </button>
+    <a href="{% url 'core:dashboard' %}" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition">
+      <span class="material-icons text-xl">close</span>
+      <span>Cancelar</span>
+    </a>
+  </div>
+
+  <!-- Modal: Lista de comprobantes (OC / Facturas / Importar remito) -->
+  <div x-show="modalListaOpen"
+       x-cloak
+       x-transition:enter="ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="fixed inset-0 z-50 overflow-y-auto"
+       aria-modal="true"
+       role="dialog"
+       @keydown.escape.window="modalListaOpen = false">
+    <div class="flex min-h-full items-center justify-center p-4">
+      <div class="fixed inset-0 bg-black/50" aria-hidden="true" @click="modalListaOpen = false"></div>
+      <div class="relative w-full max-w-3xl rounded-xl bg-white dark:bg-gray-800 shadow-xl border border-gray-200 dark:border-gray-700 max-h-[90vh] flex flex-col">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white" x-text="modalTitulo || 'Comprobantes'"></h2>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Seleccione un comprobante para cargar sus renglones en el Remito de compra.</p>
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mt-2" x-show="proveedorBusqueda">
+            <span class="text-gray-500 dark:text-gray-400">Proveedor:</span> <span x-text="proveedorBusqueda || '—'"></span>
+          </p>
+        </div>
+        <div class="p-6 overflow-y-auto flex-1 min-h-0">
+          <template x-if="modalLoading">
+            <div class="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+              <span class="material-icons text-4xl animate-spin mb-2">progress_activity</span>
+              <span>Cargando...</span>
+            </div>
+          </template>
+          <template x-if="!modalLoading && modalError">
+            <div class="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200" x-text="modalError"></div>
+          </template>
+          <template x-if="!modalLoading && !modalError && modalComprobantes.length === 0 && modalListaOpen">
+            <div class="p-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200">
+              <p class="font-medium">No hay comprobantes para mostrar.</p>
+              <p class="text-sm mt-1">Verifique que el proveedor tenga órdenes de compra pendientes, facturas pendientes o remitos (según el tipo elegido).</p>
+            </div>
+          </template>
+          <template x-if="!modalLoading && !modalError && modalComprobantes.length > 0">
+            <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nro</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Fecha</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Importe</th>
+                    <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Acción</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                  <template x-for="c in modalComprobantes" :key="c.CodigoMovimiento">
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100" x-text="c.NroComprobante || '—'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100" x-text="formatoFechaModal(c.Fecha)"></td>
+                      <td class="px-4 py-3 text-sm text-right text-gray-900 dark:text-gray-100" x-text="formatoImporteModal(c.ImporteCompra)"></td>
+                      <td class="px-4 py-3 text-right">
+                        <form method="post" action="{% url 'compras:lista_comp_remito' %}" target="_top" class="inline">
+                          <input type="hidden" name="csrfmiddlewaretoken" :value="csrfToken">
+                          <input type="hidden" name="codigo_movimiento" :value="c.CodigoMovimiento">
+                          <input type="hidden" name="tipo" :value="modalTipo">
+                          <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition">
+                            <span class="material-icons text-lg">add_circle</span>
+                            <span>Seleccionar</span>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </div>
+        <div class="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0 flex justify-end">
+          <button type="button" @click="modalListaOpen = false" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition">
+            <span class="material-icons text-lg">close</span>
+            <span>Cerrar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

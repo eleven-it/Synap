@@ -1,0 +1,43 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Nuevo conjunto (Lista de materiales) - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'mpr:bom_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Lista de materiales</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Nuevo conjunto</span>
+        </nav>
+
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Nuevo conjunto de armado</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">Cree un conjunto (lista de materiales). Luego podrá añadir componentes en la pantalla de edición.</p>
+
+        <form method="post" action="" class="space-y-6">
+            {% csrf_token %}
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+                <label for="nombre_en_abm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nombre del conjunto *</label>
+                <input type="text" id="nombre_en_abm" name="nombre_en_abm" value="{{ bom.cabecera.nombre_en_abm }}" maxlength="200" required
+                       class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                       placeholder="Ej. Pack 6 medias"/>
+                <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-4 mb-2">Detalle (opcional)</label>
+                <textarea id="detalle" name="detalle" rows="2" maxlength="500"
+                          class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          placeholder="Descripción breve">{{ bom.cabecera.detalle }}</textarea>
+            </div>
+            <div class="flex flex-wrap gap-3">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">
+                    Crear conjunto
+                </button>
+                <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,156 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{% if editing %}Editar autoservicio{% else %}Nuevo autoservicio{% endif %} · Self-Checkout{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 py-10 transition-colors duration-500">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header class="mb-8">
+      <a href="{% url 'self_checkout:config_list' %}" class="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">← Volver a configuración</a>
+      <h1 class="text-2xl font-semibold text-slate-900 dark:text-white mt-2">
+        {% if editing %}Editar autoservicio {{ kiosk_id }}{% else %}Nuevo autoservicio{% endif %}
+      </h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+        El Punto de Venta (PV) se asocia con AFIP y determina la numeración de facturas.
+      </p>
+    </header>
+
+    {% if messages %}
+    <div class="mb-6 space-y-2" id="form-messages">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}" data-message-text="{{ message|escape }}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    <script>
+    (function() {
+      var container = document.getElementById('form-messages');
+      if (!container) return;
+      var seen = {}, nodes = container.querySelectorAll('[data-message-text]'), kept = 0;
+      nodes.forEach(function(n) {
+        var t = n.getAttribute('data-message-text');
+        if (seen[t]) { n.remove(); } else { seen[t] = true; kept++; }
+      });
+    })();
+    </script>
+    {% endif %}
+
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 md:p-8">
+      <form method="post" class="space-y-6">
+        {% csrf_token %}
+        {% if not editing %}
+        <div>
+          <label for="kiosk_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Identificador del autoservicio</label>
+          <input type="text" name="kiosk_id" id="kiosk_id" required
+                 value="{{ form_data.kiosk_id|default:'' }}"
+                 placeholder="ej: kiosk-01"
+                 class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Único por autoservicio. Se usa en la URL: /self-checkout/kiosco/<strong>kiosk-01</strong>/</p>
+        </div>
+        {% endif %}
+
+        <div>
+          <label for="id_sucursal" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Sucursal</label>
+          <select name="id_sucursal" id="id_sucursal" required
+                  class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="">Seleccionar sucursal</option>
+            {% for s in sucursales %}
+            <option value="{{ s.id_sucursal }}" {% if form_data.id_sucursal == s.id_sucursal or form_data.id_sucursal|stringformat:"s" == s.id_sucursal|stringformat:"s" %}selected{% endif %}>
+              {{ s.nombre_sucursal|default:s.desc_sucursal|default:s.id_sucursal }} ({{ s.id_sucursal }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label for="id_punto_venta" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Punto de venta (PV)</label>
+          <select name="id_punto_venta" id="id_punto_venta" required
+                  class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="">Seleccionar punto de venta</option>
+            {% for p in puntos_venta %}
+            <option value="{{ p.id_punto_venta }}" {% if form_data.id_punto_venta == p.id_punto_venta or form_data.id_punto_venta|stringformat:"s" == p.id_punto_venta|stringformat:"s" %}selected{% endif %}>
+              PV {{ p.nro_punto_venta|default:p.id_punto_venta }} (id {{ p.id_punto_venta }}) — Suc. {{ p.id_sucursal }}
+            </option>
+            {% endfor %}
+          </select>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">El PV está asociado a AFIP y talonarios. Un autoservicio = un PV.</p>
+        </div>
+
+        <div>
+          <label for="id_deposito" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Depósito</label>
+          <select name="id_deposito" id="id_deposito" required
+                  class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="">Seleccionar depósito</option>
+            {% for d in depositos %}
+            <option value="{{ d.id_deposito }}" {% if form_data.id_deposito == d.id_deposito or form_data.id_deposito|stringformat:"s" == d.id_deposito|stringformat:"s" %}selected{% endif %}>
+              {{ d.id_deposito }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label for="cod_viajante" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Vendedor (viajante)</label>
+          <select name="cod_viajante" id="cod_viajante"
+                  class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="">Sin asignar</option>
+            {% for v in viajantes %}
+            <option value="{{ v.CodViajante }}" {% if form_data.cod_viajante == v.CodViajante or form_data.cod_viajante|stringformat:"s" == v.CodViajante|stringformat:"s" %}selected{% endif %}>
+              {{ v.Nombre|default:v.CodViajante }} ({{ v.CodViajante }})
+            </option>
+            {% endfor %}
+          </select>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Se carga al abrir la sesión del autoservicio y se graba en cuentacliente al facturar.</p>
+        </div>
+
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="enviar_factura_email" value="1" {% if not editing %}checked{% elif form_data.enviar_factura_email %}checked{% endif %}
+                   class="rounded border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Habilitar envío de factura por email</span>
+          </label>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Si está activo, en el autoservicio se solicita correo para enviar la factura (según tipo: obligatorio u opcional).</p>
+        </div>
+
+        <div>
+          <label for="modo_rfid" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Modo RFID</label>
+          <select name="modo_rfid" id="modo_rfid"
+                  class="w-full rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:border-sky-500">
+            <option value="delta" {% if form_data.modo_rfid == 'delta' or not form_data.modo_rfid %}selected{% endif %}>delta</option>
+            <option value="snapshot" {% if form_data.modo_rfid == 'snapshot' %}selected{% endif %}>snapshot</option>
+          </select>
+        </div>
+
+        {% if editing %}
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="activo" value="1" {% if form_data.activo %}checked{% endif %}
+                   class="rounded border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Autoservicio activo</span>
+          </label>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" name="modo_tpv" value="1" {% if form_data.modo_tpv %}checked{% endif %}
+                   class="rounded border-slate-300 dark:border-slate-600 text-sky-600 focus:ring-sky-500">
+            <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Modo TPV (más medios de pago y grilla extendida)</span>
+          </label>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Si está activo, este kiosco opera como TPV: efectivo, tarjeta y Mercado Pago; grilla del carrito con todos los datos del renglón.</p>
+        </div>
+        {% endif %}
+
+        <div class="flex gap-3 pt-4">
+          <button type="submit" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg hover:shadow-xl transition-all">
+            {% if editing %}Guardar cambios{% else %}Crear autoservicio{% endif %}
+          </button>
+          <a href="{% url 'self_checkout:config_list' %}" class="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

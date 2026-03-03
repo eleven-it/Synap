@@ -87,19 +87,12 @@ def listar_listas_precio(base_empresa: str) -> List[Dict[str, Any]]:
 
 
 def listar_viajantes(base_empresa: str) -> List[Dict[str, Any]]:
-    """Lista vendedores (viajantes) no anulados para asignar al kiosco."""
-    try:
-        with mysql_cursor(base_empresa, dict_cursor=True) as c:
-            c.execute("""
-                SELECT CodViajante, Nombre
-                FROM viajantes
-                WHERE anulado = 'No'
-                ORDER BY Nombre
-            """)
-            return [dict(r) for r in c.fetchall()]
-    except Exception as e:
-        logger.warning("listar_viajantes failed: %s", e)
-        return []
+    """
+    Lista vendedores (viajantes) no anulados. Delega en core (única implementación).
+    Usado por: configuración de kiosco, selector de vendedor TPV táctil.
+    """
+    from core.services.administranet_sucursales import AdministraNETSucursalesService
+    return AdministraNETSucursalesService().obtener_viajantes(base_empresa)
 
 
 def listar_kiosks(base_empresa: str) -> List[Dict[str, Any]]:

@@ -1,0 +1,136 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Registrar parte de producción (OPP) - OPT {{ opt_numero }} - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {# Breadcrumbs #}
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'mpr:opt_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Órdenes</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'mpr:opt_detail' id_lista %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">OPT {{ opt_numero }}</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Registrar OPP</span>
+        </nav>
+
+        <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">
+            Registrar parte de producción (OPP)
+        </h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">
+            Registre la salida de producto terminado desde el depósito de producción (origen) hacia el depósito de terminados (destino). Se generará un movimiento tipo OPP.
+        </p>
+
+        {# Resumen OP: tabla con Cant. Pendiente por artículo (OPP) #}
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 mb-8">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">OPT {{ opt_numero }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Pendiente total: <strong class="text-amber-600 dark:text-amber-400">{{ total_pendiente }}</strong> unidades</p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Artículo</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. Pendiente</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for linea in lineas %}
+                        <tr>
+                            <td class="px-4 py-2 text-gray-700 dark:text-gray-300">{{ linea.codigo_articulo }} · {{ linea.descripcion_articulo|truncatewords:6 }}</td>
+                            <td class="px-4 py-2 text-right text-amber-600 dark:text-amber-400 font-medium tabular-nums">{{ linea.cantidad_pendiente_prod }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <form method="post" action="" class="space-y-6">
+            {% csrf_token %}
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span class="material-icons text-purple-500 dark:text-purple-400">analytics</span>
+                    Cantidad a registrar
+                </h2>
+                <div>
+                    <label for="cantidad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cantidad producida (a dar de alta)</label>
+                    <input type="number" id="cantidad" name="cantidad" value="{{ total_pendiente }}" min="1" max="{{ total_pendiente }}"
+                           class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 text-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Pendiente total: {{ total_pendiente }} unidades</p>
+                </div>
+            </div>
+
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span class="material-icons text-purple-500 dark:text-purple-400">label</span>
+                    Clasificación / calidad
+                </h2>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Indique el tipo de salida para elegir el depósito destino correcto:</p>
+                <div class="flex flex-wrap gap-4 mb-4">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="clasificacion" value="primera" checked class="rounded-full border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Primera (terminado)</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="clasificacion" value="2da" class="rounded-full border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">2da selección</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="clasificacion" value="scrap" class="rounded-full border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Scrap</span>
+                    </label>
+                </div>
+                <p class="text-xs text-amber-600 dark:text-amber-400">Si elige 2da selección o Scrap, seleccione en &quot;Depósito destino&quot; el almacén correspondiente (ej. Depósito 2da, Depósito Scrap).</p>
+            </div>
+
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <span class="material-icons text-purple-500 dark:text-purple-400">warehouse</span>
+                    Depósitos
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="deposito_origen" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito origen (producción / WIP)</label>
+                        <select id="deposito_origen" name="deposito_origen" required
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">Seleccione origen</option>
+                            {% for dep in depositos %}
+                            <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="deposito_destino" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito destino (terminados / 2da / Scrap)</label>
+                        <select id="deposito_destino" name="deposito_destino" required
+                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <option value="">Seleccione destino</option>
+                            {% for dep in depositos %}
+                            <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">Se registrará Salida en origen y Entrada en destino.</p>
+            </div>
+
+            <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 dark:border-slate-800 p-5 text-white">
+                <p class="text-sm text-slate-200 dark:text-slate-300 mb-4">
+                    Esta acción generará un movimiento de inventario OPP (Parte de producción): salida desde el depósito origen y entrada en el depósito destino.
+                </p>
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
+                        <span class="material-icons text-lg">assignment</span>
+                        Registrar parte de producción (OPP)
+                    </button>
+                    <a href="{% url 'mpr:opt_detail' id_lista %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                        Cancelar y volver
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,106 @@
+# Support – Stack independiente (no depende de Synap)
+# Un solo .env: support/.env (desde support/.env.example).
+# Uso: cd support && cp .env.example .env && docker compose -f docker/docker-compose.yml up -d
+# Backend: http://localhost:8250   Frontend: http://localhost:3000
+
+name: support
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: support_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-support}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-support}
+      POSTGRES_DB: ${POSTGRES_DB:-support}
+    volumes:
+      - support_postgres_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-support} -d ${POSTGRES_DB:-support}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: support_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - support_redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: support_backend
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-support}:${POSTGRES_PASSWORD:-support}@db:5432/${POSTGRES_DB:-support}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      # CORS: config.settings.local usa orígenes concretos + credentials (no wildcard)
+      ALLOWED_HOSTS: "*"
+      # RAG: Synap (desde contenedor usar host.docker.internal si Synap corre en el host)
+      SUPPORT_SYNAP_API_URL: ${SUPPORT_SYNAP_API_URL:-}
+    volumes:
+      - ../backend:/app
+      - support_static:/app/staticfiles
+    ports:
+      - "${BACKEND_PORT:-8250}:8250"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput --clear &&
+             cd /tmp && exec gunicorn config.wsgi:application --bind 0.0.0.0:8250 --workers 2 --worker-tmp-dir /tmp --chdir /app"
+
+  frontend:
+    image: node:20-alpine
+    container_name: support_frontend
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8250}
+    volumes:
+      - ../frontend:/app
+      - support_frontend_node_modules:/app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    profiles:
+      - dev
+
+  minio:
+    image: minio/minio:latest
+    container_name: support_minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - support_minio_data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+    command: server /data
+    profiles:
+      - storage
+
+volumes:
+  support_postgres_data:
+  support_redis_data:
+  support_static:
+  support_frontend_node_modules:
+  support_minio_data:
