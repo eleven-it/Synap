@@ -185,7 +185,8 @@ La definición exacta de “precio según lista” en VB6: parámetro **lista_pr
 **Filtros desde payload:** fecha_inicio, fecha_fin, base_empresa, sucursales, punto_venta, **depositos_incluidos** (opcional: solo se suman al stock estos depósitos; si vacío, todos), clientes_excluidos, **lista_precio** (0–6: Costo, Lista Oficial, Lista 1–5; mismo mapeo que VB6 Info_Stock; por defecto 2 = Lista 1).  
 **Filtro fijo (alineado con VB6):** artículos con `articulo.tipo_art = 'Gasto'` se excluyen del detalle BO y del detalle por renglón.  
 **Reservado:** solo estados **En preparación** y **Preparado** (sin Parcial), alineado con Excel Hoja1.  
-**Valorización:** costo = articulo.PrecioCosto; saldo_valorizado = stock_actual × precio según lista_precio (CASE 0→PrecioCosto, 1→PNOficial, 2→Precio1V, …, 6→Precio5V).
+**Valorización:** costo = articulo.PrecioCosto; saldo_valorizado = stock_actual × precio según lista_precio (CASE 0→PrecioCosto, 1→PNOficial, 2→Precio1V, …, 6→Precio5V).  
+**Filtro por fecha en backorder:** las consultas que filtran por `stockp.Fecha` (sp.Fecha, spr.Fecha) reciben fechas en formato **YYYYMMDD** (ej. `'20260101'`, `'20260302'`). En bases AdministraNET donde `stockp.Fecha` es INT (YYYYMMDD), enviar `'YYYY-MM-DD'` hace que MySQL convierta a 2026 y el rango incluya todo el año; usar YYYYMMDD alinea el bo_importe con VB6.
 
 ### 3.1 Facturación (total)
 
@@ -439,6 +440,53 @@ FROM stock_deposito sd
 WHERE sd.id_articulo IN (%s);  -- placeholders para ids_art
 -- + AND sd.id_deposito IN (...) si depositos_incluidos (solo esos depósitos)
 ```
+
+### 3.9 Consistencia bo_importe vs Precio x renglón (investigación)
+
+**Problema observado:** Para un mismo artículo (ej. id_art 5753, codigo 391586), la consulta agregada (3.4) devolvía `bo_importe` ≈ 22.336.360 mientras en la pestaña Backorder (renglón a renglón) se mostraba "Precio x renglón" ≈ 32.727.258 en una fila.
+
+**Causa identificada y validada:** En bases donde `stockp.Fecha` es **INT** (formato YYYYMMDD), si las fechas se enviaban en formato `'YYYY-MM-DD'` (ej. `'2026-01-01'`), MySQL las convertía a entero y el rango quedaba ampliado (todo el año 2026). Si **solo una** de las dos consultas (agregada vs row-level) recibía ese formato y la otra YYYYMMDD, los conjuntos de filas diferían: el agregado podía devolver `bo_importe` ≈ 22,3M (período correcto) y los renglones incluir más filas del año → suma ≈ 32,7M. La **solución** es que ambas usen exactamente el mismo filtro de fecha en **YYYYMMDD** (`fecha_inicio_bo`, `fecha_fin_bo`). Los tests en `TestCausaInconsistenciaValidada` reproducen el escenario: mismo filtro → sin inconsistencia; filtro distinto (agregado 22,3M, renglones 32,7M) → 1 inconsistencia detectada.
+
+**Invariante:** Para cada artículo (codigo), la suma de `precio_x_renglon` sobre `backorder_detalle_rows` (filas con ese `cod_manual`) debe ser igual al `bo_importe` de ese artículo en `backorder_detalle`.
+
+**Comprobación en runtime:** En `query_runner._run_backorder_vs_stock_vs_facturacion`, tras construir `backorder_detalle` y `backorder_detalle_rows`, se ejecuta una comprobación: por cada artículo se suma `precio_x_renglon` de las filas con ese `cod_manual` y se compara con `bo_importe` (tolerancia 0,01). Si difieren, se registra un **warning** en log: `[BO] Inconsistencia agregado vs renglones: codigo=... bo_importe=... sum(precio_x_renglon)=...`. Eso indica que conviene revisar que ambas consultas usen el mismo filtro de fecha (YYYYMMDD) y los mismos estados/ exclusiones.
+
+**Tests:** Tests unitarios en `reports/tests/test_bo_report_consistency.py` cubren: (1) conversión de fechas a YYYYMMDD (`parse_fecha_bo_yyyymmdd`), (2) consistencia agregado vs renglones (`check_bo_agregado_vs_renglones_consistency`), (3) que el prorrateo con_stock/con_ingreso/sin_stock suma bo_importe, (4) que la columna precio_x_renglon en el SELECT row-level es el índice 9. Ejecutar: `docker exec Synap_app python manage.py test reports.tests.test_bo_report_consistency`. Para validar contra datos reales, ejecutar el reporte BO y revisar logs por el warning de consistencia.
+
+### 3.10 Uso de bo_importe y precio_x_renglon en el reporte (sin transformar el dato de la DB)
+
+Si las consultas a la DB son correctas y aun así se ve un valor distinto en pantalla (ej. 32,7M en “Precio x renglón”), los únicos usos y “cálculos” en el reporte son los siguientes. **Ninguno reemplaza ni recalcula bo_importe o precio_x_renglon a partir de otro campo.**
+
+**Backend (`query_runner.py`):**
+
+| Dato | Origen | Cálculo / uso |
+|------|--------|----------------|
+| `bo_importe` | `row[5]` del SELECT agregado (3.4), es decir `SUM(sp.PrecioNetoxR)` | Se envía tal cual. Se usa solo para **prorratear** por cantidad y obtener `con_stock_importe`, `con_ingreso_importe`, `sin_stock_importe` (proporción de bo_importe según con_stock_qty/bo_qty, etc.). Esos tres se envían además de `bo_importe`, no en lugar de él. |
+| `precio_x_renglon` | `r[9]` del SELECT row-level (3.5), es decir `COALESCE(spr.PrecioNetoxR, 0)` | Se convierte a `float` y se envía tal cual. No hay ningún cálculo que lo modifique. |
+
+**Frontend (`bo_stock_facturacion.js`):**
+
+| Dónde se muestra | Campo usado | Transformación |
+|------------------|-------------|----------------|
+| Pestañas “Detalle con stock”, “Con ingreso”, “Sin stock” (tabla por **artículo**) | `r.bo_importe` | Solo `formatCurrency(r.bo_importe)` (formato es-AR, sin cambiar el número). |
+| Pestaña “Backorder” (tabla por **renglón**) | `row.precio_x_renglon` | Solo `formatCurrency(row.precio_x_renglon)`. Cada fila es un elemento de `backorder_detalle_rows`; no se mezcla con `backorder_detalle` ni con `bo_importe`. |
+| Pestaña “Backorder” **con “Agrupar por”** activo | Para filas de **detalle**: `row.precio_x_renglon`. Para filas de **grupo**: `g.totals['precio_x_renglon']` | En grupos, el total es la **suma** de `precio_x_renglon` de todos los renglones del grupo (ej. si se agrupa por Rubro, el total del rubro “LOREAL PRESTIGE” es la suma de todos los renglones de ese rubro). Un valor como 32,7M en una **fila de grupo** podría ser esa suma (varios artículos/renglones), no el importe de un solo renglón. |
+
+**Conclusión:** El reporte no hace ningún cálculo que “transforme” el valor de la DB para la columna “Precio x renglón”: se pinta `precio_x_renglon` de cada renglón (o la suma del grupo si hay agrupación). Si se ve 32,7M donde la DB solo tiene renglones de ~21M y ~1M para ese artículo, hay que comprobar: (1) que no se esté mirando una **fila de grupo** (total de un rubro/cliente/etc.), y (2) que el payload del reporte use las fechas en YYYYMMDD y el mismo filtro que la consulta manual (ver 3.9).
+
+### 3.11 PrecioVentaxR vs PrecioNetoxR (origen del valor 32.727.262)
+
+En `stockp` existen dos importes por renglón:
+
+| Campo | Significado | Ejemplo (120 u) |
+|-------|-------------|-----------------|
+| **PrecioVentaxR** | Importe por renglón a **precio de venta** (antes de descuentos/IVA neto) | 120 × PrecioVentaxU (272.727,23) ≈ **32.727.268** |
+| **PrecioNetoxR** | Importe por renglón a **precio neto** (el que usa el reporte BO) | 120 × PrecioNetoxU (177.272,70) ≈ **21.272.724** |
+
+Si se ve **32.727.262,08** y al dividir por la cantidad pendiente (120) da **272.727,18** ≈ **PrecioVentaxU**, ese valor **no sale de PrecioNetoxR**: sale de **PrecioVentaxR** (o de PrecioVentaxU × Cantidad). El PrecioNetoxR correcto para ese renglón es PrecioNetoxU × Cantidad ≈ 21.272.724.
+
+- **Reporte BO Synap:** usa solo **PrecioNetoxR** (`spr.PrecioNetoxR` → `precio_x_renglon`). Si en la base ese renglón tuviera 32.727.262 en la columna PrecioNetoxR, sería un error de dato (se habría escrito el importe de venta en el campo neto).
+- Cualquier pantalla o informe que muestre 32.727.262 como "Precio x renglón" para ese renglón está usando **precio de venta por renglón** (PrecioVentaxR), no precio neto (PrecioNetoxR).
 
 ---
 

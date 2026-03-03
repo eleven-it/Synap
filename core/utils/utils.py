@@ -318,17 +318,6 @@ APPS_MENU = [
                         "permission": "reports.ver"
                     }
                 ]
-            },
-            {
-                "seccion": _("Análisis"),
-                "items": [
-                    {
-                        "label": _("Análisis Saldo de Stock"),
-                        "url": "reports:validacion_saldo_stock",
-                        "icon": "inventory",
-                        "permission": "reports.ver"
-                    }
-                ]
             }
         ]
     },
