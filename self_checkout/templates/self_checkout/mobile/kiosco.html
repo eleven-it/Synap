@@ -10,41 +10,46 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 {% endblock %}
 
+{% block content %}
+<script>document.body.classList.add('kiosk-client-mode'); document.body.classList.add('tpv-mobile');</script>
+{{ block.super }}
+{% endblock %}
+
 {% block extra_css %}
 {{ block.super }}
 <style>
-/* ========== MOBILE TPV OVERRIDES ========== */
-/* Objetivo: vista usable en celular (no responsive desktop escalado). */
+/* ========== MOBILE TPV OVERRIDES (body.tpv-mobile = solo cuando se sirve este template) ========== */
+/* Anulan las reglas del desktop (body.kiosk-client-mode) con igual o mayor especificidad. */
 
-/* Viewport y raíz: altura real del dispositivo, sin zoom de página */
 html { -webkit-text-size-adjust: 100%; }
-body.kiosk-client-mode {
+
+body.tpv-mobile.kiosk-client-mode {
   min-height: 100dvh !important;
   font-size: 16px !important;
 }
-body.kiosk-client-mode .kiosk-root {
+body.tpv-mobile .kiosk-root {
   min-height: 100dvh !important;
   padding-bottom: env(safe-area-inset-bottom, 0.5rem) !important;
 }
 
-/* Respetar preferencia de movimiento reducido */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  body.tpv-mobile *,
+  body.tpv-mobile *::before,
+  body.tpv-mobile *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* Root: viewport completo sin bordes decorativos */
-body.kiosk-client-mode .kiosk-card {
+body.tpv-mobile .kiosk-card {
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
 }
 
-/* Columna única siempre (sin media query — este template solo se sirve en mobile) */
-.kiosk-main-two-cols {
+/* Forzar columna única siempre (anula @media (min-width: 1024px) del desktop) */
+body.tpv-mobile .kiosk-main-two-cols {
   flex-direction: column !important;
   overflow: hidden !important;
   flex: 1 !important;
@@ -53,8 +58,7 @@ body.kiosk-client-mode .kiosk-card {
   gap: 0.5rem !important;
 }
 
-/* Columna izquierda (búsqueda): scrollable, ancho completo */
-.kiosk-col-left {
+body.tpv-mobile .kiosk-col-left {
   flex: 1 !important;
   width: 100% !important;
   min-height: 0 !important;
@@ -63,8 +67,8 @@ body.kiosk-client-mode .kiosk-card {
   border-right: none !important;
 }
 
-/* Columna derecha (carrito): bottom sheet con handle visual */
-.kiosk-col-right {
+/* Bottom sheet carrito (anula body.kiosk-client-mode .kiosk-col-right { max-height: none } del desktop) */
+body.tpv-mobile .kiosk-col-right {
   width: 100% !important;
   flex: none !important;
   max-height: 45vh !important;
@@ -77,13 +81,12 @@ body.kiosk-client-mode .kiosk-card {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .kiosk-col-right {
+  body.tpv-mobile .kiosk-col-right {
     transition: max-height 0.3s ease;
   }
 }
 
-/* Handle del bottom sheet (visual affordance) */
-.kiosk-col-right::before {
+body.tpv-mobile .kiosk-col-right::before {
   content: '';
   display: block;
   width: 2.5rem;
@@ -94,66 +97,60 @@ body.kiosk-client-mode .kiosk-card {
   opacity: 0.5;
 }
 
-/* Touch targets: mínimo 44px (WCAG 2.5.5 AAA / 2.5.8 AA) */
 .touch-manipulation { touch-action: manipulation; }
-body.kiosk-client-mode .kiosk-card button,
-body.kiosk-client-mode .kiosk-card a,
-body.kiosk-client-mode .kiosk-card [role="button"] {
+body.tpv-mobile .kiosk-card button,
+body.tpv-mobile .kiosk-card a,
+body.tpv-mobile .kiosk-card [role="button"] {
   min-height: 2.75rem !important;
   min-width: 2.75rem !important;
 }
 
-/* Header mobile: compacto pero legible y táctil */
-body.kiosk-client-mode .kiosk-card header {
+body.tpv-mobile .kiosk-card header {
   padding: 0.5rem 0.75rem !important;
   flex-wrap: wrap !important;
   gap: 0.5rem !important;
 }
-body.kiosk-client-mode .kiosk-card header h1 {
+body.tpv-mobile .kiosk-card header h1 {
   font-size: 1.125rem !important;
   line-height: 1.25 !important;
 }
-body.kiosk-client-mode .kiosk-card header .text-\[10px\],
-body.kiosk-client-mode .kiosk-card header [class*="text-[10px]"] {
+body.tpv-mobile .kiosk-card header .text-\[10px\],
+body.tpv-mobile .kiosk-card header [class*="text-[10px]"] {
   font-size: 0.625rem !important;
 }
-body.kiosk-client-mode .kiosk-card header button,
-body.kiosk-client-mode .kiosk-card header .flex.items-center.gap-2 {
+body.tpv-mobile .kiosk-card header button,
+body.tpv-mobile .kiosk-card header .flex.items-center.gap-2 {
   min-height: 2.75rem !important;
   padding: 0.5rem 0.75rem !important;
   font-size: 0.875rem !important;
 }
-body.kiosk-client-mode .kiosk-card header img {
+body.tpv-mobile .kiosk-card header img {
   max-height: 2.25rem !important;
 }
 
-/* CTA principal "Pagar ahora": bien grande en mobile */
-body.kiosk-client-mode .kiosk-card .kiosk-col-right button.w-full.bg-primary {
+body.tpv-mobile .kiosk-col-right button.w-full.bg-primary {
   min-height: 3.5rem !important;
   font-size: 1.25rem !important;
   padding: 1rem 1.5rem !important;
 }
 
-/* Focus visible: anillo de alta visibilidad para navegación por teclado */
-body.kiosk-client-mode .kiosk-card :focus-visible {
+body.tpv-mobile .kiosk-card :focus-visible {
   outline: 2px solid #3b82f6 !important;
   outline-offset: 2px !important;
 }
 
-/* Inputs: font-size >= 16px para evitar zoom en iOS */
-body.kiosk-client-mode .kiosk-card input[type="text"],
-body.kiosk-client-mode .kiosk-card input[type="number"],
-body.kiosk-client-mode .kiosk-card input[type="email"],
-body.kiosk-client-mode .kiosk-card input[type="search"],
-body.kiosk-client-mode .kiosk-card input[type="tel"],
-body.kiosk-client-mode .kiosk-card select,
-body.kiosk-client-mode .kiosk-card textarea {
+body.tpv-mobile .kiosk-card input[type="text"],
+body.tpv-mobile .kiosk-card input[type="number"],
+body.tpv-mobile .kiosk-card input[type="email"],
+body.tpv-mobile .kiosk-card input[type="search"],
+body.tpv-mobile .kiosk-card input[type="tel"],
+body.tpv-mobile .kiosk-card select,
+body.tpv-mobile .kiosk-card textarea {
   font-size: 1rem !important;
   min-height: 2.75rem !important;
 }
 
-/* Modales: fullscreen en mobile para maximizar área útil */
-.fixed.inset-0 > div {
+body.tpv-mobile .fixed.inset-0 > div {
   max-width: 100% !important;
   max-height: 100dvh !important;
   width: 100% !important;
@@ -161,63 +158,53 @@ body.kiosk-client-mode .kiosk-card textarea {
   margin: 0 !important;
 }
 
-/* Ocultar botón pantalla completa (sin sentido en mobile) */
-button[title="Pantalla completa"],
-.btn-fullscreen { display: none !important; }
+body.tpv-mobile button[title="Pantalla completa"],
+body.tpv-mobile .btn-fullscreen { display: none !important; }
 
-/* Barras de botones: scroll horizontal sin scrollbar visible */
-.flex.items-center.gap-2.overflow-x-auto,
-.flex.gap-2.overflow-x-auto {
+body.tpv-mobile .flex.items-center.gap-2.overflow-x-auto,
+body.tpv-mobile .flex.gap-2.overflow-x-auto {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
-.flex.items-center.gap-2.overflow-x-auto::-webkit-scrollbar,
-.flex.gap-2.overflow-x-auto::-webkit-scrollbar { display: none; }
+body.tpv-mobile .flex.items-center.gap-2.overflow-x-auto::-webkit-scrollbar,
+body.tpv-mobile .flex.gap-2.overflow-x-auto::-webkit-scrollbar { display: none; }
 
-/* Tablas dentro de modales: scroll horizontal */
-.overflow-x-auto { -webkit-overflow-scrolling: touch; }
+body.tpv-mobile .overflow-x-auto { -webkit-overflow-scrolling: touch; }
 
-/* Padding lateral reducido */
-.px-4.sm\:px-6.lg\:px-8 {
+body.tpv-mobile .px-4.sm\:px-6.lg\:px-8 {
   padding-left: 0.5rem !important;
   padding-right: 0.5rem !important;
 }
 
-/* Texto de totales y títulos del carrito: legibles en mobile */
-body.kiosk-client-mode .kiosk-col-right .text-2xl { font-size: 1.5rem !important; }
-body.kiosk-client-mode .kiosk-col-right .text-xl { font-size: 1.25rem !important; }
-body.kiosk-client-mode .kiosk-col-right h2 { font-size: 1.125rem !important; }
-body.kiosk-client-mode .kiosk-col-right .text-xs { font-size: 0.8125rem !important; }
+body.tpv-mobile .kiosk-col-right .text-2xl { font-size: 1.5rem !important; }
+body.tpv-mobile .kiosk-col-right .text-xl { font-size: 1.25rem !important; }
+body.tpv-mobile .kiosk-col-right h2 { font-size: 1.125rem !important; }
+body.tpv-mobile .kiosk-col-right .text-xs { font-size: 0.8125rem !important; }
 
-/* Búsqueda / escaneo: input grande y legible */
-body.kiosk-client-mode .kiosk-col-left input#tpv-busqueda-producto,
-body.kiosk-client-mode .kiosk-col-left input[placeholder*="Escanear"],
-body.kiosk-client-mode .kiosk-col-left input[placeholder*="Esperando"] {
+body.tpv-mobile .kiosk-col-left input#tpv-busqueda-producto,
+body.tpv-mobile .kiosk-col-left input[placeholder*="Escanear"],
+body.tpv-mobile .kiosk-col-left input[placeholder*="Esperando"] {
   min-height: 3rem !important;
   font-size: 1rem !important;
   padding: 0.75rem 1rem !important;
 }
 
-/* Botones secundarios bajo "Pagar ahora" (Tarjeta regalo, Asistencia, Cancelar) */
-body.kiosk-client-mode .kiosk-col-right .grid.grid-cols-3 button {
+body.tpv-mobile .kiosk-col-right .grid.grid-cols-3 button {
   min-height: 2.75rem !important;
   font-size: 0.75rem !important;
   padding: 0.5rem !important;
 }
 
-/* Grid de resultados: 1 columna en mobile */
-.grid.grid-cols-1.sm\:grid-cols-2 { grid-template-columns: 1fr !important; }
-.grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+body.tpv-mobile .grid.grid-cols-1.sm\:grid-cols-2,
+body.tpv-mobile .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
 
-/* Mejora de contraste para badges de estado */
-.bg-emerald-100 { background-color: #d1fae5 !important; }
-.text-emerald-700 { color: #047857 !important; }
-.bg-amber-100 { background-color: #fef3c7 !important; }
-.text-amber-700 { color: #b45309 !important; }
+body.tpv-mobile .bg-emerald-100 { background-color: #d1fae5 !important; }
+body.tpv-mobile .text-emerald-700 { color: #047857 !important; }
+body.tpv-mobile .bg-amber-100 { background-color: #fef3c7 !important; }
+body.tpv-mobile .text-amber-700 { color: #b45309 !important; }
 
-/* Safe area insets para dispositivos con notch */
 @supports (padding: max(0px)) {
-  .kiosk-col-right {
+  body.tpv-mobile .kiosk-col-right {
     padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
   }
 }
