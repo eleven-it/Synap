@@ -2,6 +2,7 @@
 <html lang="es" x-data="{ openMenu: false, openUserMenu: false, sidebarOpen: true }" @click.away="openMenu = false; openUserMenu = false" class="bg-gray-100 dark:bg-gray-900">
 <head>
     <meta charset="UTF-8">
+    {% block extra_meta %}{% endblock %}
     <title>{% block title %}Synap{% endblock %}</title>
     {% load static %}
     {% load i18n %}

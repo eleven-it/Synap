@@ -134,6 +134,8 @@ mobile/kiosco.html  →  extends  →  kiosco.html  →  extends  →  base_app.
 - Oculta botón pantalla completa
 - Scroll horizontal para barras de botones
 
+**Viewport y usabilidad en celular (marzo 2026):** En dispositivos móviles la pantalla podía verse como "responsive desktop" (todo escalado y pequeño) porque `base_app.html` no incluye meta viewport. Se añadió en `theme/templates/base_app.html` el bloque `{% block extra_meta %}` y en `mobile/kiosco.html` se sobreescribe con `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`. Además se reforzaron los overrides mobile: `body.kiosk-client-mode` con `min-height: 100dvh` y `font-size: 16px`, header más compacto con botones táctiles ≥ 44px, CTA "Pagar ahora" con `min-height: 3.5rem` y `font-size: 1.25rem`, e inputs de búsqueda/escaneo con `min-height: 3rem` y padding generoso. Con esto el TPV en celular se usa con tamaño de pantalla real y botones manejables.
+
 ### 4.2 Templates simples (tablas → cards)
 
 Cada uno es un template independiente que extiende `base_app.html` y reimplementa el contenido como cards en lugar de tablas:

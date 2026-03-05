@@ -6,10 +6,26 @@
   0 duplicación de HTML/JS/Alpine.js.
 {% endcomment %}
 
+{% block extra_meta %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% endblock %}
+
 {% block extra_css %}
 {{ block.super }}
 <style>
 /* ========== MOBILE TPV OVERRIDES ========== */
+/* Objetivo: vista usable en celular (no responsive desktop escalado). */
+
+/* Viewport y raíz: altura real del dispositivo, sin zoom de página */
+html { -webkit-text-size-adjust: 100%; }
+body.kiosk-client-mode {
+  min-height: 100dvh !important;
+  font-size: 16px !important;
+}
+body.kiosk-client-mode .kiosk-root {
+  min-height: 100dvh !important;
+  padding-bottom: env(safe-area-inset-bottom, 0.5rem) !important;
+}
 
 /* Respetar preferencia de movimiento reducido */
 @media (prefers-reduced-motion: reduce) {
@@ -80,17 +96,58 @@ body.kiosk-client-mode .kiosk-card {
 
 /* Touch targets: mínimo 44px (WCAG 2.5.5 AAA / 2.5.8 AA) */
 .touch-manipulation { touch-action: manipulation; }
-button, a, [role="button"] { min-height: 2.75rem; }
+body.kiosk-client-mode .kiosk-card button,
+body.kiosk-client-mode .kiosk-card a,
+body.kiosk-client-mode .kiosk-card [role="button"] {
+  min-height: 2.75rem !important;
+  min-width: 2.75rem !important;
+}
+
+/* Header mobile: compacto pero legible y táctil */
+body.kiosk-client-mode .kiosk-card header {
+  padding: 0.5rem 0.75rem !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+}
+body.kiosk-client-mode .kiosk-card header h1 {
+  font-size: 1.125rem !important;
+  line-height: 1.25 !important;
+}
+body.kiosk-client-mode .kiosk-card header .text-\[10px\],
+body.kiosk-client-mode .kiosk-card header [class*="text-[10px]"] {
+  font-size: 0.625rem !important;
+}
+body.kiosk-client-mode .kiosk-card header button,
+body.kiosk-client-mode .kiosk-card header .flex.items-center.gap-2 {
+  min-height: 2.75rem !important;
+  padding: 0.5rem 0.75rem !important;
+  font-size: 0.875rem !important;
+}
+body.kiosk-client-mode .kiosk-card header img {
+  max-height: 2.25rem !important;
+}
+
+/* CTA principal "Pagar ahora": bien grande en mobile */
+body.kiosk-client-mode .kiosk-card .kiosk-col-right button.w-full.bg-primary {
+  min-height: 3.5rem !important;
+  font-size: 1.25rem !important;
+  padding: 1rem 1.5rem !important;
+}
 
 /* Focus visible: anillo de alta visibilidad para navegación por teclado */
-:focus-visible {
+body.kiosk-client-mode .kiosk-card :focus-visible {
   outline: 2px solid #3b82f6 !important;
   outline-offset: 2px !important;
 }
 
 /* Inputs: font-size >= 16px para evitar zoom en iOS */
-input[type="text"], input[type="number"], input[type="email"],
-input[type="search"], input[type="tel"], select, textarea {
+body.kiosk-client-mode .kiosk-card input[type="text"],
+body.kiosk-client-mode .kiosk-card input[type="number"],
+body.kiosk-client-mode .kiosk-card input[type="email"],
+body.kiosk-client-mode .kiosk-card input[type="search"],
+body.kiosk-client-mode .kiosk-card input[type="tel"],
+body.kiosk-client-mode .kiosk-card select,
+body.kiosk-client-mode .kiosk-card textarea {
   font-size: 1rem !important;
   min-height: 2.75rem !important;
 }
@@ -126,9 +183,27 @@ button[title="Pantalla completa"],
   padding-right: 0.5rem !important;
 }
 
-/* Texto de totales más grande para visibilidad */
-.kiosk-col-right .text-2xl { font-size: 1.75rem !important; }
-.kiosk-col-right .text-xl { font-size: 1.25rem !important; }
+/* Texto de totales y títulos del carrito: legibles en mobile */
+body.kiosk-client-mode .kiosk-col-right .text-2xl { font-size: 1.5rem !important; }
+body.kiosk-client-mode .kiosk-col-right .text-xl { font-size: 1.25rem !important; }
+body.kiosk-client-mode .kiosk-col-right h2 { font-size: 1.125rem !important; }
+body.kiosk-client-mode .kiosk-col-right .text-xs { font-size: 0.8125rem !important; }
+
+/* Búsqueda / escaneo: input grande y legible */
+body.kiosk-client-mode .kiosk-col-left input#tpv-busqueda-producto,
+body.kiosk-client-mode .kiosk-col-left input[placeholder*="Escanear"],
+body.kiosk-client-mode .kiosk-col-left input[placeholder*="Esperando"] {
+  min-height: 3rem !important;
+  font-size: 1rem !important;
+  padding: 0.75rem 1rem !important;
+}
+
+/* Botones secundarios bajo "Pagar ahora" (Tarjeta regalo, Asistencia, Cancelar) */
+body.kiosk-client-mode .kiosk-col-right .grid.grid-cols-3 button {
+  min-height: 2.75rem !important;
+  font-size: 0.75rem !important;
+  padding: 0.5rem !important;
+}
 
 /* Grid de resultados: 1 columna en mobile */
 .grid.grid-cols-1.sm\:grid-cols-2 { grid-template-columns: 1fr !important; }
