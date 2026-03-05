@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b6cee",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Header -->
+<header class="flex items-center justify-between px-8 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center gap-3">
+<div class="bg-primary p-2 rounded-lg text-white">
+<span class="material-symbols-outlined text-2xl">point_of_sale</span>
+</div>
+<div>
+<h1 class="text-xl font-extrabold tracking-tight text-primary">AdministraNET</h1>
+<p class="text-xs font-medium text-slate-500 dark:text-slate-400">Retail POS Solutions</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end">
+<span class="text-sm font-bold bg-primary/10 text-primary px-3 py-1 rounded-full">Kiosko 01</span>
+<span class="text-xs text-slate-400">Sucursal Centro</span>
+</div>
+<div class="h-10 w-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User avatar icon for kiosk operator" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB-g2koRkFk1LQSFwqzVT6xDaACqA4Lv_DbFt9Vmska8xvvC4wqfR1uLoidhq4gv_Hj31YNVKcUVkCP6H8dZ8RfJGbl-8GpJF0-gP35ygfFw2gCOGPCAsmx5dZep7DBGzbPo4jYm32fs_xbnEx4kR9kmvLJx0Mv2-h6u0W0T5kbdFo5BXIk22KHK_SNFZ3woUfj1LvzNn-Pi9sdXYhQCqwiMlxJb5QgU2ItHtUkqkIs0pKlI7zUzRNfJV3N7JVQ4a-oVcOzBjgkWjU"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 flex p-6 gap-6 overflow-hidden">
+<!-- Left Section: Scanning Area -->
+<section class="flex-1 flex flex-col gap-6">
+<div class="bg-white dark:bg-slate-900 rounded-xl p-8 shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col justify-center items-center text-center">
+<div class="mb-8 bg-primary/5 p-12 rounded-full">
+<span class="material-symbols-outlined text-8xl text-primary animate-pulse">barcode_scanner</span>
+</div>
+<h2 class="text-3xl font-black mb-4 text-slate-900 dark:text-white">Escanea tu producto</h2>
+<p class="text-lg text-slate-500 dark:text-slate-400 mb-8 max-w-md">
+                    Pasa el código de barras por el escáner o usa el buscador para agregar artículos a tu carrito.
+                </p>
+<div class="w-full max-w-2xl">
+<div class="relative group">
+<span class="absolute left-5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 text-3xl">search</span>
+<input class="w-full pl-16 pr-6 py-6 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-xl focus:border-primary focus:ring-0 transition-all placeholder:text-slate-400" placeholder="Busca por nombre o código..." type="text"/>
+</div>
+</div>
+<div class="mt-12 flex gap-4">
+<button class="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined">category</span>
+                        Ver catálogo completo
+                    </button>
+<button class="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined">help</span>
+                        Solicitar Asistencia
+                    </button>
+</div>
+</div>
+</section>
+<!-- Right Section: Cart Area -->
+<aside class="w-[450px] flex flex-col gap-6">
+<div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex-1 flex flex-col overflow-hidden">
+<div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+<h3 class="text-xl font-bold">Tus productos</h3>
+<span class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">0 items</span>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center p-10 text-center">
+<div class="w-48 h-48 mb-6 opacity-20 dark:opacity-40">
+<div class="w-full h-full bg-slate-200 dark:bg-slate-700 rounded-2xl flex items-center justify-center">
+<span class="material-symbols-outlined text-7xl">shopping_cart_off</span>
+</div>
+</div>
+<p class="text-xl font-bold text-slate-900 dark:text-white mb-2">Tu carrito está vacío</p>
+<p class="text-sm text-slate-500 dark:text-slate-400">Escanea un producto para comenzar tu compra hoy mismo.</p>
+</div>
+<!-- Totals Section -->
+<div class="p-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800">
+<div class="space-y-2 mb-6 text-slate-600 dark:text-slate-400">
+<div class="flex justify-between">
+<span>Subtotal</span>
+<span class="font-medium">$0.00</span>
+</div>
+<div class="flex justify-between">
+<span>Descuento</span>
+<span class="text-emerald-500 font-medium">-$0.00</span>
+</div>
+<div class="flex justify-between">
+<span>Impuestos (IVA 16%)</span>
+<span class="font-medium">$0.00</span>
+</div>
+<div class="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-end">
+<span class="text-lg font-bold text-slate-900 dark:text-white uppercase">Total</span>
+<span class="text-4xl font-black text-primary">$0.00</span>
+</div>
+</div>
+<button class="w-full py-5 bg-primary/20 text-primary/60 cursor-not-allowed rounded-2xl font-black text-xl flex items-center justify-center gap-3 transition-all">
+<span class="material-symbols-outlined">payments</span>
+                        PAGAR AHORA
+                    </button>
+</div>
+</div>
+</aside>
+</main>
+<!-- Footer Actions -->
+<footer class="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+<div class="flex gap-4">
+<button class="flex items-center gap-2 px-6 py-3 text-red-500 font-bold hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-colors">
+<span class="material-symbols-outlined">close</span>
+                Cancelar compra
+            </button>
+</div>
+<div class="flex gap-4">
+<button class="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined">card_giftcard</span>
+                Usar Tarjeta de Regalo
+            </button>
+<button class="flex items-center gap-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined">loyalty</span>
+                Miembro AdministraNET
+            </button>
+</div>
+</footer>
+</body></html>

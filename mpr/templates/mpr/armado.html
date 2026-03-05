@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% load static %}
 
-{% block title %}Ejecutar armado (Lista de materiales) - MPR - Synap{% endblock %}
+{% block title %}Armado – OPT {{ opt_numero|default:"-" }} - MPR - Synap{% endblock %}
 
 {% block content %}
 <section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
@@ -9,51 +9,55 @@
         <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
             <span class="mx-2">/</span>
-            <a href="{% url 'mpr:bom_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Lista de materiales</a>
+            <a href="{% url 'mpr:opt_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">OPT</a>
+            {% if id_lista %}
             <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Ejecutar armado</span>
+            <a href="{% url 'mpr:opt_detail' id_lista %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">OPT {{ opt_numero }}</a>
+            {% endif %}
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Armado</span>
         </nav>
 
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Ejecutar armado (Lista de materiales)</h1>
+        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Armado – OPT {{ opt_numero|default:"-" }}</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">
-            Salida de componentes desde el depósito origen y entrada del producto armado en el depósito destino. Se genera un movimiento de stock tipo Armado.
+            Salida de componentes desde el depósito origen y entrada del producto armado en el depósito destino. Se genera un movimiento de stock tipo Armado. Los productos y cantidades corresponden a la OPT seleccionada.
         </p>
 
         <form method="post" action="" class="space-y-6">
             {% csrf_token %}
-            {# Conjunto Lista de materiales #}
+            {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}">{% endif %}
+
+            {# Tabla Producto | Cantidad (desde OPT) #}
             <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <span class="material-icons text-purple-500 dark:text-purple-400">category</span>
-                    Conjunto de armado
+                    Productos a armar
                 </h2>
-                <label for="id_en_abm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Conjunto (Lista de materiales)</label>
-                <select id="id_en_abm" name="id_en_abm" required
-                        class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">Seleccione conjunto</option>
-                    {% for c in conjuntos %}
-                    <option value="{{ c.id_en_abm }}" {% if id_en_abm_preseleccionado == c.id_en_abm %}selected{% endif %}>
-                        {{ c.nombre_en_abm|default:c.id_en_abm }} ({{ c.n_componentes }} comp.)
-                    </option>
-                    {% endfor %}
-                </select>
-                {% if bom_seleccionado %}
-                <div class="mt-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-sm">
-                    <p class="font-medium text-gray-700 dark:text-gray-300">Producto resultante: {{ articulo_armado.codigo_articulo }} — {{ articulo_armado.descripcion_articulo }}</p>
-                    <p class="text-gray-500 dark:text-gray-400 mt-1">Componentes: {% for comp in bom_seleccionado.componentes %}{{ comp.codigo_articulo }} × {{ comp.cantidad_articulo }}{% if not forloop.last %}; {% endif %}{% endfor %}</p>
+                {% if lineas_armado %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Producto</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for item in lineas_armado %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">{{ item.producto_label }}</td>
+                                <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ item.cantidad }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% if not hay_restante_armar %}
+                <p class="mt-3 text-sm text-amber-600 dark:text-amber-400">No quedan cantidades por armar para esta OPT.</p>
                 {% endif %}
-            </div>
-
-            {# Cantidad #}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span class="material-icons text-purple-500 dark:text-purple-400">tag</span>
-                    Cantidad a armar
-                </h2>
-                <label for="cantidad_a_armar" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Unidades</label>
-                <input type="number" id="cantidad_a_armar" name="cantidad_a_armar" value="{{ cantidad_preseleccionada|default:1 }}" min="1" required
-                       class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">No hay artículos armables en esta OPT o no se indicó OPT.</p>
+                {% endif %}
             </div>
 
             {# Depósitos #}
@@ -91,12 +95,24 @@
                     Se descontará stock de cada componente en el depósito origen y se sumará el producto armado en el depósito destino. Compruebe que haya stock suficiente de insumos.
                 </p>
                 <div class="flex flex-wrap gap-3">
+                    {% if hay_restante_armar and id_lista %}
                     <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
                         <span class="material-icons text-lg">build</span>
                         Ejecutar armado
                     </button>
-                    <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
-                        Cancelar
+                    {% else %}
+                    <button type="button" disabled class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gray-500 cursor-not-allowed text-white">
+                        <span class="material-icons text-lg">build</span>
+                        Ejecutar armado
+                    </button>
+                    {% endif %}
+                    {% if id_lista %}
+                    <a href="{% url 'mpr:opt_detail' id_lista %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                        Volver a OPT
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'mpr:opt_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                        Listado OPT
                     </a>
                 </div>
             </div>

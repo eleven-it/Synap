@@ -6,13 +6,13 @@
 {% block content %}
 <section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        {# Breadcrumbs #}
+        {# Breadcrumbs: último ítem "Detalle" para no repetir el nombre #}
         <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
             <span class="mx-2">/</span>
             <a href="{% url 'mpr:bom_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Lista de materiales</a>
             <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">{{ bom.cabecera.nombre_en_abm }}</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">Detalle</span>
         </nav>
 
         {# Cabecera del conjunto #}
@@ -37,10 +37,6 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <a href="{% url 'mpr:bom_edit' bom.cabecera.id_en_abm %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">Editar</a>
-                    <a href="{% url 'mpr:armado_bom' bom.cabecera.id_en_abm %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">
-                        <span class="material-icons text-lg">build</span>
-                        Ejecutar armado
-                    </a>
                     <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                         <span class="material-icons text-lg">arrow_back</span>
                         Volver al listado
@@ -48,7 +44,7 @@
                 </div>
             </div>
             {% if articulo_armado %}
-            <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">Artículo armado: <strong>{{ articulo_armado.codigo_articulo }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">Artículo armado: <strong>{{ articulo_armado.codigo_articulo }}</strong>{% if articulo_armado.descripcion_articulo != bom.cabecera.nombre_en_abm %} — {{ articulo_armado.descripcion_articulo }}{% endif %}</p>
             {% else %}
             <p class="text-sm text-amber-600 dark:text-amber-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">Artículo armado: no asignado. Edite el conjunto para asignar uno.</p>
             {% endif %}
@@ -58,7 +54,6 @@
         <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Componentes ({{ bom.componentes|length }})</h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">en_abm_formula: insumos y cantidades por unidad de armado</p>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">

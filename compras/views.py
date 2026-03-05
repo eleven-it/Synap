@@ -1,6 +1,7 @@
 """
-Vistas para Remito de compra (paridad PRemito.frm VB6).
+Vistas para Remito de compra (paridad PRemito.frm VB6) y hub de comprobantes (paridad CargaComprobantesP.frm).
 Eventos: Form_Load → GET con contexto; Aceptar_Click → POST guardar; Eliminar_Click → POST eliminar renglón.
+Hub: listado proveedores, precheck y redirección a Factura/NC/ND/OP según accion.
 """
 import json
 from datetime import date
@@ -8,7 +9,24 @@ from datetime import date
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+
+from legacy_db.repositories import (
+    buscar_proveedores_paginado,
+    count_proveedores,
+    listar_sucursales,
+    check_lock_op_proveedor,
+    hay_facturas_para_op_por_imputacion,
+    hay_descuentos_para_nc_descuento,
+    PROVEEDOR_ORDER_COLUMNS,
+)
+from legacy_db.validators import (
+    PrecheckError,
+    validar_cai_vigente,
+    validar_obliga_oc_para_factura,
+)
+from legacy_db.mappers import proveedor_row_to_dto, sucursal_row_to_dto
 
 from core.services.administranet_compras import (
     alta_renglon_temporal,
@@ -528,4 +546,296 @@ def lista_comp_remito(request):
         "tipo": tipo,
         "codigo_proveedor": cod_prov,
         "titulo": titulo,
+    })
+
+
+# ─── Hub Comprobantes de Compra (paridad CargaComprobantesP.frm FORM-001) ───
+
+def _hub_ver_todas_sucursales(request):
+    """Equivalente a Principal.ver_proveedor_sucursal = 'Si'."""
+    user = request.session.get("user") or {}
+    return (user.get("ver_proveedor_sucursal") or "").strip().lower() == "si"
+
+
+def _hub_precheck(base_empresa, id_usuario, accion, codigo_proveedor):
+    """
+    Misma lógica que legacy_db api_precheck. Devuelve (ok, codigo_error, extra).
+    extra puede contener codigo_usuario si OP_BLOQUEADA.
+    """
+    if not codigo_proveedor and accion in ("keyFact", "keyPorimp", "keyAcuenta", "keyNCDesR", "keyAsignaPag"):
+        return False, PrecheckError.SIN_PROVEEDOR, {}
+    if accion in ("keyPorimp", "keyAcuenta"):
+        lock = check_lock_op_proveedor(base_empresa, codigo_proveedor, id_usuario or 0)
+        if lock:
+            return False, PrecheckError.OP_BLOQUEADA, {"codigo_usuario": lock.get("codigo_usuario") or ""}
+        if accion == "keyPorimp" and not hay_facturas_para_op_por_imputacion(base_empresa, codigo_proveedor):
+            return False, PrecheckError.SIN_FACTURAS_IMPUTAR, {}
+    if accion == "keyAsignaPag":
+        # Paridad VB6: AsigPago requiere facturas/comprobantes para imputar (op_factura).
+        if not hay_facturas_para_op_por_imputacion(base_empresa, codigo_proveedor):
+            return False, PrecheckError.SIN_FACTURAS_IMPUTAR, {}
+    if accion == "keyNCDesR" and not hay_descuentos_para_nc_descuento(base_empresa, codigo_proveedor):
+        return False, PrecheckError.SIN_DESCUENTOS_NC, {}
+    if accion == "keyFact" and codigo_proveedor:
+        rows = buscar_proveedores_paginado(
+            base_empresa=base_empresa,
+            q=str(codigo_proveedor),
+            tipo_busqueda="Incluye texto",
+            id_sucursal=None,
+            ver_proveedor_todas_sucursales=True,
+            limit=1,
+            offset=0,
+        )
+        if rows:
+            prov = rows[0]
+            ok_cai, err_cai = validar_cai_vigente(prov.get("FechaCAI"))
+            if not ok_cai:
+                return False, err_cai, {}
+            ok_oc, err_oc = validar_obliga_oc_para_factura(prov.get("obliga_oc_carga_comp"))
+            if not ok_oc:
+                return False, err_oc, {}
+    return True, None, {}
+
+
+# Mensajes de error para el usuario (paridad VB6)
+PRECHECK_MENSAJES = {
+    PrecheckError.CAI_VENCIDO: "El CAI del proveedor está vencido. No se puede abrir el comprobante.",
+    PrecheckError.REQUIERE_OC: "Este proveedor exige Orden de Compra para cargar factura.",
+    PrecheckError.OP_BLOQUEADA: "Otro usuario está usando la Orden de Pago de este proveedor. Intente más tarde.",
+    PrecheckError.SIN_FACTURAS_IMPUTAR: "No hay facturas pendientes para imputar en Orden de Pago.",
+    PrecheckError.SIN_DESCUENTOS_NC: "No existen descuentos cargados para Nota de Crédito por descuento.",
+    PrecheckError.SIN_PROVEEDOR: "Seleccione un proveedor.",
+}
+
+
+@require_GET
+def hub_comprobantes_proveedor(request):
+    """
+    Hub de comprobantes de compra (paridad CargaComprobantesP.frm).
+    Listado y búsqueda de proveedores; al elegir acción se ejecuta precheck y se redirige al formulario
+    correspondiente (o se muestra error). Persistencia idéntica a VB6 vía legacy_db.
+    """
+    base_empresa, id_usuario, _ = _session_base(request)
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    accion = (request.GET.get("accion") or "").strip()
+    codigo_proveedor_raw = request.GET.get("codigo_proveedor")
+    try:
+        codigo_proveedor = int(codigo_proveedor_raw) if codigo_proveedor_raw else None
+    except (ValueError, TypeError):
+        codigo_proveedor = None
+
+    # Si hay accion + proveedor, ejecutar precheck y redirigir o mostrar error
+    if accion and codigo_proveedor:
+        ok, codigo_err, extra = _hub_precheck(base_empresa, id_usuario, accion, codigo_proveedor)
+        if not ok:
+            msg = PRECHECK_MENSAJES.get(codigo_err)
+            if codigo_err == PrecheckError.OP_BLOQUEADA and extra.get("codigo_usuario"):
+                msg = f"{msg} (Usuario: {extra['codigo_usuario']})"
+            messages.error(request, msg or f"Validación: {codigo_err}")
+        else:
+            # Redirigir al formulario correspondiente (placeholders hasta implementar PFactura, OrdenPago, etc.)
+            if accion == "keyFact":
+                return redirect("compras:factura_compra" + "?codigo_proveedor=" + str(codigo_proveedor))
+            if accion == "keyPorimp":
+                return redirect("compras:orden_pago_form", codigo_proveedor=codigo_proveedor, tipo="imputacion")
+            if accion == "keyAcuenta":
+                return redirect("compras:orden_pago_form", codigo_proveedor=codigo_proveedor, tipo="acuenta")
+            if accion == "keyNCDev":
+                return redirect("compras:nota_credito_form", codigo_proveedor=codigo_proveedor, tipo="devolucion")
+            if accion == "keyNCDesR":
+                return redirect("compras:nota_credito_form", codigo_proveedor=codigo_proveedor, tipo="descuento")
+            if accion == "keyND":
+                return redirect("compras:nota_debito_form", codigo_proveedor=codigo_proveedor)
+            if accion == "keyVerCtaCte":
+                return redirect("compras:ctacte_proveedor", codigo_proveedor=codigo_proveedor)
+            if accion == "keyAsignaPag":
+                return redirect("compras:imputacion_form", codigo_proveedor=codigo_proveedor)
+            if accion == "keyDesimputa":
+                return redirect("compras:desimputacion_form", codigo_proveedor=codigo_proveedor)
+        # Si no redirigió (accion no mapeada o error), seguir mostrando listado con filtros actuales
+
+    # Listado: filtros y paginación (paridad Consulta_Busqueda)
+    q = (request.GET.get("q") or "").strip()
+    tipo_busqueda = (request.GET.get("tipo_busqueda") or "Incluye texto").strip()
+    if tipo_busqueda not in ("Comienza con", "Finaliza con", "Incluye texto"):
+        tipo_busqueda = "Incluye texto"
+    id_sucursal = request.GET.get("id_sucursal")
+    if id_sucursal not in (None, ""):
+        try:
+            id_sucursal = int(id_sucursal)
+        except (ValueError, TypeError):
+            id_sucursal = None
+    else:
+        id_sucursal = None
+    ver_todas = _hub_ver_todas_sucursales(request)
+    page_size = min(int(request.GET.get("page_size") or 50), 500)
+    page = max(1, int(request.GET.get("page") or 1))
+    offset = (page - 1) * page_size
+    order_by = (request.GET.get("order_by") or "Nombre").strip()
+    if order_by not in PROVEEDOR_ORDER_COLUMNS:
+        order_by = "Nombre"
+    orden = (request.GET.get("orden") or "asc").lower()
+    if orden not in ("asc", "desc"):
+        orden = "asc"
+
+    rows = buscar_proveedores_paginado(
+        base_empresa=base_empresa,
+        q=q,
+        tipo_busqueda=tipo_busqueda,
+        id_sucursal=id_sucursal if not ver_todas else None,
+        ver_proveedor_todas_sucursales=ver_todas,
+        limit=page_size,
+        offset=offset,
+        order_by=order_by,
+        orden=orden,
+    )
+    total = count_proveedores(
+        base_empresa=base_empresa,
+        q=q,
+        tipo_busqueda=tipo_busqueda,
+        id_sucursal=id_sucursal if not ver_todas else None,
+        ver_proveedor_todas_sucursales=ver_todas,
+    )
+    proveedores = [proveedor_row_to_dto(r) for r in rows]
+    sucursales_raw = listar_sucursales(base_empresa)
+    sucursales = [sucursal_row_to_dto(r) for r in sucursales_raw]
+    total_pages = (total + page_size - 1) // page_size if page_size else 1
+    has_next_page = (page * page_size) < total
+
+    return render(request, "compras/hub_comprobantes.html", {
+        "proveedores": proveedores,
+        "total": total,
+        "total_pages": total_pages,
+        "has_next_page": has_next_page,
+        "page": page,
+        "page_size": page_size,
+        "sucursales": sucursales,
+        "q": q,
+        "tipo_busqueda": tipo_busqueda,
+        "id_sucursal": id_sucursal,
+        "order_by": order_by,
+        "orden": orden,
+        "ver_todas_sucursales": ver_todas,
+    })
+
+
+@require_GET
+def factura_compra(request):
+    """
+    Pantalla única Factura de Compra (rediseño centrado en cargar facturas).
+    Proveedor como campo predictivo; selector de origen de datos (Manual, Desde Remito, OC, Vale);
+    barra con Ver Cuenta Corriente, Agregar Proveedor, Informes.
+    Persistencia vía legacy_db (guardado en iteración futura).
+    """
+    base_empresa, id_usuario, _ = _session_base(request)
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    codigo_proveedor_initial = request.GET.get("codigo_proveedor")
+    nombre_proveedor_initial = ""
+    if codigo_proveedor_initial:
+        try:
+            cod = int(codigo_proveedor_initial)
+            from core.services.administranet_compras import buscar_proveedores
+            resultados = buscar_proveedores(base_empresa, str(cod), limite=1)
+            if resultados and str(resultados[0].get("Codigo")) == str(cod):
+                nombre_proveedor_initial = (resultados[0].get("Nombre") or "").strip()
+        except (ValueError, TypeError):
+            codigo_proveedor_initial = None
+
+    ctacte_base = reverse("compras:ctacte_proveedor", kwargs={"codigo_proveedor": 0}).replace("/0/", "/")
+    return render(request, "compras/factura_compra.html", {
+        "codigo_proveedor_initial": codigo_proveedor_initial or "",
+        "nombre_proveedor_initial": nombre_proveedor_initial,
+        "ctacte_base": ctacte_base,
+    })
+
+
+@require_GET
+def factura_compra_form(request, codigo_proveedor):
+    """Redirige a pantalla única Factura de Compra con proveedor en query string (desde hub)."""
+    return redirect("compras:factura_compra" + "?codigo_proveedor=" + str(codigo_proveedor))
+
+
+@require_GET
+def orden_pago_form(request, codigo_proveedor, tipo):
+    """Placeholder: Orden de Pago (OrdenPago.frm). tipo: imputacion | acuenta."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    titulo = "Orden de Pago por imputación" if tipo == "imputacion" else "Orden de Pago a cuenta"
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": titulo,
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
+    })
+
+
+@require_GET
+def nota_credito_form(request, codigo_proveedor, tipo):
+    """Placeholder: Nota de Crédito (PNotaCredDev / PNotaCredDesc). tipo: devolucion | descuento."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    titulo = "NC Devolución" if tipo == "devolucion" else "NC Descuento"
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": titulo,
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
+    })
+
+
+@require_GET
+def nota_debito_form(request, codigo_proveedor):
+    """Placeholder: Nota de Débito (PNotaDeb.frm)."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": "Nota de Débito",
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
+    })
+
+
+@require_GET
+def ctacte_proveedor(request, codigo_proveedor):
+    """Placeholder: Cuenta Corriente Proveedor (CuentaProveedor.frm)."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": "Cuenta Corriente Proveedor",
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
+    })
+
+
+@require_GET
+def imputacion_form(request, codigo_proveedor):
+    """Placeholder: Imputación comprobantes a OP (AsigPago.frm)."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": "Imputación de comprobantes a Orden de Pago",
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
+    })
+
+
+@require_GET
+def desimputacion_form(request, codigo_proveedor):
+    """Placeholder: Desimputación (AsigPagoD.frm)."""
+    base_empresa, _, _ = _session_base(request)
+    if not base_empresa:
+        return redirect("core:dashboard")
+    return render(request, "compras/comprobante_en_construccion.html", {
+        "titulo": "Desimputación de comprobantes",
+        "codigo_proveedor": codigo_proveedor,
+        "url_hub": "compras:hub_comprobantes",
     })

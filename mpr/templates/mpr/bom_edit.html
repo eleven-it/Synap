@@ -3,148 +3,171 @@
 
 {% block title %}Editar lista de materiales {{ bom.cabecera.nombre_en_abm }} - MPR - Synap{% endblock %}
 
+{% block extra_css %}
+<style>
+  .bom-edit-section { transition: opacity 0.2s ease; }
+  .bom-input:focus { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+  .bom-btn-primary { transition: transform 0.15s ease, box-shadow 0.2s ease; }
+  .bom-btn-primary:hover { transform: translateY(-1px); }
+  .bom-btn-primary:active { transform: translateY(0); }
+  .bom-table-row { transition: background-color 0.15s ease; }
+  .bom-table-row:hover { background-color: rgba(148, 163, 184, 0.08); }
+  .dark .bom-table-row:hover { background-color: rgba(71, 85, 105, 0.25); }
+  .bom-anular:hover { text-decoration: underline; }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+<section class="min-h-screen bg-gray-50/80 dark:bg-gray-900/95 py-8 transition-colors duration-300">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
+            <span aria-hidden="true">/</span>
             <a href="{% url 'mpr:bom_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Lista de materiales</a>
-            <span class="mx-2">/</span>
+            <span aria-hidden="true">/</span>
             <a href="{% url 'mpr:bom_detail' id_en_abm %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">{{ bom.cabecera.nombre_en_abm }}</a>
-            <span class="mx-2">/</span>
+            <span aria-hidden="true">/</span>
             <span class="text-gray-700 dark:text-gray-300 font-medium">Editar</span>
         </nav>
 
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Editar conjunto: {{ bom.cabecera.nombre_en_abm }}</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">ID conjunto: {{ id_en_abm }}</p>
-
-        {# Cabecera #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 mb-8">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Datos del conjunto</h2>
-            <form method="post" action="">
-                {% csrf_token %}
-                <input type="hidden" name="accion" value="guardar_cabecera"/>
-                <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                        <label for="nombre_en_abm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Nombre *</label>
-                        <input type="text" id="nombre_en_abm" name="nombre_en_abm" value="{{ bom.cabecera.nombre_en_abm }}" maxlength="200" required
-                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500"/>
-                    </div>
-                    <div>
-                        <label for="anulado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</label>
-                        <select id="anulado" name="anulado" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2">
-                            <option value="No" {% if bom.cabecera.anulado == 'No' %}selected{% endif %}>Activo</option>
-                            <option value="Si" {% if bom.cabecera.anulado == 'Si' %}selected{% endif %}>Anulado</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Detalle</label>
-                    <textarea id="detalle" name="detalle" rows="2" maxlength="500" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2">{{ bom.cabecera.detalle }}</textarea>
-                </div>
-                <div class="mt-4">
-                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">Guardar cabecera</button>
-                </div>
-            </form>
+        <div class="mb-8">
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Editar receta</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Conjunto: {{ bom.cabecera.nombre_en_abm }} · ID {{ id_en_abm }}</p>
         </div>
 
-        {# Artículo armado (resultado del armado: articulo.id_en_abm, ensamblado='Si') #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 mb-8">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Artículo armado</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">El artículo armado es el producto resultante al ejecutar esta lista de materiales. Debe ser un artículo con <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">ensamblado=Si</code> y <code class="text-xs bg-gray-100 dark:bg-gray-700 px-1 rounded">id_en_abm={{ id_en_abm }}</code>.</p>
-            {% if articulo_armado %}
-            <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">Actual: <strong>{{ articulo_armado.codigo_articulo }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
-            {% else %}
-            <p class="text-sm text-amber-600 dark:text-amber-400 mb-3">Ningún artículo asignado. Asigne uno para poder ejecutar armados desde esta lista de materiales.</p>
-            {% endif %}
-            <form method="post" action="" class="flex flex-wrap items-end gap-3">
-                {% csrf_token %}
-                <input type="hidden" name="accion" value="set_articulo_armado"/>
-                <div class="min-w-[220px]">
-                    <label for="id_articulo_armado" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Artículo armado</label>
-                    <select id="id_articulo_armado" name="id_articulo_armado" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
-                        <option value="">— Sin asignar —</option>
-                        {% for a in articulos %}
-                        <option value="{{ a.id_articulo }}" {% if articulo_armado and articulo_armado.id_articulo == a.id_articulo %}selected{% endif %}>{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">Asignar artículo armado</button>
-            </form>
-        </div>
+        <div class="space-y-0 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl bg-white dark:bg-gray-800/50 shadow-sm overflow-hidden">
 
-        {# Componentes #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-8">
-            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Componentes ({{ bom.componentes|length }})</h2>
+            {# —— Cabecera —— #}
+            <div class="bom-edit-section px-6 sm:px-8 pt-6 pb-8">
+                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-4">Datos del conjunto</p>
+                <form method="post" action="">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="guardar_cabecera"/>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <div>
+                            <label for="nombre_en_abm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nombre <span class="text-red-500">*</span></label>
+                            <input type="text" id="nombre_en_abm" name="nombre_en_abm" value="{{ bom.cabecera.nombre_en_abm }}" maxlength="200" required
+                                   class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
+                        </div>
+                        <div>
+                            <label for="anulado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Estado</label>
+                            <select id="anulado" name="anulado" class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500">
+                                <option value="No" {% if bom.cabecera.anulado == 'No' %}selected{% endif %}>Activo</option>
+                                <option value="Si" {% if bom.cabecera.anulado == 'Si' %}selected{% endif %}>Anulado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-5">
+                        <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Detalle</label>
+                        <textarea id="detalle" name="detalle" rows="2" maxlength="500" placeholder="Descripción u observaciones (opcional)"
+                                  class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 resize-none">{{ bom.cabecera.detalle }}</textarea>
+                    </div>
+                    <div class="mt-4">
+                        <button type="submit" class="bom-btn-primary inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow">Guardar cabecera</button>
+                    </div>
+                </form>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Código</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Artículo</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Unidad</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for comp in bom.componentes %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ comp.codigo_articulo }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ comp.descripcion_articulo }}</td>
-                            <td class="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ comp.cantidad_articulo }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{{ comp.tipo_unidad|default:"—" }}</td>
-                            <td class="px-4 py-3">
-                                <form method="post" action="" class="inline" onsubmit="return confirm('¿Anular este componente?');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="accion" value="anular_componente"/>
-                                    <input type="hidden" name="id_en_abm_formula" value="{{ comp.id_en_abm_formula }}"/>
-                                    <button type="submit" class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline">Anular</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">Sin componentes. Añada uno abajo.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {# Form agregar componente #}
-            <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Añadir componente</h3>
+
+            <hr class="border-gray-200 dark:border-gray-700"/>
+
+            {# —— Artículo armado —— #}
+            <div class="bom-edit-section px-6 sm:px-8 py-8">
+                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Artículo armado</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-xl">Producto resultante al ejecutar esta lista de materiales. Debe tener <code class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs">ensamblado=Si</code> y <code class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-xs">id_en_abm={{ id_en_abm }}</code>.</p>
+                {% if articulo_armado %}
+                <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">Actual: <strong>{{ articulo_armado.codigo_articulo }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
+                {% else %}
+                <p class="text-sm text-amber-600 dark:text-amber-400 mb-4">Ningún artículo asignado. Asigne uno para poder ejecutar armados desde esta lista.</p>
+                {% endif %}
                 <form method="post" action="" class="flex flex-wrap items-end gap-3">
                     {% csrf_token %}
-                    <input type="hidden" name="accion" value="agregar_componente"/>
-                    <div class="min-w-[200px]">
-                        <label for="id_articulo" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Artículo</label>
-                        <select id="id_articulo" name="id_articulo" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm">
-                            <option value="">Seleccione</option>
+                    <input type="hidden" name="accion" value="set_articulo_armado"/>
+                    <div class="min-w-[220px] flex-1">
+                        <label for="id_articulo_armado" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Artículo armado</label>
+                        <select id="id_articulo_armado" name="id_articulo_armado" class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500">
+                            <option value="">— Sin asignar —</option>
                             {% for a in articulos %}
-                            <option value="{{ a.id_articulo }}">{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
+                            <option value="{{ a.id_articulo }}" {% if articulo_armado and articulo_armado.id_articulo == a.id_articulo %}selected{% endif %}>{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="w-24">
-                        <label for="cantidad_articulo" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad</label>
-                        <input type="text" id="cantidad_articulo" name="cantidad_articulo" value="1" required class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"/>
-                    </div>
-                    <div class="w-32">
-                        <label for="tipo_unidad" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Unidad</label>
-                        <input type="text" id="tipo_unidad" name="tipo_unidad" maxlength="20" placeholder="Opcional" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm"/>
-                    </div>
-                    <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">Añadir</button>
+                    <button type="submit" class="bom-btn-primary shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow">Asignar artículo armado</button>
                 </form>
+            </div>
+
+            <hr class="border-gray-200 dark:border-gray-700"/>
+
+            {# —— Componentes —— #}
+            <div class="bom-edit-section">
+                <div class="px-6 sm:px-8 pt-6 pb-4">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Componentes <span class="font-normal normal-case text-gray-500 dark:text-gray-400">({{ bom.componentes|length }})</span></p>
+                </div>
+                <div class="overflow-x-auto -mx-px">
+                    <table class="min-w-full" role="table">
+                        <thead>
+                            <tr class="border-y border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/50">
+                                <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
+                                <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Artículo</th>
+                                <th class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cantidad</th>
+                                <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unidad</th>
+                                <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700/80">
+                            {% for comp in bom.componentes %}
+                            <tr class="bom-table-row">
+                                <td class="px-4 sm:px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ comp.codigo_articulo }}</td>
+                                <td class="px-4 sm:px-6 py-3 text-sm text-gray-600 dark:text-gray-300">{{ comp.descripcion_articulo }}</td>
+                                <td class="px-4 sm:px-6 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ comp.cantidad_articulo }}</td>
+                                <td class="px-4 sm:px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{{ comp.tipo_unidad|default:"—" }}</td>
+                                <td class="px-4 sm:px-6 py-3">
+                                    <form method="post" action="" class="inline" onsubmit="return confirm('¿Anular este componente?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion" value="anular_componente"/>
+                                        <input type="hidden" name="id_en_abm_formula" value="{{ comp.id_en_abm_formula }}"/>
+                                        <button type="submit" class="bom-anular text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors">Anular</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-4 sm:px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin componentes. Añada uno debajo.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 sm:px-8 py-5 bg-gray-50/50 dark:bg-gray-800/30 border-t border-gray-100 dark:border-gray-700/80">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">Añadir componente</p>
+                    <form method="post" action="" class="flex flex-wrap items-end gap-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="accion" value="agregar_componente"/>
+                        <div class="min-w-[200px] flex-1">
+                            <label for="id_articulo" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Artículo</label>
+                            <select id="id_articulo" name="id_articulo" required class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500">
+                                <option value="">Seleccione</option>
+                                {% for a in articulos %}
+                                <option value="{{ a.id_articulo }}">{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="w-24">
+                            <label for="cantidad_articulo" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Cantidad</label>
+                            <input type="text" id="cantidad_articulo" name="cantidad_articulo" value="1" required class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
+                        </div>
+                        <div class="w-32">
+                            <label for="tipo_unidad" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Unidad</label>
+                            <input type="text" id="tipo_unidad" name="tipo_unidad" maxlength="20" placeholder="Opcional" class="bom-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
+                        </div>
+                        <button type="submit" class="bom-btn-primary shrink-0 px-4 py-2.5 rounded-xl text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow">Añadir</button>
+                    </form>
+                </div>
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-3">
-            <a href="{% url 'mpr:bom_detail' id_en_abm %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Ver detalle</a>
-            <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:underline">Volver al listado</a>
+        <div class="mt-8 flex flex-wrap gap-3">
+            <a href="{% url 'mpr:bom_detail' id_en_abm %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Ver detalle</a>
+            <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">Volver al listado</a>
         </div>
     </div>
 </section>

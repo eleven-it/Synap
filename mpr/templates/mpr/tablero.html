@@ -142,7 +142,7 @@
             </div>
         </div>
 
-        {# Fila 3 – OPs to Release / OPs to Close #}
+        {# Fila 3 – OPTs to Release / OPTs to Close #}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
@@ -171,7 +171,7 @@
             <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
                     <span class="material-icons text-green-500 dark:text-green-400">task_alt</span>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OPs a cerrar</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OPTs a cerrar</h2>
                     <span class="px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Producción completada</span>
                 </div>
                 <div class="divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto">
@@ -183,11 +183,11 @@
                         </div>
                         <form method="post" action="{{ op.cerrar_url }}" class="inline">
                             {% csrf_token %}
-                            <button type="submit" class="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">Cerrar OP</button>
+                            <button type="submit" class="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">Cerrar OPT</button>
                         </form>
                     </div>
                     {% empty %}
-                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay OPs listas para cerrar</div>
+                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay OPTs listas para cerrar</div>
                     {% endfor %}
                 </div>
             </div>

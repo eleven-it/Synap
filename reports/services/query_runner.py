@@ -3768,6 +3768,7 @@ class QueryRunnerService:
                 notes.append(f"Depósitos incluidos: {len(depositos_incluidos)} depósito(s) (stock y disponible solo de estos depósitos).")
             if clientes_excluidos:
                 notes.append(f"Clientes excluidos: {len(clientes_excluidos)} cliente(s) (facturación, remitos y backorder NOT IN).")
+            notes.append(f"Base de datos utilizada: {base_empresa} (conexión MySQL: {mysql_config.get('HOST', '')}:{mysql_config.get('PORT', '')}).")
             lista_precio_labels = ["Costo", "Lista Oficial", "Lista 1", "Lista 2", "Lista 3", "Lista 4", "Lista 5"]
             notes.append(f"Saldo valorizado según lista de precio: {lista_precio_labels[lista_precio]} (parámetro lista_precio={lista_precio}).")
             filters_applied = {
@@ -3790,8 +3791,9 @@ class QueryRunnerService:
                     f"⚠️ Detalle con ingreso: suma(con_ingreso_importe)={sum_con_ingreso:.2f} != con_ingreso_total={con_ingreso_total:.2f} (diff={diff_ingreso:.2f})"
                 )
             
-            # Extra: datasets para tabs y flags para la UI
+            # Extra: datasets para tabs y flags para la UI (base_empresa_used para depuración cuando un comprobante no aparece)
             extra = {
+                "base_empresa_used": base_empresa,
                 "tabs": {
                     "resumen": resumen_data,
                     "detalle_sin_stock": detalle_sin_stock,

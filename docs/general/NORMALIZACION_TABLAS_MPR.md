@@ -20,7 +20,7 @@ Documento de referencia de las tablas de base de datos usadas por el módulo MPR
 
 | Tabla | Columnas relevantes | Notas |
 |-------|---------------------|--------|
-| **lista_produccion_agrupada** | `id_lista_produccion` (PK, auto), `id_articulo`, `cantidad_pedida`, `cantidad_pendiente_prod`, `id_usuario`, `en_proceso_produccion` ('Si'/'No'), `id_deposito_produccion` (opc.), `prioridad` (opc.), `fecha_objetivo` (opc.) | Una fila por línea de OP; varias filas pueden compartir el mismo `id_lista_produccion` (una OP por lista). |
+| **lista_produccion_agrupada** | `id_lista_produccion` (PK, auto), `id_articulo`, `cantidad_pedida`, `cantidad_pendiente_prod`, `id_usuario`, `en_proceso_produccion` ('Si'/'No'), `id_deposito_produccion` (opc.), `prioridad` (opc.), `fecha_objetivo` (opc.) | Una fila por línea de OPT; varias filas pueden compartir el mismo `id_lista_produccion` (una OPT por lista). |
 | **lista_produccion_detalle** | `codigo_movimiento_pedido`, `id_articulo`, `cantidad_pedida`, `cantidad_pendiente_prod`, `en_proceso_produccion` | Detalle por pedido + artículo; origen demanda desde pedidos. |
 | **lista_produccion_historico** | `id_articulo`, `id_articulo_formula`, `cantidad_pedida`, `cantidad_movimiento`, `cantidad_armada`, `id_deposito`, `codigo_movimiento_mstock`, `codigo_movimiento_opt` | Trazabilidad OPT (opcional); se escribe al liberar OPT. |
 
@@ -78,7 +78,7 @@ movimiento_stock
   └── codigo_movimiento  ← stock (vía id_ref_movstock / CodigoMovimiento según uso)
 
 lista_produccion_agrupada
-  └── id_lista_produccion  (agrupa varias filas por OP; mismo id = misma OP)
+  └── id_lista_produccion  (agrupa varias filas por OPT; mismo id = misma OPT)
 
 comp_ped
   └── codigo  → cliente.codigo (JOIN en listar_pedidos_fabrica)
@@ -144,9 +144,9 @@ Ver **docs/general/TIPOS_DATOS_ADMINISTRANET.md** si existe.
 | Acción | Tablas leídas | Tablas escritas |
 |--------|----------------|-----------------|
 | Pedido producción trabajo (OPT) / demanda | lista_produccion_agrupada, articulo, stock_deposito, deposito | — |
-| Crear OP | lista_produccion_agrupada, articulo | lista_produccion_agrupada (INSERT) |
+| Crear OPT | lista_produccion_agrupada, articulo | lista_produccion_agrupada (INSERT) |
 | Liberar OPT | lista_produccion_agrupada, articulo, codmov, talonarios, movimiento_stock, stock, stock_deposito | movimiento_stock, stock, stock_deposito, lista_produccion_agrupada (UPDATE), lista_produccion_historico (opc.) |
 | Registrar OPP | lista_produccion_agrupada, codmov, talonarios, movimiento_stock, stock, stock_deposito | movimiento_stock, stock, stock_deposito, lista_produccion_agrupada (UPDATE cantidad_pendiente_prod) |
 | Armado | en_abm, en_abm_formula, articulo, stock_deposito, codmov, talonarios, movimiento_stock, stock | movimiento_stock, stock, stock_deposito |
-| Cerrar OP | lista_produccion_agrupada | lista_produccion_agrupada (UPDATE en_proceso_produccion='No') |
+| Cerrar OPT | lista_produccion_agrupada | lista_produccion_agrupada (UPDATE en_proceso_produccion='No') |
 | Lista de materiales (BOM) | en_abm, en_abm_formula, articulo | en_abm, en_abm_formula, articulo (id_en_abm, ensamblado) |

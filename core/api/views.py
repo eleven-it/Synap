@@ -182,6 +182,29 @@ def proveedor_search_api(request):
     return JsonResponse({'results': results})
 
 
+def articulo_search_api(request):
+    """
+    GET /core/api/articulos/search/?q=...
+    Búsqueda predictiva de artículos por código, nombre o código de barras.
+    Requiere sesión con base_empresa. Devuelve { results: [ { IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, ... }, ... ] }.
+    Usado en Factura de Compra (tab Líneas) y otros formularios que necesiten autocompletado de artículo.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        return JsonResponse({'error': 'Sin empresa activa.', 'results': []}, status=400)
+    q = (request.GET.get('q') or '').strip()
+    limit = min(int(request.GET.get('limit', 20)), 30)
+    from core.services.administranet_stock import _buscar_articulos_con_precios
+    try:
+        items = _buscar_articulos_con_precios(base_empresa, q, limit=limit)
+    except Exception:
+        items = []
+    return JsonResponse({'results': items})
+
+
 def provincias_api(request):
     """
     API para obtener provincias desde la base de la empresa (administraNET).

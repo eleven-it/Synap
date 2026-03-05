@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AdministraNET - Carrito con Oferta Añadida</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b6cee",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    keyframes: {
+                        'toast-in': {
+                            '0%': { transform: 'translateY(100%)', opacity: '0' },
+                            '20%': { transform: 'translateY(0)', opacity: '1' },
+                            '80%': { transform: 'translateY(0)', opacity: '1' },
+                            '100%': { transform: 'translateY(100%)', opacity: '0' },
+                        }
+                    },
+                    animation: {
+                        'toast': 'toast-in 3s ease-in-out forwards',
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer utilities {
+            .animate-toast-notification {
+                animation: toast-in 3s ease-in-out forwards;
+            }
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen relative overflow-hidden">
+<div class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none animate-toast-notification">
+<div class="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 border border-white/10">
+<div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-white">check</span>
+</div>
+<div class="flex flex-col">
+<span class="font-bold text-sm uppercase tracking-tight">Producto añadido</span>
+<span class="text-xs opacity-80">Aceite de Oliva Extra Virgen ha sido agregado</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col min-h-screen max-w-[1440px] mx-auto shadow-2xl bg-white dark:bg-slate-900">
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-8 py-4 bg-white dark:bg-slate-900 sticky top-0 z-50">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg">
+<span class="material-symbols-outlined text-3xl font-bold">point_of_sale</span>
+</div>
+<div>
+<h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white uppercase">AdministraNET</h1>
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] leading-none">Retail Management System</p>
+</div>
+</div>
+<div class="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
+<div class="flex flex-col px-3 border-r border-slate-200 dark:border-slate-700">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Cliente</span>
+<button class="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">person</span>
+<span>Consumidor Final</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+<div class="flex flex-col px-3 border-r border-slate-200 dark:border-slate-700">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Lista de Precios</span>
+<button class="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">sell</span>
+<span>General</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+<div class="flex flex-col px-3">
+<span class="text-[10px] font-bold text-slate-400 uppercase">Vendedor</span>
+<button class="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">badge</span>
+<span>Asignar</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end">
+<span class="text-sm font-bold text-slate-900 dark:text-slate-100">Kiosko 01</span>
+<span class="text-xs text-slate-500 uppercase tracking-widest">Terminal Activa</span>
+</div>
+<div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary cursor-pointer hover:bg-primary/20 transition-all">
+<span class="material-symbols-outlined">settings</span>
+</div>
+</div>
+</header>
+<main class="flex flex-1 gap-6 p-8 overflow-hidden">
+<div class="flex-[1.2] flex flex-col gap-6">
+<div class="bg-white dark:bg-slate-800 rounded-xl border-2 border-primary/30 dark:border-primary/50 p-8 shadow-xl shadow-primary/5 flex flex-col justify-center items-center text-center space-y-8 relative overflow-hidden">
+<div class="absolute top-0 left-0 w-full h-1 bg-primary animate-pulse"></div>
+<div class="space-y-4">
+<h2 class="text-4xl font-black text-slate-900 dark:text-white leading-tight">Escanea tus productos</h2>
+<p class="text-lg text-slate-500 dark:text-slate-400">Pasa el código de barras por el escáner para continuar agregando</p>
+</div>
+<div class="w-full max-w-2xl">
+<label class="flex flex-col gap-3">
+<span class="text-left font-semibold text-slate-700 dark:text-slate-300">Código de barras o nombre</span>
+<div class="relative group">
+<input autofocus="" class="w-full h-20 text-2xl px-6 rounded-xl border-2 border-primary bg-primary/5 dark:bg-slate-900 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all outline-none pr-20 font-medium" placeholder="Esperando escaneo..." type="text"/>
+<div class="absolute right-4 top-1/2 -translate-y-1/2 text-primary flex items-center justify-center p-3">
+<span class="material-symbols-outlined text-4xl animate-pulse">barcode_scanner</span>
+</div>
+</div>
+</label>
+</div>
+<div class="grid grid-cols-2 gap-4 w-full max-w-2xl pt-4">
+<button class="flex items-center justify-center gap-3 p-4 border-2 border-slate-100 dark:border-slate-700 rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary">search</span>
+<span class="font-bold text-slate-600 dark:text-slate-300 group-hover:text-primary">Búsqueda Teclado</span>
+</button>
+<button class="flex items-center justify-center gap-3 p-4 border-2 border-slate-100 dark:border-slate-700 rounded-xl hover:border-primary hover:bg-primary/5 transition-all group">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary">category</span>
+<span class="font-bold text-slate-600 dark:text-slate-300 group-hover:text-primary">Explorar Categorías</span>
+</button>
+</div>
+</div>
+<div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-6 flex items-center gap-6">
+<div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-white shrink-0">
+<span class="material-symbols-outlined text-3xl">star</span>
+</div>
+<div>
+<h3 class="font-bold text-amber-800 dark:text-amber-400 text-xl">¡Aprovecha nuestras ofertas!</h3>
+<p class="text-amber-700 dark:text-amber-500/80">Sigue agregando productos para obtener descuentos por volumen en marcas seleccionadas.</p>
+</div>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-4">
+<div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full overflow-hidden">
+<div class="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+<h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">shopping_cart</span>
+                        Tus productos
+                    </h2>
+<span class="bg-primary text-white text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">4 Artículos</span>
+</div>
+<div class="flex-1 overflow-y-auto">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-white dark:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider z-10 border-b border-slate-100 dark:border-slate-700">
+<tr>
+<th class="px-6 py-4">Producto</th>
+<th class="px-4 py-4 text-center">Cant.</th>
+<th class="px-4 py-4 text-right">Precio</th>
+<th class="px-6 py-4 text-right">Total</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+<tr class="bg-primary/5 dark:bg-primary/10 border-l-4 border-primary transition-colors">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-bold text-slate-900 dark:text-white">Aceite de Oliva Extra Virgen</span>
+<span class="bg-amber-100 text-amber-700 text-[8px] font-black px-1.5 py-0.5 rounded uppercase">Oferta</span>
+</div>
+<span class="text-xs text-slate-400">SKU: 7705544332</span>
+</div>
+</td>
+<td class="px-4 py-4 text-center">
+<div class="inline-flex items-center bg-white dark:bg-slate-700 rounded-lg p-1 shadow-sm">
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-md transition-all">-</button>
+<span class="px-3 font-bold text-primary">1</span>
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-md transition-all">+</button>
+</div>
+</td>
+<td class="px-4 py-4 text-right text-slate-500 dark:text-slate-400">$8.50</td>
+<td class="px-6 py-4 text-right font-bold text-primary">$8.50</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-slate-100">Leche Entera 1L</span>
+<span class="text-xs text-slate-400">SKU: 7701234567</span>
+</div>
+</td>
+<td class="px-4 py-4 text-center">
+<div class="inline-flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">-</button>
+<span class="px-3 font-bold text-slate-900 dark:text-white">1</span>
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">+</button>
+</div>
+</td>
+<td class="px-4 py-4 text-right text-slate-500 dark:text-slate-400">$4.50</td>
+<td class="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">$4.50</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-slate-100">Pan Tajado</span>
+<span class="text-xs text-slate-400">SKU: 7709876543</span>
+</div>
+</td>
+<td class="px-4 py-4 text-center">
+<div class="inline-flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">-</button>
+<span class="px-3 font-bold text-slate-900 dark:text-white">2</span>
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">+</button>
+</div>
+</td>
+<td class="px-4 py-4 text-right text-slate-500 dark:text-slate-400">$3.00</td>
+<td class="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">$6.00</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+<td class="px-6 py-4">
+<div class="flex flex-col">
+<span class="font-bold text-slate-900 dark:text-slate-100">Manzanas Rojas</span>
+<span class="text-xs text-slate-400">Peso: 5.0kg</span>
+</div>
+</td>
+<td class="px-4 py-4 text-center">
+<div class="inline-flex items-center bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">-</button>
+<span class="px-3 font-bold text-slate-900 dark:text-white">5</span>
+<button class="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-white rounded-md shadow-sm transition-all">+</button>
+</div>
+</td>
+<td class="px-4 py-4 text-right text-slate-500 dark:text-slate-400">$2.80</td>
+<td class="px-6 py-4 text-right font-bold text-slate-900 dark:text-white">$14.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 space-y-3">
+<div class="flex justify-between text-slate-600 dark:text-slate-400">
+<span>Subtotal</span>
+<span class="font-medium">$33.00</span>
+</div>
+<div class="flex justify-between text-slate-600 dark:text-slate-400">
+<span>Descuento Oferta</span>
+<span class="font-bold text-green-600">-$2.00</span>
+</div>
+<div class="flex justify-between text-slate-600 dark:text-slate-400">
+<span>Impuestos (IVA 19%)</span>
+<span class="font-medium">$0.00</span>
+</div>
+<div class="pt-4 flex justify-between items-center border-t border-slate-200 dark:border-slate-700">
+<span class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">TOTAL</span>
+<div class="flex flex-col items-end">
+<span class="text-4xl font-black text-primary leading-none">$31.00</span>
+<span class="text-[10px] text-green-600 font-bold uppercase tracking-widest mt-1">¡Has ahorrado $2.00!</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<button class="w-full bg-primary hover:bg-blue-700 text-white font-black text-2xl py-6 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-4 transition-all active:scale-[0.98]">
+<span class="material-symbols-outlined text-3xl">payments</span>
+                    Pagar ahora
+                </button>
+<div class="grid grid-cols-3 gap-2">
+<button class="flex flex-col items-center justify-center gap-1 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-400">featured_seasonal_and_gifts</span>
+<span class="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-300 text-center">Tarjeta Regalo</span>
+</button>
+<button class="flex flex-col items-center justify-center gap-1 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+<span class="material-symbols-outlined text-primary">support_agent</span>
+<span class="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-300 text-center">Asistencia</span>
+</button>
+<button class="flex flex-col items-center justify-center gap-1 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg hover:bg-red-100 transition-colors">
+<span class="material-symbols-outlined text-red-500">cancel</span>
+<span class="text-[10px] font-bold uppercase text-red-600 text-center">Cancelar</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-8 py-4 flex justify-between items-center text-xs text-slate-400 font-medium">
+<div class="flex gap-4">
+<span>Versión 2.4.1</span>
+<span>•</span>
+<span>ID Sistema: POS-K01-2024</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span>Conectado al servidor central</span>
+</div>
+</footer>
+</div>
+
+</body></html>

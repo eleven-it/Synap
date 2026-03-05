@@ -8,10 +8,10 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 
 | Término | Descripción |
 |--------|-------------|
-| **OP (Orden de producción)** | Orden que agrupa demanda de producción por artículo. En AdministraNET se representa en `lista_produccion_agrupada` (por `id_lista_produccion` e `id_articulo`). Estados: pendiente de liberar, en proceso, cerrada. |
+| **OPT (Orden de producción)** | Orden que agrupa demanda de producción por artículo. En AdministraNET se representa en `lista_produccion_agrupada` (por `id_lista_produccion` e `id_articulo`). Estados: pendiente de liberar, en proceso, cerrada. |
 | **Lista de producción agrupada** | Tabla que agrupa la demanda por artículo: `cantidad_pedida`, `cantidad_pendiente_prod`, `en_proceso_produccion`. Es la fuente de “qué fabricar” y “cuánto falta”. |
 | **Lista de producción detalle** | Desglose por pedido y artículo (`lista_produccion_detalle`): vincula demanda a pedidos de venta (comp_ped) y stockp. |
-| **Pendiente de producción** | Cantidad que falta producir de una OP: `cantidad_pendiente_prod` en lista_produccion_agrupada. Se reduce al liberar OPT y al registrar OPP. |
+| **Pendiente de producción** | Cantidad que falta producir de una OPT: `cantidad_pendiente_prod` en lista_produccion_agrupada. Se reduce al liberar OPT y al registrar OPP. |
 
 ---
 
@@ -19,7 +19,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 
 | Término | Descripción |
 |--------|-------------|
-| **OPT** | **Pedido de producción** o **liberación a producción**. Movimiento de stock (motivo 11, tipo_mov 'OPT') que **confirma** la OP y registra la **entrada** de material/producto a producir en un depósito (ej. depósito de producción). Descuenta `cantidad_pendiente_prod` de la OPT. En Synap se ejecuta desde “Liberar OPT” en el detalle de la OPT. |
+| **OPT** | **Pedido de producción** o **liberación a producción**. Movimiento de stock (motivo 11, tipo_mov 'OPT') que **confirma** la OPT y registra la **entrada** de material/producto a producir en un depósito (ej. depósito de producción). Descuenta `cantidad_pendiente_prod` de la OPT. En Synap se ejecuta desde “Liberar OPT” en el detalle de la OPT. |
 | **Liberar a producción** | Acción en MPR que ejecuta el OPT: genera movimiento_stock tipo OPT, actualiza stock_deposito y lista_produccion_agrupada (y opcionalmente lista_produccion_historico). |
 | **Depósito destino (OPT)** | Depósito donde se registra la entrada al liberar OPT (normalmente depósito de producción o terminados). Debe tener `deposito.suma_stock` según configuración. |
 
@@ -31,7 +31,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 |--------|-------------|
 | **OPP** | **Parte de producción**. Movimiento que registra la **salida de producto terminado**: salida desde depósito origen (ej. producción) y entrada a depósito destino (terminados, 2da selección o scrap). Tipo_mov 'OPP', motivo "Parte producción". Descuenta `cantidad_pendiente_prod` de la OPT. |
 | **Registrar OPP** | Pantalla MPR para cargar cantidad producida, depósito origen y depósito destino. Clasificación opcional: Primera, 2da selección, Scrap (elegir depósito destino acorde). |
-| **Cerrar OPT** | Cuando el pendiente total de la OP es 0, se puede “Cerrar OPT”: se marca `en_proceso_produccion = 'No'`. Disponible en el tablero y en el detalle de la OPT. |
+| **Cerrar OPT** | Cuando el pendiente total de la OPT es 0, se puede “Cerrar OPT”: se marca `en_proceso_produccion = 'No'`. Disponible en el tablero y en el detalle de la OPT. |
 
 ---
 

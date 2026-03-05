@@ -20,17 +20,31 @@
         </div>
         {% endif %}
 
-        {# Header #}
+        {# Header: título + Tablero + formulario Actualizar (fechas + botón) #}
         <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div>
                 <h1 class="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">
                     Pedido producción trabajo (OPT)
                 </h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Demanda por artículo con stock terminado (depósitos que suman) y cantidad a fabricar
-                </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-end gap-3">
+                <form method="post" action="{% url 'mpr:ventana_pack_actualizar' %}" class="flex flex-wrap items-end gap-2">
+                    {% csrf_token %}
+                    <label class="flex flex-col gap-0.5">
+                        <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Fecha desde</span>
+                        <input type="date" name="fecha_desde" value="{{ filtros_actualizar.fecha_desde|default:'' }}"
+                               class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 text-xs"/>
+                    </label>
+                    <label class="flex flex-col gap-0.5">
+                        <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Fecha hasta</span>
+                        <input type="date" name="fecha_hasta" value="{{ filtros_actualizar.fecha_hasta|default:'' }}"
+                               class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 text-xs"/>
+                    </label>
+                    <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-all">
+                        <span class="material-icons text-base">refresh</span>
+                        Actualizar
+                    </button>
+                </form>
                 <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                     <span class="material-icons text-lg">dashboard</span>
                     Tablero
@@ -38,33 +52,16 @@
             </div>
         </header>
 
-        {# Filtros para Actualizar (alineado con VB6: Fecha y Texto) #}
-        <div class="mb-6 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-            <h2 class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-3">Búsqueda para actualizar lista de producción</h2>
-            <p class="text-[10px] text-slate-500 dark:text-slate-400 mb-3">Al pulsar «Actualizar», solo se incorporan pedidos PED (Pendiente, Fábrica) que cumplan las fechas y el texto. Deje en blanco para considerar todos los pedidos pendientes.</p>
-            <form method="post" action="{% url 'mpr:ventana_pack_actualizar' %}" class="flex flex-wrap items-end gap-4">
-                {% csrf_token %}
-                <label class="flex flex-col gap-1">
-                    <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Fecha desde</span>
-                    <input type="date" name="fecha_desde" value="{{ filtros_actualizar.fecha_desde|default:'' }}"
-                           class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-xs"/>
-                </label>
-                <label class="flex flex-col gap-1">
-                    <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Fecha hasta</span>
-                    <input type="date" name="fecha_hasta" value="{{ filtros_actualizar.fecha_hasta|default:'' }}"
-                           class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-xs"/>
-                </label>
-                <label class="flex flex-col gap-1">
-                    <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Texto</span>
-                    <input type="text" name="busqueda" value="{{ filtros_actualizar.busqueda|default:'' }}"
-                           placeholder="Nro comprobante o búsqueda"
-                           class="rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-xs min-w-[180px]"/>
-                </label>
-                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-all">
-                    <span class="material-icons text-lg">refresh</span>
-                    Actualizar
-                </button>
-            </form>
+        {# Búsqueda predictiva + Tabs y tablas (mismo scope para filtrar) #}
+        <div x-data="{ query: '' }">
+        <div class="mb-4">
+            <label for="ventana-pack-busqueda" class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Búsqueda</label>
+            <input type="text"
+                   id="ventana-pack-busqueda"
+                   x-model="query"
+                   placeholder="Buscar en la tabla…"
+                   class="mt-0.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3 py-2 text-xs min-w-[200px] focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Filtra los artículos ya cargados. Para incorporar más pedidos desde el servidor, use las fechas y «Actualizar».</p>
         </div>
 
         {# Tabs Packs | Unidades #}
@@ -109,7 +106,9 @@
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for f in filas %}
-                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }}"
+                                x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                                 <td class="px-4 py-3">
                                     <input type="checkbox" name="sel" value="{{ f.id_articulo }}" class="row-sel rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500" aria-label="Incluir en OPT"/>
                                 </td>
@@ -180,8 +179,10 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                        {% for f in filas_unidades %}
-                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            {% for f in filas_unidades %}
+                        <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                            data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }}"
+                            x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.id_articulo }}</td>
                             <td class="px-4 py-3">
                                 <span class="font-semibold text-slate-900 dark:text-white text-xs">{{ f.codigo_manual }}</span>
@@ -210,6 +211,8 @@
             </div>
         </div>
         </div>{# fin panel-unidades #}
+
+        </div>{# fin x-data query (búsqueda predictiva) #}
 
         <div id="tooltip-stock-deposito" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[280px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none; font-family: system-ui, sans-serif;" role="tooltip"></div>
         <div id="tooltip-receta" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[320px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none; font-family: system-ui, sans-serif;" role="tooltip"></div>

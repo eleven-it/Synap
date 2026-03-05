@@ -75,6 +75,25 @@ Documentación de la interfaz del kiosco autoservicio Synap.
 
 ---
 
+## Contrato JS para refactor Stitch (Alpine / DOM)
+
+Al refactorizar los templates Stitch a Django (includes), los siguientes identificadores y atributos son **contrato obligatorio** y no deben cambiarse; cualquier include debe preservarlos en el mismo nodo o en uno que Alpine siga encontrando:
+
+| Contrato | Uso |
+|----------|-----|
+| `x-ref="scanInput"` | Input escáner; focus y agregar por código |
+| `id="tpv-busqueda-producto"` | Búsqueda predictiva TPV; teclado (↑↓ Enter) |
+| `x-ref="busquedaDropdownList"` | Contenedor lista resultados búsqueda |
+| `:data-search-index="index"` (en cada `<tr>`) | Selección por teclado en tabla búsqueda |
+| `x-ref="descuentoInput"` | Descuento por ítem |
+| `x-ref="descuentoPieInput"` | Descuento global al carrito |
+| `x-ref="emailInputFa"` / `x-ref="emailInputCf"` | Inputs email en modales (Factura A / Consumidor Final) |
+| Variables Alpine (x-show) para modales | modalSeries, modalTpvCliente, modalListaPrecio, modalVendedor, modalVouchers, modalCuentaCorriente, modalEmail, pantalla pago, post-venta |
+
+Mapeo completo de templates Stitch a includes y tabla de contrato: [STITCH_TEMPLATES_MAP.md](STITCH_TEMPLATES_MAP.md).
+
+---
+
 ## Sin datos sensibles
 
 Los errores de conexión muestran únicamente `window.location.host`. Nunca se exponen usuarios, contraseñas ni tokens en la UI.

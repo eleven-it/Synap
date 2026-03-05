@@ -10,7 +10,7 @@ Documento de referencia del esquema de base de datos usado por el módulo MPR en
 
 | Rol | Tablas |
 |-----|--------|
-| **Producción / OP** | lista_produccion_agrupada, lista_produccion_detalle, lista_produccion_historico |
+| **Producción / OPT** | lista_produccion_agrupada, lista_produccion_detalle, lista_produccion_historico |
 | **Movimientos de stock** | movimiento_stock (cabecera), stock (renglones), stock_deposito (saldos) |
 | **Secuencia / comprobante** | codmov (CodigoMovimiento), talonarios (MSTOCK, Nro comprobante) |
 | **Pedidos / demanda** | comp_ped (PED, tipo_pedido_opt: Pendiente \| Produccion \| Terminado), stockp (cantidad). *estado_pedido_opt y cantidad_fab_pendiente_opt deprecados para MPR; no usar "En proceso parcial/completo".* |
@@ -97,15 +97,15 @@ Agrupación por artículo de demanda de producción (órdenes de producción).
 
 | Campo | Tipo | Uso |
 |-------|------|-----|
-| id_lista_produccion | BIGINT(20) PK, AUTO_INCREMENT | Identificador de OP/agrupación. |
+| id_lista_produccion | BIGINT(20) PK, AUTO_INCREMENT | Identificador de OPT/agrupación. |
 | id_articulo | BIGINT(20) | Artículo (FK lógico a articulo.IDArt). |
 | cantidad_pedida | DOUBLE(15,2) DEFAULT 0 | Cantidad total pedida. |
 | cantidad_pendiente_prod | DOUBLE(15,2) DEFAULT 0 | Pendiente de producir; MPR lo decrementa al liberar OPT. |
 | id_usuario | INT(11) | Usuario. |
 | en_proceso_produccion | VARCHAR(2) DEFAULT 'No' | Ej. 'Si'/'No'. |
-| **fecha_objetivo** | **DATE NULL** | **Opcional.** Fecha objetivo de entrega; si la tabla no la tiene, MPR no muestra el campo en Nueva OP. Añadir con script en `docs/general/sql/schema_mpr_administranet92.sql`. Usado para KPI "OP atrasadas" (fecha_objetivo &lt; hoy y pendiente &gt; 0). |
+| **fecha_objetivo** | **DATE NULL** | **Opcional.** Fecha objetivo de entrega; si la tabla no la tiene, MPR no muestra el campo en Nueva OPT. Añadir con script en `docs/general/sql/schema_mpr_administranet92.sql`. Usado para KPI "OPT atrasadas" (fecha_objetivo &lt; hoy y pendiente &gt; 0). |
 
-**Uso en Synap:** Lectura en listado OP y detalle; UPDATE `cantidad_pendiente_prod = cantidad_pendiente_prod - &lt;qty&gt;` en `ejecutar_liberar_opt`. Si existe `fecha_objetivo`, se puede informar al crear la OP (Nueva OP) y mostrar en detalle.
+**Uso en Synap:** Lectura en listado OP y detalle; UPDATE `cantidad_pendiente_prod = cantidad_pendiente_prod - &lt;qty&gt;` en `ejecutar_liberar_opt`. Si existe `fecha_objetivo`, se puede informar al crear la OPT (Nueva OPT) y mostrar en detalle.
 
 **Nota:** En **administranet89** esta tabla no existía; en **administranet92** sí existe con la estructura anterior.
 
@@ -134,7 +134,7 @@ Detalle por **artículo y componente de fórmula** (armado/unidad, pendientes, s
 
 **Relación con lista_produccion_agrupada:** No hay FK en `information_schema`. La relación es por **id_articulo** (y **id_articulo_formula**): las filas de `_formula` desglosan por componente (armado/unidad, pedido/pendiente/stock) la demanda del mismo artículo que aparece en `lista_produccion_agrupada`. Para vincular agrupada con fórmulas: JOIN por `id_articulo` (y opcionalmente filtrar por id_lista_produccion según criterio de agrupación en MPR).
 
-**Alcance MPR:** La lógica de negocio de MPR (y de estas tablas lista_produccion_*) vive **solo en Synap**; no hay lógica equivalente en VB6/AdministraNET. **Nota:** Esta tabla no tiene ni requiere `fecha_objetivo`; la fecha objetivo es por OP y va en `lista_produccion_agrupada`.
+**Alcance MPR:** La lógica de negocio de MPR (y de estas tablas lista_produccion_*) vive **solo en Synap**; no hay lógica equivalente en VB6/AdministraNET. **Nota:** Esta tabla no tiene ni requiere `fecha_objetivo`; la fecha objetivo es por OPT y va en `lista_produccion_agrupada`.
 
 ---
 

@@ -76,6 +76,32 @@ APPS_MENU = [
                     {"label": _("Consultas y Anulaciones"), "url": "stock:visualiza_movimientos", "icon": "list_alt", "permission": "stock.consultas"},
                     {"label": _("Informes"), "url": "stock:visualiza_movimientos", "icon": "assessment", "permission": "stock.informes"},
                 ]
+            },
+            {
+                "seccion": _("Comprobantes de compra"),
+                "items": [
+                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "stock.ver"},
+                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "stock.ver"},
+                ]
+            }
+        ]
+    },
+    {
+        "id": "compras",
+        "nombre": _("Compras"),
+        "permiso": "compras.ver",
+        "url": "compras:factura_compra",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/></svg>""",
+        "orden": 4,
+        "color": "emerald",
+        "submenus": [
+            {
+                "seccion": _("Comprobantes"),
+                "items": [
+                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "compras.ver"},
+                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "compras.ver"},
+                    {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "compras.crear"},
+                ]
             }
         ]
     },
@@ -85,34 +111,20 @@ APPS_MENU = [
         "permiso": "mpr.ver",
         "url": "mpr:tablero",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'/></svg>""",
-        "orden": 4,
+        "orden": 5,
         "color": "purple",
         "submenus": [
-            {
-                "seccion": _("Tablero"),
-                "items": [
-                    {"label": _("Tablero"), "url": "mpr:tablero", "icon": "dashboard", "permission": "mpr.ver"},
-                ]
-            },
-            {
-                "seccion": _("Demanda"),
-                "items": [
-                    {"label": _("Pedido producción trabajo (OPT)"), "url": "mpr:ventana_pack", "icon": "inventory_2", "permission": "mpr.ver"},
-                    {"label": _("Pedidos a fábrica"), "url": "mpr:pedidos_fabrica_list", "icon": "assignment", "permission": "mpr.ver"},
-                ]
-            },
             {
                 "seccion": _("Órdenes de producción"),
                 "items": [
                     {"label": _("Asistente de producción"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver"},
-                    {"label": _("Lista de OPT"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver"},
+                    {"label": _("Listado de OPT existentes"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver"},
                 ]
             },
             {
                 "seccion": _("Ejecución"),
                 "items": [
-                    {"label": _("Pedido producción trabajo (OPT)"), "url": "mpr:ventana_pack", "icon": "rocket_launch", "permission": "mpr.ver"},
-                    {"label": _("Ejecutar armado (Lista de materiales)"), "url": "mpr:armado", "icon": "build", "permission": "mpr.ver"},
+                    {"label": _("Creación Pedido Producción Trabajo (OPT)"), "url": "mpr:ventana_pack", "icon": "rocket_launch", "permission": "mpr.ver"},
                     {"label": _("Parte de producción (OPP)"), "url": "mpr:opt_list", "icon": "assignment", "permission": "mpr.ver"},
                     {"label": _("Reclasificación (2da/Scrap)"), "url": "mpr:reclasificacion", "icon": "swap_horiz", "permission": "mpr.ver"},
                 ]
@@ -120,7 +132,7 @@ APPS_MENU = [
             {
                 "seccion": _("Lista de materiales"),
                 "items": [
-                    {"label": _("Listado de conjuntos"), "url": "mpr:bom_list", "icon": "list_alt", "permission": "mpr.ver"},
+                    {"label": _("Armado / desarmado de artículos"), "url": "mpr:bom_list", "icon": "list_alt", "permission": "mpr.ver"},
                 ]
             },
             {
@@ -722,7 +734,7 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
     
     # Agregar módulos core que siempre deben estar activos
-    core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'mpr'}
+    core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'mpr', 'compras'}
     active_modules.update(core_modules)
 
     apps_filtradas = []

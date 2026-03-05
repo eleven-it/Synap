@@ -1551,7 +1551,7 @@
         if (!data || data.length === 0) {
             tablePartHtml = '<div class="flex items-center justify-center py-8"><div class="text-xs text-slate-500 dark:text-slate-400">' + (searchQuery.length >= 2 ? 'No hay coincidencias para la búsqueda.' : 'No hay backorder para mostrar.') + '</div></div>';
             if (contentOnlyBo(tablePartHtml)) return;
-            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por nro. comprobante, descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
             attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
             return;
         }
@@ -1575,7 +1575,7 @@
             var pieAgrupado = 'Backorder detalle. Agrupado por: ' + groupByFields.join(' → ') + '. ' + numAgrupaciones + ' agrupación' + (numAgrupaciones !== 1 ? 'es' : '') + (leyendaFilas ? ' · ' + leyendaFilas : '') + '.';
             tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr>' + headerCells + '</tr></thead><tbody>' + bodyRows + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + pieAgrupado + '</p>';
             if (contentOnlyBo(tablePartHtml, function () { attachGroupToggleListenersBO(container); })) return;
-            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+            boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por nro. comprobante, descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
             attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
             attachGroupToggleListenersBO(container);
             return;
@@ -1590,7 +1590,7 @@
         var leyenda = searchQuery.length >= 2 ? 'Mostrando ' + data.length + ' de ' + totalRows + ' renglones de backorder' : 'Mostrando ' + data.length + ' renglones de backorder';
         tablePartHtml = '<div class="overflow-x-auto max-h-[500px] overflow-y-auto"><table class="w-full border-collapse text-sm"><thead class="sticky top-0"><tr><th class="' + th + ' text-center">Fecha</th><th class="' + th + ' text-left">Nro comp</th><th class="' + th + ' text-left">Descripción</th><th class="' + th + ' text-left">Cod. manual</th><th class="' + th + ' text-right">Cant. pend</th><th class="' + th + ' text-left">Cliente</th><th class="' + th + ' text-right">Pendiente valorizado</th><th class="' + th + ' text-left">Rubro</th><th class="' + th + ' text-left">Subrubro</th><th class="' + th + ' text-left">Vendedor</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div><p class="text-xs text-slate-400 dark:text-slate-500 mt-3">' + leyenda + '</p>';
         if (contentOnlyBo(tablePartHtml)) return;
-        boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
+        boSetSearchAndContent(container, 'bo-backorder-search', 'Buscar por nro. comprobante, descripción, código, cliente, rubro, vendedor...', searchQuery, tablePartHtml);
         attachBoSearchListener('bo-backorder-search', function () { renderBackorderDetalleTable(BO_LAST_BACKORDER_DATA); });
     }
     

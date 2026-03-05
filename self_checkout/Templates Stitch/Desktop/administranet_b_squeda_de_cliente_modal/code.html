@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AdministraNET - Búsqueda de Cliente Modal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b6cee",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex items-center justify-center p-4">
+<!-- Modal Overlay Backdrop -->
+<div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40"></div>
+<!-- Modal Container -->
+<div class="relative z-50 w-full max-w-[960px] bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+<!-- Header -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-8 py-6">
+<div class="flex items-center gap-3">
+<div class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary">
+<span class="material-symbols-outlined text-3xl">person_search</span>
+</div>
+<div>
+<h2 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Buscar Cliente</h2>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Localice al cliente ingresando su nombre, DNI o RUC.</p>
+</div>
+</div>
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</header>
+<!-- Search Section -->
+<div class="px-8 py-6">
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">search</span>
+</div>
+<input class="block w-full h-16 pl-12 pr-4 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:ring-4 focus:ring-primary/20 focus:border-primary text-lg transition-all outline-none text-slate-900 dark:text-slate-100 placeholder:text-slate-400" placeholder="Buscar cliente por nombre, DNI o RUC" type="text"/>
+</div>
+</div>
+<!-- Results Table Container -->
+<div class="px-8 flex-1 overflow-auto max-h-[400px]">
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50 dark:bg-slate-800/50">
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Nombre</th>
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Identificación</th>
+<th class="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tipo de Cliente</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+<!-- Row 1: Selected state example -->
+<tr class="hover:bg-primary/5 dark:hover:bg-primary/10 bg-primary/5 dark:bg-primary/10 border-l-4 border-l-primary cursor-pointer transition-colors">
+<td class="px-6 py-5">
+<div class="font-semibold text-slate-900 dark:text-slate-100">Juan Pérez</div>
+<div class="text-xs text-slate-500 dark:text-slate-400">juan.perez@email.com</div>
+</td>
+<td class="px-6 py-5 text-slate-600 dark:text-slate-300 font-medium">12345678</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary">
+                                    Frecuente
+                                </span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+<td class="px-6 py-5">
+<div class="font-semibold text-slate-900 dark:text-slate-100">María García</div>
+<div class="text-xs text-slate-500 dark:text-slate-400">m.garcia@corporativo.com</div>
+</td>
+<td class="px-6 py-5 text-slate-600 dark:text-slate-300 font-medium">20456789012</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                    Empresa
+                                </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+<td class="px-6 py-5">
+<div class="font-semibold text-slate-900 dark:text-slate-100">Carlos López</div>
+<div class="text-xs text-slate-500 dark:text-slate-400">carlos.l@gmail.com</div>
+</td>
+<td class="px-6 py-5 text-slate-600 dark:text-slate-300 font-medium">87654321</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                                    Nuevo
+                                </span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
+<td class="px-6 py-5">
+<div class="font-semibold text-slate-900 dark:text-slate-100">Ana Martinez</div>
+<div class="text-xs text-slate-500 dark:text-slate-400">ana.mtz@outlook.com</div>
+</td>
+<td class="px-6 py-5 text-slate-600 dark:text-slate-300 font-medium">45982134</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/20 text-primary">
+                                    Frecuente
+                                </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Footer Actions -->
+<footer class="p-8 mt-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
+<button class="flex items-center gap-2 px-6 py-4 rounded-xl font-bold text-primary hover:bg-primary/10 transition-all active:scale-95 border-2 border-primary/20">
+<span class="material-symbols-outlined">person_add</span>
+                Nuevo Cliente
+            </button>
+<div class="flex gap-4">
+<button class="px-8 py-4 rounded-xl font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">
+                    Cancelar
+                </button>
+<button class="flex items-center gap-2 px-10 py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95">
+                    Seleccionar
+                    <span class="material-symbols-outlined">check_circle</span>
+</button>
+</div>
+</footer>
+</div>
+<!-- Background UI Mockup (Simulating the screen behind the modal) -->
+<div class="fixed inset-0 pointer-events-none -z-10 flex flex-col p-10 gap-10 opacity-50">
+<div class="h-20 w-full bg-white rounded-xl shadow-sm"></div>
+<div class="flex-1 grid grid-cols-3 gap-6">
+<div class="col-span-2 bg-white rounded-xl shadow-sm"></div>
+<div class="bg-white rounded-xl shadow-sm"></div>
+</div>
+</div>
+</body></html>

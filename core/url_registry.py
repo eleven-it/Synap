@@ -49,15 +49,20 @@ class URLRegistry:
         return urls
     
     def get_module_url_patterns(self):
-        """Obtiene los patrones de URL para incluir en el archivo principal"""
+        """Obtiene los patrones de URL para incluir en el archivo principal.
+        No incluye módulos que ya están en urls.py principal (evita W005 namespace duplicado).
+        """
         url_patterns = []
-        
+        # Módulos ya incluidos explícitamente en django_project/urls.py
+        skip_in_main = ('core', 'login', 'reports')
+
         for module_name, module_urls in self.module_urls.items():
-            if module_urls:
-                url_patterns.append(
-                    path(f'{module_name}/', include((f'{module_name}.urls', module_name), namespace=module_name))
-                )
-        
+            if module_name in skip_in_main or not module_urls:
+                continue
+            url_patterns.append(
+                path(f'{module_name}/', include((f'{module_name}.urls', module_name), namespace=module_name))
+            )
+
         return url_patterns
     
     def reload_module_urls(self):

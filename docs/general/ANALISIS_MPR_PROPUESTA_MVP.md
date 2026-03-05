@@ -565,7 +565,7 @@ Pantalla tipo "Active Planning Orders": tabla principal con columnas Order ID, M
 - Cantidad producida ahora (default: pendiente o lote estándar). Unidad de carga + equivalencia a unidad base.
 - Depósito origen (default: producción/WIP). Depósito destino (terminados o según modelo).
 - **Calidad / clasificación (MVP simple):** Radio: Primera (terminado) | 2da selección | Scrap. Si 2da o Scrap: depósito destino = correspondiente (mostrar si suma_stock); motivo opcional (scrap: defecto, corte, etc.).
-- **Cierre:** Si pendiente = 0: ofrecer "Cerrar OP". Si queda pendiente: estado "Parcialmente terminada".
+- **Cierre:** Si pendiente = 0: ofrecer "Cerrar OPT". Si queda pendiente: estado "Parcialmente terminada".
 
 ### 7.9 Reclasificación (2da selección / Scrap) como acción separada
 

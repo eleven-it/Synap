@@ -85,10 +85,18 @@ python manage.py setup_reports_installation || {
 }
 
 # Recolectar archivos estáticos (si es necesario)
+# Se filtran los avisos "Found another file" (duplicados theme/static/admin vs django.contrib.admin)
 if [ "$COLLECTSTATIC" != "false" ]; then
     echo ""
     echo "📁 Recolectando archivos estáticos..."
-    python manage.py collectstatic --noinput || echo "⚠️  Advertencia: Error al recolectar archivos estáticos"
+    _out=$(mktemp)
+    if python manage.py collectstatic --noinput > "$_out" 2>&1; then
+        grep -v "Found another file" "$_out" || true
+    else
+        grep -v "Found another file" "$_out" || true
+        echo "⚠️  Advertencia: Error al recolectar archivos estáticos"
+    fi
+    rm -f "$_out"
 fi
 
 # Ejecutar el comando pasado como argumento

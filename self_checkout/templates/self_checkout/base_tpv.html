@@ -1,0 +1,20 @@
+{% extends "base_app.html" %}
+{% comment %}
+  Base opcional para pantallas TPV / kiosco (self_checkout).
+  Proporciona viewport para responsive 100% y bloques estándar.
+  Uso: kiosco.html puede extender base_tpv.html en lugar de base_app.html
+  para heredar viewport y estructura; si se usa, en extra_css del hijo
+  hacer {{ block.super }} para conservar viewport.
+{% endcomment %}
+
+{% block title %}Self-Checkout · Synap{% endblock %}
+
+{% block extra_css %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% endblock %}
+
+{% block content %}
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}

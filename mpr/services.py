@@ -186,9 +186,9 @@ def listar_lista_produccion_agrupada(
 
 def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str, Any]]:
     """
-    OPs con pendiente total 0, listas para cerrar (no se exige en_proceso_produccion='Si'
-    para que aparezcan aunque el flag no se haya actualizado).
-    Devuelve: id_lista_produccion, id_articulo, codigo_articulo, descripcion_articulo (una fila por OP).
+    OPTs con pendiente total 0 y aún en proceso (en_proceso_produccion='Si'), listas para cerrar.
+    Solo se muestran las que siguen abiertas; al cerrarlas desaparecen de la lista.
+    Devuelve: id_lista_produccion, id_articulo, codigo_articulo, descripcion_articulo (una fila por OPT).
     """
     if not (base_empresa or "").strip():
         return []
@@ -198,6 +198,7 @@ def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str,
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             if not tbl_agrupada or not tbl_articulo:
                 return []
+            # Solo OPT con pendiente 0 y que sigan en proceso (al menos una fila con en_proceso_produccion='Si')
             cursor.execute(
                 f"""
                 SELECT l.id_lista_produccion, l.id_articulo,
@@ -210,6 +211,7 @@ def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str,
                     FROM {tbl_agrupada} g
                     GROUP BY g.id_lista_produccion
                     HAVING COALESCE(SUM(g.cantidad_pendiente_prod), 0) = 0
+                      AND MAX(CASE WHEN UPPER(TRIM(COALESCE(g.en_proceso_produccion, ''))) = 'SI' THEN 1 ELSE 0 END) = 1
                   )
                 ORDER BY l.id_lista_produccion
                 LIMIT %s
@@ -230,7 +232,7 @@ def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str,
                     })
             return result
     except Exception as e:
-        logger.warning("Error al listar OPs para cerrar en %s: %s", base_empresa, e, exc_info=True)
+        logger.warning("Error al listar OPTs para cerrar en %s: %s", base_empresa, e, exc_info=True)
         return []
 
 
@@ -1120,7 +1122,7 @@ def get_op_detalle(
     id_lista_produccion: int,
 ) -> List[Dict[str, Any]]:
     """
-    Devuelve las líneas de una OP por id_lista_produccion (lista_produccion_agrupada + articulo).
+    Devuelve las líneas de una OPT por id_lista_produccion (lista_produccion_agrupada + articulo).
 
     Incluye todas las filas con ese id_lista_produccion (con o sin pendiente).
     Formato igual que listar_lista_produccion_agrupada. Lista vacía si no hay datos o tablas.
@@ -1163,7 +1165,7 @@ def get_op_detalle(
         return result
     except Exception as e:
         logger.warning(
-            "Error al obtener detalle OP id_lista_produccion=%s en %s: %s",
+            "Error al obtener detalle OPT id_lista_produccion=%s en %s: %s",
             id_lista_produccion,
             base_empresa,
             e,
@@ -1394,8 +1396,9 @@ def listar_bom_conjuntos(
     solo_en_produccion: bool = False,
 ) -> List[Dict[str, Any]]:
     """
-    Lista conjuntos de armado (en_abm) con cantidad de componentes.
-    Devuelve: id_en_abm, nombre_en_abm, anulado, detalle, descuenta_en, n_componentes.
+    Lista conjuntos de armado (en_abm) con cantidad de componentes y datos del artículo armado.
+    Devuelve: id_en_abm, nombre_en_abm, anulado, detalle, descuenta_en, n_componentes,
+    id_articulo (IDArt del artículo armado), codigo_manual (id_manual del artículo).
     Si solo_en_produccion=True, solo devuelve conjuntos cuyo artículo armado está en
     lista_produccion_agrupada con cantidad_pendiente_prod > 0 o en_proceso_produccion = 'Si'.
     """
@@ -1416,27 +1419,34 @@ def listar_bom_conjuntos(
             else:
                 subcount = ", 0 AS n_componentes"
             join_produccion = ""
+            join_articulo = ""
             if solo_en_produccion and tbl_articulo and tbl_agrupada:
                 join_produccion = f"""
                 INNER JOIN {tbl_articulo} a ON a.id_en_abm = e.id_en_abm AND COALESCE(a.ensamblado, 'No') = 'Si'
                 INNER JOIN {tbl_agrupada} l ON l.id_articulo = a.IDArt
                     AND (COALESCE(l.cantidad_pendiente_prod, 0) > 0 OR COALESCE(l.en_proceso_produccion, 'No') = 'Si')
                 """
+            elif tbl_articulo:
+                join_articulo = f"LEFT JOIN {tbl_articulo} a ON a.id_en_abm = e.id_en_abm AND COALESCE(a.ensamblado, 'No') = 'Si'"
+            cols_articulo = "a.IDArt AS id_articulo, COALESCE(a.id_manual, '') AS codigo_manual" if tbl_articulo else "NULL AS id_articulo, '' AS codigo_manual"
             sql = f"""
                 SELECT DISTINCT e.id_en_abm, COALESCE(e.nombre_en_abm, '') AS nombre_en_abm,
                        COALESCE(e.anulado, 'No') AS anulado, COALESCE(e.detalle, '') AS detalle,
                        COALESCE(e.descuenta_en, '') AS descuenta_en
-                       {subcount}
+                       {subcount},
+                       {cols_articulo}
                 FROM {tbl_abm} e
                 {join_produccion}
+                {join_articulo}
                 WHERE 1=1 {where}
                 ORDER BY e.nombre_en_abm, e.id_en_abm
                 LIMIT %s
             """
             cursor.execute(sql, [limit])
             rows = cursor.fetchall()
-        return [
-            {
+        result = []
+        for r in rows:
+            item = {
                 "id_en_abm": to_int_or_none(r.get("id_en_abm")),
                 "nombre_en_abm": str_or_default(r.get("nombre_en_abm"), "-"),
                 "anulado": str_or_default(r.get("anulado"), "No"),
@@ -1444,8 +1454,11 @@ def listar_bom_conjuntos(
                 "descuenta_en": str_or_default(r.get("descuenta_en"), ""),
                 "n_componentes": to_int_or_none(r.get("n_componentes")) or 0,
             }
-            for r in rows
-        ]
+            id_art = to_int_or_none(r.get("id_articulo"))
+            item["id_articulo"] = id_art
+            item["codigo_manual"] = str_or_default(r.get("codigo_manual"), "-") if id_art else "-"
+            result.append(item)
+        return result
     except Exception as e:
         logger.warning("Error al listar conjuntos de lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return []
@@ -1583,6 +1596,64 @@ def get_articulo_armado_por_bom(base_empresa: str, id_en_abm: int) -> Optional[D
         return None
 
 
+def get_cantidades_armadas_por_opt(
+    base_empresa: str, id_lista_produccion: int
+) -> Dict[int, int]:
+    """
+    Devuelve por cada id_articulo la cantidad ya armada para la OPT dada.
+    Busca movimientos tipo Armado cuyo detalle contiene "OPT {id_lista_produccion}"
+    y suma las Entrada del artículo armado en la tabla stock.
+    Devuelve dict id_articulo -> cantidad_ya_armada (entero).
+    """
+    if not (base_empresa or "").strip() or id_lista_produccion is None:
+        return {}
+    result = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_mov or not tbl_stock:
+                return {}
+            # Detalle con "OPT N " o "OPT N)" para no confundir OPT 1 con OPT 12
+            patron = f"OPT {id_lista_produccion} "
+            patron2 = f"OPT {id_lista_produccion})"
+            cursor.execute(
+                f"""
+                SELECT codigo_movimiento FROM {tbl_mov}
+                WHERE UPPER(TRIM(COALESCE(tipo_mov,''))) = 'ARMADO'
+                  AND (INSTR(COALESCE(detalle,''), %s) > 0 OR INSTR(COALESCE(detalle,''), %s) > 0)
+                  AND COALESCE(anulado,'No') <> 'Si'
+                """,
+                [patron, patron2],
+            )
+            codigos = [row["codigo_movimiento"] for row in cursor.fetchall() if row.get("codigo_movimiento")]
+            if not codigos:
+                return {}
+            placeholders = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"""
+                SELECT IDArt, COALESCE(SUM(Entrada), 0) AS total_entrada
+                FROM {tbl_stock}
+                WHERE CodigoMovimiento IN ({placeholders}) AND COALESCE(Entrada, 0) > 0
+                GROUP BY IDArt
+                """,
+                codigos,
+            )
+            for row in cursor.fetchall():
+                id_art = to_int_or_none(row.get("IDArt"))
+                if id_art is not None:
+                    result[id_art] = int(float(row.get("total_entrada") or 0))
+    except Exception as e:
+        logger.warning(
+            "Error al obtener cantidades armadas por OPT %s en %s: %s",
+            id_lista_produccion,
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+    return result
+
+
 def ejecutar_armado(
     base_empresa: str,
     id_usuario: int,
@@ -1590,10 +1661,13 @@ def ejecutar_armado(
     cantidad_a_armar: int,
     deposito_origen: int,
     deposito_destino: int,
+    id_lista_produccion: Optional[int] = None,
+    id_articulo_armado: Optional[int] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
     """
     Ejecuta armado (lista de materiales): salidas de componentes desde deposito_origen, entrada del artículo armado en deposito_destino.
     Un movimiento_stock (tipo_mov Armado), renglones stock y actualización stock_deposito.
+    Si id_lista_produccion se indica, se graba en detalle para trazabilidad (get_cantidades_armadas_por_opt).
     Devuelve (ok, codigo_movimiento, nro_comprobante, mensaje_error).
     """
     if not (base_empresa or "").strip():
@@ -1610,10 +1684,24 @@ def ejecutar_armado(
     articulo_armado = get_articulo_armado_por_bom(base_empresa, id_en_abm)
     if not articulo_armado:
         return False, None, None, "No hay artículo armado asociado a este conjunto (articulo.ensamblado=Si, id_en_abm)."
+    # Validar descuenta_en = 'Mstock' (alineado con VB6 CargaMovStock)
+    descuenta_en = (bom.get("cabecera") or {}).get("descuenta_en") or ""
+    if isinstance(descuenta_en, str):
+        descuenta_en = descuenta_en.strip()
+    if descuenta_en and descuenta_en.upper() != "MSTOCK":
+        return (
+            False,
+            None,
+            None,
+            "El artículo no está definido para ser utilizado por este proceso (descuenta_en debe ser Mstock).",
+        )
     id_ref_movstock = 1
     id_pv = 1
     fecha_mov = date.today().isoformat()
-    detalle_mov = f"Armado desde MPR (conjunto {id_en_abm}, {cantidad_a_armar} u.)"
+    if id_lista_produccion is not None:
+        detalle_mov = f"Armado OPT {id_lista_produccion} (conjunto {id_en_abm}, {cantidad_a_armar} u.)"
+    else:
+        detalle_mov = f"Armado desde MPR (conjunto {id_en_abm}, {cantidad_a_armar} u.)"
     try:
         with get_connection(base_empresa) as conn:
             conn.autocommit(False)
@@ -1628,6 +1716,26 @@ def ejecutar_armado(
                 if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd, tbl_articulo]):
                     conn.rollback()
                     return False, None, None, "Faltan tablas necesarias (codmov, talonarios, movimiento_stock, stock, stock_deposito, articulo)."
+                # Tablas y soporte de lote en componentes (FIFO)
+                tbl_lote = _nombre_tabla(cursor, "lote")
+                tbl_lote_stock = _nombre_tabla(cursor, "lote_stock")
+                stock_tiene_id_lote = False
+                if tbl_stock:
+                    cursor.execute(
+                        "SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = 'id_lote'",
+                        [tbl_stock],
+                    )
+                    stock_tiene_id_lote = cursor.fetchone() is not None
+                articulos_con_lote = set()
+                if tbl_articulo and bom.get("componentes"):
+                    ids_comp = [c["id_articulo"] for c in bom["componentes"]]
+                    if ids_comp:
+                        placeholders = ",".join(["%s"] * len(ids_comp))
+                        cursor.execute(
+                            f"SELECT IDArt FROM {tbl_articulo} WHERE IDArt IN ({placeholders}) AND UPPER(TRIM(COALESCE(Lote,''))) = 'SI'",
+                            ids_comp,
+                        )
+                        articulos_con_lote = {row[0] for row in cursor.fetchall()}
                 # Validar stock de componentes en deposito_origen
                 for comp in bom["componentes"]:
                     qty_necesaria = (comp.get("cantidad_articulo") or 0) * cantidad_a_armar
@@ -1726,38 +1834,147 @@ def ejecutar_armado(
                     sd_row = cursor.fetchone()
                     saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
                     saldo_despues = saldo_actual - qty_salida
-                    orden += 1
-                    cursor.execute(
-                        f"""
-                        INSERT INTO {tbl_stock}
-                        (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                         id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
-                        VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
-                        """,
-                        [
-                            codigo_mov,
-                            id_art,
-                            codigo_art,
-                            descripcion_art,
-                            fecha_mov,
-                            qty_salida,
-                            saldo_despues,
-                            deposito_origen,
-                            id_ref_movstock,
-                            orden,
-                            id_usuario,
-                            MOTIVO_ARMADO_TEXTO,
-                            nro_comprobante,
-                            None,
-                        ],
+                    usa_lote = (
+                        id_art in articulos_con_lote
+                        and tbl_lote
+                        and tbl_lote_stock
                     )
-                    if sd_row:
-                        cursor.execute(f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s", [saldo_despues, sd_row[0]])
-                    else:
+                    if not usa_lote:
+                        orden += 1
                         cursor.execute(
-                            f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
-                            [id_art, deposito_origen, saldo_despues],
+                            f"""
+                            INSERT INTO {tbl_stock}
+                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                            VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                            """,
+                            [
+                                codigo_mov,
+                                id_art,
+                                codigo_art,
+                                descripcion_art,
+                                fecha_mov,
+                                qty_salida,
+                                saldo_despues,
+                                deposito_origen,
+                                id_ref_movstock,
+                                orden,
+                                id_usuario,
+                                MOTIVO_ARMADO_TEXTO,
+                                nro_comprobante,
+                                None,
+                            ],
                         )
+                        if sd_row:
+                            cursor.execute(f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s", [saldo_despues, sd_row[0]])
+                        else:
+                            cursor.execute(
+                                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                                [id_art, deposito_origen, saldo_despues],
+                            )
+                    else:
+                        # Consumo FIFO desde lotes en depósito origen
+                        cursor.execute(
+                            f"""
+                            SELECT l.id_lote, l.cod_lote, l.fecha_vto_lote, ls.id_lote_stock, ls.stock_lote
+                            FROM {tbl_lote} l
+                            INNER JOIN {tbl_lote_stock} ls ON ls.id_lote = l.id_lote
+                            WHERE l.id_articulo = %s AND ls.id_deposito = %s
+                              AND COALESCE(l.anulado,'No') = 'No' AND COALESCE(ls.stock_lote,0) > 0
+                            ORDER BY l.fecha_vto_lote ASC
+                            FOR UPDATE
+                            """,
+                            [id_art, deposito_origen],
+                        )
+                        filas_lote = cursor.fetchall()
+                        stock_total_lotes = sum(float(f[4] or 0) for f in filas_lote)
+                        if stock_total_lotes < float(qty_salida):
+                            conn.rollback()
+                            return (
+                                False,
+                                None,
+                                None,
+                                f"Stock en lotes insuficiente de componente {codigo_art} en depósito origen: "
+                                f"disponible en lotes {stock_total_lotes}, se necesitan {qty_salida}.",
+                            )
+                        qty_restante = qty_salida
+                        for fila in filas_lote:
+                            if qty_restante <= 0:
+                                break
+                            id_lote, cod_lote, fecha_vto_lote, id_lote_stock, stock_lote = (
+                                fila[0], fila[1], fila[2], fila[3], Decimal(str(fila[4] or 0)),
+                            )
+                            tomar = min(stock_lote, qty_restante)
+                            nuevo_stock_lote = stock_lote - tomar
+                            cursor.execute(
+                                f"UPDATE {tbl_lote_stock} SET stock_lote = %s WHERE id_lote_stock = %s",
+                                [nuevo_stock_lote, id_lote_stock],
+                            )
+                            cursor.execute(
+                                f"UPDATE {tbl_lote} SET stock_total_lote = COALESCE(stock_total_lote, 0) - %s WHERE id_lote = %s",
+                                [tomar, id_lote],
+                            )
+                            orden += 1
+                            saldo_despues_lote = saldo_actual - (qty_salida - qty_restante + tomar)
+                            if stock_tiene_id_lote:
+                                cursor.execute(
+                                    f"""
+                                    INSERT INTO {tbl_stock}
+                                    (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                                     id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, id_lote)
+                                    VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s)
+                                    """,
+                                    [
+                                        codigo_mov,
+                                        id_art,
+                                        codigo_art,
+                                        descripcion_art,
+                                        fecha_mov,
+                                        tomar,
+                                        saldo_despues_lote,
+                                        deposito_origen,
+                                        id_ref_movstock,
+                                        orden,
+                                        id_usuario,
+                                        MOTIVO_ARMADO_TEXTO,
+                                        nro_comprobante,
+                                        None,
+                                        id_lote,
+                                    ],
+                                )
+                            else:
+                                cursor.execute(
+                                    f"""
+                                    INSERT INTO {tbl_stock}
+                                    (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                                     id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                                    VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                                    """,
+                                    [
+                                        codigo_mov,
+                                        id_art,
+                                        codigo_art,
+                                        descripcion_art,
+                                        fecha_mov,
+                                        tomar,
+                                        saldo_despues_lote,
+                                        deposito_origen,
+                                        id_ref_movstock,
+                                        orden,
+                                        id_usuario,
+                                        MOTIVO_ARMADO_TEXTO,
+                                        nro_comprobante,
+                                        None,
+                                    ],
+                                )
+                            qty_restante -= tomar
+                        if sd_row:
+                            cursor.execute(f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s", [saldo_despues, sd_row[0]])
+                        else:
+                            cursor.execute(
+                                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                                [id_art, deposito_origen, saldo_despues],
+                            )
                 # Entrada del artículo armado en deposito_destino
                 id_art_arm = articulo_armado["id_articulo"]
                 codigo_arm = articulo_armado["codigo_articulo"]
@@ -2044,7 +2261,7 @@ def listar_articulos_para_op(
     limit: int = 300,
 ) -> List[Dict[str, Any]]:
     """
-    Lista artículos para selector de Nueva OP (id_articulo, codigo_articulo, descripcion_articulo).
+    Lista artículos para selector de Nueva OPT (id_articulo, codigo_articulo, descripcion_articulo).
     """
     if not (base_empresa or "").strip():
         return []
@@ -2074,7 +2291,7 @@ def listar_articulos_para_op(
             for r in rows
         ]
     except Exception as e:
-        logger.warning("Error al listar artículos para OP en %s: %s", base_empresa, e, exc_info=True)
+        logger.warning("Error al listar artículos para OPT en %s: %s", base_empresa, e, exc_info=True)
         return []
 
 
@@ -2113,7 +2330,7 @@ def _columnas_opcionales_op_agrupada(cursor, tbl_agrupada: str) -> Dict[str, str
 
 def listar_columnas_opcionales_nueva_op(base_empresa: str) -> Dict[str, bool]:
     """
-    Indica qué columnas opcionales tiene lista_produccion_agrupada para Nueva OP.
+    Indica qué columnas opcionales tiene lista_produccion_agrupada para Nueva OPT.
     Devuelve: has_deposito_produccion, has_prioridad, has_fecha_objetivo.
     """
     result = {"has_deposito_produccion": False, "has_prioridad": False, "has_fecha_objetivo": False}
@@ -2129,7 +2346,7 @@ def listar_columnas_opcionales_nueva_op(base_empresa: str) -> Dict[str, bool]:
             result["has_prioridad"] = "prioridad" in opts
             result["has_fecha_objetivo"] = "fecha_objetivo" in opts
     except Exception as e:
-        logger.debug("Error al listar columnas opcionales OP: %s", e)
+        logger.debug("Error al listar columnas opcionales OPT: %s", e)
     return result
 
 
@@ -2416,7 +2633,7 @@ def ejecutar_liberar_opt(
                         "WHERE id_lista_produccion = %s AND id_articulo = %s",
                         [qty, id_lista_produccion, id_art],
                     )
-                # Marcar la OP como "En proceso" (liberada OPT)
+                # Marcar la OPT como "En proceso" (liberada OPT)
                 cursor.execute(
                     f"UPDATE {tbl_agrupada} SET en_proceso_produccion = 'Si' WHERE id_lista_produccion = %s",
                     [id_lista_produccion],
@@ -2482,7 +2699,7 @@ def ejecutar_opp(
     """
     Registra Parte de producción (OPP): movimiento Salida desde deposito_origen y Entrada a deposito_destino.
     Crea movimiento_stock (tipo_mov OPP, motivo "Parte producción"), renglones stock (Salida en origen, Entrada en destino)
-    y actualiza stock_deposito. Actualiza lista_produccion_agrupada (cantidad_pendiente_prod) para que el pendiente de la OP baje; opcionalmente stockp (cantidad_fab_pendiente_opt) si existe la columna.
+    y actualiza stock_deposito. Actualiza lista_produccion_agrupada (cantidad_pendiente_prod) para que el pendiente de la OPT baje; opcionalmente stockp (cantidad_fab_pendiente_opt) si existe la columna.
 
     lineas: resultado de get_op_detalle.
     cantidad_total: se reparte entre líneas en orden.
@@ -2641,7 +2858,7 @@ def ejecutar_opp(
                             f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
                             [id_art, deposito_destino, saldo_dest_despues],
                         )
-                    # Descontar pendiente de la OP en lista_produccion_agrupada (cada línea tiene su id_lista_produccion en OPT agrupada)
+                    # Descontar pendiente de la OPT en lista_produccion_agrupada (cada línea tiene su id_lista_produccion en OPT agrupada)
                     id_lista_linea = to_int_or_none(linea.get("id_lista_produccion")) or id_lista_produccion
                     if tbl_agrupada:
                         try:

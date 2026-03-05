@@ -79,6 +79,7 @@ misc/scripts/
 misc/documentacion/
 
 # Archivos de backup
+backups/
 media_bak/
 *.backup
 *.bak

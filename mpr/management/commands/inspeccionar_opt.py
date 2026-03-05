@@ -91,7 +91,7 @@ class Command(BaseCommand):
                     movs = cursor.fetchall()
                     if movs:
                         self.stdout.write("")
-                        self.stdout.write("Últimos 10 movimientos OPT en MySQL (para identificar por fecha/nro el de esta OP):")
+                        self.stdout.write("Últimos 10 movimientos OPT en MySQL (para identificar por fecha/nro el de esta OPT):")
                         for m in movs:
                             self.stdout.write(
                                 f"  codigo_mov={m.get('codigo_movimiento')} dep_destino={m.get('deposito_destino')} "

@@ -94,24 +94,29 @@ class AdministraNETAuth:
                 """, [base_empresa])
                 tiene_idioma = cursor.fetchone()[0] > 0
 
+                # CONVERT + TRIM evita fallos por padding binario de AES (comparación string a string)
+                # LOWER(cod_usuario) para que coincida aunque en la base esté 'Supervisor' y se ingrese 'supervisor'
+                pass_cond = "TRIM(CONVERT(AES_DECRYPT(password_usuario, 'a7v8xx2'), CHAR)) = %s"
+                cod = cod_usuario.strip()
+                cod_lower = cod.lower()
                 if tiene_idioma:
-                    cursor.execute("""
+                    cursor.execute(f"""
                         SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
                                id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
                                tipo_busqueda_defecto, baja_usuario, idioma
                         FROM usuarios
-                        WHERE baja_usuario = 'No' AND cod_usuario = %s
-                          AND AES_DECRYPT(password_usuario, 'a7v8xx2') = %s
-                    """, [cod_usuario.lower().strip(), password.strip()])
+                        WHERE (baja_usuario IS NULL OR baja_usuario = 'No') AND LOWER(cod_usuario) = %s
+                          AND {pass_cond}
+                    """, [cod_lower, password.strip()])
                 else:
-                    cursor.execute("""
+                    cursor.execute(f"""
                         SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
                                id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
                                tipo_busqueda_defecto, baja_usuario
                         FROM usuarios
-                        WHERE baja_usuario = 'No' AND cod_usuario = %s
-                          AND AES_DECRYPT(password_usuario, 'a7v8xx2') = %s
-                    """, [cod_usuario.lower().strip(), password.strip()])
+                        WHERE (baja_usuario IS NULL OR baja_usuario = 'No') AND LOWER(cod_usuario) = %s
+                          AND {pass_cond}
+                    """, [cod_lower, password.strip()])
 
                 row = cursor.fetchone()
                 if not row:

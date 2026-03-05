@@ -1,0 +1,47 @@
+{% comment %}
+  Totales: HTML exacto Stitch kiosk_active_cart_1. Contrato: x-ref="descuentoPieInput".
+{% endcomment %}
+<!-- Descuento general al pie (solo TPV): inyección sin cambiar diseño Stitch -->
+<div class="shrink-0 border-b border-slate-200 dark:border-slate-700 px-6 py-3" x-show="modoTpv" x-cloak>
+  <template x-if="descuentoPieEditando">
+    <div class="flex flex-wrap items-center gap-2" x-on:click.stop>
+      <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Descuento general %</span>
+      <input type="number" min="0" max="100" step="0.5" class="w-20 py-1.5 px-2 rounded-lg border border-primary bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm text-right tabular-nums" x-model="descuentoPieInputVal" x-ref="descuentoPieInput" placeholder="0" x-on:keydown.enter.prevent="aplicarDescuentoPie()" x-on:keydown.escape.prevent="descuentoPieEditando = false">
+      <button type="button" class="rounded-lg bg-primary text-white px-3 py-1.5 text-sm font-semibold hover:bg-primary/90" x-on:click="aplicarDescuentoPie()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Aplicar</button>
+      <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" x-on:click="descuentoPieEditando = false">Cancelar</button>
+    </div>
+  </template>
+  <template x-if="!descuentoPieEditando">
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-sm font-medium text-slate-900 dark:text-white" x-text="cartVoucherPct != null ? (cartIdSpCupon ? 'Descuento voucher' : 'Descuento general') : 'Descuento general'"></span>
+      <template x-if="cartVoucherPct != null && cartVoucherPct > 0">
+        <span class="text-sm font-semibold text-amber-600 dark:text-amber-400" x-text="(cartVoucherPct || 0) + '%'"></span>
+      </template>
+      <template x-if="cartVoucherPct == null || cartVoucherPct === 0">
+        <button type="button" class="text-sm font-medium text-primary hover:underline" x-on:click="descuentoPieEditando = true; descuentoPieInputVal = ''" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Aplicar %</button>
+      </template>
+      <button type="button" x-show="cartVoucherPct != null && cartVoucherPct > 0" x-cloak class="text-xs font-medium text-slate-500 dark:text-slate-400 hover:underline ml-1" x-on:click="quitarVoucher()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">Quitar</button>
+    </div>
+  </template>
+</div>
+<!-- Totales: HTML exacto Stitch -->
+<div class="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 space-y-3">
+  <div class="flex justify-between text-slate-600 dark:text-slate-400">
+    <span>Subtotal</span>
+    <span class="font-medium" x-text="'$' + formatoMoneda(total || 0)"></span>
+  </div>
+  <div class="flex justify-between text-slate-600 dark:text-slate-400">
+    <span>Descuento Oferta</span>
+    <span class="font-bold text-green-600">-$0.00</span>
+  </div>
+  <div class="flex justify-between text-slate-600 dark:text-slate-400">
+    <span x-text="impuestosIvaLabel"></span>
+    <span class="font-medium" x-text="'$' + formatoMoneda(impuestosIvaVal || 0)"></span>
+  </div>
+  <div class="pt-4 flex justify-between items-center border-t border-slate-200 dark:border-slate-700">
+    <span class="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">TOTAL</span>
+    <div class="flex flex-col items-end">
+      <span class="text-4xl font-black text-primary leading-none" x-text="'$' + formatoMoneda(total || 0)"></span>
+    </div>
+  </div>
+</div>

@@ -32,7 +32,7 @@ urlpatterns = [
     path("core/", include("core.urls", namespace="core")),
     # Vista alternativa para servir archivos media cuando el servidor web no está configurado
     path("media/<path:path>", serve_media_file, name="serve_media"),
-    # Módulos deshabilitados para administraNET Analytics
+    # Mercado Pago se carga por registro de módulos cuando está activo (evita W005 namespace duplicado).
     # path("mercadopago/", include("mercadopago.urls")),
     # path("tiendanube-adminet/", include("tiendanube_administranet.urls", namespace="tiendanube_administranet")),
     # path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
@@ -95,6 +95,7 @@ urlpatterns.extend([
     path('reports/', include('reports.urls', namespace='reports')),
     path('stock/', include('stock.urls', namespace='stock')),
     path('compras/', include('compras.urls', namespace='compras')),
+    path('api/legacy-hub/', include('legacy_db.urls', namespace='legacy_hub')),
     path('mpr/', include('mpr.urls', namespace='mpr')),
 ])
 

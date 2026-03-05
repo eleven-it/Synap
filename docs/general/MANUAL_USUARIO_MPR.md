@@ -21,8 +21,8 @@ Este manual describe el uso del módulo MPR en Synap: tablero, demanda, OPT (Ped
 
 ### Qué muestra
 
-- **KPIs:** OP en progreso, OP atrasadas, Unidades pendientes, Ítems urgentes (según demanda y stock).
-- **Top urgencias:** Tabla con artículo, descripción, stock terminado, demanda y estado (Warning/Ok). Enlace “Ver todo” a la lista de OP.
+- **KPIs:** OPT en progreso, OPT atrasadas, Unidades pendientes, Ítems urgentes (según demanda y stock).
+- **Top urgencias:** Tabla con artículo, descripción, stock terminado, demanda y estado (Warning/Ok). Enlace “Ver todo” a la lista de OPT.
 
 **Cuándo un ítem es urgente:** Un ítem aparece como **urgente** (estado **Warning**) cuando el **stock terminado es menor que la demanda** (pendiente de producción). Es decir, cuando hay cantidad pendiente de fabricar: la cantidad a fabricar = max(0, demanda − stock terminado) es mayor que 0. La tabla se ordena por esa cantidad a fabricar (los que más faltante tienen aparecen primero).
 
@@ -37,8 +37,8 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Qué se muestra en Movimientos recientes:** La lista se obtiene de la base de datos: últimos movimientos de stock **no anulados** de tipo OPT (Pedido producción), OPP (Parte producción) o Armado, ordenados por número de movimiento (más recientes primero). Por cada movimiento se muestra: **(1) Icono** según el tipo (OPT → liberación, OPP → parte, Armado → armado); **(2) Título:** “OPT liberada”, “OPP registrada”, “Armado completado” o “Movimiento stock”; **(3) Detalle:** por defecto “Comp.” seguido del número de comprobante, o el texto del campo detalle del movimiento (recortado a 50 caracteres) si existe; **(4) Fecha:** fecha del movimiento en formato dd-MM-yyyy (si no hay fecha se muestra “—”). Sirve para ver de un vistazo las últimas liberaciones OPT, partes OPP y armados realizados.
 
-- **OPT en progreso:** Hasta 5 ítems con pendiente; enlace “Ver” al detalle de la OP y “Liberar” al tablero/acciones.
-- **OPT a cerrar:** OPs con pendiente total 0 y aún en proceso; botón “Cerrar OPT” por cada una (POST que marca la OP como cerrada).
+- **OPT en progreso:** Hasta 5 ítems con pendiente; enlace “Ver” al detalle de la OPT y “Liberar” al tablero/acciones.
+- **OPT a cerrar:** OPTs con pendiente total 0 y aún en proceso; botón “Cerrar OPT” por cada una (POST que marca la OPT como cerrada).
 
 ### Acciones rápidas (header)
 
@@ -182,12 +182,12 @@ Al confirmar se genera un movimiento tipo **OPP** (Parte producción), se descue
 
 ### 4.6 Cerrar OPT
 
-Disponible cuando el **pendiente total de la OP es 0**.
+Disponible cuando el **pendiente total de la OPT es 0**.
 
-- **Desde Detalle de OP:** Bloque verde con botón “Cerrar OPT” (POST a `/mpr/ordenes/<id_lista>/cerrar/`).
+- **Desde Detalle de OPT:** Bloque verde con botón “Cerrar OPT” (POST a `/mpr/ordenes/<id_lista>/cerrar/`).
 - **Desde Tablero:** En “OPs a cerrar”, botón “Cerrar OPT” por cada OP listada.
 
-Al cerrar, la OP pasa a `en_proceso_produccion = 'No'`.
+Al cerrar, la OPT pasa a `en_proceso_produccion = 'No'`.
 
 ### 4.7 Guardrails de proceso
 

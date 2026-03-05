@@ -1,7 +1,7 @@
 {% extends "base_app.html" %}
 {% load static %}
 
-{% block title %}Lista de materiales - Conjuntos de armado - MPR - Synap{% endblock %}
+{% block title %}Productos para armado / desarmado - MPR - Synap{% endblock %}
 
 {% block content %}
 <section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
@@ -17,16 +17,13 @@
         <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
                 <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">
-                    Conjuntos de armado (Lista de materiales)
+                    Productos para armado / desarmado
                 </h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Lista de materiales / recetas (en_abm). Cada conjunto define los componentes para armado.
-                </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <a href="{% url 'mpr:bom_create' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">
                     <span class="material-icons text-lg">add</span>
-                    Nuevo conjunto
+                    Nuevo
                 </a>
                 <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
                     <span class="material-icons text-lg">dashboard</span>
@@ -45,57 +42,138 @@
                 Todos
             </a>
             <span class="border-l border-gray-300 dark:border-gray-600 h-5 mx-1" aria-hidden="true"></span>
-            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1">Conjuntos:</span>
+            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1">Productos:</span>
             <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=1" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if solo_en_produccion %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
                 En producción
             </a>
             <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=0" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if not solo_en_produccion %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
-                Todos los conjuntos
+                Todos
             </a>
         </div>
 
-        {# Tabla #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Detalle</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº componentes</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for c in conjuntos %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ c.id_en_abm }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ c.nombre_en_abm }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{{ c.detalle|default:"—" }}</td>
-                            <td class="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">{{ c.n_componentes }}</td>
-                            <td class="px-4 py-3 text-center">
-                                {% if c.anulado == 'Si' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Anulado</span>
-                                {% else %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Activo</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 flex flex-wrap gap-1">
-                                <a href="{% url 'mpr:bom_detail' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors">Ver</a>
-                                <a href="{% url 'mpr:bom_edit' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Editar</a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                No hay conjuntos de armado. La tabla <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">en_abm</code> puede estar vacía o no existir en esta base.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        {# Búsqueda predictiva + Tabla (mismo scope Alpine) #}
+        <div x-data="{
+            query: '',
+            visibleCount: 0,
+            sortBy: 'nombre',
+            sortDir: 1,
+            updateCount() {
+                this.$nextTick(() => {
+                    const rows = this.$el.querySelectorAll('tr.bom-search-row');
+                    this.visibleCount = Array.from(rows).filter(tr => tr.offsetParent !== null).length;
+                });
+            },
+            setSort(col) {
+                if (this.sortBy === col) this.sortDir *= -1;
+                else { this.sortBy = col; this.sortDir = 1; }
+                this.reorderRows();
+            },
+            reorderRows() {
+                const tbody = this.$el.querySelector('tbody');
+                const dataRows = Array.from(this.$el.querySelectorAll('tr.bom-search-row'));
+                const otherRows = Array.from(tbody.querySelectorAll('tr:not(.bom-search-row)'));
+                const dir = this.sortDir;
+                const key = this.sortBy;
+                const getVal = (tr) => {
+                    const d = tr.dataset;
+                    if (key === 'cod_sistema') return parseInt(d.codSistema, 10) || 0;
+                    if (key === 'cod_manual') return (d.codManual || '').toLowerCase();
+                    return (d.nombre || '').toLowerCase();
+                };
+                dataRows.sort((a, b) => {
+                    const va = getVal(a), vb = getVal(b);
+                    let cmp = 0;
+                    if (key === 'cod_sistema') cmp = va - vb;
+                    else cmp = (va < vb) ? -1 : (va > vb) ? 1 : 0;
+                    return dir * cmp;
+                });
+                dataRows.forEach(tr => tbody.appendChild(tr));
+                otherRows.forEach(tr => tbody.appendChild(tr));
+            },
+            init() {
+                this.$watch('query', () => this.updateCount());
+                this.updateCount();
+                this.$nextTick(() => this.reorderRows());
+            }
+        }">
+            <div class="mb-4">
+                <label for="bom-search-input" class="sr-only">Buscar productos</label>
+                <input type="text"
+                       id="bom-search-input"
+                       x-model="query"
+                       placeholder="Buscar por nombre, ID o detalle…"
+                       class="w-full max-w-md rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400" x-show="query.length >= 1" x-transition>
+                    <span x-text="visibleCount"></span> producto(s) coinciden
+                </p>
+            </div>
+
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors rounded-tl"
+                                    @click="setSort('cod_sistema')"
+                                    :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'cod_sistema' }"
+                                    title="Ordenar por Cod. sistema">Cod. sistema <span x-show="sortBy === 'cod_sistema'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                                    @click="setSort('cod_manual')"
+                                    :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'cod_manual' }"
+                                    title="Ordenar por Cod. Manual">Cod. Manual <span x-show="sortBy === 'cod_manual'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                                    @click="setSort('nombre')"
+                                    :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'nombre' }"
+                                    title="Ordenar por nombre">Nombre <span x-show="sortBy === 'nombre'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Detalle</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº componentes</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for c in conjuntos %}
+                            <tr class="bom-search-row hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                data-search-text="{{ c.id_articulo|default:'' }} {{ c.codigo_manual|default:''|escape }} {{ c.nombre_en_abm|default:''|escape }} {{ c.detalle|default:''|escape }}"
+                                data-cod-sistema="{{ c.id_articulo|default:'' }}"
+                                data-cod-manual="{{ c.codigo_manual|default:''|escape }}"
+                                data-nombre="{{ c.nombre_en_abm|default:''|escape }}"
+                                x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white tabular-nums">{{ c.id_articulo|default:"—" }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ c.codigo_manual|default:"—" }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ c.nombre_en_abm }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{{ c.detalle|default:"—" }}</td>
+                                <td class="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">{{ c.n_componentes }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if c.anulado == 'Si' %}
+                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Anulado</span>
+                                    {% else %}
+                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Activo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-4 py-3 flex flex-wrap gap-1">
+                                    <a href="{% url 'mpr:bom_detail' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors">Ver</a>
+                                    <a href="{% url 'mpr:bom_edit' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Editar</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                    No hay conjuntos de armado. La tabla <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">en_abm</code> puede estar vacía o no existir en esta base.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% if conjuntos %}
+                            <tr class="bom-no-results border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                                x-show="query.length >= 1 && visibleCount === 0"
+                                x-cloak
+                                x-transition>
+                                <td colspan="7" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">Ningún producto coincide con la búsqueda.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

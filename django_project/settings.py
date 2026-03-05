@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
+    'legacy_db',  # Capa escritura compatible VB6 (tablas MySQL administraNET)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
@@ -159,6 +160,9 @@ DATABASES = {
 
 # Base MySQL por defecto para reportes (BO, ventas, etc.) cuando no viene en sesión/filtros
 DEFAULT_BASE_EMPRESA = config('DB_NAME', default='administranet')
+
+# Router: legacy_db usa siempre la conexión MySQL (administraNET)
+DATABASE_ROUTERS = ['legacy_db.db_router.LegacyDbRouter']
 
 # Configuración regional
 LANGUAGE_CODE = 'es-ar'

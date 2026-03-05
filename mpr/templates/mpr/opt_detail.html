@@ -61,6 +61,8 @@
                 <span class="inline-flex items-center gap-1">{% if paso_liberada_opt %}<span class="material-icons text-green-500 text-base">check_circle</span>{% else %}<span class="material-icons text-gray-400 text-base">radio_button_unchecked</span>{% endif %} En producción</span>
                 <span class="inline-flex items-center gap-1">{% if paso_producida_opp %}<span class="material-icons text-green-500 text-base">check_circle</span>{% else %}<span class="material-icons text-gray-400 text-base">radio_button_unchecked</span>{% endif %} Producida (OPP)</span>
                 <span class="inline-flex items-center gap-1">{% if paso_pendiente_cero %}<span class="material-icons text-green-500 text-base">check_circle</span>{% else %}<span class="material-icons text-gray-400 text-base">radio_button_unchecked</span>{% endif %} Pendiente 0</span>
+                <span class="inline-flex items-center gap-1">{% if paso_armado %}<span class="material-icons text-green-500 text-base">check_circle</span>{% else %}<span class="material-icons text-gray-400 text-base">radio_button_unchecked</span>{% endif %} Armado</span>
+                <span class="inline-flex items-center gap-1">{% if paso_cerrado %}<span class="material-icons text-green-500 text-base">check_circle</span>{% else %}<span class="material-icons text-gray-400 text-base">radio_button_unchecked</span>{% endif %} Cerrado</span>
             </div>
         </div>
 
@@ -76,6 +78,7 @@
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Código</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Artículo</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cant. pedida</th>
+                            {% if lineas_with_armado %}<th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Armado</th><th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Restante por armar</th>{% endif %}
                             <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Estado</th>
                         </tr>
                     </thead>
@@ -85,6 +88,10 @@
                             <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ linea.codigo_articulo }}</td>
                             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ linea.descripcion_articulo }}</td>
                             <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ linea.cantidad_pedida }}</td>
+                            {% if lineas_with_armado %}
+                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ linea.cantidad_ya_armada|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ linea.cantidad_restante_armar|default:"-" }}</td>
+                            {% endif %}
                             <td class="px-4 py-3 text-center">
                                 {% if linea.cantidad_pendiente_prod > 0 %}
                                 <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Pendiente</span>
@@ -99,24 +106,35 @@
             </div>
         </div>
 
-        {# Tarjetas de acción: Armado y Registrar OPP #}
+        {# Tarjetas de acción: Armado (solo por OPT) y Registrar OPP #}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             {% if lineas_with_armado %}
+            {% if total_pendiente > 0 %}
+            <div class="flex items-center gap-4 p-5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 opacity-80 cursor-not-allowed" title="Disponible cuando pendiente = 0">
+                <span class="material-icons text-3xl text-gray-400">build</span>
+                <div>
+                    <p class="font-semibold text-gray-600 dark:text-gray-400">Armado desde esta OPT</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-500">Disponible cuando pendiente = 0 (todo registrado por OPP)</p>
+                </div>
+            </div>
+            {% elif not hay_restante_armar %}
+            <div class="flex items-center gap-4 p-5 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 opacity-80 cursor-not-allowed" title="Todo el armado ya registrado">
+                <span class="material-icons text-3xl text-gray-400">build</span>
+                <div>
+                    <p class="font-semibold text-gray-600 dark:text-gray-400">Armado desde esta OPT</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-500">Todo el armado de esta OPT ya fue registrado</p>
+                </div>
+            </div>
+            {% else %}
             <a href="{{ lineas_with_armado.0.armado_url }}" class="flex items-center gap-4 p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all group">
                 <span class="material-icons text-3xl text-blue-500 dark:text-blue-400 group-hover:scale-110 transition-transform">build</span>
                 <div>
                     <p class="font-semibold text-gray-900 dark:text-white">Armado desde esta OPT</p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Ir a armado con artículo y cantidad preseleccionados</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Ir a armado con cantidades restantes por artículo</p>
                 </div>
             </a>
             {% endif %}
-            <a href="{% url 'mpr:bom_list' %}" class="flex items-center gap-4 p-5 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-500 hover:shadow-md transition-all group">
-                <span class="material-icons text-3xl text-blue-500 dark:text-blue-400 group-hover:scale-110 transition-transform">build</span>
-                <div>
-                    <p class="font-semibold text-gray-900 dark:text-white">Armado (Lista de materiales)</p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">Ver recetas y conjuntos de armado</p>
-                </div>
-            </a>
+            {% endif %}
             {% if id_lista and total_pendiente > 0 %}
             <a href="{% url 'mpr:registrar_opp' id_lista %}" class="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white border border-transparent hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all group">
                 <span class="material-icons text-3xl group-hover:scale-110 transition-transform">assignment</span>

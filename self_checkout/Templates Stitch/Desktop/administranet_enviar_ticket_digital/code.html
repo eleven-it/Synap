@@ -1,0 +1,188 @@
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#136dec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101822",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Manrope', sans-serif;
+        }
+        .keyboard-key {
+            @apply flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg h-14 text-lg font-semibold shadow-sm active:bg-slate-100 transition-colors;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen font-display">
+<div class="layout-container flex flex-col min-h-screen">
+<!-- Top Navigation -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 md:px-20">
+<div class="flex items-center gap-3">
+<div class="text-primary">
+<span class="material-symbols-outlined text-4xl">receipt_long</span>
+</div>
+<h1 class="text-xl font-extrabold tracking-tight">AdministraNET</h1>
+</div>
+<button class="flex items-center gap-2 px-6 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg font-bold hover:bg-slate-200 transition-colors">
+<span class="material-symbols-outlined text-xl">arrow_back</span>
+<span>Volver</span>
+</button>
+</header>
+<main class="flex-1 flex flex-col max-w-6xl mx-auto w-full p-6 gap-8">
+<!-- Success Message -->
+<div class="text-center py-4">
+<div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full mb-4">
+<span class="material-symbols-outlined text-4xl">check_circle</span>
+</div>
+<h2 class="text-4xl font-black mb-2">¡Pago Exitoso!</h2>
+<p class="text-slate-500 dark:text-slate-400 text-lg">Seleccione cómo desea recibir su ticket digital</p>
+</div>
+<!-- Delivery Options Grid -->
+<div class="grid md:grid-cols-2 gap-8">
+<!-- Email Card -->
+<div class="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col gap-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 flex items-center justify-center bg-primary/10 rounded-lg text-primary">
+<span class="material-symbols-outlined text-3xl">mail</span>
+</div>
+<div>
+<h3 class="text-xl font-bold">Enviar por Email</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Reciba el comprobante en su correo</p>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-600 dark:text-slate-300">Correo Electrónico</label>
+<input class="w-full p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-primary focus:border-transparent outline-none text-lg" placeholder="ejemplo@correo.com" type="email"/>
+</div>
+<button class="w-full py-4 bg-primary text-white rounded-lg font-bold text-lg hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">send</span>
+<span>Enviar Email</span>
+</button>
+</div>
+<!-- WhatsApp Card -->
+<div class="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col gap-6">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 flex items-center justify-center bg-green-100 dark:bg-green-900/20 rounded-lg text-green-600">
+<span class="material-symbols-outlined text-3xl">chat</span>
+</div>
+<div>
+<h3 class="text-xl font-bold">Enviar por WhatsApp</h3>
+<p class="text-slate-500 dark:text-slate-400 text-sm">Reciba el comprobante en su móvil</p>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<label class="text-sm font-semibold text-slate-600 dark:text-slate-300">Número de Teléfono</label>
+<div class="flex gap-2">
+<div class="w-24 px-3 py-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between cursor-pointer">
+<span class="font-bold">+54</span>
+<span class="material-symbols-outlined text-slate-400">expand_more</span>
+</div>
+<input class="flex-1 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none text-lg" placeholder="11 2345 6789" type="tel"/>
+</div>
+</div>
+<button class="w-full py-4 bg-green-600 text-white rounded-lg font-bold text-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">brand_family</span>
+<span>Enviar WhatsApp</span>
+</button>
+</div>
+</div>
+<!-- On-Screen Keyboard -->
+<div class="mt-auto pt-8">
+<div class="bg-slate-200 dark:bg-slate-900/50 p-4 rounded-2xl flex flex-col gap-2 max-w-4xl mx-auto shadow-inner">
+<!-- Numbers row -->
+<div class="grid grid-cols-10 gap-2">
+<div class="keyboard-key">1</div>
+<div class="keyboard-key">2</div>
+<div class="keyboard-key">3</div>
+<div class="keyboard-key">4</div>
+<div class="keyboard-key">5</div>
+<div class="keyboard-key">6</div>
+<div class="keyboard-key">7</div>
+<div class="keyboard-key">8</div>
+<div class="keyboard-key">9</div>
+<div class="keyboard-key">0</div>
+</div>
+<!-- QWERTY row 1 -->
+<div class="grid grid-cols-10 gap-2">
+<div class="keyboard-key">Q</div>
+<div class="keyboard-key">W</div>
+<div class="keyboard-key">E</div>
+<div class="keyboard-key">R</div>
+<div class="keyboard-key">T</div>
+<div class="keyboard-key">Y</div>
+<div class="keyboard-key">U</div>
+<div class="keyboard-key">I</div>
+<div class="keyboard-key">O</div>
+<div class="keyboard-key">P</div>
+</div>
+<!-- QWERTY row 2 -->
+<div class="grid grid-cols-10 gap-2 px-4">
+<div class="keyboard-key">A</div>
+<div class="keyboard-key">S</div>
+<div class="keyboard-key">D</div>
+<div class="keyboard-key">F</div>
+<div class="keyboard-key">G</div>
+<div class="keyboard-key">H</div>
+<div class="keyboard-key">J</div>
+<div class="keyboard-key">K</div>
+<div class="keyboard-key">L</div>
+<div class="keyboard-key">Ñ</div>
+</div>
+<!-- QWERTY row 3 -->
+<div class="grid grid-cols-10 gap-2">
+<div class="keyboard-key col-span-1 bg-slate-100 dark:bg-slate-700">
+<span class="material-symbols-outlined">shift</span>
+</div>
+<div class="keyboard-key">Z</div>
+<div class="keyboard-key">X</div>
+<div class="keyboard-key">C</div>
+<div class="keyboard-key">V</div>
+<div class="keyboard-key">B</div>
+<div class="keyboard-key">N</div>
+<div class="keyboard-key">M</div>
+<div class="keyboard-key">@</div>
+<div class="keyboard-key col-span-1 bg-slate-100 dark:bg-slate-700">
+<span class="material-symbols-outlined">backspace</span>
+</div>
+</div>
+<!-- Bottom row -->
+<div class="grid grid-cols-12 gap-2">
+<div class="keyboard-key col-span-2 text-sm">.com</div>
+<div class="keyboard-key col-span-1 text-lg">,</div>
+<div class="keyboard-key col-span-6 bg-white dark:bg-slate-800"></div>
+<div class="keyboard-key col-span-1 text-lg">.</div>
+<div class="keyboard-key col-span-2 bg-primary text-white">Enter</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="px-6 py-6 text-center text-slate-400 text-sm">
+<p>© 2024 AdministraNET POS System. Terminal K-402</p>
+</footer>
+</div>
+</body></html>
