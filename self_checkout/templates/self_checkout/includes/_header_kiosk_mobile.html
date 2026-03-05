@@ -1,0 +1,57 @@
+{% comment %}
+  Header TPV 100% mobile: compacto, touch-friendly, sin barra horizontal que trunque.
+  Mismo contrato que _header_kiosk: logo_path, MEDIA_URL, modo_homologacion, kioskId, modoTpv, tpvCliente, tpvListaPrecio, tpvVendedor, cartVoucherPct, abrirModal*, abrirCuentaCorriente.
+{% endcomment %}
+<header class="tpv-mobile-header flex flex-col border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-50 safe-area-pad">
+  <div class="flex items-center justify-between px-4 py-3 min-h-[3.5rem]">
+    <div class="flex items-center gap-2 min-w-0">
+      {% if logo_path %}
+      <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-9 w-auto object-contain shrink-0"/>
+      {% else %}
+      <div class="text-primary flex items-center justify-center bg-primary/10 p-2 rounded-lg shrink-0">
+        <span class="material-symbols-outlined text-2xl font-bold">point_of_sale</span>
+      </div>
+      {% endif %}
+      <div class="min-w-0">
+        <h1 class="text-base font-bold text-slate-900 dark:text-white truncate uppercase leading-tight">AdministraNET</h1>
+        <p class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none">TPV</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <div class="text-right">
+        <span class="block text-sm font-bold text-slate-900 dark:text-slate-100" x-text="kioskId || 'Kiosko 01'"></span>
+        <span class="text-[10px] text-slate-500 uppercase">Activo</span>
+      </div>
+      {% if modo_homologacion %}
+      <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 uppercase">Homo</span>
+      {% endif %}
+    </div>
+  </div>
+  {% comment %} Fila de toques: Cliente, Lista, Vendedor, Descuento — solo en modo TPV {% endcomment %}
+  <div x-show="modoTpv" x-cloak class="px-3 pb-3 pt-0">
+    <div class="flex flex-wrap gap-2">
+      <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="tpvClienteBusqueda = ''; tpvClienteResultados = []; tpvClienteError = ''; modalTpvCliente = true">
+        <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">person</span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvCliente.nombre_cliente || 'Consumidor Final'"></span>
+      </button>
+      <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="abrirModalListaPrecio()">
+        <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">sell</span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvListaPrecio.nombre || 'General'"></span>
+      </button>
+      <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="abrirModalVendedor()">
+        <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">badge</span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvVendedor.nombre || 'Asignar'"></span>
+      </button>
+      <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-left flex-1 min-w-0 max-w-[50%]" :class="cartVoucherPct ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-amber-200' : 'bg-slate-50 dark:bg-slate-800/50'" x-on:click="abrirModalVouchers()">
+        <span class="material-symbols-outlined text-lg shrink-0" :class="cartVoucherPct ? 'text-amber-600' : 'text-slate-500'">local_offer</span>
+        <span class="text-sm font-semibold truncate" x-text="cartVoucherPct ? (cartVoucherPct + '% desc.') : 'Descuento'"></span>
+      </button>
+      <template x-if="tpvCliente.id_cliente != 1">
+        <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50" x-on:click="abrirCuentaCorriente()">
+          <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">account_balance</span>
+          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">Cta. cte.</span>
+        </button>
+      </template>
+    </div>
+  </div>
+</header>

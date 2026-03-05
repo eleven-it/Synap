@@ -1,9 +1,7 @@
 {% extends "self_checkout/kiosco.html" %}
 {% comment %}
-  Template mobile para el kiosco/TPV.
-  Herencia multi-nivel: extiende kiosco.html (desktop) y solo sobreescribe CSS
-  para layout single-column, bottom-sheet carrito, touch targets y accesibilidad.
-  0 duplicación de HTML/JS/Alpine.js.
+  TPV 100% diseño mobile: reemplaza header y main por layout tipo app (header compacto,
+  búsqueda arriba, barra fija abajo con total + Pagar, sheet para carrito). Misma lógica Alpine.
 {% endcomment %}
 
 {% block extra_meta %}
@@ -15,12 +13,18 @@
 {{ block.super }}
 {% endblock %}
 
+{% block kiosk_header %}
+{% include "self_checkout/includes/_header_kiosk_mobile.html" %}
+{% endblock %}
+
+{% block kiosk_main %}
+{% include "self_checkout/includes/_kiosk_main_mobile.html" %}
+{% endblock %}
+
 {% block extra_css %}
 {{ block.super }}
 <style>
-/* ========== MOBILE TPV OVERRIDES (body.tpv-mobile = solo cuando se sirve este template) ========== */
-/* Anulan las reglas del desktop (body.kiosk-client-mode) con igual o mayor especificidad. */
-
+/* ========== TPV MOBILE APP (diseño 100% mobile) ========== */
 html { -webkit-text-size-adjust: 100%; }
 
 body.tpv-mobile.kiosk-client-mode {
@@ -29,73 +33,31 @@ body.tpv-mobile.kiosk-client-mode {
 }
 body.tpv-mobile .kiosk-root {
   min-height: 100dvh !important;
-  padding-bottom: env(safe-area-inset-bottom, 0.5rem) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  body.tpv-mobile *,
-  body.tpv-mobile *::before,
-  body.tpv-mobile *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
 body.tpv-mobile .kiosk-card {
   border-radius: 0 !important;
   border: none !important;
   box-shadow: none !important;
-}
-
-/* Forzar columna única siempre (anula @media (min-width: 1024px) del desktop) */
-body.tpv-mobile .kiosk-main-two-cols {
+  flex: 1 !important;
+  min-height: 0 !important;
+  display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  flex: 1 !important;
-  min-height: 0 !important;
-  padding: 0.5rem !important;
-  gap: 0.5rem !important;
+}
+body.tpv-mobile .kiosk-root > div {
+  padding: 0 !important;
 }
 
-body.tpv-mobile .kiosk-col-left {
-  flex: 1 !important;
-  width: 100% !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
-  border-right: none !important;
-}
+.safe-area-pad { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+.safe-area-pad-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
 
-/* Bottom sheet carrito (anula body.kiosk-client-mode .kiosk-col-right { max-height: none } del desktop) */
-body.tpv-mobile .kiosk-col-right {
-  width: 100% !important;
-  flex: none !important;
-  max-height: 45vh !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 1rem 1rem 0 0 !important;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.12) !important;
-  position: relative;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  body.tpv-mobile .kiosk-col-right {
-    transition: max-height 0.3s ease;
-  }
-}
-
-body.tpv-mobile .kiosk-col-right::before {
-  content: '';
-  display: block;
-  width: 2.5rem;
-  height: 0.25rem;
-  background: #94a3b8;
-  border-radius: 9999px;
-  margin: 0.5rem auto 0.25rem;
-  opacity: 0.5;
-}
+body.tpv-mobile .tpv-mobile-main { flex: 1; min-height: 0; }
+body.tpv-mobile .tpv-mobile-bottom-bar { min-height: 3.5rem; }
+body.tpv-mobile .tpv-mobile-chip { min-height: 2.75rem; }
 
 .touch-manipulation { touch-action: manipulation; }
 body.tpv-mobile .kiosk-card button,
@@ -104,41 +66,6 @@ body.tpv-mobile .kiosk-card [role="button"] {
   min-height: 2.75rem !important;
   min-width: 2.75rem !important;
 }
-
-body.tpv-mobile .kiosk-card header {
-  padding: 0.5rem 0.75rem !important;
-  flex-wrap: wrap !important;
-  gap: 0.5rem !important;
-}
-body.tpv-mobile .kiosk-card header h1 {
-  font-size: 1.125rem !important;
-  line-height: 1.25 !important;
-}
-body.tpv-mobile .kiosk-card header .text-\[10px\],
-body.tpv-mobile .kiosk-card header [class*="text-[10px]"] {
-  font-size: 0.625rem !important;
-}
-body.tpv-mobile .kiosk-card header button,
-body.tpv-mobile .kiosk-card header .flex.items-center.gap-2 {
-  min-height: 2.75rem !important;
-  padding: 0.5rem 0.75rem !important;
-  font-size: 0.875rem !important;
-}
-body.tpv-mobile .kiosk-card header img {
-  max-height: 2.25rem !important;
-}
-
-body.tpv-mobile .kiosk-col-right button.w-full.bg-primary {
-  min-height: 3.5rem !important;
-  font-size: 1.25rem !important;
-  padding: 1rem 1.5rem !important;
-}
-
-body.tpv-mobile .kiosk-card :focus-visible {
-  outline: 2px solid #3b82f6 !important;
-  outline-offset: 2px !important;
-}
-
 body.tpv-mobile .kiosk-card input[type="text"],
 body.tpv-mobile .kiosk-card input[type="number"],
 body.tpv-mobile .kiosk-card input[type="email"],
@@ -150,6 +77,11 @@ body.tpv-mobile .kiosk-card textarea {
   min-height: 2.75rem !important;
 }
 
+body.tpv-mobile .kiosk-card :focus-visible {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
 body.tpv-mobile .fixed.inset-0 > div {
   max-width: 100% !important;
   max-height: 100dvh !important;
@@ -157,7 +89,6 @@ body.tpv-mobile .fixed.inset-0 > div {
   border-radius: 0 !important;
   margin: 0 !important;
 }
-
 body.tpv-mobile button[title="Pantalla completa"],
 body.tpv-mobile .btn-fullscreen { display: none !important; }
 
@@ -168,44 +99,23 @@ body.tpv-mobile .flex.gap-2.overflow-x-auto {
 }
 body.tpv-mobile .flex.items-center.gap-2.overflow-x-auto::-webkit-scrollbar,
 body.tpv-mobile .flex.gap-2.overflow-x-auto::-webkit-scrollbar { display: none; }
-
 body.tpv-mobile .overflow-x-auto { -webkit-overflow-scrolling: touch; }
 
-body.tpv-mobile .px-4.sm\:px-6.lg\:px-8 {
-  padding-left: 0.5rem !important;
-  padding-right: 0.5rem !important;
-}
-
-body.tpv-mobile .kiosk-col-right .text-2xl { font-size: 1.5rem !important; }
-body.tpv-mobile .kiosk-col-right .text-xl { font-size: 1.25rem !important; }
-body.tpv-mobile .kiosk-col-right h2 { font-size: 1.125rem !important; }
-body.tpv-mobile .kiosk-col-right .text-xs { font-size: 0.8125rem !important; }
-
-body.tpv-mobile .kiosk-col-left input#tpv-busqueda-producto,
-body.tpv-mobile .kiosk-col-left input[placeholder*="Escanear"],
-body.tpv-mobile .kiosk-col-left input[placeholder*="Esperando"] {
-  min-height: 3rem !important;
-  font-size: 1rem !important;
+/* Banner ofertas del include: más compacto en mobile para que no trunque */
+body.tpv-mobile .tpv-mobile-main .flex.items-center.gap-6.rounded-xl.p-6 {
   padding: 0.75rem 1rem !important;
+  gap: 0.75rem !important;
 }
+body.tpv-mobile .tpv-mobile-main .flex.items-center.gap-6.rounded-xl.p-6 .w-16 { width: 2.5rem !important; height: 2.5rem !important; }
+body.tpv-mobile .tpv-mobile-main .flex.items-center.gap-6.rounded-xl.p-6 h3 { font-size: 0.9375rem !important; }
+body.tpv-mobile .tpv-mobile-main .flex.items-center.gap-6.rounded-xl.p-6 p { font-size: 0.8125rem !important; line-height: 1.25 !important; }
 
-body.tpv-mobile .kiosk-col-right .grid.grid-cols-3 button {
-  min-height: 2.75rem !important;
-  font-size: 0.75rem !important;
-  padding: 0.5rem !important;
-}
-
-body.tpv-mobile .grid.grid-cols-1.sm\:grid-cols-2,
-body.tpv-mobile .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
-
-body.tpv-mobile .bg-emerald-100 { background-color: #d1fae5 !important; }
-body.tpv-mobile .text-emerald-700 { color: #047857 !important; }
-body.tpv-mobile .bg-amber-100 { background-color: #fef3c7 !important; }
-body.tpv-mobile .text-amber-700 { color: #b45309 !important; }
-
-@supports (padding: max(0px)) {
-  body.tpv-mobile .kiosk-col-right {
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
+@media (prefers-reduced-motion: reduce) {
+  body.tpv-mobile *,
+  body.tpv-mobile *::before,
+  body.tpv-mobile *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
 </style>

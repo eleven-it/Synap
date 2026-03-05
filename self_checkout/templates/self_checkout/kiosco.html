@@ -170,9 +170,12 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
           </div>
         </div>
       </div>
+      {% block kiosk_header %}
       {% include "self_checkout/includes/_header_kiosk.html" %}
+      {% endblock %}
 
-      <!-- Main: HTML exacto Stitch kiosk_active_cart_1 (dos columnas) -->
+      <!-- Main: desktop = dos columnas; mobile = bloque override -->
+      {% block kiosk_main %}
       <main class="kiosk-main-two-cols flex flex-1 gap-6 p-6 md:p-8 overflow-hidden min-h-0 bg-background-light dark:bg-background-dark" x-show="estado !== 'success'" x-cloak>
     <div class="kiosk-col-left flex-[1.2] flex flex-col gap-6 min-h-0 overflow-hidden">
       {% include "self_checkout/includes/_search_scan.html" %}
@@ -187,6 +190,7 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
       </div>
     </aside>
   </main>
+      {% endblock %}
 
   {% include "self_checkout/includes/_post_sale.html" %}
 
@@ -829,6 +833,7 @@ document.addEventListener('alpine:init', () => {
     modalEmail: false,
     modalRfid: false,
     modalPago: false,
+    cartSheetOpen: false,
     modalConnectionError: false,
     mostrarReceipt: false,
     modalConfirmEliminar: false,
@@ -2192,12 +2197,16 @@ document.addEventListener('alpine:init', () => {
       window.open(ticketUrl, '_blank', 'width=400,height=700,menubar=no,toolbar=no,location=no,status=no');
     },
 
+    toggleCartSheet() {
+      this.cartSheetOpen = !this.cartSheetOpen;
+    },
     cerrarModales() {
       if (!this.modalPago) this.modalEmail = false;
       this.modalRfid = false;
       this.mostrarReceipt = false;
       this.modalConfirmEliminar = false;
       this.cerrarModalSeries();
+      this.cartSheetOpen = false;
     },
 
     reintentarConexion() {
