@@ -1,10 +1,16 @@
 {% load static %}
+{% load menu_tags %}
 <!DOCTYPE html>
 <html class="light" lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>AdministraNET Login</title>
+  {% get_media_prefix as MEDIA_URL %}
+  {% get_administranet_logo as logo_path %}
+  {% if logo_path %}
+  <link rel="icon" type="image/png" href="{{ MEDIA_URL }}{{ logo_path }}" />
+  {% endif %}
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -24,26 +30,35 @@
       },
     }
   </script>
-  <style>body { min-height: max(884px, 100dvh); }</style>
+  <style>
+    body { min-height: 100dvh; -webkit-text-size-adjust: 100%; }
+    /* Evitar zoom en iOS al enfocar inputs (font-size >= 16px ya aplicado en inputs) */
+  </style>
   {% csrf_token %}
 </head>
-<body class="bg-background-light dark:bg-background-dark font-display antialiased">
-  <div class="relative flex min-h-screen w-full flex-col items-center justify-center overflow-x-hidden p-6">
-    <!-- Logo -->
-    <div class="mb-12 flex flex-col items-center">
-      <div class="mb-4 flex h-20 w-20 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
-        <span class="material-symbols-outlined text-4xl">storefront</span>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased min-h-screen">
+  <div class="relative flex min-h-[100dvh] min-h-screen w-full flex-col items-center justify-center overflow-x-hidden p-4 sm:p-6">
+    <!-- Logo: mismo origen que desktop (get_administranet_logo), mismo criterio que login_administranet.html -->
+    <div class="mb-8 sm:mb-12 flex flex-col items-center w-full">
+      <div class="logo-container mb-3 sm:mb-4 flex items-center justify-center rounded-xl overflow-hidden">
+        {% if logo_path %}
+        <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="logo max-h-20 max-w-[240px] w-auto object-contain sm:max-h-24"/>
+        {% else %}
+        <div class="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
+          <span class="material-symbols-outlined text-4xl">storefront</span>
+        </div>
+        {% endif %}
       </div>
-      <h1 class="text-slate-900 dark:text-slate-100 tracking-tight text-[32px] font-bold leading-tight text-center">AdministraNET</h1>
+      <h1 class="text-slate-900 dark:text-slate-100 tracking-tight text-2xl sm:text-[32px] font-bold leading-tight text-center px-2">AdministraNET</h1>
     </div>
     <!-- Mensaje -->
-    <div class="mb-8 text-center">
-      <h2 class="text-slate-900 dark:text-slate-100 text-[24px] font-bold leading-tight tracking-[-0.015em] mb-2">¡Bienvenido!</h2>
-      <p class="text-slate-600 dark:text-slate-400 text-base font-normal">Iniciá sesión para continuar</p>
+    <div class="mb-6 sm:mb-8 text-center px-2">
+      <h2 class="text-slate-900 dark:text-slate-100 text-xl sm:text-[24px] font-bold leading-tight tracking-[-0.015em] mb-2">¡Bienvenido!</h2>
+      <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base font-normal">Iniciá sesión para continuar</p>
     </div>
-    <!-- Formulario -->
-    <div class="w-full max-w-[400px] space-y-5">
-      <div id="error-message" class="text-red-600 text-sm text-center hidden"></div>
+    <!-- Formulario: mismos 4 campos que desktop (Servidor oculto en mobile, Empresa, Usuario, Contraseña) -->
+    <div class="w-full max-w-[400px] space-y-4 sm:space-y-5 px-1">
+      <div id="error-message" class="text-red-600 text-sm text-center hidden px-2"></div>
       <input type="hidden" id="server" name="server" value="{{ db_host|default:server_default.host|default:'' }}"/>
 
       <!-- Empresa -->
@@ -51,7 +66,7 @@
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Empresa</label>
         <div class="relative flex items-center">
           <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">business</span>
-          <select id="empresa" name="empresa" required class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 pl-12 pr-4 text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none">
+          <select id="empresa" name="empresa" required class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-4 text-base text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none min-h-[44px]">
             <option value="">Seleccione una empresa</option>
             {% for empresa in empresas %}
             <option value="{{ empresa.base_empresa }}">{{ empresa.nombre_empresa }}</option>
@@ -64,7 +79,7 @@
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Usuario</label>
         <div class="relative flex items-center">
           <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">person</span>
-          <input id="usuario" type="text" name="usuario" autocomplete="username" required placeholder="Código de usuario" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 pl-12 pr-4 text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400"/>
+          <input id="usuario" type="text" name="usuario" autocomplete="username" required placeholder="Código de usuario" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-4 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
         </div>
       </div>
       <!-- Contraseña -->
@@ -72,20 +87,20 @@
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Contraseña</label>
         <div class="relative flex items-center">
           <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">lock</span>
-          <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-4 pl-12 pr-12 text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400"/>
+          <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-12 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
           <button type="button" class="absolute right-4 text-slate-400 hover:text-primary transition-colors" onclick="var i=document.getElementById('password');i.type=i.type==='password'?'text':'password';">
             <span class="material-symbols-outlined text-[22px]">visibility</span>
           </button>
         </div>
       </div>
       <!-- Botón -->
-      <div class="pt-4">
-        <button type="button" id="btn-submit" onclick="handleLogin(event)" class="w-full rounded-xl bg-primary py-4 text-base font-bold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.98] transition-all">Iniciar sesión</button>
+      <div class="pt-2 sm:pt-4">
+        <button type="button" id="btn-submit" onclick="handleLogin(event)" class="w-full rounded-xl bg-primary py-3.5 sm:py-4 text-base font-bold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.98] transition-all min-h-[44px]">Iniciar sesión</button>
       </div>
     </div>
-    <!-- Decoración -->
-    <div class="fixed top-[-10%] left-[-10%] -z-10 h-[40%] w-[40%] rounded-full bg-primary/5 blur-[100px]"></div>
-    <div class="fixed bottom-[-10%] right-[-10%] -z-10 h-[40%] w-[40%] rounded-full bg-primary/10 blur-[100px]"></div>
+    <!-- Decoración (no interfieren en scroll) -->
+    <div class="fixed top-[-10%] left-[-10%] -z-10 h-[40%] w-[40%] rounded-full bg-primary/5 blur-[100px] pointer-events-none" aria-hidden="true"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] -z-10 h-[40%] w-[40%] rounded-full bg-primary/10 blur-[100px] pointer-events-none" aria-hidden="true"></div>
   </div>
 
   <script>

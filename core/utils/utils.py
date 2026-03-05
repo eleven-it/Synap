@@ -733,8 +733,8 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     # Obtener módulos activos desde la base de datos
     active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
     
-    # Agregar módulos core que siempre deben estar activos
-    core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'mpr', 'compras'}
+    # Agregar módulos core que siempre deben estar activos (como stock, compras, mpr)
+    core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'mpr', 'compras', 'self_checkout'}
     active_modules.update(core_modules)
 
     apps_filtradas = []

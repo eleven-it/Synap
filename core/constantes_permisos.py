@@ -128,6 +128,12 @@ PERMISOS_POR_MODULO = {
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),
     ],
+    "Self-Checkout / TPV": [
+        ("self_checkout.ver", "Ver Self-Checkout / TPV"),
+        ("self_checkout.kiosk", "Operar kiosco / TPV"),
+        ("self_checkout.supervisor", "Supervisar autoservicios"),
+        ("self_checkout.admin", "Configurar autoservicios y talonarios"),
+    ],
     "Reportes": [
         ("reports.view_operational", "Informes operativos"),
         ("reports.view_managerial", "Informes gerenciales"),
@@ -346,8 +352,9 @@ CAN_CONFIGURE_INTEGRATIONS = "core.can_configure_integrations"
 CAN_VALIDATE_DATA = "core.can_validate_data"
 CAN_MANAGE_VALIDATION_RULES = "core.can_manage_validation_rules"
 
-# Self-Checkout (AdministraNET permiso_sistema)
+# Self-Checkout (AdministraNET permiso_sistema, compatibles con PERMISOS_POR_MODULO y sync)
+SCO_VER = "self_checkout.ver"
 SCO_KIOSK = "self_checkout.kiosk"
 SCO_SUPERVISOR = "self_checkout.supervisor"
 SCO_ADMIN = "self_checkout.admin"
-SCO_PERMISSIONS = (SCO_KIOSK, SCO_SUPERVISOR, SCO_ADMIN)
+SCO_PERMISSIONS = (SCO_VER, SCO_KIOSK, SCO_SUPERVISOR, SCO_ADMIN)

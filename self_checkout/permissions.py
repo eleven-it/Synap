@@ -5,13 +5,14 @@ Delega en core.services.administranet_permisos_usuario (única fuente).
 import logging
 from typing import Any
 
-from core.constantes_permisos import SCO_KIOSK, SCO_SUPERVISOR, SCO_ADMIN, SCO_PERMISSIONS
+from core.constantes_permisos import SCO_VER, SCO_KIOSK, SCO_SUPERVISOR, SCO_ADMIN, SCO_PERMISSIONS
 from core.services.administranet_permisos_usuario import get_permisos_totales_administranet
 
 logger = logging.getLogger(__name__)
 
-# Jerarquía: admin implica supervisor y kiosk; supervisor implica kiosk
+# Jerarquía: admin implica supervisor y kiosk; supervisor implica kiosk; ver solo da acceso a ver módulo
 SCO_HIERARCHY = {
+    SCO_VER: [],
     SCO_KIOSK: [SCO_SUPERVISOR, SCO_ADMIN],
     SCO_SUPERVISOR: [SCO_ADMIN],
     SCO_ADMIN: [],

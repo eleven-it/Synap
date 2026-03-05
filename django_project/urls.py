@@ -97,6 +97,7 @@ urlpatterns.extend([
     path('compras/', include('compras.urls', namespace='compras')),
     path('api/legacy-hub/', include('legacy_db.urls', namespace='legacy_hub')),
     path('mpr/', include('mpr.urls', namespace='mpr')),
+    path('self_checkout/', include('self_checkout.urls', namespace='self_checkout')),
 ])
 
 # Logistics API

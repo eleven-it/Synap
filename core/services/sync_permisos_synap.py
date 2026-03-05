@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Clave de cache por empresa; TTL en segundos (por defecto 24h)
 CACHE_KEY_PREFIX = "synap_perm_sync:"
-MODULOS_CON_COMODIN = ("reports", "stock")
+MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout")
 
 
 def _lista_permisos_synap(grupo_permiso: str = "Synap") -> List[Dict]:
