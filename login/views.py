@@ -13,6 +13,7 @@ from django.contrib import messages
 from urllib.parse import urlparse
 from .administranet_auth import AdministraNETAuth
 from core.models import Empresa
+from core.utils.template_selector import get_template_for_device
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +117,8 @@ def login_view(request):
     }
     
     logger.info(f"📋 Mostrando login con {len(empresas)} empresas disponibles (servidor={db_host})")
-    
-    return render(request, "login/login_administranet.html", {
+    template_name = get_template_for_device(request, "login/login_administranet.html")
+    return render(request, template_name, {
         'empresas': empresas,
         'servidores': servidores,
         'server_default': server_default,
@@ -316,6 +317,7 @@ def perfil_view(request):
         messages.success(request, "Perfil actualizado correctamente")
         return redirect("login:perfil")
 
-    return render(request, "login/perfil.html", {
+    template_name = get_template_for_device(request, "login/perfil.html")
+    return render(request, template_name, {
         "user": session_user
     })

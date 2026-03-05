@@ -167,6 +167,20 @@ Cada uno es un template independiente que extiende `base_app.html` y reimplement
 |---|---|
 | `self_checkout/views.py` | Import `get_template_for_device`, 5 vistas usan selector |
 
+### Login y Ajustes (perfil) mobile
+
+Cuando el dispositivo es móvil (`request.is_mobile`), se sirven templates específicos basados en Stitch:
+
+| Vista (app login) | Template desktop | Template mobile |
+|---|---|---|
+| `login_view` | `login/login_administranet.html` | `login/mobile/login_administranet.html` |
+| `perfil_view` | `login/perfil.html` | `login/mobile/perfil.html` |
+
+- **Login mobile:** Diseño Stitch `administranet_login_es` (logo, bienvenida, empresa/usuario/contraseña, mismo POST JSON que desktop).
+- **Ajustes mobile:** Diseño Stitch `administranet_ajustes_es` (header con volver, perfil rápido, secciones Perfil de Negocio, POS, Seguridad, Cerrar sesión, barra inferior Ventas/Productos/Informes/Ajustes).
+
+Archivos: `login/views.py` (usa `get_template_for_device`), `login/templates/login/mobile/login_administranet.html`, `login/templates/login/mobile/perfil.html`.
+
 ### No modificados (intactos)
 
 - `self_checkout/urls.py` — Sin cambios en rutas.

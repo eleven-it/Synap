@@ -1,0 +1,142 @@
+{% load i18n %}
+{% load static %}
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AdministraNET Ajustes</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#7f13ec",
+            "background-light": "#f7f6f8",
+            "background-dark": "#191022",
+          },
+          fontFamily: { "display": ["Inter", "sans-serif"] },
+          borderRadius: { "DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px" },
+        },
+      },
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; min-height: max(884px, 100dvh); }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="sticky top-0 z-10 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-primary/10 px-4 py-4 flex items-center justify-between">
+    <a href="{% url 'core:dashboard' %}" class="flex items-center gap-3 text-slate-700 dark:text-slate-300 hover:text-primary transition-colors">
+      <span class="material-symbols-outlined text-primary">arrow_back_ios</span>
+      <h1 class="text-xl font-bold tracking-tight">Ajustes</h1>
+    </a>
+    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+      <span class="material-symbols-outlined text-primary text-sm">notifications</span>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 overflow-y-auto px-4 py-6 space-y-6 pb-24">
+    <!-- Perfil rápido -->
+    <div class="flex items-center gap-4 p-2">
+      <div class="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden border-2 border-primary/30">
+        <span class="material-symbols-outlined text-3xl text-primary">person</span>
+      </div>
+      <div>
+        <h2 class="font-bold text-lg">{{ user.nombre_completo|default:user.cod_usuario|default:"Usuario" }}</h2>
+        <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">{{ user.base_empresa|default:"" }} • {{ user.cod_usuario|default:"" }}</p>
+      </div>
+    </div>
+
+    {% if messages %}
+    <div class="space-y-2">
+      {% for message in messages %}
+      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">{{ message }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Perfil de Negocio -->
+    <section class="space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 ml-1">Perfil de Negocio</h3>
+      <div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-primary/5">
+        <a href="{% url 'core:dashboard' %}" class="w-full flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-primary/5">
+          <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">domain</span>
+          <span class="flex-1 text-left font-medium">Datos de la Empresa</span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a href="#" class="w-full flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">branding_watermark</span>
+          <span class="flex-1 text-left font-medium">Logotipo</span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Configuración de POS -->
+    <section class="space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 ml-1">Configuración de POS</h3>
+      <div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-primary/5">
+        <a href="{% url 'self_checkout:config_list' %}" class="w-full flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-primary/5">
+          <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">print</span>
+          <span class="flex-1 text-left font-medium">Kioscos / TPV</span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a href="#" class="w-full flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">percent</span>
+          <span class="flex-1 text-left font-medium">Impuestos</span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Seguridad -->
+    <section class="space-y-2">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 ml-1">Seguridad</h3>
+      <div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-primary/5">
+        <a href="#" class="w-full flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-primary/5">
+          <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">lock</span>
+          <span class="flex-1 text-left font-medium">Cambiar contraseña</span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Cerrar sesión -->
+    <div class="pt-4">
+      <a href="{% url 'login:logout' %}" class="w-full bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 py-4 rounded-xl font-bold flex items-center justify-center gap-2 border border-red-100 dark:border-red-900/30">
+        <span class="material-symbols-outlined">logout</span>
+        Cerrar sesión
+      </a>
+      <p class="text-center text-slate-400 dark:text-slate-600 text-xs mt-6 mb-4">AdministraNET Synap</p>
+    </div>
+  </main>
+
+  <!-- Navegación inferior -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-white dark:bg-background-dark border-t border-primary/10 px-6 pb-6 pt-3 flex justify-between items-center z-20">
+    <a href="{% url 'core:dashboard' %}" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors">
+      <span class="material-symbols-outlined">storefront</span>
+      <span class="text-[10px] font-medium">Ventas</span>
+    </a>
+    <a href="{% url 'core:dashboard' %}" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors">
+      <span class="material-symbols-outlined">inventory_2</span>
+      <span class="text-[10px] font-medium">Productos</span>
+    </a>
+    <a href="{% url 'reports:workspace' %}" class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-primary transition-colors">
+      <span class="material-symbols-outlined">bar_chart</span>
+      <span class="text-[10px] font-medium">Informes</span>
+    </a>
+    <a href="{% url 'login:perfil' %}" class="flex flex-col items-center gap-1 text-primary">
+      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+      <span class="text-[10px] font-bold">Ajustes</span>
+    </a>
+  </nav>
+</body>
+</html>
