@@ -16,7 +16,7 @@ from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
 from core.utils.administranet_types import to_int_or_none, str_or_default, to_date_or_none
 
-from mpr.exceptions import MprSchemaError
+from mpr.exceptions import MprSchemaError, formatear_error_esquema
 
 logger = logging.getLogger(__name__)
 
@@ -366,7 +366,9 @@ def listar_movimientos_recientes_mpr(base_empresa: str, limit: int = 15) -> List
                     """,
                     [limit],
                 )
-            except Exception:
+            except Exception as e1:
+                if "1054" in str(e1) or "Unknown column" in str(e1).lower():
+                    raise MprSchemaError(formatear_error_esquema(e1, "movimiento_stock"))
                 cursor.execute(
                     f"""
                     SELECT codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, detalle
@@ -413,7 +415,11 @@ def listar_movimientos_recientes_mpr(base_empresa: str, limit: int = 15) -> List
                 "id_lista": id_lista,
             })
         return result
+    except MprSchemaError:
+        raise
     except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
         logger.warning("Error al listar movimientos recientes MPR en %s: %s", base_empresa, e, exc_info=True)
         return []
 
@@ -1901,17 +1907,20 @@ def ejecutar_armado(
                     )
                 except Exception as ins_err:
                     if "1054" in str(ins_err):
-                        cursor.execute(
-                            f"""
-                            INSERT INTO {tbl_mov}
-                            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
-                             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
-                            """,
-                            params_mov[:15],
-                        )
+                        try:
+                            cursor.execute(
+                                f"""
+                                INSERT INTO {tbl_mov}
+                                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                                """,
+                                params_mov[:15],
+                            )
+                        except Exception as ins_err2:
+                            raise MprSchemaError(formatear_error_esquema(ins_err2, "movimiento_stock"))
                     else:
-                        raise ins_err
+                        raise MprSchemaError(formatear_error_esquema(ins_err, "movimiento_stock"))
                 orden = 0
                 # Salidas de componentes desde deposito_origen
                 for comp in bom["componentes"]:
@@ -2120,11 +2129,15 @@ def ejecutar_armado(
                 raise
             except Exception as e:
                 conn.rollback()
+                if "1054" in str(e) or "Unknown column" in str(e).lower():
+                    raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
                 logger.warning("Error en ejecutar_armado: %s", e, exc_info=True)
                 return False, None, None, str(e)
     except MprSchemaError:
         raise
     except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
         logger.warning("Error de conexión en ejecutar_armado: %s", e, exc_info=True)
         return False, None, None, str(e)
 
@@ -2735,17 +2748,20 @@ def ejecutar_liberar_opt(
                 except Exception as ins_err:
                     if "1054" in str(ins_err):
                         params_mov_sin_busq = params_mov[:15]  # sin nro_comprobante_busq
-                        cursor.execute(
-                            f"""
-                            INSERT INTO {tbl_mov}
-                            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
-                             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
-                            """,
-                            params_mov_sin_busq,
-                        )
+                        try:
+                            cursor.execute(
+                                f"""
+                                INSERT INTO {tbl_mov}
+                                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                                """,
+                                params_mov_sin_busq,
+                            )
+                        except Exception as ins_err2:
+                            raise MprSchemaError(formatear_error_esquema(ins_err2, "movimiento_stock"))
                     else:
-                        raise ins_err
+                        raise MprSchemaError(formatear_error_esquema(ins_err, "movimiento_stock"))
                 # (4) Por cada (linea, cantidad): INSERT stock, actualizar stock_deposito, actualizar lista_produccion_agrupada
                 for idx, (linea, qty) in enumerate(distribucion):
                     id_art = to_int_or_none(linea.get("id_articulo"))
@@ -2845,11 +2861,15 @@ def ejecutar_liberar_opt(
                 raise
             except Exception as e:
                 conn.rollback()
+                if "1054" in str(e) or "Unknown column" in str(e).lower():
+                    raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
                 logger.warning("Error en ejecutar_liberar_opt: %s", e, exc_info=True)
                 return False, None, None, str(e)
     except MprSchemaError:
         raise
     except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
         logger.warning("Error de conexión en ejecutar_liberar_opt: %s", e, exc_info=True)
         return False, None, None, str(e)
 
@@ -2956,17 +2976,20 @@ def ejecutar_opp(
                     )
                 except Exception as ins_err:
                     if "1054" in str(ins_err):
-                        cursor.execute(
-                            f"""
-                            INSERT INTO {tbl_mov}
-                            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
-                             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
-                            """,
-                            params_mov[:14],
-                        )
+                        try:
+                            cursor.execute(
+                                f"""
+                                INSERT INTO {tbl_mov}
+                                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                                """,
+                                params_mov[:14],
+                            )
+                        except Exception as ins_err2:
+                            raise MprSchemaError(formatear_error_esquema(ins_err2, "movimiento_stock"))
                     else:
-                        raise ins_err
+                        raise MprSchemaError(formatear_error_esquema(ins_err, "movimiento_stock"))
                 orden = 0
                 for linea, qty in distribucion:
                     id_art = to_int_or_none(linea.get("id_articulo"))
@@ -3048,6 +3071,8 @@ def ejecutar_opp(
                 raise
             except Exception as e:
                 conn.rollback()
+                if "1054" in str(e) or "Unknown column" in str(e).lower():
+                    raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
                 logger.exception("Error en ejecutar_opp: %s", e)
                 try:
                     primera_linea = lineas[0] if lineas else {}
@@ -3064,6 +3089,8 @@ def ejecutar_opp(
     except MprSchemaError:
         raise
     except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
         logger.exception("Error de conexión en ejecutar_opp: %s", e)
         return False, None, None, str(e)
 
@@ -3173,17 +3200,20 @@ def ejecutar_reclasificacion(
                     )
                 except Exception as ins_err:
                     if "1054" in str(ins_err):
-                        cursor.execute(
-                            f"""
-                            INSERT INTO {tbl_mov}
-                            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
-                             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
-                            """,
-                            params_mov[:15],
-                        )
+                        try:
+                            cursor.execute(
+                                f"""
+                                INSERT INTO {tbl_mov}
+                                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                                """,
+                                params_mov[:15],
+                            )
+                        except Exception as ins_err2:
+                            raise MprSchemaError(formatear_error_esquema(ins_err2, "movimiento_stock"))
                     else:
-                        raise ins_err
+                        raise MprSchemaError(formatear_error_esquema(ins_err, "movimiento_stock"))
                 saldo_orig_despues = saldo_orig - salida
                 cursor.execute(
                     f"""
@@ -3239,11 +3269,15 @@ def ejecutar_reclasificacion(
                 raise
             except Exception as e:
                 conn.rollback()
+                if "1054" in str(e) or "Unknown column" in str(e).lower():
+                    raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
                 logger.warning("Error en ejecutar_reclasificacion: %s", e, exc_info=True)
                 return False, None, None, str(e)
     except MprSchemaError:
         raise
     except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock"))
         logger.warning("Error de conexión en ejecutar_reclasificacion: %s", e, exc_info=True)
         return False, None, None, str(e)
 
