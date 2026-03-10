@@ -5,6 +5,8 @@
 - **Tipos de datos AdministraNET:** En todo el proyecto, al leer o escribir datos en MySQL de administraNET (tablas compartidas con VB6), se deben **validar y normalizar** los tipos para cumplir el mismo criterio que AdministraNET: usar `core.utils.administranet_types` (`to_int_or_none`, `to_date_or_none`, `str_or_default`, `to_decimal_or_none`) para INT, DATE, VARCHAR y DECIMAL según el schema (docs/reports/docs/tablas, docs/general/tablas). No enviar strings numéricos sin convertir a int; no enviar string vacío en campos DATE (usar None); usar valor por defecto (ej. '-') en VARCHAR opcionales vacíos. Ver `docs/general/TIPOS_DATOS_ADMINISTRANET.md`.
 
 - **Plan de referencia:** Todo el desarrollo relacionado con shell, sesión, login, TPV, caja, reportes y migración desde Principal.frm (VB6) debe ajustarse al plan oficial del repositorio: **docs/general/PLAN_PRINCIPAL_FODA_BRECHAS_SYNAP.md** (y al flujo de ramas en **docs/general/FLUJO_RAMAS_Y_PLAN.md**).
+
+- **Staging sin docs ni .md:** Al subir cambios a la rama Staging (merge desde Desarrollo), **no** deben incluirse la carpeta `docs/` ni archivos `.md`. Tras el merge en Staging, ejecutar `git rm -r docs` (y si aplica quitar .md de raíz), commit y push. Ver **docs/general/FLUJO_RAMAS_Y_PLAN.md** (§ Carpeta docs/ solo en Desarrollo).
 - Consultar ese plan antes de proponer o implementar cambios en: context_processors, logout, session store, barra de estado, fecha servidor, auth-cashier, cierre de caja, base_empresa, permisos y seguridad (cookies, ENVIRONMENT=production).
 - Las medidas de seguridad descritas en el plan deben activarse cuando **ENVIRONMENT=production** (o produccion).
 
