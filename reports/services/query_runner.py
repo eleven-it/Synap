@@ -2647,14 +2647,17 @@ class QueryRunnerService:
         self, cursor, fecha_inicio: str, fecha_fin: str,
         sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
         clientes_excluidos: Optional[List] = None,
+        filtrar_por_fecha: bool = True,
     ) -> float:
-        """Total pedidos pendientes de entrega (comp_ped PED, En preparación/Preparado). Reutilizado por sales_summary y total_consolidado_operativo."""
+        """Total pedidos pendientes de entrega (comp_ped PED, En preparación/Preparado). Reutilizado por sales_summary y total_consolidado_operativo. Si filtrar_por_fecha=False (solo en total_consolidado_operativo), no se aplica rango de fechas."""
         where_conditions = [
-            "cp.Fecha >= %s", "cp.Fecha <= %s",
             "cp.TipoComprobante = 'PED'", "cp.Anulado = 'No'",
             "cp.Estado IN ('En preparación', 'Preparado')",
         ]
-        params = [fecha_inicio, fecha_fin]
+        params = []
+        if filtrar_por_fecha:
+            where_conditions.extend(["cp.Fecha >= %s", "cp.Fecha <= %s"])
+            params.extend([fecha_inicio, fecha_fin])
         if puntos_venta:
             placeholders = ",".join(["%s"] * len(puntos_venta))
             where_conditions.append(f"cp.id_pv IN ({placeholders})")
@@ -2859,6 +2862,7 @@ class QueryRunnerService:
                 cursor, fecha_inicio, fecha_fin,
                 sucursales_ints or None, puntos_venta_ints or None,
                 clientes_excluidos or None,
+                filtrar_por_fecha=False,
             )
             total_consolidado = ventas_netas + remitos_no_facturados + pedidos_pendientes
             conn.close()
@@ -2877,6 +2881,7 @@ class QueryRunnerService:
             }
             notes = [
                 f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+                "Pedidos pendientes de entrega: sin filtro por período (saldo total).",
             ]
             if sucursales_ints or puntos_venta_ints:
                 notes.append("Filtros: sucursales y/o punto de venta aplicados.")
