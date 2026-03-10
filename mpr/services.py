@@ -16,6 +16,8 @@ from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
 from core.utils.administranet_types import to_int_or_none, str_or_default, to_date_or_none
 
+from mpr.exceptions import MprSchemaError
+
 logger = logging.getLogger(__name__)
 
 # Motivo 11 = Pedido producción (OPT), 12 = Parte producción (OPP), 9 = Armado en Synap
@@ -98,11 +100,10 @@ def listar_lista_produccion_agrupada(
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             if not tbl_agrupada or not tbl_articulo:
-                logger.debug(
-                    "Tablas lista_produccion_agrupada o articulo no encontradas en %s",
-                    base_empresa,
+                raise MprSchemaError(
+                    "Faltan tablas en la base de datos: lista_produccion_agrupada o articulo. "
+                    "Cree las tablas o verifique el esquema para usar MPR."
                 )
-                return []
             opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
             col_fecha = opts.get("fecha_objetivo")
             sql = f"""
@@ -174,6 +175,8 @@ def listar_lista_produccion_agrupada(
                 "en_proceso_produccion": str_or_default(r.get("en_proceso_produccion"), "No"),
             })
         return result
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning(
             "Error al listar lista_produccion_agrupada en %s: %s",
@@ -197,7 +200,9 @@ def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str,
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             if not tbl_agrupada or not tbl_articulo:
-                return []
+                raise MprSchemaError(
+                    "Faltan tablas en la base de datos: lista_produccion_agrupada o articulo. Cree las tablas o verifique el esquema para usar MPR."
+                )
             # Solo OPT con pendiente 0 y que sigan en proceso (al menos una fila con en_proceso_produccion='Si')
             cursor.execute(
                 f"""
@@ -231,9 +236,37 @@ def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str,
                         "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                     })
             return result
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al listar OPTs para cerrar en %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+def _actualizar_comp_ped_estado_produccion(
+    cursor,
+    tbl_cp: str,
+    codigos_movimiento: List[int],
+    estado: str,
+) -> None:
+    """
+    Actualiza comp_ped.estado_pedido_opt al valor indicado para los CodigoMovimiento dados.
+    estado: 'Produccion' o 'Terminado'.
+    """
+    if not codigos_movimiento:
+        return
+    placeholders = ",".join(["%s"] * len(codigos_movimiento))
+    if estado == "Terminado":
+        cursor.execute(
+            f"UPDATE {tbl_cp} SET estado_pedido_opt = 'Terminado' "
+            f"WHERE CodigoMovimiento IN ({placeholders}) AND COALESCE(estado_pedido_opt, '') = 'Produccion'",
+            codigos_movimiento,
+        )
+    else:
+        cursor.execute(
+            f"UPDATE {tbl_cp} SET estado_pedido_opt = %s WHERE CodigoMovimiento IN ({placeholders})",
+            [estado] + codigos_movimiento,
+        )
 
 
 def cerrar_op(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Optional[str]]:
@@ -248,7 +281,9 @@ def cerrar_op(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Option
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "lista_produccion_agrupada")
             if not tbl:
-                return False, "Tabla lista_produccion_agrupada no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla lista_produccion_agrupada en la base de datos. Cree la tabla o verifique el esquema para usar MPR."
+                )
             cursor.execute(
                 f"SELECT COALESCE(SUM(cantidad_pendiente_prod), 0) FROM {tbl} WHERE id_lista_produccion = %s",
                 [id_lista_produccion],
@@ -263,19 +298,42 @@ def cerrar_op(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Option
             )
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al cerrar OPT %s en %s: %s", id_lista_produccion, base_empresa, e, exc_info=True)
         return False, str(e)
 
 
 def cerrar_opt(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Optional[str]]:
-    """Cierra la OPT (todas sus líneas). Si es OPT agrupada, cierra todas; si no, cierra esa fila. Pendiente total debe ser 0."""
+    """Cierra la OPT (todas sus líneas). Si es OPT agrupada, cierra todas; si no, cierra esa fila. Pendiente total debe ser 0.
+    Actualiza comp_ped.estado_pedido_opt a 'Terminado' para los pedidos asociados a esta OPT."""
     lineas = get_opt_detalle(base_empresa, id_lista_produccion)
     if not lineas:
         return False, "OPT no encontrada o sin líneas."
     total_pendiente = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
     if total_pendiente > 0:
         return False, "No se puede cerrar la OPT con pendiente mayor a 0. Registre OPP hasta completar."
+    # Marcar pedidos asociados a esta OPT como Terminado (id_articulo de las líneas → detalle → codigo_movimiento_pedido)
+    ids_articulo = list({l["id_articulo"] for l in lineas if l.get("id_articulo") is not None})
+    if ids_articulo:
+        try:
+            with get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+                tbl_cp = _nombre_tabla(cursor, "comp_ped")
+                if tbl_detalle and tbl_cp:
+                    ph = ",".join(["%s"] * len(ids_articulo))
+                    cursor.execute(
+                        f"SELECT DISTINCT codigo_movimiento_pedido FROM {tbl_detalle} WHERE id_articulo IN ({ph})",
+                        ids_articulo,
+                    )
+                    codigos = [to_int_or_none(r[0]) for r in cursor.fetchall() if to_int_or_none(r[0]) is not None]
+                    if codigos:
+                        _actualizar_comp_ped_estado_produccion(cursor, tbl_cp, codigos, "Terminado")
+                conn.commit()
+        except Exception as e:
+            logger.warning("Error al actualizar comp_ped a Terminado al cerrar OPT %s: %s", id_lista_produccion, e)
     ids_unicos = list({l["id_lista_produccion"] for l in lineas if l.get("id_lista_produccion")})
     for id_lista in ids_unicos:
         ok, err = cerrar_op(base_empresa, id_lista)
@@ -369,13 +427,17 @@ def listar_ventana_pack(
     y cantidad a fabricar. Útil para decidir qué fabricar.
 
     Devuelve: id_articulo, codigo_articulo, descripcion_articulo, cantidad_pendiente_prod (demanda),
-    stock_terminado, cantidad_a_fabricar (max(0, demanda - stock_terminado)).
+    stock_terminado, stock_reserva (indicador, no saldo), cantidad_a_fabricar (max(0, demanda - stock_terminado + stock_reserva)),
+    cantidad_urgente_abs (max(0, demanda - stock_terminado); la reserva no interviene).
     """
     if not (base_empresa or "").strip():
         return []
     try:
-        # Demanda: agrupada por artículo (suma cantidad_pendiente_prod)
-        agrupada = listar_lista_produccion_agrupada(base_empresa, limit=limit * 2)
+        # Demanda: solo pendiente no asignada a OPT (en_proceso_produccion='No'), para no mostrar
+        # artículos que ya están en una OPT creada/liberada.
+        agrupada = listar_lista_produccion_agrupada(
+            base_empresa, limit=limit * 2, estado_en_proceso="No"
+        )
         by_art = {}
         for r in agrupada:
             id_art = to_int_or_none(r.get("id_articulo"))
@@ -392,6 +454,31 @@ def listar_ventana_pack(
                 }
             by_art[id_art]["cantidad_pendiente_prod"] += r.get("cantidad_pendiente_prod") or 0
             by_art[id_art]["cantidad_pedida"] += r.get("cantidad_pedida") or 0
+        # Restar cantidades ya asignadas a OPTs (OptLinea) para no mostrar en ventana-pack
+        # lo que ya está creado/liberado en una OPT (incluye OPTs creadas antes de este fix).
+        try:
+            from django.db.models import Sum
+            from mpr.models import OptLinea
+            qs = (
+                OptLinea.objects.filter(opt__base_empresa=base_empresa)
+                .values("id_articulo")
+                .annotate(total=Sum("cantidad_pedida"))
+            )
+            opt_totals = {r["id_articulo"]: r["total"] for r in qs}
+            for id_art in list(by_art.keys()):
+                restar = int(float(opt_totals.get(id_art, 0) or 0))
+                if restar <= 0:
+                    continue
+                by_art[id_art]["cantidad_pendiente_prod"] = max(
+                    0, (by_art[id_art]["cantidad_pendiente_prod"] or 0) - restar
+                )
+                by_art[id_art]["cantidad_pedida"] = max(
+                    0, (by_art[id_art]["cantidad_pedida"] or 0) - restar
+                )
+                if by_art[id_art]["cantidad_pendiente_prod"] <= 0:
+                    del by_art[id_art]
+        except Exception as e:
+            logger.debug("No se pudo restar OptLinea en ventana-pack: %s", e)
         if not by_art:
             return []
 
@@ -547,14 +634,14 @@ def listar_ventana_pack(
                         pass
             for id_art, row in by_art.items():
                 st = stock_map.get(id_art, 0)  # valor real (puede ser negativo)
+                reserva = reserva_map.get(id_art, 0)
                 row["stock_terminado"] = st
-                row["cantidad_a_fabricar"] = max(0, row["cantidad_pendiente_prod"] - st)
-                # Urgente = max(0, cant pedida - stock sin reserva)
+                row["cantidad_a_fabricar"] = max(0, row["cantidad_pendiente_prod"] - st + reserva)
+                # Urgente = max(0, cant pedida - saldo); la reserva no interviene
                 row["cantidad_urgente_abs"] = max(0, row["cantidad_pendiente_prod"] - st)
                 row["cantidad_urgente"] = row["cantidad_urgente_abs"]
-                reserva = reserva_map.get(id_art, 0)
                 row["stock_reserva"] = reserva
-                row["stock"] = st + reserva  # Stock (terminado + reserva), valor real
+                row["stock"] = st  # Solo suma de saldos; reserva no se usa para saldos
                 row["brecha_reserva"] = reserva_map.get(id_art, 0) - st
                 # UM y presentación
                 ap = art_um_pres_map.get(id_art) or {}
@@ -597,6 +684,8 @@ def listar_ventana_pack(
                     "reserva": reserva,
                 })
         return sorted(by_art.values(), key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al listar ventana pack en %s: %s", base_empresa, e, exc_info=True)
         return []
@@ -717,9 +806,8 @@ def _listar_unidades_por_demanda(
                 art = art_rows.get(id_art) or {}
                 st = stock_map.get(id_art, 0)  # valor real (puede ser negativo)
                 reserva = float(art.get("stock_reserva") or 0)
-                stock = st + reserva
-                cant_a_fabricar = max(0, demanda - stock)
-                # Urgente = max(0, cant pedida - stock sin reserva)
+                cant_a_fabricar = max(0, demanda - st + reserva)
+                # Urgente = max(0, cant pedida - saldo); la reserva no interviene
                 cant_urgente_abs = max(0, demanda - st)
                 cant_urgente = cant_urgente_abs
                 id_pres_v = art.get("id_presentacionV")
@@ -736,7 +824,7 @@ def _listar_unidades_por_demanda(
                     "cantidad_pendiente_prod": demanda,
                     "stock_terminado": st,
                     "stock_reserva": reserva,
-                    "stock": stock,
+                    "stock": st,
                     "cantidad_a_fabricar": cant_a_fabricar,
                     "cantidad_urgente": cant_urgente,
                     "cantidad_urgente_abs": cant_urgente_abs,
@@ -833,7 +921,10 @@ def actualizar_pedidos_produccion(
 ) -> Tuple[bool, str]:
     """
     Réplica del botón "Actualización" en Lista_Pedidos_OPT (VB6 Actualiza_Pedidos_Produccion).
-    Carga lista_produccion_detalle y lista_produccion_agrupada desde pedidos PED Pendiente + Fabrica (stockp + comp_ped).
+    Carga lista_produccion_detalle y lista_produccion_agrupada desde pedidos PED (Anulado='No',
+    estado_pedido_opt='Pendiente' si aplica), solo artículos con articulo.tipo_art_fab = 'Fabricado'.
+    Solo escribe en lista_produccion_detalle (INSERT) y lista_produccion_agrupada (INSERT/UPDATE);
+    no actualiza en_proceso_produccion en detalle ni comp_ped.
     Devuelve (éxito, mensaje).
     """
     if not (base_empresa or "").strip():
@@ -846,21 +937,28 @@ def actualizar_pedidos_produccion(
             tbl_cp = _nombre_tabla(cursor, "comp_ped")
             tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
-            if not all([tbl_stockp, tbl_cp, tbl_detalle, tbl_agrupada]):
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            if not all([tbl_stockp, tbl_cp, tbl_detalle, tbl_agrupada, tbl_articulo]):
                 conn.rollback()
-                return False, "Faltan tablas stockp, comp_ped, lista_produccion_detalle o lista_produccion_agrupada."
-            # Origen: stockp + comp_ped (PED, Anulado='No', estado_pedido_opt='Pendiente', tipo_pedido_opt='Fabrica')
+                faltan = [n for n, t in [
+                    ("stockp", tbl_stockp), ("comp_ped", tbl_cp), ("lista_produccion_detalle", tbl_detalle),
+                    ("lista_produccion_agrupada", tbl_agrupada), ("articulo", tbl_articulo),
+                ] if not t]
+                raise MprSchemaError(
+                    f"Faltan tablas en la base de datos: {', '.join(faltan)}. Cree las tablas o verifique el esquema para usar MPR."
+                )
+            # Origen: stockp + comp_ped + articulo (PED, Anulado='No', estado_pedido_opt='Pendiente' si aplica, tipo_art_fab='Fabricado')
             sql_origin = f"""
                 SELECT cp.CodigoMovimiento AS codigo_movimiento_pedido, sp.IDArt AS id_articulo,
                        COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
                 FROM {tbl_stockp} sp
                 INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                INNER JOIN {tbl_articulo} a ON a.IDArt = sp.IDArt AND COALESCE(a.tipo_art_fab, '') = 'Fabricado'
                 WHERE COALESCE(cp.Anulado, 'No') = 'No'
                   AND COALESCE(cp.TipoComprobante, '') = 'PED'
-                  AND COALESCE(cp.tipo_pedido_opt, '') = 'Fabrica'
             """
             params_origin = []
-            # estado_pedido_opt si existe (algunas bases usan tipo_pedido_opt para Pendiente/Produccion)
+            # Solo pedidos pendientes de producción (estado_pedido_opt = 'Pendiente')
             try:
                 cursor.execute("SHOW COLUMNS FROM {} LIKE %s".format(tbl_cp.replace("`", "`")), ["estado_pedido_opt"])
                 if cursor.fetchone():
@@ -879,7 +977,6 @@ def actualizar_pedidos_produccion(
                 params_origin.extend([pct, pct])
             cursor.execute(sql_origin, params_origin)
             filas_origen = cursor.fetchall()
-            codigos_pedido = list({to_int_or_none(r[0]) for r in filas_origen if to_int_or_none(r[0]) is not None})
             if not filas_origen:
                 conn.rollback()
                 return False, "No existen pedidos nuevos pendientes para entrar en el proceso de producción."
@@ -966,31 +1063,10 @@ def actualizar_pedidos_produccion(
                             )
                         else:
                             raise ins_err
-            # 3) Marcar detalle como en proceso
-            cursor.execute(
-                f"UPDATE {tbl_detalle} SET en_proceso_produccion = 'Si' WHERE COALESCE(en_proceso_produccion, 'No') = 'No'",
-            )
-            # 4) comp_ped: estado_pedido_opt = 'Produccion' para los codigos involucrados
-            if codigos_pedido:
-                placeholders = ",".join(["%s"] * len(codigos_pedido))
-                try:
-                    cursor.execute(
-                        f"UPDATE {tbl_cp} SET estado_pedido_opt = 'Produccion' WHERE CodigoMovimiento IN ({placeholders})",
-                        codigos_pedido,
-                    )
-                except Exception as upd_err:
-                    if "1054" in str(upd_err):
-                        try:
-                            cursor.execute(
-                                f"UPDATE {tbl_cp} SET tipo_pedido_opt = 'Produccion' WHERE CodigoMovimiento IN ({placeholders})",
-                                codigos_pedido,
-                            )
-                        except Exception:
-                            pass
-                    else:
-                        raise upd_err
             conn.commit()
             return True, "Se actualizaron los nuevos pedidos a producir correctamente."
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error en actualizar_pedidos_produccion en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e) or "Error al actualizar pedidos de producción."
@@ -1295,10 +1371,14 @@ def actualizar_deposito_suma_stock(base_empresa: str, cod_deposito: int, valor: 
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "deposito")
             if not tbl:
-                return False, "Tabla deposito no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla deposito en la base de datos. Cree la tabla o verifique el esquema para usar MPR."
+                )
             cursor.execute(f"UPDATE {tbl} SET suma_stock = %s WHERE CodDeposito = %s", [valor, cod_deposito])
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al actualizar suma_stock en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e)
@@ -1341,9 +1421,9 @@ def listar_pedidos_fabrica(
     estado: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Lista pedidos de venta (comp_ped) con estado de producción (tipo_pedido_opt en Pendiente, Produccion, Terminado).
-    El filtro opcional estado filtra por tipo_pedido_opt (Pendiente, Produccion, Terminado).
-    Devuelve: CodigoMovimiento, NroComprobante, Fecha, Estado, tipo_pedido_opt, nombre_cliente.
+    Lista pedidos de venta (comp_ped) con estado de producción (estado_pedido_opt en Pendiente, Produccion, Terminado).
+    El filtro opcional estado filtra por estado_pedido_opt (Pendiente, Produccion, Terminado).
+    Devuelve: CodigoMovimiento, NroComprobante, Fecha, Estado, estado_pedido_opt, nombre_cliente.
     """
     if not (base_empresa or "").strip():
         return []
@@ -1352,22 +1432,24 @@ def listar_pedidos_fabrica(
             tbl_cp = _nombre_tabla(cursor, "comp_ped")
             tbl_cli = _nombre_tabla(cursor, "cliente")
             if not tbl_cp:
-                return []
+                raise MprSchemaError(
+                    "Falta la tabla comp_ped en la base de datos. Cree la tabla o verifique el esquema para usar MPR."
+                )
             join_cli = f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
             sql = f"""
                 SELECT cp.CodigoMovimiento, COALESCE(cp.NroComprobante, '') AS NroComprobante,
                        cp.Fecha, COALESCE(cp.Estado, '') AS Estado,
-                       COALESCE(cp.tipo_pedido_opt, '') AS tipo_pedido_opt,
+                       COALESCE(cp.estado_pedido_opt, '') AS estado_pedido_opt,
                        COALESCE(cli.nombre_cliente, '') AS nombre_cliente
                 FROM {tbl_cp} cp
                 {join_cli}
                 WHERE COALESCE(cp.Anulado, 'No') = 'No'
                   AND COALESCE(cp.TipoComprobante, '') = 'PED'
-                  AND COALESCE(cp.tipo_pedido_opt, '') IN ('Pendiente', 'Produccion', 'Terminado')
+                  AND COALESCE(cp.estado_pedido_opt, '') IN ('Pendiente', 'Produccion', 'Terminado')
             """
             params = []
             if estado:
-                sql += " AND cp.tipo_pedido_opt = %s"
+                sql += " AND cp.estado_pedido_opt = %s"
                 params.append(estado)
             sql += " ORDER BY cp.CodigoMovimiento DESC LIMIT %s"
             params.append(limit)
@@ -1379,11 +1461,13 @@ def listar_pedidos_fabrica(
                 "NroComprobante": str_or_default(r.get("NroComprobante"), "-"),
                 "Fecha": r.get("Fecha"),
                 "Estado": str_or_default(r.get("Estado"), "-"),
-                "tipo_pedido_opt": str_or_default(r.get("tipo_pedido_opt"), "-"),
+                "estado_pedido_opt": str_or_default(r.get("estado_pedido_opt"), "-"),
                 "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
             }
             for r in rows
         ]
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al listar pedidos fábrica en %s: %s", base_empresa, e, exc_info=True)
         return []
@@ -1411,7 +1495,9 @@ def listar_bom_conjuntos(
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
             if not tbl_abm:
-                return []
+                raise MprSchemaError(
+                    "Falta la tabla en_abm en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             where = " AND COALESCE(e.anulado, 'No') = 'No'" if solo_activos else ""
             subcount = ""
             if tbl_formula:
@@ -1459,6 +1545,8 @@ def listar_bom_conjuntos(
             item["codigo_manual"] = str_or_default(r.get("codigo_manual"), "-") if id_art else "-"
             result.append(item)
         return result
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al listar conjuntos de lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return []
@@ -1715,7 +1803,13 @@ def ejecutar_armado(
                 tbl_articulo = _nombre_tabla(cursor, "articulo")
                 if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd, tbl_articulo]):
                     conn.rollback()
-                    return False, None, None, "Faltan tablas necesarias (codmov, talonarios, movimiento_stock, stock, stock_deposito, articulo)."
+                    faltan = [n for n, t in [
+                        ("codmov", tbl_codmov), ("talonarios", tbl_talonarios), ("movimiento_stock", tbl_mov),
+                        ("stock", tbl_stock), ("stock_deposito", tbl_sd), ("articulo", tbl_articulo),
+                    ] if not t]
+                    raise MprSchemaError(
+                        f"Faltan tablas en la base de datos: {', '.join(faltan)}. Cree las tablas o verifique el esquema para usar MPR."
+                    )
                 # Tablas y soporte de lote en componentes (FIFO)
                 tbl_lote = _nombre_tabla(cursor, "lote")
                 tbl_lote_stock = _nombre_tabla(cursor, "lote_stock")
@@ -2021,10 +2115,15 @@ def ejecutar_armado(
                     )
                 conn.commit()
                 return True, codigo_mov, nro_comprobante, None
+            except MprSchemaError:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 logger.warning("Error en ejecutar_armado: %s", e, exc_info=True)
                 return False, None, None, str(e)
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error de conexión en ejecutar_armado: %s", e, exc_info=True)
         return False, None, None, str(e)
@@ -2046,7 +2145,9 @@ def crear_conjunto_bom(
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "en_abm")
             if not tbl:
-                return False, None, "Tabla en_abm no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla en_abm en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             cursor.execute(f"SELECT COALESCE(MAX(id_en_abm), 0) + 1 FROM {tbl}")
             row = cursor.fetchone()
             id_en_abm = int(float(row[0])) if row and row[0] is not None else 1
@@ -2057,6 +2158,8 @@ def crear_conjunto_bom(
             )
             conn.commit()
         return True, id_en_abm, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al crear conjunto lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, None, str(e)
@@ -2083,7 +2186,9 @@ def actualizar_conjunto_bom(
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "en_abm")
             if not tbl:
-                return False, "Tabla en_abm no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla en_abm en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             if anulado is not None and anulado in ("Si", "No"):
                 cursor.execute(
                     f"UPDATE {tbl} SET nombre_en_abm = %s, detalle = COALESCE(%s, detalle), anulado = %s WHERE id_en_abm = %s",
@@ -2096,6 +2201,8 @@ def actualizar_conjunto_bom(
                 )
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al actualizar conjunto lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e)
@@ -2123,7 +2230,9 @@ def crear_componente_bom(
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "en_abm_formula")
             if not tbl:
-                return False, None, "Tabla en_abm_formula no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla en_abm_formula en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             cursor.execute(f"SELECT COALESCE(MAX(id_en_abm_formula), 0) + 1 FROM {tbl}")
             row = cursor.fetchone()
             id_formula = int(float(row[0])) if row and row[0] is not None else 1
@@ -2134,6 +2243,8 @@ def crear_componente_bom(
             )
             conn.commit()
         return True, id_formula, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al crear componente lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, None, str(e)
@@ -2161,7 +2272,9 @@ def actualizar_componente_bom(
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "en_abm_formula")
             if not tbl:
-                return False, "Tabla en_abm_formula no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla en_abm_formula en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             tipo_unidad_val = (tipo_unidad or "").strip() or ""
             cursor.execute(
                 f"UPDATE {tbl} SET id_articulo = %s, cantidad_articulo = %s, tipo_unidad = %s WHERE id_en_abm_formula = %s",
@@ -2169,6 +2282,8 @@ def actualizar_componente_bom(
             )
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al actualizar componente lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e)
@@ -2197,7 +2312,9 @@ def set_articulo_armado_bom(
             cursor = conn.cursor()
             tbl_art = _nombre_tabla(cursor, "articulo")
             if not tbl_art:
-                return False, "Tabla articulo no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla articulo en la base de datos. Cree la tabla o verifique el esquema para usar MPR."
+                )
             # Columnas opcionales en bases antiguas (articulo.id_en_abm, articulo.ensamblado)
             has_id_en_abm = False
             has_ensamblado = False
@@ -2211,7 +2328,9 @@ def set_articulo_armado_bom(
             except Exception:
                 pass
             if not has_id_en_abm:
-                return False, "La tabla articulo no tiene columna id_en_abm."
+                raise MprSchemaError(
+                    "La tabla articulo no tiene la columna id_en_abm. Agregue la columna o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             # Quitar asignación a cualquier artículo que tenga este id_en_abm
             if has_ensamblado:
                 cursor.execute(
@@ -2230,6 +2349,8 @@ def set_articulo_armado_bom(
                     cursor.execute(f"UPDATE {tbl_art} SET id_en_abm = %s WHERE IDArt = %s", [id_en_abm, id_articulo])
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al asignar artículo armado lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e)
@@ -2247,10 +2368,14 @@ def anular_componente_bom(base_empresa: str, id_en_abm_formula: int) -> Tuple[bo
             cursor = conn.cursor()
             tbl = _nombre_tabla(cursor, "en_abm_formula")
             if not tbl:
-                return False, "Tabla en_abm_formula no encontrada."
+                raise MprSchemaError(
+                    "Falta la tabla en_abm_formula en la base de datos. Cree la tabla o verifique el esquema para usar MPR (Lista de materiales)."
+                )
             cursor.execute(f"UPDATE {tbl} SET anulado = 'Si' WHERE id_en_abm_formula = %s", [id_en_abm_formula])
             conn.commit()
         return True, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al anular componente lista de materiales en %s: %s", base_empresa, e, exc_info=True)
         return False, str(e)
@@ -2378,7 +2503,9 @@ def crear_op_agrupada(
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             if not tbl_agrupada or not tbl_articulo:
-                return False, None, "No se encontraron tablas lista_produccion_agrupada o articulo."
+                raise MprSchemaError(
+                    "Faltan tablas en la base de datos: lista_produccion_agrupada o articulo. Cree las tablas o verifique el esquema para usar MPR."
+                )
             opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
             cols = ["id_articulo", "cantidad_pedida", "cantidad_pendiente_prod", "id_usuario", "en_proceso_produccion"]
             vals = [id_articulo, cantidad_pedida, cantidad_pedida, id_usuario, "Si"]
@@ -2400,6 +2527,8 @@ def crear_op_agrupada(
             id_lista = cursor.lastrowid
             conn.commit()
             return True, id_lista, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al crear OPT agrupada en %s: %s", base_empresa, e, exc_info=True)
         return False, None, str(e)
@@ -2433,7 +2562,9 @@ def crear_opt_multiples_articulos(
             tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
             tbl_articulo = _nombre_tabla(cursor, "articulo")
             if not tbl_agrupada or not tbl_articulo:
-                return False, None, "No se encontraron tablas lista_produccion_agrupada o articulo."
+                raise MprSchemaError(
+                    "Faltan tablas en la base de datos: lista_produccion_agrupada o articulo. Cree las tablas o verifique el esquema para usar MPR."
+                )
             opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
             cols = ["id_articulo", "cantidad_pedida", "cantidad_pendiente_prod", "id_usuario", "en_proceso_produccion"]
             for id_articulo, cantidad in lineas:
@@ -2445,6 +2576,19 @@ def crear_opt_multiples_articulos(
                     vals,
                 )
                 ids_creados.append((id_articulo, cantidad, cursor.lastrowid))
+            # Marcar pedidos en producción para que no vuelvan a entrar en lista_produccion_agrupada (Actualizar)
+            ids_articulo = [a for a, _ in lineas]
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            if tbl_detalle and tbl_cp and ids_articulo:
+                ph = ",".join(["%s"] * len(ids_articulo))
+                cursor.execute(
+                    f"SELECT DISTINCT codigo_movimiento_pedido FROM {tbl_detalle} WHERE id_articulo IN ({ph})",
+                    ids_articulo,
+                )
+                codigos = [to_int_or_none(r[0]) for r in cursor.fetchall() if to_int_or_none(r[0]) is not None]
+                if codigos:
+                    _actualizar_comp_ped_estado_produccion(cursor, tbl_cp, codigos, "Produccion")
             conn.commit()
 
         id_lista_principal = ids_creados[0][2]
@@ -2461,6 +2605,8 @@ def crear_opt_multiples_articulos(
                 cantidad_pedida=cantidad,
             )
         return True, id_lista_principal, None
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error al crear OPT múltiples artículos en %s: %s", base_empresa, e, exc_info=True)
         return False, None, str(e)
@@ -2528,7 +2674,13 @@ def ejecutar_liberar_opt(
                 tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
                 if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd, tbl_agrupada]):
                     conn.rollback()
-                    return False, None, None, "Faltan tablas necesarias (codmov, talonarios, movimiento_stock, stock, stock_deposito, lista_produccion_agrupada)."
+                    faltan = [n for n, t in [
+                        ("codmov", tbl_codmov), ("talonarios", tbl_talonarios), ("movimiento_stock", tbl_mov),
+                        ("stock", tbl_stock), ("stock_deposito", tbl_sd), ("lista_produccion_agrupada", tbl_agrupada),
+                    ] if not t]
+                    raise MprSchemaError(
+                        f"Faltan tablas en la base de datos: {', '.join(faltan)}. Cree las tablas o verifique el esquema para usar MPR."
+                    )
                 # (1) Siguiente codigo_movimiento
                 cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
                 row = cursor.fetchone()
@@ -2628,12 +2780,22 @@ def ejecutar_liberar_opt(
                             f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
                             [id_art, deposito_destino, saldo_despues],
                         )
-                    cursor.execute(
-                        f"UPDATE {tbl_agrupada} SET cantidad_pendiente_prod = COALESCE(cantidad_pendiente_prod, 0) - %s "
-                        "WHERE id_lista_produccion = %s AND id_articulo = %s",
-                        [qty, id_lista_produccion, id_art],
-                    )
-                # Marcar la OPT como "En proceso" (liberada OPT)
+                    # Actualizar lista_produccion_agrupada: si nuevo_pendiente <= 0 eliminar fila, si no actualizar
+                    id_lista_linea = to_int_or_none(linea.get("id_lista_produccion")) or id_lista_produccion
+                    pendiente_actual = int(float(linea.get("cantidad_pendiente_prod") or 0))
+                    nuevo_pendiente = pendiente_actual - qty
+                    if nuevo_pendiente <= 0:
+                        cursor.execute(
+                            f"DELETE FROM {tbl_agrupada} WHERE id_lista_produccion = %s AND id_articulo = %s",
+                            [id_lista_linea, id_art],
+                        )
+                    else:
+                        cursor.execute(
+                            f"UPDATE {tbl_agrupada} SET cantidad_pendiente_prod = %s, en_proceso_produccion = 'Si' "
+                            "WHERE id_lista_produccion = %s AND id_articulo = %s",
+                            [nuevo_pendiente, id_lista_linea, id_art],
+                        )
+                # Marcar como "En proceso" las filas de esta OPT que sigan existiendo (id_lista_principal)
                 cursor.execute(
                     f"UPDATE {tbl_agrupada} SET en_proceso_produccion = 'Si' WHERE id_lista_produccion = %s",
                     [id_lista_produccion],
@@ -2678,10 +2840,15 @@ def ejecutar_liberar_opt(
                 except Exception as opt_err:
                     logger.warning("No se pudo actualizar Opt.codigo_movimiento: %s", opt_err)
                 return True, codigo_mov, nro_comprobante, None
+            except MprSchemaError:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 logger.warning("Error en ejecutar_liberar_opt: %s", e, exc_info=True)
                 return False, None, None, str(e)
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error de conexión en ejecutar_liberar_opt: %s", e, exc_info=True)
         return False, None, None, str(e)
@@ -2744,7 +2911,13 @@ def ejecutar_opp(
                 tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
                 if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd]):
                     conn.rollback()
-                    return False, None, None, "Faltan tablas necesarias (codmov, talonarios, movimiento_stock, stock, stock_deposito)."
+                    faltan = [n for n, t in [
+                        ("codmov", tbl_codmov), ("talonarios", tbl_talonarios), ("movimiento_stock", tbl_mov),
+                        ("stock", tbl_stock), ("stock_deposito", tbl_sd),
+                    ] if not t]
+                    raise MprSchemaError(
+                        f"Faltan tablas en la base de datos: {', '.join(faltan)}. Cree las tablas o verifique el esquema para usar MPR."
+                    )
                 cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
                 row = cursor.fetchone()
                 if not row:
@@ -2870,6 +3043,9 @@ def ejecutar_opp(
                             logger.warning("No se pudo actualizar lista_produccion_agrupada en OPP: %s", agg_err)
                 conn.commit()
                 return True, codigo_mov, nro_comprobante, None
+            except MprSchemaError:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 logger.exception("Error en ejecutar_opp: %s", e)
@@ -2885,6 +3061,8 @@ def ejecutar_opp(
                 except Exception as log_err:
                     logger.debug("No se pudo registrar contexto ejecutar_opp: %s", log_err)
                 return False, None, None, str(e)
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.exception("Error de conexión en ejecutar_opp: %s", e)
         return False, None, None, str(e)
@@ -2931,7 +3109,13 @@ def ejecutar_reclasificacion(
                 tbl_sd = _nombre_tabla(cursor, "stock_deposito")
                 if not all([tbl_articulo, tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd]):
                     conn.rollback()
-                    return False, None, None, "Faltan tablas necesarias."
+                    faltan = [n for n, t in [
+                        ("articulo", tbl_articulo), ("codmov", tbl_codmov), ("talonarios", tbl_talonarios),
+                        ("movimiento_stock", tbl_mov), ("stock", tbl_stock), ("stock_deposito", tbl_sd),
+                    ] if not t]
+                    raise MprSchemaError(
+                        f"Faltan tablas en la base de datos: {', '.join(faltan)}. Cree las tablas o verifique el esquema para usar MPR."
+                    )
                 cursor.execute(
                     f"SELECT IDArt, COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo, COALESCE(NombreArticulo, '') AS nombre FROM {tbl_articulo} WHERE IDArt = %s",
                     [id_articulo],
@@ -3050,10 +3234,15 @@ def ejecutar_reclasificacion(
                     )
                 conn.commit()
                 return True, codigo_mov, nro_comprobante, None
+            except MprSchemaError:
+                conn.rollback()
+                raise
             except Exception as e:
                 conn.rollback()
                 logger.warning("Error en ejecutar_reclasificacion: %s", e, exc_info=True)
                 return False, None, None, str(e)
+    except MprSchemaError:
+        raise
     except Exception as e:
         logger.warning("Error de conexión en ejecutar_reclasificacion: %s", e, exc_info=True)
         return False, None, None, str(e)

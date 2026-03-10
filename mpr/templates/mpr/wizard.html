@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "mpr/base_mpr.html" %}
 {% load static %}
 
 {% block title %}Asistente de producción - MPR - Synap{% endblock %}
@@ -376,10 +376,12 @@
         <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl p-6 mb-6">
             <h3 class="text-base font-bold text-gray-900 dark:text-white mb-4">Siguientes acciones</h3>
             <div class="flex flex-col sm:flex-row flex-wrap gap-3">
-                <a href="{% url 'mpr:registrar_opp' id_lista=id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                {% if total_pendiente > 0 %}
+                <a href="{% url 'mpr:wizard' %}?paso=3" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
                     <span class="material-icons text-xl">assignment</span>
                     Registrar OPP
                 </a>
+                {% endif %}
                 <a href="{% url 'mpr:opt_detail' id_lista=id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
                     <span class="material-icons text-xl">visibility</span>
                     Ver detalle de la OPT
