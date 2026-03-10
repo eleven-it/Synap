@@ -16,16 +16,18 @@
 
 Las ramas **Reports** y **Reports-1.0** se mantienen para historial y compatibilidad; el flujo estándar de versionado es Desarrollo → Staging → Produccion.
 
-### Carpeta `docs/` solo en Desarrollo
+### Carpeta `docs/` y archivos `.md` solo en Desarrollo
 
-La documentación en **`docs/`** (raíz del repo) se versiona y sube **solo en la rama Desarrollo**. Para que Staging y Produccion no incluyan documentación, al hacer **merge Desarrollo → Staging** ejecutar en la rama Staging:
+La documentación en **`docs/`** y los archivos **`.md`** (raíz del repo) se versionan y suben **solo en la rama Desarrollo**. **No subir a Staging** la carpeta `docs/` ni archivos `.md`. Tras hacer **merge Desarrollo → Staging**, en la rama Staging ejecutar:
 
 ```bash
 git rm -r docs
-git commit -m "Release: quitar docs (solo en Desarrollo)"
+# Si hubiera .md en la raíz que no deban estar en Staging: git rm *.md
+git commit -m "Release: quitar docs y .md (solo en Desarrollo)"
+git push origin Staging
 ```
 
-Luego continuar con el merge o el despliegue. Así Staging y Produccion no contendrán la carpeta `docs/`.
+Luego continuar con el despliegue. Así Staging y Produccion no contendrán documentación.
 
 ---
 
