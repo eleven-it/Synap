@@ -13,7 +13,7 @@
 - `_parse_sucursales_pv(filters)` → normaliza sucursales y punto_venta desde filters.
 - `_get_ventas_netas_total(cursor, fecha_inicio, fecha_fin, sucursales, puntos_venta)` → total ventas netas con filtros opcionales.
 - `_get_remitos_no_facturados_total(...)` → total remitos no facturados.
-- `_get_pedidos_pendientes_total(...)` → total pedidos pendientes de entrega.
+- `_get_pedidos_pendientes_total(..., filtrar_por_fecha=True)` → total pedidos pendientes de entrega. En `total_consolidado_operativo` se llama con `filtrar_por_fecha=False` (no se aplica rango de fechas; es saldo total pendiente de entrega).
 
 `_run_sales_summary` y `_run_total_consolidado_operativo` usan estos helpers.  
 `sales_summary` además aplica ahora filtros opcionales sucursales/punto_venta (antes no los aplicaba).
@@ -28,16 +28,17 @@
 ## 2) KPI layout (UI)
 
 - Cuatro KPIs en una sola columna (orden):
-  1. VENTAS NETAS  
-  2. REMITOS NO FACTURADOS  
-  3. PEDIDOS PENDIENTES DE ENTREGA  
-  4. TOTAL CONSOLIDADO  
+  1. VENTAS NETAS (filtrado por período).
+  2. REMITOS NO FACTURADOS (filtrado por período).
+  3. PEDIDOS PENDIENTES DE ENTREGA (sin filtro por período: saldo total de PED en estado En preparación/Preparado).
+  4. TOTAL CONSOLIDADO (VN + Remitos + Pedidos pendientes; este último sin fecha).
 - Formato moneda ARS (mismo que el resto del sistema).
 
 ## 3) Backend
 
 - **Routing:** `report.slug == "total-consolidado-operativo"` → `_run_total_consolidado_operativo(report, payload)`.
-- **Respuesta:** `QueryResult` con `data` = lista de 4 objetos `{ label, value }`, `totals` con las 4 claves, `notes` (período y filtros aplicados).
+- **Pedidos pendientes de entrega:** se obtiene con `_get_pedidos_pendientes_total(..., filtrar_por_fecha=False)`; no se aplica el rango de fechas del reporte (saldo total de PED En preparación/Preparado).
+- **Respuesta:** `QueryResult` con `data` = lista de 4 objetos `{ label, value }`, `totals` con las 4 claves, `notes` (período, nota de pedidos sin filtro fecha, y filtros aplicados).
 
 ## 4) Frontend
 
@@ -61,7 +62,7 @@
 ## 6) Validación final sugerida
 
 1. **Consistencia con reportes individuales:**  
-   Mismos filtros (fechas, sucursales, punto_venta) en ventas-netas, remitos-no-facturados, pedidos-pendientes y total-consolidado-operativo → la suma de totales de los tres reportes debe coincidir con TOTAL CONSOLIDADO del nuevo reporte.
+   Ventas netas y Remitos no facturados en total-consolidado-operativo usan el mismo período (y sucursales/PV) que los reportes ventas-netas y remitos-no-facturados. El indicador **Pedidos pendientes de entrega** en total-consolidado-operativo no usa el rango de fechas (es saldo total), por lo que no coincidirá con un reporte de pedidos-pendientes filtrado por período. TOTAL CONSOLIDADO = VN(período) + Remitos(período) + Pedidos pendientes (saldo total).
 
 2. **Workspace:**  
    - Añadir dos instancias de Total Consolidado Operativo con filtros distintos (p. ej. períodos o sucursales diferentes).  
