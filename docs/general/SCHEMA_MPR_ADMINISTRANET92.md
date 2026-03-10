@@ -13,7 +13,7 @@ Documento de referencia del esquema de base de datos usado por el módulo MPR en
 | **Producción / OPT** | lista_produccion_agrupada, lista_produccion_detalle, lista_produccion_historico |
 | **Movimientos de stock** | movimiento_stock (cabecera), stock (renglones), stock_deposito (saldos) |
 | **Secuencia / comprobante** | codmov (CodigoMovimiento), talonarios (MSTOCK, Nro comprobante) |
-| **Pedidos / demanda** | comp_ped (PED, tipo_pedido_opt: Pendiente \| Produccion \| Terminado), stockp (cantidad). *estado_pedido_opt y cantidad_fab_pendiente_opt deprecados para MPR; no usar "En proceso parcial/completo".* |
+| **Pedidos / demanda** | comp_ped (PED, **estado_pedido_opt**: Pendiente \| Produccion \| Terminado), stockp (cantidad). *cantidad_fab_pendiente_opt deprecado para MPR; no usar "En proceso parcial/completo".* |
 | **Lista de materiales / armado** | en_abm, en_abm_formula; articulo (ensamblado, id_en_abm) |
 | **Catálogos** | articulo, deposito, deposito_reposicion, ref_movstock, unimed, presentacion_abm, viajantes |
 
@@ -219,7 +219,7 @@ Cabecera de pedidos. Fuente de demanda MPR cuando tipo pedido a fábrica.
 |-------|------|----------|
 | CodigoMovimiento | DECIMAL | ID pedido. |
 | TipoComprobante | VARCHAR | 'PED'. |
-| tipo_pedido_opt | VARCHAR | Estado de producción del pedido: 'Pendiente', 'Produccion', 'Terminado'. Única fuente de demanda para fabricación cuando es 'Pendiente'. |
+| estado_pedido_opt | VARCHAR | Estado de producción del pedido: 'Pendiente', 'Produccion', 'Terminado'. Única fuente de demanda para fabricación cuando es 'Pendiente'. |
 | estado_pedido_opt | VARCHAR | *(Deprecado para MPR.)* En VB6: Pendiente, En producción, En proceso parcial/completo, etc. MPR no usa este campo ni los estados "En proceso parcial/completo". |
 | (resto) | varios | Fecha, cliente, estado, etc. |
 

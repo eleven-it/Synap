@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from core.services.administranet_stock import get_depositos
 from core.utils.administranet_types import to_int_or_none
 
+from .exceptions import MprSchemaError
 from .services import (
     actualizar_componente_bom,
     actualizar_conjunto_bom,
@@ -59,7 +60,18 @@ from .services import (
 )
 
 
-class MprLoginRequiredMixin(LoginRequiredMixin):
+class MprSchemaErrorMixin:
+    """Inyecta en el contexto el mensaje de error de esquema (tabla/campo inexistente) para mostrar el modal en MPR."""
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        modal_msg = self.request.session.pop("mpr_schema_error_modal", None)
+        if modal_msg:
+            context["mpr_schema_error_modal"] = modal_msg
+        return context
+
+
+class MprLoginRequiredMixin(LoginRequiredMixin, MprSchemaErrorMixin):
     """Mixin para MPR: exige sesión de administraNET (compatible con AdministraNETUser)."""
 
     def dispatch(self, request, *args, **kwargs):
@@ -86,6 +98,12 @@ def _get_id_puesto(request):
         return None
 
 
+def _mpr_schema_error_redirect(request, e):
+    """Guarda el error de esquema en sesión y redirige al tablero para mostrar el modal."""
+    request.session["mpr_schema_error_modal"] = str(e)
+    return redirect("mpr:tablero")
+
+
 class TableroView(MprLoginRequiredMixin, TemplateView):
     """Tablero de control MPR: vista 'control de planta' y entrada rápida a acción."""
 
@@ -96,9 +114,33 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
         base_empresa = _get_base_empresa(self.request)
         # KPIs y listas desde MySQL si hay empresa; si no, placeholders
         if base_empresa:
-            agrupada = listar_lista_produccion_agrupada(base_empresa, limit=50)
+            try:
+                agrupada = listar_lista_produccion_agrupada(base_empresa, limit=50)
+            except MprSchemaError as e:
+                context["mpr_schema_error_modal"] = str(e)
+                context["kpi_op_in_progress"] = 0
+                context["kpi_delayed_ops"] = 0
+                context["kpi_pending_units"] = 0
+                context["kpi_urgent_items"] = 0
+                context["ops_to_release"] = []
+                context["ops_to_close"] = []
+                context["recent_movements"] = []
+                context["top_urgencies"] = []
+                return context
             total_pendiente = sum(r["cantidad_pendiente_prod"] for r in agrupada)
-            ventana_pack = listar_ventana_pack(base_empresa, limit=15)
+            try:
+                ventana_pack = listar_ventana_pack(base_empresa, limit=15)
+            except MprSchemaError as e:
+                context["mpr_schema_error_modal"] = str(e)
+                context["kpi_op_in_progress"] = len(agrupada)
+                context["kpi_delayed_ops"] = 0
+                context["kpi_pending_units"] = total_pendiente
+                context["kpi_urgent_items"] = 0
+                context["ops_to_release"] = []
+                context["ops_to_close"] = []
+                context["recent_movements"] = []
+                context["top_urgencies"] = []
+                return context
             context["kpi_op_in_progress"] = len(agrupada)
             context["kpi_delayed_ops"] = 0
             context["kpi_pending_units"] = total_pendiente
@@ -132,20 +174,25 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                     "detail_url": detail_url,
                 })
             context["ops_to_release"] = ops_release
-            ops_close_raw = listar_ops_para_cerrar(base_empresa, limit=10)
-            context["ops_to_close"] = [
-                {
-                    "numero": op["id_lista_produccion"],
-                    "detail_url": reverse("mpr:opt_detail", kwargs={"id_lista": op["id_lista_produccion"]}),
-                    "cerrar_url": reverse("mpr:opt_cerrar", kwargs={"id_lista": op["id_lista_produccion"]}),
-                    "descripcion": (op.get("descripcion_articulo") or "")[:40] or "-",
-                }
-                for op in ops_close_raw
-            ]
-            recent_raw = listar_movimientos_recientes_mpr(base_empresa, limit=10)
-            for mov in recent_raw:
+            try:
+                ops_close_raw = listar_ops_para_cerrar(base_empresa, limit=10)
+                context["ops_to_close"] = [
+                    {
+                        "numero": op["id_lista_produccion"],
+                        "detail_url": reverse("mpr:opt_detail", kwargs={"id_lista": op["id_lista_produccion"]}),
+                        "cerrar_url": reverse("mpr:opt_cerrar", kwargs={"id_lista": op["id_lista_produccion"]}),
+                        "descripcion": (op.get("descripcion_articulo") or "")[:40] or "-",
+                    }
+                    for op in ops_close_raw
+                ]
+                recent_raw = listar_movimientos_recientes_mpr(base_empresa, limit=10)
+                for mov in recent_raw:
                     mov["detail_url"] = reverse("mpr:opt_detail", kwargs={"id_lista": mov["id_lista"]}) if mov.get("id_lista") else None
-            context["recent_movements"] = recent_raw
+                context["recent_movements"] = recent_raw
+            except MprSchemaError as e:
+                context["mpr_schema_error_modal"] = str(e)
+                context["ops_to_close"] = []
+                context["recent_movements"] = []
         else:
             context["kpi_op_in_progress"] = 0
             context["kpi_delayed_ops"] = 0
@@ -180,6 +227,15 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             self._limpiar_wizard(request)
             return redirect("mpr:tablero")
         wizard = request.session.get(WIZARD_SESSION_KEY) or {}
+        # Ir al paso 3 (OPP) desde "Registrar OPP" (única opción; /opt/<id>/registrar-opp/ está deprecado). Aceptar id_lista por GET para abrir desde detalle OPT.
+        id_lista_get = request.GET.get("id_lista")
+        if request.GET.get("paso") == "3":
+            id_lista = int(id_lista_get) if (id_lista_get and str(id_lista_get).isdigit()) else wizard.get("id_lista")
+            if id_lista:
+                wizard["id_lista"] = id_lista
+                wizard["paso"] = 3
+                request.session[WIZARD_SESSION_KEY] = wizard
+                request.session.modified = True
         paso = wizard.get("paso", 1)
         # Paso 1 del wizard = pantalla ventana-pack (demanda por artículo)
         if paso == 1:
@@ -220,11 +276,14 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             if request.POST.get("accion") == "cerrar_opt":
                 id_lista = wizard.get("id_lista")
                 if id_lista:
-                    ok, error = cerrar_opt(base_empresa, id_lista)
-                    if ok:
-                        messages.success(request, f"OPT {id_lista} cerrada correctamente.")
-                    else:
-                        messages.error(request, error or "Error al cerrar la OPT.")
+                    try:
+                        ok, error = cerrar_opt(base_empresa, id_lista)
+                        if ok:
+                            messages.success(request, f"OPT {id_lista} cerrada correctamente.")
+                        else:
+                            messages.error(request, error or "Error al cerrar la OPT.")
+                    except MprSchemaError as e:
+                        return _mpr_schema_error_redirect(request, e)
                 return redirect("mpr:wizard")
             if request.POST.get("accion") == "finalizar":
                 self._limpiar_wizard(request)
@@ -336,9 +395,12 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         total_pendiente = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
         if cantidad_total > total_pendiente:
             cantidad_total = int(total_pendiente)
-        ok_opt, codigo_mov, nro_comprobante, error_opt = ejecutar_liberar_opt(
-            base_empresa, id_usuario, id_lista, lineas, cantidad_total, deposito_produccion,
-        )
+        try:
+            ok_opt, codigo_mov, nro_comprobante, error_opt = ejecutar_liberar_opt(
+                base_empresa, id_usuario, id_lista, lineas, cantidad_total, deposito_produccion,
+            )
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         if not ok_opt:
             msg = error_opt or "Error al liberar a producción."
             if msg and ("bytes" in msg.lower() or "formatting" in msg.lower() or "convert" in msg.lower()):
@@ -419,6 +481,8 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                     base_empresa, id_usuario, id_lista, lineas_actual,
                     cantidad, deposito_origen, deposito_destino,
                 )
+            except MprSchemaError as e:
+                return _mpr_schema_error_redirect(request, e)
             except Exception as e:
                 logger.exception(
                     "MPR OPP wizard: excepción en ejecutar_opp base_empresa=%s id_lista=%s deposito_destino=%s cantidad=%s: %s",
@@ -477,9 +541,12 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if not id_en_abm or cantidad_a_armar <= 0 or not deposito_origen or not deposito_destino:
             messages.error(request, "Complete conjunto, cantidad y ambos depósitos para ejecutar el armado.")
             return redirect("mpr:wizard")
-        ok, codigo_mov, nro_comp, error = ejecutar_armado(
-            base_empresa, id_usuario, id_en_abm, cantidad_a_armar, deposito_origen, deposito_destino,
-        )
+        try:
+            ok, codigo_mov, nro_comp, error = ejecutar_armado(
+                base_empresa, id_usuario, id_en_abm, cantidad_a_armar, deposito_origen, deposito_destino,
+            )
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         if ok:
             messages.success(request, f"Armado registrado. Comprobante {nro_comp}.")
         else:
@@ -802,10 +869,13 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
         if not lineas:
             messages.error(request, "No se encontraron líneas para esta OPT.")
             return redirect("mpr:opt_detail", id_lista=id_lista)
-        ok, codigo_mov, nro_comprobante, error = ejecutar_opp(
-            base_empresa, id_usuario, id_lista, lineas,
-            cantidad_total, deposito_origen, deposito_destino,
-        )
+        try:
+            ok, codigo_mov, nro_comprobante, error = ejecutar_opp(
+                base_empresa, id_usuario, id_lista, lineas,
+                cantidad_total, deposito_origen, deposito_destino,
+            )
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         if ok:
             messages.success(
                 request,
@@ -826,7 +896,10 @@ class CerrarOptView(MprLoginRequiredMixin, TemplateView):
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("mpr:opt_detail", id_lista=id_lista)
-        ok, error = cerrar_opt(base_empresa, id_lista)
+        try:
+            ok, error = cerrar_opt(base_empresa, id_lista)
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         if ok:
             messages.success(request, f"OPT {id_lista} cerrada correctamente.")
         else:
@@ -866,12 +939,16 @@ class BomListView(MprLoginRequiredMixin, TemplateView):
         solo_activos = self.request.GET.get("activos", "1") == "1"
         solo_en_produccion = self.request.GET.get("en_produccion", "1") == "1"
         context["base_empresa"] = base_empresa
-        context["conjuntos"] = listar_bom_conjuntos(
-            base_empresa,
-            limit=100,
-            solo_activos=solo_activos,
-            solo_en_produccion=solo_en_produccion,
-        )
+        try:
+            context["conjuntos"] = listar_bom_conjuntos(
+                base_empresa,
+                limit=100,
+                solo_activos=solo_activos,
+                solo_en_produccion=solo_en_produccion,
+            )
+        except MprSchemaError as e:
+            context["mpr_schema_error_modal"] = str(e)
+            context["conjuntos"] = []
         context["solo_activos"] = solo_activos
         context["solo_en_produccion"] = solo_en_produccion
         return context
@@ -1066,7 +1143,7 @@ class BomEditView(MprLoginRequiredMixin, TemplateView):
 
 
 class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
-    """Listado de pedidos con estado de producción (comp_ped tipo_pedido_opt: Pendiente, Produccion, Terminado)."""
+    """Listado de pedidos con estado de producción (comp_ped estado_pedido_opt: Pendiente, Produccion, Terminado)."""
 
     template_name = "mpr/pedidos_fabrica_list.html"
 
@@ -1083,7 +1160,11 @@ class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
         base_empresa = _get_base_empresa(self.request)
         estado = self.request.GET.get("estado", "").strip() or None
         context["base_empresa"] = base_empresa
-        context["pedidos"] = listar_pedidos_fabrica(base_empresa, limit=100, estado=estado)
+        try:
+            context["pedidos"] = listar_pedidos_fabrica(base_empresa, limit=100, estado=estado)
+        except MprSchemaError as e:
+            context["mpr_schema_error_modal"] = str(e)
+            context["pedidos"] = []
         context["filtro_estado"] = estado or ""
         return context
 
@@ -1274,16 +1355,19 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             cantidad_restante_armar = max(0, cantidad_pedida - cantidad_ya_armada)
             if cantidad_restante_armar <= 0:
                 continue
-            ok, codigo_mov, nro_comp, error = ejecutar_armado(
-                base_empresa,
-                id_usuario,
-                id_en_abm,
-                cantidad_restante_armar,
-                deposito_origen,
-                deposito_destino,
-                id_lista_produccion=id_lista,
-                id_articulo_armado=id_art,
-            )
+            try:
+                ok, codigo_mov, nro_comp, error = ejecutar_armado(
+                    base_empresa,
+                    id_usuario,
+                    id_en_abm,
+                    cantidad_restante_armar,
+                    deposito_origen,
+                    deposito_destino,
+                    id_lista_produccion=id_lista,
+                    id_articulo_armado=id_art,
+                )
+            except MprSchemaError as e:
+                return _mpr_schema_error_redirect(request, e)
             if ok:
                 ejecutados += 1
                 cantidades_armadas[id_art] = cantidades_armadas.get(id_art, 0) + cantidad_restante_armar
@@ -1417,13 +1501,16 @@ class VentanaPackActualizarView(MprLoginRequiredMixin, TemplateView):
             id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
         except (TypeError, ValueError):
             id_usuario = None
-        ok, msg = actualizar_pedidos_produccion(
-            base_empresa,
-            id_usuario=id_usuario,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-            busqueda=busqueda,
-        )
+        try:
+            ok, msg = actualizar_pedidos_produccion(
+                base_empresa,
+                id_usuario=id_usuario,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                busqueda=busqueda,
+            )
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         request.session["ventana_pack_filtros_actualizar"] = {
             "fecha_desde": fecha_desde or "",
             "fecha_hasta": fecha_hasta or "",
@@ -1488,47 +1575,69 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
                 id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
             except (TypeError, ValueError):
                 id_usuario = None
-            ok, id_lista_principal, error = crear_opt_multiples_articulos(base_empresa, id_usuario, lineas)
+            try:
+                ok, id_lista_principal, error = crear_opt_multiples_articulos(base_empresa, id_usuario, lineas)
+            except MprSchemaError as e:
+                return _mpr_schema_error_redirect(request, e)
             if ok and id_lista_principal:
                 if "ventana_pack_seleccion" in request.session:
                     del request.session["ventana_pack_seleccion"]
-                # Si estamos en el asistente (wizard), liberar a producción y pasar al paso 3 (OPP)
-                wizard = request.session.get(WIZARD_SESSION_KEY) or {}
-                if wizard.get("paso") == 1:
-                    deposito_produccion = get_deposito_produccion_mpr(base_empresa)
-                    if deposito_produccion:
-                        lineas_detalle = get_op_detalle(base_empresa, id_lista_principal)
-                        if lineas_detalle:
-                            total_liberar = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas_detalle)
+                # Inmediatamente después de Crear OPT: ejecutar Liberar OPT (depósito de producción configurado)
+                liberada = False
+                nro_comp_liberada = None
+                lineas_detalle = []
+                deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+                if deposito_produccion:
+                    lineas_detalle = get_op_detalle(base_empresa, id_lista_principal)
+                    if lineas_detalle:
+                        total_liberar = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas_detalle)
+                        try:
                             ok_opt, _cod, nro_comp, err_opt = ejecutar_liberar_opt(
                                 base_empresa, id_usuario, id_lista_principal, lineas_detalle,
                                 total_liberar, deposito_produccion,
                             )
-                            if ok_opt:
-                                primer_art = lineas_detalle[0].get("id_articulo") if lineas_detalle else None
-                                request.session[WIZARD_SESSION_KEY] = {
-                                    "paso": 3,
-                                    "id_lista": id_lista_principal,
-                                    "id_articulo": primer_art,
-                                    "cantidad_pedida": total_liberar,
-                                }
-                                request.session.modified = True
-                                messages.success(request, f"OPT Nº {id_lista_principal} creada y liberada. Comprobante {nro_comp}. Siguiente: Crear OPP.")
-                                return redirect("mpr:wizard")
-                            messages.error(request, err_opt or "Error al liberar a producción.")
+                        except MprSchemaError as e:
+                            return _mpr_schema_error_redirect(request, e)
+                        if ok_opt:
+                            liberada = True
+                            nro_comp_liberada = nro_comp
                         else:
-                            messages.error(request, "No se pudieron cargar las líneas de la OPT.")
-                    else:
-                        messages.error(request, "Configure el depósito de producción en Config. Depósitos para continuar en el asistente.")
+                            if request.session.get(WIZARD_SESSION_KEY, {}).get("paso") == 1:
+                                messages.error(request, err_opt or "Error al liberar a producción.")
+                                return redirect("mpr:ventana_pack_agrupar")
+                    elif request.session.get(WIZARD_SESSION_KEY, {}).get("paso") == 1:
+                        messages.error(request, "No se pudieron cargar las líneas de la OPT.")
+                        return redirect("mpr:ventana_pack_agrupar")
+                elif request.session.get(WIZARD_SESSION_KEY, {}).get("paso") == 1:
+                    messages.error(request, "Configure el depósito de producción en Config. Depósitos para continuar en el asistente.")
                     return redirect("mpr:ventana_pack_agrupar")
-                messages.success(request, f"OPT creada con {len(lineas)} artículo(s). Nº {id_lista_principal}.")
+                wizard = request.session.get(WIZARD_SESSION_KEY) or {}
+                if wizard.get("paso") == 1 and liberada:
+                    primer_art = lineas_detalle[0].get("id_articulo") if lineas_detalle else None
+                    total_liberar = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas_detalle)
+                    request.session[WIZARD_SESSION_KEY] = {
+                        "paso": 3,
+                        "id_lista": id_lista_principal,
+                        "id_articulo": primer_art,
+                        "cantidad_pedida": total_liberar,
+                    }
+                    request.session.modified = True
+                    messages.success(request, f"OPT Nº {id_lista_principal} creada y liberada. Comprobante {nro_comp_liberada}. Siguiente: Crear OPP.")
+                    return redirect("mpr:wizard")
+                if liberada:
+                    messages.success(request, f"OPT Nº {id_lista_principal} creada y liberada con {len(lineas)} artículo(s). Comprobante {nro_comp_liberada}.")
+                else:
+                    messages.success(request, f"OPT creada con {len(lineas)} artículo(s). Nº {id_lista_principal}.")
                 return redirect("mpr:opt_detail", id_lista=id_lista_principal)
             messages.error(request, error or "Error al crear la OPT.")
             return self.get(request, *args, **kwargs)
         # POST desde Pantalla 1: guardar sel y cant_* en sesión y redirigir GET
         selected = request.POST.getlist("sel")
         filas_sesion = []
-        ventana_pack_filas = listar_ventana_pack(base_empresa, limit=200)
+        try:
+            ventana_pack_filas = listar_ventana_pack(base_empresa, limit=200)
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
         lookup = {f["id_articulo"]: f for f in ventana_pack_filas}
         for id_art_str in selected:
             try:
@@ -1600,8 +1709,13 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
         wizard = self.request.session.get(WIZARD_SESSION_KEY) or {}
         context["base_empresa"] = base_empresa
         context["vista_unidades"] = vista == "unidades"
-        context["filas"] = listar_ventana_pack(base_empresa, limit=200)
-        context["filas_unidades"] = listar_ventana_pack_unidades(base_empresa, limit=200)
+        try:
+            context["filas"] = listar_ventana_pack(base_empresa, limit=200)
+            context["filas_unidades"] = listar_ventana_pack_unidades(base_empresa, limit=200)
+        except MprSchemaError as e:
+            context["mpr_schema_error_modal"] = str(e)
+            context["filas"] = []
+            context["filas_unidades"] = []
         filtros = self.request.session.get("ventana_pack_filtros_actualizar") or {}
         # Preset fechas: inicio y fin del mes en curso si están vacías
         hoy = date.today()

@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "mpr/base_mpr.html" %}
 {% load static %}
 
 {% block title %}Pedidos con estado de producción - Demanda - MPR - Synap{% endblock %}
@@ -47,7 +47,7 @@
                             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ p.Fecha|default:"—" }}</td>
                             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ p.nombre_cliente|truncatewords:6 }}</td>
                             <td class="px-4 py-3 text-center">
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{{ p.tipo_pedido_opt }}</span>
+                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{{ p.estado_pedido_opt }}</span>
                             </td>
                         </tr>
                         {% empty %}

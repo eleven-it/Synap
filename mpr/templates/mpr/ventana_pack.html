@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "mpr/base_mpr.html" %}
 {% load static %}
 
 {% block title %}Pedido producción trabajo (OPT) - Demanda - MPR - Synap{% endblock %}
@@ -80,8 +80,9 @@
             Marque los artículos que desea incluir en la OPT. La cantidad a producir es de solo lectura (según lista de producción). Pulse «Continuar» para revisar y generar la OPT.
         </p>
         <p class="text-[10px] text-slate-500 dark:text-slate-400 mb-3">
-            <strong>Stock:</strong> stock terminado (depósitos con <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">suma_stock='Si'</code>) + reserva. —
-            <strong>Cant. presentación:</strong> Cant a producir ÷ <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">multiplicador_vta</code> de la presentación.
+            <strong>Saldo:</strong> stock terminado (depósitos con <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">suma_stock='Si'</code>). —
+            <strong>Reserva:</strong> indicador de stock mínimo a garantizar al producir (no forma parte del saldo). —
+            <strong>Cant. presentación:</strong> Cant. a producir ÷ <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">multiplicador_vta</code> de la presentación.
         </p>
 
         <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-crear-opt">
@@ -96,7 +97,8 @@
                                 </th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cod. sistema</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cod. Manual y nombre artículo</th>
-                                <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Stock terminado + Reserva (depósitos suma_stock='Si').">Stock</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Suma de saldos en depósitos con suma_stock=Si. Total = suma de saldos; Reserva = indicador (no se usa para calcular saldos).">Saldo</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">Reserva</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cant. Pedida</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cant a producir</th>
                                 <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Urgente</th>
@@ -122,14 +124,15 @@
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">
                                     <span class="stock-terminado-tooltip-trigger cursor-help inline-block"
                                           data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}"
-                                          title="">{{ f.stock|floatformat:0 }}</span>
+                                          title="">{{ f.stock_terminado|floatformat:0 }}</span>
                                 </td>
+                                <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_pedida|floatformat:0 }}</td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">
                                     <span>{{ f.cantidad_a_fabricar|floatformat:0 }}</span>
                                     <input type="hidden" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|floatformat:0 }}"/>
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums text-xs {% if f.cantidad_urgente < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Stock − Pend. producción (mín. 0).">
+                                <td class="px-4 py-3 text-right tabular-nums text-xs {% if f.cantidad_urgente < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Si Cant. Pedida − Saldo > 0 entonces Urgente = Cant. Pedida − Saldo; sino 0.">
                                     {{ f.cantidad_urgente_abs|floatformat:0 }}
                                 </td>
                                 <td class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 text-xs">{{ f.nombre_presentacion|default:"-" }}</td>
@@ -139,7 +142,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="9" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                                <td colspan="10" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                                     No hay artículos con demanda de producción. La tabla <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">lista_produccion_agrupada</code> puede estar vacía o no existir en esta base.
                                 </td>
                             </tr>
@@ -172,7 +175,8 @@
                         <tr>
                             <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cod. sistema</th>
                             <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cod. Manual y nombre artículo</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Stock terminado + Reserva.">Stock</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" title="Indicador de stock mínimo a garantizar (no es saldo).">Reserva</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cant. Pedida</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cant a producir</th>
                             <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Urgente</th>
@@ -191,17 +195,18 @@
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">
                                 <span class="stock-terminado-tooltip-trigger cursor-help inline-block"
                                       data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}"
-                                      title="">{{ f.stock|floatformat:0 }}</span>
+                                      title="">{{ f.stock_terminado|floatformat:0 }}</span>
                             </td>
+                            <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Indicador de stock mínimo a garantizar (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_pedida|floatformat:0 }}</td>
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_a_fabricar|floatformat:0 }}</td>
-                            <td class="px-4 py-3 text-right tabular-nums text-xs {% if f.cantidad_urgente < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Stock − demanda (mín. 0).">
+                            <td class="px-4 py-3 text-right tabular-nums text-xs {% if f.cantidad_urgente < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Si Cant. Pedida − Saldo > 0 entonces Urgente = Cant. Pedida − Saldo; sino 0.">
                                 {{ f.cantidad_urgente_abs|floatformat:0 }}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                                 No hay componentes con demanda. Incluya packs con receta (BOM) y Cant a producir &gt; 0 en el tab Packs.
                             </td>
                         </tr>
@@ -272,7 +277,7 @@
                 }
             }
             function showTip(ev, data) {
-                var title = '<div class="font-bold text-sm text-white mb-1">Stock por depósito</div><div class="text-[10px] text-slate-400 mb-0.5">Depósitos con suma_stock=Si</div>';
+                var title = '<div class="font-bold text-sm text-white mb-1">Saldo por depósito</div><div class="text-[10px] text-slate-400 mb-0.5">Depósitos con suma_stock=Si. Total = suma de saldos. Reserva = indicador de stock mínimo a garantizar (no se usa para calcular saldos).</div>';
                 var lines = [];
                 (data.filas || []).forEach(function(d) {
                     var saldo = d.stock_terminado != null ? Number(d.stock_terminado) : 0;
@@ -281,8 +286,8 @@
                 var total = data.total != null ? Number(data.total) : 0;
                 var disp = data.disponible != null ? Number(data.disponible) : 0;
                 var reserva = data.reserva != null ? Number(data.reserva) : 0;
-                lines.push('<div class="flex items-center justify-between gap-3 py-0.5 border-t border-slate-700 mt-0.5 pt-0.5"><span class="text-slate-300 text-xs font-medium">Total</span><span class="' + valorClass(total) + ' text-xs tabular-nums">' + total + '</span></div>');
-                lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs font-medium">Reserva</span><span class="' + valorClass(reserva) + ' text-xs tabular-nums">' + reserva + '</span></div>');
+                lines.push('<div class="flex items-center justify-between gap-3 py-0.5 border-t border-slate-700 mt-0.5 pt-0.5"><span class="text-slate-300 text-xs font-medium">Total (saldo)</span><span class="' + valorClass(total) + ' text-xs tabular-nums">' + total + '</span></div>');
+                lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs font-medium">Reserva (indicador)</span><span class="' + valorClass(reserva) + ' text-xs tabular-nums">' + reserva + '</span></div>');
                 lines.push('<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs font-medium">Disponible</span><span class="' + valorClass(disp) + ' text-xs tabular-nums">' + disp + '</span></div>');
                 var body = '<div class="space-y-0.5 border-t border-slate-700 pt-1 mt-1">' + lines.join('') + '</div>';
                 tip.innerHTML = title + (lines.length || reserva !== 0 ? body : '<div class="text-sky-300 text-[10px] font-medium">Sin datos</div>');

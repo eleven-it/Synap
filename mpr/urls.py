@@ -22,6 +22,7 @@ urlpatterns = [
     path("opt/", views.OptListView.as_view(), name="opt_list"),
     path("opt/nueva/", views.NuevaOptView.as_view(), name="opt_create"),
     path("opt/<int:id_lista>/", views.OptDetailView.as_view(), name="opt_detail"),
+    # Deprecado: usar asistente (wizard ?paso=3&id_lista=X) para registrar OPP.
     path("opt/<int:id_lista>/registrar-opp/", views.RegistrarOppView.as_view(), name="registrar_opp"),
     path("opt/<int:id_lista>/cerrar/", views.CerrarOptView.as_view(), name="opt_cerrar"),
 ]

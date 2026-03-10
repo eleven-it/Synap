@@ -52,7 +52,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | Término | Descripción |
 |--------|-------------|
 | **Stock terminado** | Suma de saldos en depósitos con `deposito.suma_stock = 'Si'`. Usado en Pedido producción trabajo (OPT)/Unidades para “cantidad a fabricar” y “cantidad urgente”. |
-| **Stock reserva** | Campo opcional en artículo (`stock_reserva`): cantidad reservada; la “brecha” es stock_reserva − stock_terminado. |
+| **Stock reserva** | Campo en artículo (`stock_reserva`): solo indicador de stock mínimo a garantizar al producir. No se usa para calcular saldos. Cant. a fabricar = max(0, (Pedido − Saldo) + Reserva). |
 | **Depósito suma_stock** | Campo en `deposito`: 'Si' o 'No'. Solo los depósitos con suma_stock = 'Si' entran en el cálculo de stock terminado y en indicadores de Pack/Unidades. |
 | **2da selección** | Productos con defectos aptos para venta a menor costo. Se suele usar un depósito específico (ej. “Depósito 2da selección”) y reclasificación desde producción. |
 | **Scrap** | Desecho no vendible. Depósito dedicado o motivo de movimiento para dar de baja producto descartado. |

@@ -280,7 +280,7 @@ def listar_pedidos_pendientes(
     Lista pedidos pendientes para Busca_PEDI (modal lista).
     - motivo 6 (Transferencia): PEDI + movimiento_stock, tipo_pedido_interno = 'A deposito',
       movimiento_stock.deposito_origen = deposito_destino. Requiere deposito_destino.
-    - motivo 11 (Pedido producción) / 12 (Parte producción): comp_ped PED, tipo_pedido_opt = 'Pendiente' (pedidos pendientes de producción).
+    - motivo 11 (Pedido producción) / 12 (Parte producción): comp_ped PED, estado_pedido_opt = 'Pendiente' (pedidos pendientes de producción).
     Devuelve lista de dict con CodigoMovimiento, NroComprobante y opcionalmente nombre_cliente, Estado.
     """
     motivo = int(motivo)
@@ -321,7 +321,7 @@ def listar_pedidos_pendientes(
                     LEFT JOIN cliente cli ON cli.codigo = cp.codigo
                     WHERE cp.Anulado = 'No'
                       AND cp.TipoComprobante IN ('PED')
-                      AND COALESCE(cp.tipo_pedido_opt, '') = 'Pendiente'
+                      AND COALESCE(cp.estado_pedido_opt, '') = 'Pendiente'
                     ORDER BY cp.CodigoMovimiento DESC
                     LIMIT 200
                     """,

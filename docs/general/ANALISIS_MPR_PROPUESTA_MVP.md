@@ -12,17 +12,17 @@
 
 | Fase | Origen | Tablas / Campos clave | Qué hace |
 |------|--------|------------------------|-----------|
-| **Pedidos pendientes de producción** | Pedidos de venta (comp_ped) en estado de producción | `comp_ped`: TipoComprobante='PED', tipo_pedido_opt en 'Pendiente', 'Produccion', 'Terminado'. La única fuente de demanda para fabricación son los pedidos con tipo_pedido_opt='Pendiente'. Cuerpo en `stockp` (cantidad, cantidad_pendiente_opt). *(cantidad_fab_pendiente_opt deprecado para MPR.)* | Demandas a fabricar; unidad de gestión es el pedido de venta. |
-| **Lista de producción (detalle y agrupada)** | Botón "Actualización" en Lista_Pedidos_OPT | `lista_produccion_detalle`: por (codigo_movimiento_pedido, id_articulo) → cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion. `lista_produccion_agrupada`: por id_articulo → cantidad_pedida, cantidad_pendiente_prod | Agrega demanda por artículo; marca pedidos en "Producción" y detalle en_proceso_produccion='Si'. |
-| **OPT (Pedido producción)** | CargaMovStock motivo 10 / ListIndex 10 | Origen: lista_produccion_agrupada + stockp. Movimiento **Entrada** (material/producto a producir). Al confirmar: `lista_produccion_agrupada.cantidad_pendiente_prod` se descuenta; se escribe `lista_produccion_historico` (id_articulo, **id_articulo_formula** siempre grabado para trazabilidad, cantidad_pedida, cantidad_movimiento, cantidad_armada, id_deposito, codigo_movimiento_mstock). `movimiento_stock.tipo_mov = 'OPT'`. En Synap: crear OPT = "Generar OPT" (Confirmar OPT); ejecutar OPT = "Liberar (OPT)" desde Detalle de OP. | "Liberar a producción" / compromiso de producción; entrada a depósito de producción. |
+| **Pedidos pendientes de producción** | Pedidos de venta (comp_ped) en estado de producción | `comp_ped`: TipoComprobante='PED', **estado_pedido_opt** en 'Pendiente', 'Produccion', 'Terminado'. La única fuente de demanda para fabricación son los pedidos con estado_pedido_opt='Pendiente'. Solo se consideran artículos con **articulo.tipo_art_fab = 'Fabricado'**. Cuerpo en `stockp` (cantidad, cantidad_pendiente_opt). *(cantidad_fab_pendiente_opt deprecado para MPR.)* | Demandas a fabricar; unidad de gestión es el pedido de venta. |
+| **Lista de producción (detalle y agrupada)** | Botón "Actualización" en Lista_Pedidos_OPT | `lista_produccion_detalle`: por (codigo_movimiento_pedido, id_articulo) → cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion. `lista_produccion_agrupada`: por id_articulo → cantidad_pedida, cantidad_pendiente_prod. El botón Actualizar solo hace INSERT en detalle e INSERT/UPDATE en agrupada; no actualiza en_proceso_produccion ni comp_ped. | Agrega demanda por artículo desde pedidos PED (Anulado='No', estado_pedido_opt='Pendiente' si aplica) y solo artículos tipo_art_fab='Fabricado'. |
+| **OPT (Pedido producción)** | CargaMovStock motivo 10 / ListIndex 10 | Origen: lista_produccion_agrupada + stockp. Movimiento **Entrada** (material/producto a producir). Al liberar: `lista_produccion_agrupada.cantidad_pendiente_prod` se descuenta por línea; si queda 0 se **elimina** la fila; se escribe `lista_produccion_historico` (id_articulo, **id_articulo_formula** siempre grabado). `movimiento_stock.tipo_mov = 'OPT'`. En Synap: "Generar OPT" en Confirmar OPT crea la OPT y ejecuta Liberar OPT de inmediato; también se puede "Liberar (OPT)" desde Detalle de OP. | "Liberar a producción" / compromiso de producción; entrada a depósito de producción. |
 | **OPP (Parte producción)** | CargaMovStock motivo 11 / ListIndex 11 | En MPR: origen lista_produccion_agrupada (cantidad_pendiente_prod). Movimiento **Salida** (producto terminado). Al confirmar: `lista_produccion_agrupada.cantidad_pendiente_prod` se descuenta. `movimiento_stock.tipo_mov = 'OPP'`. *(Deprecado: stockp.cantidad_fab_pendiente_opt y estados "En proceso parcial/completo"; MPR no los usa.)* | Registrar **salida de producción** (parte terminada); descuenta pendiente de la OP. |
 | **Armado** | CargaMovStock motivo 8 (Armado) | `en_abm` (conjunto armado) + `en_abm_formula` (lista de materiales: id_articulo, cantidad_articulo). Articulo.ensamblado='Si', articulo.id_en_abm. MstockE = entrada producto armado; MstockS = salida componentes. | Consume componentes (salida) y produce producto armado (entrada) según fórmula. |
 
 ### 1.2 Estados del pedido de producción
 
-**En MPR (Synap)** se usan únicamente los estados de **tipo_pedido_opt** en `comp_ped`: **Pendiente**, **Produccion**, **Terminado**. La única fuente de demanda para fabricación son los pedidos con tipo_pedido_opt = 'Pendiente'.
+**En MPR (Synap)** se usan únicamente los estados de **estado_pedido_opt** en `comp_ped`: **Pendiente**, **Produccion**, **Terminado**. La única fuente de demanda para fabricación son los pedidos con estado_pedido_opt = 'Pendiente'.
 
-**Deprecado (no usado en MPR):** Los estados "En proceso parcial" y "En proceso completo" basados en `cantidad_fab_pendiente_opt` en stockp (lógica comentada en VB6 y referenciada en filtros legacy "Parte producción") **no se utilizan** en el módulo MPR. El progreso de la producción se refleja en lista_produccion_agrupada (cantidad_pendiente_prod, en_proceso_produccion) y en tipo_pedido_opt (Pendiente → Produccion → Terminado).
+**Deprecado (no usado en MPR):** Los estados "En proceso parcial" y "En proceso completo" basados en `cantidad_fab_pendiente_opt` en stockp (lógica comentada en VB6 y referenciada en filtros legacy "Parte producción") **no se utilizan** en el módulo MPR. El progreso de la producción se refleja en lista_produccion_agrupada (cantidad_pendiente_prod, en_proceso_produccion) y en estado_pedido_opt (Pendiente → Produccion → Terminado).
 
 ### 1.3 Conclusión del análisis
 
@@ -104,7 +104,7 @@ En AdministraNET actual no hay ubicaciones "tipo" (terminado/semi/reserva/scrap/
 
 | Concepto | Descripción MVP |
 |----------|------------------|
-| **Demanda de producción** | Pedidos de venta (comp_ped) con tipo_pedido_opt='Pendiente' (única fuente para fabricación). tipo_pedido_opt puede ser también 'Produccion' o 'Terminado'. |
+| **Demanda de producción** | Pedidos de venta (comp_ped) con estado_pedido_opt='Pendiente' (única fuente para fabricación). estado_pedido_opt puede ser también 'Produccion' o 'Terminado'. |
 | **Orden de producción (OP)** | Registro que agrupa una o más líneas de demanda (por pedido y artículo, o por artículo agregado). Estados: Borrador, Confirmada, En progreso, Parcialmente terminada, Terminada, Cancelada. Equivalente conceptual a "OPT + seguimiento hasta OPP". |
 | **Liberación a producción (OPT)** | Acción que "confirma" la OP y registra la **entrada** de materiales/producto a producir (movimiento tipo OPT). En MVP puede seguir generando un movimiento_stock tipo_mov='OPT' y actualizar lista_produccion_agrupada/historico o su equivalente en el nuevo modelo. |
 | **Operación de producción** | En MVP: **Armado** (Lista de materiales). Consumo de componentes (salida) + producción de producto armado (entrada). Se puede modelar como un paso de la OP o como movimiento de stock con motivo Armado vinculado a la OP. |
@@ -150,7 +150,7 @@ flowchart LR
    - Depósito (ej. "Terminados", "Semi", "Scrap", "2da selección") y/o
    - Campo o configuración por artículo/depósito para reportes (alertas de stock mínimo, informe por tipo).
 
-**Coherencia y mejoras (3.4):** Verificar que el flujo exija en cada paso el **depósito** correspondiente (OPT: depósito destino de entrada; Armado: depósitos de componentes y producto armado; OPP: depósito origen de salida) para que los reportes por depósito y la trazabilidad sean correctos. Considerar un paso intermedio de validación antes de Liberar OPT: comprobar que exista stock o demanda suficiente y que el depósito de producción esté configurado (suma_stock según corresponda). Documentar la transición explícita de "Demanda" a "En producción" (actualización de lista_produccion_agrupada/detalle y tipo_pedido_opt) para evitar doble conteo en Pedido producción trabajo (OPT)/Unidades.
+**Coherencia y mejoras (3.4):** Verificar que el flujo exija en cada paso el **depósito** correspondiente (OPT: depósito destino de entrada; Armado: depósitos de componentes y producto armado; OPP: depósito origen de salida) para que los reportes por depósito y la trazabilidad sean correctos. Considerar un paso intermedio de validación antes de Liberar OPT: comprobar que exista stock o demanda suficiente y que el depósito de producción esté configurado (suma_stock según corresponda). Documentar la transición explícita de "Demanda" a "En producción" (actualización de lista_produccion_agrupada/detalle y estado_pedido_opt) para evitar doble conteo en Pedido producción trabajo (OPT)/Unidades.
 
 ### 3.5 Alcance MVP (qué incluir y qué dejar para después)
 
@@ -161,7 +161,7 @@ flowchart LR
   - **Tipos de stock/ubicación:** Configuración por depósito (ej. tipo_ubicacion: terminado | semi | materia_prima | scrap | 2da_seleccion | reserva) o por artículo; uso en reportes y alertas de stock mínimo.
 
 - **Pantallas MPR (MVP):**
-  - **Listado "Pedidos con estado de producción":** Lectura de comp_ped (tipo_pedido_opt en Pendiente, Produccion, Terminado) + stockp; opcionalmente agregado por artículo (lista_produccion_agrupada). La demanda para fabricar son los pedidos con tipo_pedido_opt='Pendiente'.
+  - **Listado "Pedidos con estado de producción":** Lectura de comp_ped (estado_pedido_opt en Pendiente, Produccion, Terminado) + stockp; opcionalmente agregado por artículo (lista_produccion_agrupada). La demanda para fabricar son los pedidos con estado_pedido_opt='Pendiente'.
   - **Orden de producción:** Alta/consulta de OP; estados; vinculación a pedidos/líneas. Acción "Liberar (OPT)" que genere el movimiento OPT y actualice lista_produccion_*.
   - **Parte de producción (OPP):** Registrar salida de producto terminado desde una OP, generando movimiento OPP y descontando cantidad_pendiente_prod de lista_produccion_agrupada. (cantidad_fab_pendiente_opt en stockp está deprecado para MPR.)
   - **Armado:** Mantener como operación desde MPR: pantalla que invoque la lógica de lista de materiales (en_abm_formula) y genere movimiento Armado (entrada producto + salida componentes), opcionalmente vinculado a OP.
@@ -200,7 +200,7 @@ flowchart LR
 
 - **Movimientos de stock:** OPT y OPP siguen generando registros en `movimiento_stock`, `stock`, `stock_deposito` (y opcionalmente lista_produccion_historico, stockp) para no romper AdministraNET/VB6. El módulo MPR orquesta la creación de esos movimientos desde sus pantallas.
 - **Armado:** Reutilizar lógica de en_abm_formula y motivo Armado; desde MPR se puede invocar el mismo servicio que use CargaMovStock para Armado.
-- **Pedidos:** comp_ped (tipo_pedido_opt: Pendiente, Produccion, Terminado) y lista_produccion_agrupada son la fuente de verdad en MPR. Al confirmar OPP se actualiza lista_produccion_agrupada.cantidad_pendiente_prod. (Actualización de stockp.cantidad_fab_pendiente_opt y estado_pedido_opt "En proceso parcial/completo" está deprecada; MPR no los usa.)
+- **Pedidos:** comp_ped (estado_pedido_opt: Pendiente, Produccion, Terminado) y lista_produccion_agrupada son la fuente de verdad en MPR. Al confirmar OPP se actualiza lista_produccion_agrupada.cantidad_pendiente_prod. (Actualización de stockp.cantidad_fab_pendiente_opt y estado_pedido_opt "En proceso parcial/completo" está deprecada; MPR no los usa.)
 
 ---
 
@@ -256,24 +256,31 @@ Todos los valores de stock listados (mínimo, terminado, semi-elaborado, reserva
 
 Las pantallas "Ventana de pack" y "Ventana de unidades" muestran los indicadores que definen **qué fabricar** (artículos a producir desde pedidos de clientes y para stock de reserva). Los mismos conceptos se calculan en **packs** o en **unidades** (unidad de fabricación configurada, ej. pares) según la vista; la **Ventana de unidades** es la base para el primer proceso de fabricación (Pedido de producción).
 
-**Stock de reserva (para estas ventanas):** Se usa el campo **articulo.stock_reserva** (valor general por artículo).
+**Stock de reserva (para estas ventanas):** Se usa el campo **articulo.stock_reserva** solo como **indicador** de stock mínimo a garantizar al producir; **no se usa para calcular saldos**.
 
 **Fórmulas de cálculo (comunes a Pack y Unidades):**
 
 | Concepto | Cálculo |
 |----------|--------|
-| **Pedidos** | Cantidad de pedidos pendientes de clientes que **no entraron en producción**. Cuando entran en producción se descuenta vía `comp_ped.tipo_pedido_opt` (Pendiente → Produccion → Terminado). |
-| **Stock reserva** | `articulo.stock_reserva` comparado con stock actual de depósitos que suman stock (`deposito.suma_stock = 'Si'`). Fórmula: stock_reserva - stock_actual, donde stock_actual = SUM(stock_deposito.saldo) para ese artículo solo en depósitos con suma_stock = 'Si'. |
-| **Stock terminado** | Sumatoria de saldos en depósitos con `deposito.suma_stock = 'Si'`: por artículo, SUM(stock_deposito.saldo) WHERE id_deposito IN (depósitos con suma_stock = 'Si'). |
-| **Cantidad a fabricar** | Stock terminado + Pedidos pendientes de producción. |
-| **Cantidad urgente** | Stock terminado - Pedidos pendientes de producción (lo urgente son los pedidos de clientes; se resta del stock terminado real). |
+| **Pedidos** | Cantidad de pedidos pendientes de clientes que **no entraron en producción**. Cuando entran en producción se descuenta vía `comp_ped.estado_pedido_opt` (Pendiente → Produccion → Terminado). |
+| **Saldo (stock terminado)** | Sumatoria de saldos en depósitos con `deposito.suma_stock = 'Si'`: por artículo, SUM(stock_deposito.saldo). La reserva no forma parte del saldo. |
+| **Reserva** | `articulo.stock_reserva`: indicador de stock mínimo a garantizar (no se usa para calcular saldos). |
+| **Cantidad a fabricar** | `max(0, (Pedido − Saldo) + Reserva)`, donde Saldo = SUM(stock_deposito.saldo) en depósitos con suma_stock='Si' y Reserva = articulo.stock_reserva. Si la demanda está cubierta (resultado ≤ 0), se muestra 0. |
+| **Urgente** | Si (Cantidad Pedida − SUM(saldo) en depósitos con suma_stock='Si') > 0 entonces Urgente = Cantidad Pedida − SUM(saldo); sino Urgente = 0. Es decir: `max(0, Cantidad Pedida − Saldo)`. La reserva **no** interviene. |
 | **Cantidad por docena** | `articulo.cantidad_promedio_bulto`: por cuánto multiplicar el pack para obtener valor por docena; `articulo.multiplicador_vta`: cantidad del pack para multiplicar y obtener docenas. |
 
 - **Ventana de pack:** Los valores anteriores se expresan en **packs** (según multiplicador_vta / unimed del artículo).
 - **Ventana de unidades:** Misma lógica en **unidades** (unidad de fabricación: ej. pares, unidades, kg). Opción de vista: Pack / Unidades / Docenas (definir en UX). **Origen de unidades para fórmulas:** tabla **en_abm_formula** (en_abm_formula.id_en_abm relacionado con articulo.idart; en_abm_formula.id_articulo tiene los artículos de la fórmula); de ahí se obtienen las unidades necesarias para fabricar (componentes en unidad base).
 - **Regla de unidad mínima:** Las cantidades se expresan en la **unidad mínima configurada** para el proceso (ej. en fábrica de medias: pares; sobrantes inferiores a 1 unidad no se contabilizan hasta completar la unidad). Parametrizable por tipo de producto o configuración MPR.
 
-**Coherencia y mejoras (4.2 y 4.2.1):** Definir un único servicio o conjunto de consultas que implemente estas fórmulas para Pack y Unidades, de modo que un cambio de regla (ej. qué depósitos suman) no se duplique. Revisar que "Pedidos pendientes de producción" esté alineado con tipo_pedido_opt y con lista_produccion_agrupada (pedidos que ya están "Produccion" o "Terminado" no deben contarse dos veces). Considerar cache o vista materializada por artículo/depósito si el volumen de ítems hace lenta la Ventana de unidades.
+**Origen de la demanda (Ventana pack / botón Actualizar):** La demanda que alimenta lista_produccion_detalle y lista_produccion_agrupada **ya no** depende de `comp_ped.tipo_pedido_opt = 'Fabrica'`. El criterio actual es: pedidos PED con `Anulado = 'No'`, `estado_pedido_opt = 'Pendiente'` (si la columna existe), y solo artículos con **`articulo.tipo_art_fab = 'Fabricado'`**. Así solo se consideran ítems de stockp cuyo artículo está marcado como fabricado. El botón "Actualizar" solo escribe en lista_produccion_detalle (INSERT) y lista_produccion_agrupada (INSERT/UPDATE); no actualiza en_proceso_produccion en detalle ni comp_ped.
+
+**Dónde entra MPR en Análisis de Punto de Reposición y Punto de equilibrio**
+
+- **Punto de reposición:** En el sistema, el "análisis de punto de reposición" usa **deposito_reposicion.stock_minimo** (y opcionalmente punto_pedido) por artículo/depósito. El reporte MPR **"Bajo mínimo"** (`reporte_mpr_bajo_minimo`) lista artículos cuyo stock total (depósitos con suma_stock='Si') está por debajo de ese mínimo. **MPR** entra como **ejecución**: la Ventana pack y la Ventana de unidades usan **articulo.stock_reserva** solo como indicador de stock mínimo a garantizar (no para calcular saldos). La fórmula Cant. Producir = max(0, Pedido − Stock + Reserva) hace que, al enviar a producir, se reponga no solo la demanda sino también el colchón hasta ese mínimo. Así, `stock_reserva` es el objetivo de reposición por artículo en MPR; el reporte "Bajo mínimo" puede seguir usando `deposito_reposicion.stock_minimo` (o articulo.stock_minimo) para alertar.
+- **Punto de equilibrio (en este contexto):** Equilibrio = demanda cubierta y reserva satisfecha: **Saldo ≥ Pedido + Reserva**. En ese caso, (Pedido − Saldo) + Reserva ≤ 0 y MPR muestra **Cant. a producir = 0**. No se produce cuando ya se está en ese "punto de equilibrio".
+
+**Coherencia y mejoras (4.2 y 4.2.1):** Definir un único servicio o conjunto de consultas que implemente estas fórmulas para Pack y Unidades, de modo que un cambio de regla (ej. qué depósitos suman) no se duplique. Revisar que "Pedidos pendientes de producción" esté alineado con estado_pedido_opt y con lista_produccion_agrupada (pedidos que ya están "Produccion" o "Terminado" no deben contarse dos veces). Considerar cache o vista materializada por artículo/depósito si el volumen de ítems hace lenta la Ventana de unidades.
 
 ### 4.3 Resumen: reutilizar vs reformular
 
@@ -291,7 +298,7 @@ Las pantallas "Ventana de pack" y "Ventana de unidades" muestran los indicadores
 
 ### 4.4 Campos de producción a usar en MPR (sin duplicar)
 
-- **comp_ped:** TipoComprobante='PED', tipo_pedido_opt (estado de producción: Pendiente, Produccion, Terminado). La única fuente de demanda para fabricación es tipo_pedido_opt='Pendiente'.
+- **comp_ped:** TipoComprobante='PED', **estado_pedido_opt** (estado de producción: Pendiente, Produccion, Terminado). La única fuente de demanda para fabricación es estado_pedido_opt='Pendiente'.
 - **stockp:** Cantidad, cantidad_pendiente_opt, CodigoMovimiento (pedido), id_stock. *(cantidad_fab_pendiente_opt y estados "En proceso parcial/completo" deprecados para MPR; MPR usa lista_produccion_agrupada.)*
 - **lista_produccion_detalle:** codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion.
 - **lista_produccion_agrupada:** id_articulo, cantidad_pedida, cantidad_pendiente_prod, id_lista_produccion.
@@ -299,7 +306,7 @@ Las pantallas "Ventana de pack" y "Ventana de unidades" muestran los indicadores
 - **movimiento_stock:** codigo_movimiento, tipo_mov ('OPT'|'OPP'), motivo_movimiento, deposito_origen, deposito_destino, etc.
 - **stock:** Por cada renglón OPT/OPP/Armado; Entrada/Salida, CodDeposito, TipoComp.
 - **en_abm, en_abm_formula:** Lista de materiales para Armado (id_articulo, cantidad_articulo por componente).
-- **articulo:** ensamblado='Si', id_en_abm para productos armados; **stock_reserva** (stock de reserva general por artículo, usado en ventanas MPR Pack/Unidades).
+- **articulo:** ensamblado='Si', id_en_abm para productos armados; **stock_reserva** (stock de reserva general por artículo, usado en ventanas MPR Pack/Unidades); **tipo_art_fab** = 'Fabricado' para que el artículo entre en la demanda de la Ventana pack (botón Actualizar): solo artículos con tipo_art_fab='Fabricado' se consideran en stockp+comp_ped al cargar lista_produccion_detalle/agrupada.
 
 MPR debe **leer y escribir** en estas tablas/campos; no definir tablas nuevas que dupliquen movimiento_stock o stockp. Si se agrega un concepto “Orden de producción” como cabecera, puede ser vista sobre lista_produccion_agrupada + comp_ped o una tabla nueva **solo de cabecera** (número OP, estado, fechas) con líneas que sigan referenciando lista_produccion_detalle/stockp.
 
@@ -326,7 +333,7 @@ MPR debe **leer y escribir** en estas tablas/campos; no definir tablas nuevas qu
 - **Propuesta MVP:** Módulo MPR con: (1) Demanda desde pedidos pendientes de producción, (2) Orden de producción con estados y liberación OPT, (3) Operación Armado (Lista de materiales), (4) Parte producción OPP, (5) Tipos de stock/ubicación para reportes y stock mínimo (deposito.suma_stock para qué depósitos suman al total; articulo.stock_reserva para reserva; deposito_reposicion.stock_minimo), (6) Ventana de pack y Ventana de unidades (4.2.1) con fórmulas de Pedidos, Stock reserva, Stock terminado, Cantidad a fabricar, Cantidad urgente, Cantidad por docena, (7) Pantallas de Lista de materiales (receta) / receta): mantenimiento de conjuntos de armado y componentes en Synap (en_abm, en_abm_formula). **Unidad mínima y presentaciones parametrizables** según el proceso (ej. par, pack, docena, unidad, kg).
 - **Siguientes pasos sugeridos:** (a) Quitar motivos 9, 11 y 12 del combo y flujo de Ingreso de movimiento de stock; (b) Definir modelo de datos de Orden de producción (vista sobre lista_produccion_* o tabla cabecera MPR); (c) Implementar pantallas MPR (lista demanda, OP, Liberar OPT, Registrar OPP, Armado); (d) Configuración tipo de stock/depósito y reporte por tipo y alerta de mínimo; (e) Documentar esquema de cálculo de cada stock (sección 4) en docs y en implementación; (f) Añadir en tabla deposito el campo suma_stock y en articulo el uso de stock_reserva; (g) Implementar Ventana de pack y Ventana de unidades (4.2.1) como punto de entrada al módulo; (h) Implementar pantallas de Lista de materiales en el módulo MPR: listado y mantenimiento de conjuntos de armado (en_abm) y de componentes de la fórmula (en_abm_formula); vinculación con artículos ensamblados (articulo.id_en_abm, ensamblado).
 
-**Coherencia y mejoras (6):** Incluir en el plan de implementación la **validación integral del flujo** entre etapas: desde Pedido producción trabajo (OPT)/Unidades (qué fabricar) hasta Liberar OPT → Armado → OPP, comprobando que los mismos depósitos (suma_stock) y las mismas fuentes (comp_ped.tipo_pedido_opt, lista_produccion_*) se usen en todo el recorrido. No usar estado_pedido_opt ni "En proceso parcial/completo" (deprecados). Revisar si falta contemplar el **cierre o anulación de OP** (cancelación, devolución de materiales) y el impacto en lista_produccion_* y stockp.
+**Coherencia y mejoras (6):** Incluir en el plan de implementación la **validación integral del flujo** entre etapas: desde Pedido producción trabajo (OPT)/Unidades (qué fabricar) hasta Liberar OPT → Armado → OPP, comprobando que los mismos depósitos (suma_stock) y las mismas fuentes (comp_ped.estado_pedido_opt, lista_produccion_*) se usen en todo el recorrido. No usar "En proceso parcial/completo" (deprecados). Revisar si falta contemplar el **cierre o anulación de OP** (cancelación, devolución de materiales) y el impacto en lista_produccion_* y stockp.
 
 ### 6.1 Implementación inicial (febrero 2025)
 
@@ -370,7 +377,7 @@ MPR debe **leer y escribir** en estas tablas/campos; no definir tablas nuevas qu
 - **Servicio `crear_op_agrupada` (mpr/services.py):** Inserta en lista_produccion_agrupada (id_articulo, cantidad_pedida, cantidad_pendiente_prod, id_usuario, en_proceso_produccion='No'). Devuelve (ok, id_lista_produccion, error). Servicio `listar_articulos_para_op(base_empresa, limit)` para el selector de artículos.
 - **Nueva OP (`/mpr/ordenes/nueva/`, `mpr:op_create`):** Formulario artículo (select) + cantidad; POST crea la OP y redirige al detalle. Preselección de artículo vía `?articulo=<id>` (desde Pedido producción trabajo (OPT)). Menú MPR "Nueva OP" apunta a `mpr:op_create`.
 - **Servicio `listar_ventana_pack` (mpr/services.py):** Agrupa lista_produccion_agrupada por id_articulo; obtiene stock terminado (SUM(stock_deposito.saldo) en depósitos con COALESCE(suma_stock,'Si')='Si'); devuelve cantidad_a_fabricar = max(0, demanda - stock_terminado). Ordenado por cantidad_a_fabricar descendente.
-- **Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/`, `mpr:ventana_pack`):** Tabla con Artículo, Stock terminado, Pendiente producción, Cantidad a fabricar (editable); checkbox por fila; botón "Continuar" envía selección a **Confirmar OPT** (`mpr:ventana_pack_agrupar`). Toggle **Pack | Unidades** en la misma pantalla (`?vista=unidades`); misma fuente de datos. En **Confirmar OPT** solo se muestra la tabla **Unidades** (componentes de recetas BOM de los packs seleccionados), con **Cant. a fabricar** editable por fila; botón **Generar OPT** crea la OPT (INSERT lista_produccion_agrupada por cada componente con cantidades del formulario) y redirige al Detalle de la OP. Equivalente a Lista_Pedidos_OPT en VB6 (crear OPT). La **ejecución** de la OPT (movimiento de stock tipo OPT) se hace desde Detalle de OP → **Liberar (OPT)** (equivalente a CargaMovStock motivo 10 "Generar" en VB6).
+- **Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/`, `mpr:ventana_pack`):** Tabla con Artículo, Stock terminado, Pendiente producción, Cantidad a fabricar (editable); checkbox por fila; botón "Continuar" envía selección a **Confirmar OPT** (`mpr:ventana_pack_agrupar`). Toggle **Pack | Unidades** en la misma pantalla (`?vista=unidades`); misma fuente de datos. En **Confirmar OPT** solo se muestra la tabla **Unidades** (componentes de recetas BOM de los packs seleccionados), con **Cant. a fabricar** editable por fila; botón **Generar OPT** crea la OPT (INSERT lista_produccion_agrupada por cada componente con cantidades del formulario) y **ejecuta Liberar OPT de inmediato** (movimiento stock tipo OPT, actualización de lista_produccion_agrupada: si cantidad_pendiente_prod queda 0 se elimina la fila), luego redirige al Detalle de la OP. Equivalente a Lista_Pedidos_OPT en VB6 (crear OPT + liberar). La liberación también puede hacerse desde Detalle de OP → **Liberar (OPT)** para OPT creadas por otros flujos.
 - **Trazabilidad OPT:** Al ejecutar Liberar OPT, `ejecutar_liberar_opt` escribe en `lista_produccion_historico` con **id_articulo_formula** siempre informado (por defecto = id_articulo de la línea; si en el futuro hay desglose por componente BOM, id_articulo_formula = componente).
 
 **Registrar OPP y Ventana Unidades (continuación):**
@@ -609,7 +616,7 @@ Listado de todas las pantallas a implementar para el módulo MPR, alineado con l
 | 1 | **Tablero MPR** | Home: KPIs, Top Urgencies, Recent Movements, OPs to Release, OPs to Close. CTAs Crear OP, Registrar OPP, Armado, Ver demanda. | 7.3 |
 | 2 | **Pedido producción trabajo (OPT)** | Demanda en packs: filtros, tabla (stock, pedidos, cantidad a fabricar/urgente), toggle Pack/Unidades/Docena, carrito de fabricación. | 7.4 |
 | 3 | **Ventana Unidades** | Misma lógica que Pedido producción trabajo (OPT) en unidad base (pares, unidades, kg según parametrización). | 7.4 |
-| 4 | **Pedidos con estado de producción (detalle)** | Listado/detalle de pedidos con tipo_pedido_opt en Pendiente, Produccion, Terminado; filtro por estado; vínculo a OP. | 7.2, 4.2.1 |
+| 4 | **Pedidos con estado de producción (detalle)** | Listado/detalle de pedidos con estado_pedido_opt en Pendiente, Produccion, Terminado; filtro por estado; vínculo a OP. | 7.2, 4.2.1 |
 | 5 | **Vista de planificación / órdenes activas** | Tabla órdenes con Stock Health, panel lateral Order Details, Fulfillment Center, Validar y confirmar. Opcional MVP. | 7.4 |
 | 6 | **Lista de OP** | Listado filtrable de órdenes de producción (estado, prioridad, depósito, artículo, origen). Columnas y acciones rápidas. | 7.5 |
 | 7 | **Nueva OP** | Alta de orden de producción: origen (pedidos o stock), líneas (artículo, cantidad), depósito producción, prioridad, fecha objetivo. | 7.5 |

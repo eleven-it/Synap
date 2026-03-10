@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "mpr/base_mpr.html" %}
 {% load static %}
 
 {% block title %}OPT {{ opt_numero }} - Producción - Synap{% endblock %}
@@ -136,11 +136,11 @@
             {% endif %}
             {% endif %}
             {% if id_lista and total_pendiente > 0 %}
-            <a href="{% url 'mpr:registrar_opp' id_lista %}" class="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white border border-transparent hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all group">
+            <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}" class="flex items-center gap-4 p-5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white border border-transparent hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all group">
                 <span class="material-icons text-3xl group-hover:scale-110 transition-transform">assignment</span>
                 <div>
                     <p class="font-semibold">Registrar OPP</p>
-                    <p class="text-sm text-white/80">Registrar parte de producción (salida origen → entrada destino)</p>
+                    <p class="text-sm text-white/80">Registrar parte de producción (asistente paso OPP)</p>
                 </div>
             </a>
             {% endif %}

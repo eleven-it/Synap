@@ -45,7 +45,7 @@ Documento de referencia de las tablas de base de datos usadas por el módulo MPR
 |-------|---------------------|--------|
 | **codmov** | `codigo`, `CodigoMovimiento` | Secuencia de códigos de movimiento (p. ej. `codigo=1`). |
 | **talonarios** | `Orden`, `Nro` | Numeración de comprobantes. |
-| **comp_ped** | `CodigoMovimiento`, `NroComprobante`, `Fecha`, `Estado`, `TipoComprobante` ('PED'), `tipo_pedido_opt` ('Pendiente' \| 'Produccion' \| 'Terminado'), `Anulado` | Pedidos de venta; tipo_pedido_opt = estado de producción. Única fuente de demanda para fabricación cuando tipo_pedido_opt='Pendiente'. |
+| **comp_ped** | `CodigoMovimiento`, `NroComprobante`, `Fecha`, `Estado`, `TipoComprobante` ('PED'), **`estado_pedido_opt`** ('Pendiente' \| 'Produccion' \| 'Terminado'), `Anulado` | Pedidos de venta; estado_pedido_opt = estado de producción. Única fuente de demanda para fabricación cuando estado_pedido_opt='Pendiente'. |
 | **deposito_reposicion** | `id_articulo`, `id_deposito`, `stock_minimo` (opc.) | Mínimos por artículo/depósito; usado en reporte "bajo mínimo". |
 
 ---
