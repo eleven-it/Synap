@@ -53,14 +53,149 @@ def _first_column_value(row) -> Optional[str]:
     return row[0] if len(row) > 0 else None
 
 
+_tabla_cache: Dict[str, Dict[str, Optional[str]]] = {}
+
+
 def _nombre_tabla(cursor, nombre_lower: str) -> Optional[str]:
-    """Devuelve el nombre real de la tabla en el servidor (puede variar mayúsculas/minúsculas)."""
+    """Devuelve el nombre real de la tabla en el servidor (cachea SHOW TABLES por base)."""
+    db_key = ""
+    try:
+        cursor.execute("SELECT DATABASE()")
+        db_key = (_first_column_value(cursor.fetchone()) or "")
+    except Exception:
+        pass
+    if db_key and db_key in _tabla_cache:
+        return _tabla_cache[db_key].get(nombre_lower)
     cursor.execute("SHOW TABLES")
+    mapa: Dict[str, Optional[str]] = {}
     for row in cursor.fetchall():
         nombre = (_first_column_value(row) or "").strip()
-        if nombre and nombre.lower() == nombre_lower:
-            return nombre
-    return None
+        if nombre:
+            mapa[nombre.lower()] = nombre
+    if db_key:
+        _tabla_cache[db_key] = mapa
+    return mapa.get(nombre_lower)
+
+
+# ---------------------------------------------------------------------------
+# Helpers bulk: evitar N+1 al consultar BOM, artículos armados, id_en_abm
+# ---------------------------------------------------------------------------
+
+def bulk_id_en_abm(base_empresa: str, id_articulos: List[int]) -> Dict[int, int]:
+    """Dado un lote de IDArt, devuelve {id_articulo: id_en_abm} para los que son ensamblados."""
+    if not id_articulos:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(id_articulos))
+            cursor.execute(
+                f"SELECT IDArt, id_en_abm FROM {tbl} WHERE IDArt IN ({ph}) "
+                f"AND id_en_abm IS NOT NULL AND COALESCE(ensamblado, 'No') = 'Si'",
+                list(id_articulos),
+            )
+            return {to_int_or_none(r["IDArt"]): to_int_or_none(r["id_en_abm"])
+                    for r in cursor.fetchall()
+                    if r.get("IDArt") and r.get("id_en_abm")}
+    except Exception as e:
+        logger.warning("bulk_id_en_abm error: %s", e)
+        return {}
+
+
+def bulk_articulo_armado(base_empresa: str, id_en_abms: List[int]) -> Dict[int, Dict[str, Any]]:
+    """Dado un lote de id_en_abm, devuelve {id_en_abm: {id_articulo, codigo_articulo, descripcion_articulo}}."""
+    if not id_en_abms:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(id_en_abms))
+            cursor.execute(
+                f"SELECT a.id_en_abm, a.IDArt AS id_articulo, "
+                f"COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo, "
+                f"COALESCE(a.NombreArticulo, '') AS descripcion_articulo "
+                f"FROM {tbl} a WHERE a.id_en_abm IN ({ph}) AND COALESCE(a.ensamblado, 'No') = 'Si'",
+                list(id_en_abms),
+            )
+            result = {}
+            for r in cursor.fetchall():
+                abm_id = to_int_or_none(r.get("id_en_abm"))
+                if abm_id is not None:
+                    result[abm_id] = {
+                        "id_articulo": to_int_or_none(r.get("id_articulo")),
+                        "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                        "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                    }
+            return result
+    except Exception as e:
+        logger.warning("bulk_articulo_armado error: %s", e)
+        return {}
+
+
+def bulk_bom_detalle(base_empresa: str, id_en_abms: List[int]) -> Dict[int, Dict[str, Any]]:
+    """Dado un lote de id_en_abm, devuelve {id_en_abm: {cabecera, componentes}} en 2 queries."""
+    if not id_en_abms:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_abm = _nombre_tabla(cursor, "en_abm")
+            tbl_formula = _nombre_tabla(cursor, "en_abm_formula")
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            if not tbl_abm:
+                return {}
+            ph = ",".join(["%s"] * len(id_en_abms))
+            cursor.execute(
+                f"SELECT id_en_abm, COALESCE(nombre_en_abm, '') AS nombre_en_abm, "
+                f"COALESCE(anulado, 'No') AS anulado, COALESCE(detalle, '') AS detalle, "
+                f"COALESCE(descuenta_en, '') AS descuenta_en "
+                f"FROM {tbl_abm} WHERE id_en_abm IN ({ph})",
+                list(id_en_abms),
+            )
+            cabeceras = {}
+            for r in cursor.fetchall():
+                abm_id = to_int_or_none(r.get("id_en_abm"))
+                if abm_id is not None:
+                    cabeceras[abm_id] = {
+                        "id_en_abm": abm_id,
+                        "nombre_en_abm": str_or_default(r.get("nombre_en_abm"), "-"),
+                        "anulado": str_or_default(r.get("anulado"), "No"),
+                        "detalle": str_or_default(r.get("detalle"), ""),
+                        "descuenta_en": str_or_default(r.get("descuenta_en"), ""),
+                    }
+            comps_map: Dict[int, list] = {abm_id: [] for abm_id in cabeceras}
+            if tbl_formula and tbl_articulo and cabeceras:
+                cursor.execute(
+                    f"SELECT f.id_en_abm, f.id_en_abm_formula, f.id_articulo, "
+                    f"f.cantidad_articulo, COALESCE(f.tipo_unidad, '') AS tipo_unidad, "
+                    f"COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo, "
+                    f"COALESCE(a.NombreArticulo, '') AS descripcion_articulo "
+                    f"FROM {tbl_formula} f INNER JOIN {tbl_articulo} a ON a.IDArt = f.id_articulo "
+                    f"WHERE f.id_en_abm IN ({ph}) AND COALESCE(f.anulado, 'No') = 'No' "
+                    f"ORDER BY f.id_en_abm, f.id_en_abm_formula",
+                    list(id_en_abms),
+                )
+                for r in cursor.fetchall():
+                    abm_id = to_int_or_none(r.get("id_en_abm"))
+                    if abm_id in comps_map:
+                        comps_map[abm_id].append({
+                            "id_en_abm_formula": to_int_or_none(r.get("id_en_abm_formula")),
+                            "id_articulo": to_int_or_none(r.get("id_articulo")),
+                            "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                            "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                            "cantidad_articulo": float(r.get("cantidad_articulo") or 0),
+                            "tipo_unidad": str_or_default(r.get("tipo_unidad"), ""),
+                        })
+            return {
+                abm_id: {"cabecera": cab, "componentes": comps_map.get(abm_id, [])}
+                for abm_id, cab in cabeceras.items()
+            }
+    except Exception as e:
+        logger.warning("bulk_bom_detalle error: %s", e)
+        return {}
 
 
 def _formatear_fecha_dd_mm_yyyy(value: Any) -> str:
@@ -763,11 +898,7 @@ def listar_ventana_pack(
                         pass
             # Recetas (BOM) por id_en_abm para tooltip en nombre del artículo
             id_en_abm_set = {v.get("id_en_abm") for v in art_um_pres_map.values() if v.get("id_en_abm") is not None}
-            bom_cache = {}
-            for id_en_abm in id_en_abm_set:
-                bom = get_bom_detalle(base_empresa, to_int_or_none(id_en_abm))
-                if bom is not None:
-                    bom_cache[to_int_or_none(id_en_abm)] = bom
+            bom_cache = bulk_bom_detalle(base_empresa, [to_int_or_none(x) for x in id_en_abm_set if x is not None])
             # presentacion_abm: id_presentacion -> nombre_presentacion
             tbl_pres = _nombre_tabla(cursor, "presentacion_abm")
             pres_map = {}
@@ -1011,15 +1142,19 @@ def listar_ventana_pack_unidades(
     if not (base_empresa or "").strip():
         return []
     filas_pack = listar_ventana_pack(base_empresa, limit=limit * 2)
+    art_ids = [to_int_or_none(r.get("id_articulo")) for r in filas_pack if (r.get("cantidad_a_fabricar") or 0) > 0]
+    art_ids = [a for a in art_ids if a is not None]
+    abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
+    bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     demanda_por_componente: Dict[int, float] = {}
     for r in filas_pack:
         cant = r.get("cantidad_a_fabricar") or 0
         if cant <= 0:
             continue
-        id_en_abm = get_id_en_abm_por_articulo(base_empresa, r.get("id_articulo") or 0)
+        id_en_abm = abm_map.get(to_int_or_none(r.get("id_articulo")))
         if id_en_abm is None:
             continue
-        bom = get_bom_detalle(base_empresa, id_en_abm)
+        bom = bom_map.get(id_en_abm)
         if not bom or not bom.get("componentes"):
             continue
         for comp in bom["componentes"]:
@@ -1043,6 +1178,10 @@ def listar_unidades_desde_seleccion(
     """
     if not (base_empresa or "").strip() or not filas:
         return []
+    art_ids = [to_int_or_none(f.get("id_articulo")) for f in filas if float(f.get("cantidad_a_fabricar") or 0) > 0]
+    art_ids = [a for a in art_ids if a is not None]
+    abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
+    bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     demanda_por_componente: Dict[int, float] = {}
     for f in filas:
         id_art = to_int_or_none(f.get("id_articulo"))
@@ -1051,10 +1190,10 @@ def listar_unidades_desde_seleccion(
         cant = float(f.get("cantidad_a_fabricar") or 0)
         if cant <= 0:
             continue
-        id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art)
+        id_en_abm = abm_map.get(id_art)
         if id_en_abm is None:
             continue
-        bom = get_bom_detalle(base_empresa, id_en_abm)
+        bom = bom_map.get(id_en_abm)
         if not bom or not bom.get("componentes"):
             continue
         for comp in bom["componentes"]:
@@ -1081,15 +1220,19 @@ def lineas_opt_desde_formulario_unidades(
     """
     if not (base_empresa or "").strip() or not filas_pack:
         return []
+    pack_ids = [to_int_or_none(f.get("id_articulo")) for f in filas_pack]
+    pack_ids = [a for a in pack_ids if a is not None]
+    abm_map = bulk_id_en_abm(base_empresa, pack_ids) if pack_ids else {}
+    bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     lineas: List[Tuple[int, int, Optional[int]]] = []
     for f in filas_pack:
         id_pack = to_int_or_none(f.get("id_articulo"))
         if not id_pack:
             continue
-        id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_pack)
+        id_en_abm = abm_map.get(id_pack)
         if id_en_abm is None:
             continue
-        bom = get_bom_detalle(base_empresa, id_en_abm)
+        bom = bom_map.get(id_en_abm)
         if not bom or not bom.get("componentes"):
             continue
         # Obtener cantidad pack y operario desde cualquier componente del pack con cantidad > 0 en el formulario
@@ -1462,6 +1605,79 @@ def listar_detalle_pedidos_por_articulo(
     except Exception as e:
         logger.warning("Error en listar_detalle_pedidos_por_articulo en %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+def bulk_detalle_pedidos_por_articulos(
+    base_empresa: str,
+    id_articulos: List[int],
+    limit_por_articulo: int = 30,
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Versión bulk de listar_detalle_pedidos_por_articulo: 1 query para N artículos."""
+    if not (base_empresa or "").strip() or not id_articulos:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            tbl_cli = _nombre_tabla(cursor, "cliente")
+            if not tbl_detalle or not tbl_cp:
+                return {}
+            ph = ",".join(["%s"] * len(id_articulos))
+            join_cli = f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
+            try:
+                cursor.execute(
+                    f"""SELECT d.id_articulo, cp.Fecha AS fecha,
+                               COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
+                               COALESCE(cli.nombre_cliente, '') AS nombre_cliente,
+                               COALESCE(d.cantidad_pedida, d.cantidad_pendiente_prod, 0) AS cantidad
+                        FROM {tbl_detalle} d
+                        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+                        {join_cli}
+                        WHERE d.id_articulo IN ({ph})
+                        ORDER BY d.id_articulo, cp.Fecha DESC""",
+                    list(id_articulos),
+                )
+            except Exception as col_err:
+                if "1054" not in str(col_err):
+                    raise
+                cursor.execute(
+                    f"""SELECT d.id_articulo, cp.Fecha AS fecha,
+                               COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
+                               '' AS nombre_cliente,
+                               COALESCE(d.cantidad_pedida, d.cantidad_pendiente_prod, 0) AS cantidad
+                        FROM {tbl_detalle} d
+                        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+                        WHERE d.id_articulo IN ({ph})
+                        ORDER BY d.id_articulo, cp.Fecha DESC""",
+                    list(id_articulos),
+                )
+            result: Dict[int, list] = {aid: [] for aid in id_articulos}
+            for r in cursor.fetchall():
+                aid = to_int_or_none(r.get("id_articulo"))
+                if aid is None or aid not in result:
+                    continue
+                if len(result[aid]) >= limit_por_articulo:
+                    continue
+                fecha_val = r.get("fecha")
+                if hasattr(fecha_val, "strftime"):
+                    fecha_str = fecha_val.strftime("%d-%m-%Y")
+                elif isinstance(fecha_val, str) and len(fecha_val) >= 10:
+                    try:
+                        fecha_str = datetime.strptime(fecha_val[:10], "%Y-%m-%d").strftime("%d-%m-%Y")
+                    except Exception:
+                        fecha_str = str(fecha_val)[:10]
+                else:
+                    fecha_str = str(fecha_val or "-")[:10]
+                result[aid].append({
+                    "fecha": fecha_str,
+                    "nro_pedido": str_or_default(r.get("nro_pedido"), "-"),
+                    "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
+                    "cantidad": to_int_or_none(r.get("cantidad")) or 0,
+                })
+            return result
+    except Exception as e:
+        logger.warning("Error en bulk_detalle_pedidos_por_articulos en %s: %s", base_empresa, e, exc_info=True)
+        return {}
 
 
 def get_op_detalle(
@@ -2318,18 +2534,25 @@ def get_lineas_armado_opt(
     if not deposito_semi:
         return []
     result = []
-    # Acumular id_articulo de componentes para una sola consulta de saldos
+    art_ids = [to_int_or_none(l.get("id_articulo")) for l in lineas]
+    art_ids = [a for a in art_ids if a is not None]
+    if not art_ids:
+        return []
+    abm_map = bulk_id_en_abm(base_empresa, art_ids)
+    abm_ids = list(set(abm_map.values()))
+    bom_map = bulk_bom_detalle(base_empresa, abm_ids) if abm_ids else {}
+    armado_map = bulk_articulo_armado(base_empresa, abm_ids) if abm_ids else {}
     componentes_ids = set()
     lineas_con_bom = []
     for linea in lineas:
         id_art = to_int_or_none(linea.get("id_articulo"))
         if id_art is None:
             continue
-        id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art)
+        id_en_abm = abm_map.get(id_art)
         if not id_en_abm:
             continue
-        articulo_armado = get_articulo_armado_por_bom(base_empresa, id_en_abm)
-        bom = get_bom_detalle(base_empresa, id_en_abm)
+        articulo_armado = armado_map.get(id_en_abm)
+        bom = bom_map.get(id_en_abm)
         if not articulo_armado or not bom or not bom.get("componentes"):
             continue
         descuenta_en = (bom.get("cabecera") or {}).get("descuenta_en") or ""
@@ -3994,17 +4217,16 @@ def _explode_packs_to_components(
     if not (base_empresa or "").strip() or not distribucion:
         return {}
     agregado: Dict[int, float] = {}
-    # Cache BOM por id_pack para no repetir consultas
-    bom_cache: Dict[int, Optional[Dict[str, Any]]] = {}
+    pack_ids = list({to_int_or_none(l.get("id_articulo")) for l, q in distribucion if to_int_or_none(l.get("id_articulo")) and q > 0})
+    abm_map = bulk_id_en_abm(base_empresa, pack_ids) if pack_ids else {}
+    bom_cache = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
 
     for linea, qty_pack in distribucion:
         id_pack = to_int_or_none(linea.get("id_articulo"))
         if id_pack is None or qty_pack <= 0:
             continue
-        if id_pack not in bom_cache:
-            id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_pack)
-            bom_cache[id_pack] = get_bom_detalle(base_empresa, id_en_abm) if id_en_abm else None
-        bom = bom_cache[id_pack]
+        id_en_abm = abm_map.get(id_pack)
+        bom = bom_cache.get(id_en_abm) if id_en_abm else None
         if bom and bom.get("componentes"):
             for comp in bom["componentes"]:
                 id_comp = to_int_or_none(comp.get("id_articulo"))

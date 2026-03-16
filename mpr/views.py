@@ -37,6 +37,8 @@ from .services import (
     get_bom_detalle,
     get_cantidades_armadas_por_opt,
     get_id_en_abm_por_articulo,
+    bulk_id_en_abm,
+    bulk_bom_detalle,
     get_lineas_armado_opt,
     get_lineas_opt_directo,
     get_op_detalle,
@@ -861,10 +863,12 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         if id_lista and id_lista != 0:
             cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
 
+        all_art_ids = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        abm_map = bulk_id_en_abm(base_empresa, all_art_ids) if all_art_ids else {}
         lineas_with_armado = []
         for l in lineas:
             id_art = l.get("id_articulo")
-            id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art) if id_art else None
+            id_en_abm = abm_map.get(id_art)
             if id_en_abm:
                 cantidad_pedida = l.get("cantidad_pedida") or 0
                 cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
@@ -1308,6 +1312,24 @@ def _opt_comprobante_pdf(request, id_lista):
     if not bloques:
         return None
 
+    todos_cod_mov = [cod for _, cod in bloques]
+    mov_cache = {}
+    renglones_cache = {}
+    dep_ids_set = set()
+    for cod_mov in todos_cod_mov:
+        mov_cache[cod_mov] = obtener_movimiento(base_empresa, cod_mov)
+        renglones_cache[cod_mov] = obtener_renglones_movimiento(base_empresa, cod_mov)
+        m = mov_cache[cod_mov]
+        if m:
+            if m.get("deposito_origen"):
+                dep_ids_set.add(m["deposito_origen"])
+            if m.get("deposito_destino"):
+                dep_ids_set.add(m["deposito_destino"])
+    dep_nombres = {}
+    if dep_ids_set:
+        from core.services.administranet_stock import get_nombres_depositos
+        dep_nombres = get_nombres_depositos(base_empresa, list(dep_ids_set))
+
     empresa = get_empresa_para_reporte(base_empresa)
     margin = 20 * mm
     col_articulo = 168 * mm
@@ -1318,7 +1340,7 @@ def _opt_comprobante_pdf(request, id_lista):
     x_fin_tabla = margin + ancho_tabla
     fila_altura = 5 * mm
     cabecera_altura = 6 * mm
-    y_min = 45 * mm  # Si y < esto, nueva página
+    y_min = 45 * mm
 
     import io
     buf = io.BytesIO()
@@ -1327,12 +1349,12 @@ def _opt_comprobante_pdf(request, id_lista):
     y_content = 210 * mm
 
     for titulo_seccion, cod_mov in bloques:
-        mov = obtener_movimiento(base_empresa, cod_mov)
+        mov = mov_cache.get(cod_mov)
         if not mov:
             continue
-        renglones = obtener_renglones_movimiento(base_empresa, cod_mov)
-        nombre_dep_origen = get_nombre_deposito(base_empresa, mov.get("deposito_origen"))
-        nombre_dep_destino = get_nombre_deposito(base_empresa, mov.get("deposito_destino"))
+        renglones = renglones_cache.get(cod_mov, [])
+        nombre_dep_origen = dep_nombres.get(mov.get("deposito_origen"), "-")
+        nombre_dep_destino = dep_nombres.get(mov.get("deposito_destino"), "-")
 
         if primera_pagina:
             y_content = draw_report_header(
@@ -2019,10 +2041,12 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
             return context
         cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+        art_ids_liberar = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        abm_map_liberar = bulk_id_en_abm(base_empresa, art_ids_liberar) if art_ids_liberar else {}
         lineas_armado = []
         for l in lineas:
             id_art = l.get("id_articulo")
-            id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art) if id_art else None
+            id_en_abm = abm_map_liberar.get(id_art)
             if not id_en_abm:
                 continue
             cantidad_pedida = l.get("cantidad_pedida") or 0
@@ -2082,11 +2106,13 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             messages.error(request, "El armado solo está disponible cuando el pendiente de la OPT es 0.")
             return redirect("mpr:opt_detail", id_lista=id_lista)
         cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+        art_ids_post = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        abm_map_post = bulk_id_en_abm(base_empresa, art_ids_post) if art_ids_post else {}
         ejecutados = 0
         primer_error = None
         for l in lineas:
             id_art = l.get("id_articulo")
-            id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_art) if id_art else None
+            id_en_abm = abm_map_post.get(id_art)
             if not id_en_abm:
                 continue
             cantidad_pedida = l.get("cantidad_pedida") or 0
@@ -2428,8 +2454,11 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         seleccion = self.request.session.get("ventana_pack_seleccion") or {}
         filas = seleccion.get("filas") or []
         import json
+        from .services import bulk_detalle_pedidos_por_articulos
+        art_ids_pack = [f.get("id_articulo") for f in filas if f.get("id_articulo")]
+        detalle_map = bulk_detalle_pedidos_por_articulos(base_empresa, art_ids_pack, limit_por_articulo=30) if art_ids_pack else {}
         for f in filas:
-            detalle = listar_detalle_pedidos_por_articulo(base_empresa, f.get("id_articulo"), limit=30)
+            detalle = detalle_map.get(f.get("id_articulo"), [])
             f["detalle_pedidos"] = detalle
             f["detalle_pedidos_json"] = json.dumps(detalle)
         wizard = self.request.session.get(WIZARD_SESSION_KEY) or {}
