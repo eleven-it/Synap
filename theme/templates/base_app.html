@@ -2,7 +2,17 @@
 <html lang="es" x-data="{ openMenu: false, openUserMenu: false, sidebarOpen: true }" @click.away="openMenu = false; openUserMenu = false" class="bg-gray-100 dark:bg-gray-900">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% block extra_meta %}{% endblock %}
+    {% if request.is_mobile %}
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Synap">
+    <meta name="msapplication-TileColor" content="#7c3aed">
+    {% endif %}
     <title>{% block title %}Synap{% endblock %}</title>
     {% load static %}
     {% load i18n %}
@@ -12,6 +22,9 @@
     {% get_administranet_logo as logo_path %}
     {% if logo_path %}
       <link rel="icon" type="image/png" href="{{ MEDIA_URL }}{{ logo_path }}" />
+    {% endif %}
+    {% if request.is_mobile %}
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/pwa/icon-180.png' %}">
     {% endif %}
     <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -238,5 +251,14 @@
         });
     });
     </script>
+    {% if request.is_mobile %}
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) { console.log('SW registrado:', reg.scope); })
+            .catch(function(err) { console.warn('SW error:', err); });
+    }
+    </script>
+    {% endif %}
 </body>
-</html> 
+</html>
