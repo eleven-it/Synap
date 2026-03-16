@@ -4,7 +4,7 @@
 {% block title %}OPT {{ opt_numero }} - Producción - Synap{% endblock %}
 
 {% block content %}
-<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {# Breadcrumbs #}
         <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
@@ -14,6 +14,17 @@
             <span class="mx-2">/</span>
             <span class="text-gray-700 dark:text-gray-300 font-medium">OPT {{ opt_numero }}</span>
         </nav>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm shadow-sm {% if message.tags == 'error' %}bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800{% elif message.tags == 'success' %}bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800{% else %}bg-amber-500/10 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800{% endif %}" role="alert">
+            <span>{{ message }}</span>
+            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" aria-label="Cerrar">
+                <span class="material-icons text-lg">close</span>
+            </button>
+        </div>
+        {% endfor %}
+        {% endif %}
 
         {# Hero / Header de la OPT #}
         <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 dark:border-slate-800 p-6 mb-8 text-white shadow-lg">
@@ -32,8 +43,8 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    {% if codigo_movimiento %}
-                    <a href="{% url 'stock:movimiento_pdf' codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                    {% if codigo_movimiento and id_lista %}
+                    <a href="{% url 'mpr:opt_comprobante_pdf' id_lista %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
                         <span class="material-icons text-lg">print</span>
                         Imprimir comprobante
                     </a>
@@ -105,6 +116,92 @@
                 </table>
             </div>
         </div>
+
+        {# Partes de producción (OPP) registradas #}
+        {% if id_lista %}
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Partes de producción (OPP) registradas</h2>
+            </div>
+            <div class="p-5">
+                {% if not opp_registradas %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">Aún no se registró ninguna parte de producción para esta OPT.</p>
+                {% else %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Comprobante</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Origen → Destino</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for opp in opp_registradas %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{% if opp.fecha %}{{ opp.fecha|date:"d/m/Y" }}{% else %}-{% endif %}</td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ opp.nro_comprobante }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ opp.nombre_origen }} → {{ opp.nombre_destino }}</td>
+                                <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ opp.cantidad_total }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <a href="{% url 'stock:movimiento_pdf' opp.codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300">
+                                        Ver comprobante
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Armados (OPA) registrados #}
+        {% if id_lista %}
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-8">
+            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Armados (OPA) registrados</h2>
+            </div>
+            <div class="p-5">
+                {% if not opas_registradas %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">Aún no se registró ningún armado para esta OPT.</p>
+                {% else %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Comprobante</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Origen → Destino</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for opa in opas_registradas %}
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{% if opa.fecha %}{{ opa.fecha|date:"d/m/Y" }}{% else %}-{% endif %}</td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ opa.nro_comprobante }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ opa.nombre_origen }} → {{ opa.nombre_destino }}</td>
+                                <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ opa.cantidad_total }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <a href="{% url 'stock:movimiento_pdf' opa.codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300">
+                                        Ver comprobante
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
 
         {# Tarjetas de acción: Armado (solo por OPT) y Registrar OPP #}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">

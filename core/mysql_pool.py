@@ -116,6 +116,13 @@ class MySQLConnectionPool:
                         logger.warning("Pool lleno, creando conexión temporal para %s", database)
                         conn = self._create_connection(database)
                         self._in_use_connections.add(conn)
+                else:
+                    # Reutilizada: asegurar que está en la base correcta (evita leer de otra empresa)
+                    if database:
+                        try:
+                            conn.select_db(database)
+                        except Exception as e:
+                            logger.warning("No se pudo select_db(%s) en conexión reutilizada: %s", database, e)
             self._init_connection_session(conn)
             yield conn
         finally:

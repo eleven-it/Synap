@@ -1,11 +1,11 @@
 # MPR - Modelos para agrupar OPT (Pedidos de producción) con múltiples artículos.
-# Cada fila en lista_produccion_agrupada (MySQL) tiene su propio id_lista_produccion.
-# Opt agrupa varias líneas (OptLinea) para representar una OPT con múltiples artículos.
+# La OPT se representa en MySQL en lista_produccion_agrupada (id_opt, codigo_movimiento_opt, id_operario_opt).
+# Opt y OptLinea están en desuso (managed=False); los datos viven en MySQL, no en Django.
 from django.db import models
 
 
 class Opt(models.Model):
-    """Cabecera de un Pedido de producción (OPT) con uno o más artículos."""
+    """Cabecera de un Pedido de producción (OPT). En desuso: datos en lista_produccion_agrupada (MySQL)."""
 
     base_empresa = models.CharField(max_length=64, db_index=True)
     id_lista_principal = models.BigIntegerField(
@@ -20,6 +20,7 @@ class Opt(models.Model):
     )
 
     class Meta:
+        managed = False
         db_table = "mpr_opt"
         ordering = ["-fecha_creacion"]
         verbose_name = "OPT (Pedido de producción)"
@@ -30,14 +31,20 @@ class Opt(models.Model):
 
 
 class OptLinea(models.Model):
-    """Línea de una OPT: vincula id_lista_produccion (MySQL) a una Opt."""
+    """Línea de una OPT. En desuso: datos en lista_produccion_agrupada (MySQL, id_opt, id_operario_opt)."""
 
     opt = models.ForeignKey(Opt, on_delete=models.CASCADE, related_name="lineas")
     id_lista_produccion = models.BigIntegerField()
     id_articulo = models.IntegerField()
     cantidad_pedida = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    id_operario_opt = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="id_sue_abm_empleado del operario que fabrica esta línea.",
+    )
 
     class Meta:
+        managed = False
         db_table = "mpr_opt_linea"
         ordering = ["id"]
         verbose_name = "Línea OPT"

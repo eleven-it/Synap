@@ -167,4 +167,4 @@ Sí. La tabla **lista_produccion_historico** se usa como **trazabilidad** de lo 
 - **No** debe disparar el mismo proceso que «Generar» en CargaMovStock motivo 10, porque ese proceso **ejecuta** la OPT (genera el movimiento de stock y actualiza pendientes e histórico).
 - El **ejecutar OPT** (proceso de CargaMovStock “Generar” motivo 10) en Synap está en la **pantalla 3** (Detalle de la OP → Liberar OPT) y **sí cumple** con todo el proceso: codmov, MSTOCK, movimiento_stock OPT, stock, stock_deposito, actualización de lista_produccion_agrupada e inserción en lista_produccion_historico.
 
-Documento de referencia: flujo OPT en **docs/general/FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md** y tablas en **docs/general/SCHEMA_MPR_ADMINISTRANET92.md**.
+Documento de referencia: flujo OPT en **docs/mpr/FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md** y tablas en **docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md**.

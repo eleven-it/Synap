@@ -4,7 +4,7 @@
 {% block title %}Armado – OPT {{ opt_numero|default:"-" }} - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
@@ -83,7 +83,7 @@
                                 class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
                             <option value="">Seleccione</option>
                             {% for dep in depositos %}
-                            <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
+                            <option value="{{ dep.CodDeposito }}" {% if id_deposito_terminado == dep.CodDeposito %}selected{% endif %}>{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
                             {% endfor %}
                         </select>
                     </div>

@@ -145,6 +145,7 @@ APPS_MENU = [
                 "seccion": _("Configuración"),
                 "items": [
                     {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver"},
+                    {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver"},
                 ]
             },
         ]

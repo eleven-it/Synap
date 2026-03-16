@@ -225,7 +225,25 @@ Formularios y procedimientos que referencian esta tabla (lectura/escritura). Bas
 
 ---
 
-## 4. Uso en Synap (reports)
+## 4. Campos opcionales para trazabilidad MPR (Synap)
+
+En bases donde la tabla `stock` incluye las columnas siguientes, el módulo MPR de Synap las rellena en las escrituras de movimientos de stock asociados a OPT/OPP/OPA:
+
+| Campo             | Tipo  | Descripción |
+|-------------------|-------|-------------|
+| **codigo_mov_opt** | INT   | Código de movimiento del comprobante MSTOCK de la OPT (liberación). Vincula el renglón de stock a la orden de producción. |
+| **id_en_abm**      | INT   | ID del conjunto de armado (BOM / lista de materiales). Vincula el renglón al armado cuando aplica (liberación OPT por pack, OPP por componente, OPA). |
+
+- **Liberación OPT:** se guarda el `codigo_mov` del movimiento creado y el `id_en_abm` del pack (primera línea de la distribución).
+- **OPP (parte de producción):** se guarda `codigo_mov_opt` (obtenido de la OPT) e `id_en_abm` del pack del componente.
+- **OPA (armado):** se guarda `codigo_mov_opt` (si existe `id_lista_produccion`) e `id_en_abm` del conjunto armado.
+- **Reclasificación:** se escriben como NULL (no asociado a OPT/BOM).
+
+Si las columnas no existen en la base, los INSERT se realizan sin ellas (fallback ante error MySQL 1054). Ver `mpr/services.py`: `ejecutar_liberar_opt`, `ejecutar_opp`, `ejecutar_armado`, `ejecutar_reclasificacion`.
+
+---
+
+## 5. Uso en Synap (reports)
 
 | Archivo | Línea | Operación | Fragmento |
 |---------|-------|-----------|-----------|

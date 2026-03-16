@@ -1,6 +1,6 @@
-# MPR - Inspeccionar en la DB cómo quedó registrada una OPT (depósito, movimiento_stock, stock).
-# Uso: python manage.py inspeccionar_opt <id_lista>
-# Ejemplo: python manage.py inspeccionar_opt 13
+# MPR - Inspeccionar en la DB cómo quedó registrada una OPT (lista_produccion_agrupada, movimiento_stock, stock).
+# Uso: python manage.py inspeccionar_opt <id_lista> --base-empresa=administranet92
+# Ejemplo: python manage.py inspeccionar_opt 13 --base-empresa=administranet92
 
 import logging
 from django.core.management.base import BaseCommand
@@ -23,7 +23,7 @@ def _nombre_tabla(cursor, nombre_lower: str):
 
 
 class Command(BaseCommand):
-    help = "Inspecciona en la DB cómo quedó registrada una OPT (depósito, movimiento_stock, stock)."
+    help = "Inspecciona en la DB cómo quedó registrada una OPT (lista_produccion_agrupada, movimiento_stock, stock)."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -31,58 +31,108 @@ class Command(BaseCommand):
             type=int,
             help="id_lista_produccion de la OPT (ej. 13 para OPT 13).",
         )
+        parser.add_argument(
+            "--base-empresa",
+            type=str,
+            required=True,
+            help="Base de datos MySQL (ej. administranet92).",
+        )
 
     def handle(self, *args, **options):
         id_lista = options["id_lista"]
-        from mpr.models import OptLinea
-
-        opt_linea = OptLinea.objects.filter(id_lista_produccion=id_lista).select_related("opt").first()
-        if not opt_linea:
-            self.stdout.write(self.style.WARNING(f"No existe ninguna OPT con id_lista_produccion={id_lista}."))
+        base_empresa = (options.get("base_empresa") or "").strip()
+        if not base_empresa:
+            self.stdout.write(self.style.ERROR("Indique --base-empresa (ej. administranet92)."))
             return
-        opt = opt_linea.opt
-        base_empresa = opt.base_empresa
-        codigo_mov = opt.codigo_movimiento
-        self.stdout.write(
-            f"OPT (id_lista_principal={opt.id_lista_principal}, id_lista consultado={id_lista}), "
-            f"base_empresa={base_empresa}, codigo_movimiento={codigo_mov}"
-        )
-        if not codigo_mov:
-            self.stdout.write(
-                self.style.WARNING(
-                    "En Django la OPT no tiene codigo_movimiento (puede no haberse liberado o falló guardar el vínculo)."
+
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl_agrupada:
+                self.stdout.write(self.style.WARNING(f"No existe la tabla lista_produccion_agrupada en {base_empresa}."))
+                return
+
+            # Resolver OPT desde agrupada: id_opt y codigo_movimiento_opt
+            try:
+                cursor.execute(
+                    f"SELECT id_opt, codigo_movimiento_opt FROM {tbl_agrupada} WHERE id_lista_produccion = %s LIMIT 1",
+                    [id_lista],
                 )
+                row = cursor.fetchone()
+            except Exception as e:
+                if "1054" in str(e) or "unknown column" in str(e).lower():
+                    row = None
+                else:
+                    raise
+
+            if not row:
+                self.stdout.write(self.style.WARNING(f"No hay fila en {tbl_agrupada} para id_lista_produccion={id_lista}."))
+                return
+
+            id_opt = row.get("id_opt")
+            codigo_mov = row.get("codigo_movimiento_opt")
+
+            # Si la fila no es la principal (id_lista != id_opt), leer codigo_movimiento_opt de la fila principal
+            if id_opt is not None and id_lista != id_opt:
+                cursor.execute(
+                    f"SELECT codigo_movimiento_opt FROM {tbl_agrupada} WHERE id_lista_produccion = %s LIMIT 1",
+                    [id_opt],
+                )
+                row_principal = cursor.fetchone()
+                codigo_mov = row_principal.get("codigo_movimiento_opt") if row_principal else codigo_mov
+
+            id_lista_principal = id_opt if id_opt is not None else id_lista
+            self.stdout.write(
+                f"OPT (id_lista_principal={id_lista_principal}, id_lista consultado={id_lista}), "
+                f"base_empresa={base_empresa}, codigo_movimiento_opt={codigo_mov}"
             )
-            # Inspeccionar estado en lista_produccion_agrupada y últimos movimientos OPT en MySQL
-            agrup = []
-            movs = []
-            with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-                tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
-                tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
-                tbl_stock = _nombre_tabla(cursor, "stock")
-                if tbl_agrupada:
+
+            # Líneas de la OPT (todas las filas con el mismo id_opt)
+            if id_opt is not None:
+                try:
+                    cursor.execute(
+                        f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod, id_operario_opt "
+                        f"FROM {tbl_agrupada} WHERE id_opt = %s ORDER BY id_lista_produccion",
+                        [id_opt],
+                    )
+                except Exception:
                     cursor.execute(
                         f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod "
-                        f"FROM {tbl_agrupada} WHERE id_lista_produccion = %s",
-                        [id_lista],
+                        f"FROM {tbl_agrupada} WHERE id_opt = %s ORDER BY id_lista_produccion",
+                        [id_opt],
                     )
-                    agrup = cursor.fetchall()
-                    if agrup:
-                        self.stdout.write("")
-                        self.stdout.write(f"lista_produccion_agrupada (id_lista_produccion={id_lista}):")
-                        for r in agrup:
-                            self.stdout.write(
-                                f"  id_articulo={r.get('id_articulo')} en_proceso_produccion={r.get('en_proceso_produccion')} "
-                                f"cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}"
-                            )
-                        if any((r.get("en_proceso_produccion") or "").strip() == "Si" for r in agrup):
-                            self.stdout.write(
-                                self.style.NOTICE(
-                                    "  -> En progreso: la liberación sí se ejecutó en MySQL; el vínculo codigo_movimiento no se guardó en Django."
-                                )
-                            )
-                    else:
-                        self.stdout.write(self.style.WARNING(f"No hay filas en {tbl_agrupada} para id_lista_produccion={id_lista}."))
+                lineas = cursor.fetchall()
+                if lineas:
+                    self.stdout.write("")
+                    self.stdout.write(f"Líneas OPT (id_opt={id_opt}):")
+                    for r in lineas:
+                        extra = f" id_operario_opt={r.get('id_operario_opt')}" if "id_operario_opt" in (r or {}) else ""
+                        self.stdout.write(
+                            f"  id_lista_produccion={r.get('id_lista_produccion')} id_articulo={r.get('id_articulo')} "
+                            f"en_proceso_produccion={r.get('en_proceso_produccion')} cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}{extra}"
+                        )
+            else:
+                cursor.execute(
+                    f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod "
+                    f"FROM {tbl_agrupada} WHERE id_lista_produccion = %s",
+                    [id_lista],
+                )
+                lineas = cursor.fetchall()
+                if lineas:
+                    self.stdout.write("")
+                    self.stdout.write(f"lista_produccion_agrupada (id_lista_produccion={id_lista}, sin id_opt):")
+                    for r in lineas:
+                        self.stdout.write(
+                            f"  id_articulo={r.get('id_articulo')} en_proceso_produccion={r.get('en_proceso_produccion')} "
+                            f"cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}"
+                        )
+
+            if not codigo_mov:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "La OPT no tiene codigo_movimiento_opt (puede no haberse liberado aún)."
+                    )
+                )
+                tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
                 if tbl_mov:
                     cursor.execute(
                         f"SELECT codigo_movimiento, deposito_origen, deposito_destino, tipo_mov, nro_comprobante, fecha, detalle "
@@ -91,24 +141,15 @@ class Command(BaseCommand):
                     movs = cursor.fetchall()
                     if movs:
                         self.stdout.write("")
-                        self.stdout.write("Últimos 10 movimientos OPT en MySQL (para identificar por fecha/nro el de esta OPT):")
+                        self.stdout.write("Últimos 10 movimientos OPT en MySQL:")
                         for m in movs:
                             self.stdout.write(
                                 f"  codigo_mov={m.get('codigo_movimiento')} dep_destino={m.get('deposito_destino')} "
-                                f"fecha={m.get('fecha')} nro={m.get('nro_comprobante')} detalle={str(m.get('detalle') or '')[:50]}"
+                                f"fecha={m.get('fecha')} nro={m.get('nro_comprobante')}"
                             )
-                        # Si hay una sola fila en agrupada con en_proceso y un solo movimiento OPT reciente, podría ser este
-                        if agrup and len(movs) >= 1:
-                            ult = movs[0]
-                            self.stdout.write(
-                                self.style.SUCCESS(
-                                    f"  -> Depósito del último movimiento OPT en DB: {ult.get('deposito_destino')} "
-                                    f"(codigo_movimiento={ult.get('codigo_movimiento')})."
-                                )
-                            )
-                    else:
-                        self.stdout.write(self.style.WARNING("No hay movimientos tipo OPT en la base."))
-            return
+                return
+
+        # Mostrar movimiento_stock y stock para codigo_mov
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
             tbl_stock = _nombre_tabla(cursor, "stock")
@@ -126,7 +167,7 @@ class Command(BaseCommand):
                         self.stdout.write(f"  {k}: {v}")
                     self.stdout.write(
                         self.style.SUCCESS(
-                            f"  -> Depósito donde se generó el stock (origen=destino): {row.get('deposito_destino')}"
+                            f"  -> Depósito donde se generó el stock: {row.get('deposito_destino')}"
                         )
                     )
                 else:
