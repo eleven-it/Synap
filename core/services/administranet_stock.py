@@ -519,6 +519,98 @@ def get_motivos_permitidos(
     return motivos
 
 
+def get_datos_iniciales_ingreso_stock(
+    base_empresa: str,
+    id_puesto: Optional[int],
+    incluir_pedidos_produccion: bool = False,
+) -> Dict[str, Any]:
+    """
+    Carga todos los datos iniciales para el formulario de ingreso mov. stock en 1 conexión.
+    Consolida: depósitos, ref_movstock, motivos, viajantes, clientes, y toda la configuración.
+    """
+    resultado = {
+        "depositos": [],
+        "ref_movstock": [],
+        "motivos": [],
+        "viajantes": [],
+        "clientes": [],
+        "activ_proyecto": "No",
+        "calculo_stock_saldo": "No",
+        "utiliza_bulto_cerrado": "No",
+        "utiliza_display": "No",
+        "tipo_unidad_defecto": "Unidad",
+        "usa_multiplica_bulto_promedio": "No",
+        "tipo_balanza": "",
+        "pedidos_parte_produccion": "No",
+    }
+    try:
+        permisos = _get_permisos_puesto(base_empresa, id_puesto)
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            # Configuración (1 query)
+            config_cols = ["activ_proyecto"]
+            opt_config = [
+                "calculo_stock_saldo", "utiliza_bulto_cerrado", "utiliza_display",
+                "tipo_unidad_defecto", "usa_multiplica_bulto_promedio", "tipo_balanza",
+                "pedidos_parte_produccion",
+            ]
+            cursor.execute("SHOW COLUMNS FROM configuracion")
+            existing = {r["Field"] for r in cursor.fetchall()}
+            select_parts = []
+            for col in config_cols + opt_config:
+                if col in existing:
+                    select_parts.append(f"COALESCE({col}, '') AS {col}")
+            if select_parts:
+                cursor.execute(f"SELECT {', '.join(select_parts)} FROM configuracion LIMIT 1")
+                cfg = cursor.fetchone()
+                if cfg:
+                    resultado["activ_proyecto"] = (cfg.get("activ_proyecto") or "No").strip() or "No"
+                    resultado["calculo_stock_saldo"] = (cfg.get("calculo_stock_saldo") or "No").strip() or "No"
+                    resultado["utiliza_bulto_cerrado"] = (cfg.get("utiliza_bulto_cerrado") or "No").strip() or "No"
+                    resultado["utiliza_display"] = (cfg.get("utiliza_display") or "No").strip() or "No"
+                    resultado["tipo_unidad_defecto"] = (cfg.get("tipo_unidad_defecto") or "Unidad").strip() or "Unidad"
+                    resultado["usa_multiplica_bulto_promedio"] = (cfg.get("usa_multiplica_bulto_promedio") or "No").strip() or "No"
+                    resultado["tipo_balanza"] = (cfg.get("tipo_balanza") or "").strip()
+                    resultado["pedidos_parte_produccion"] = (cfg.get("pedidos_parte_produccion") or "No").strip() or "No"
+
+            # Depósitos
+            acceso_dep = (permisos.get("acceso_deposito") or "").strip()
+            id_dep = permisos.get("id_deposito")
+            if acceso_dep == "Todos" or not id_dep:
+                cursor.execute("SELECT CodDeposito, COALESCE(NombreDeposito, '') AS NombreDeposito FROM deposito WHERE COALESCE(anulado, 'No') = 'No' ORDER BY NombreDeposito")
+            else:
+                cursor.execute("SELECT CodDeposito, COALESCE(NombreDeposito, '') AS NombreDeposito FROM deposito WHERE CodDeposito = %s AND COALESCE(anulado, 'No') = 'No'", [id_dep])
+            resultado["depositos"] = [dict(r) for r in cursor.fetchall()]
+
+            # Ref movstock
+            acceso_ref = (permisos.get("acceso_ref_movstock") or "").strip()
+            id_ref = permisos.get("id_refmovstock")
+            if acceso_ref == "Todos" or not id_ref:
+                cursor.execute("SELECT id_ref_movstock, COALESCE(nombre_ref_movstock, '') AS nombre_ref_movstock FROM ref_movstock WHERE COALESCE(anulado, 'No') = 'No' ORDER BY nombre_ref_movstock")
+            else:
+                cursor.execute("SELECT id_ref_movstock, COALESCE(nombre_ref_movstock, '') AS nombre_ref_movstock FROM ref_movstock WHERE id_ref_movstock = %s AND COALESCE(anulado, 'No') = 'No'", [int(id_ref)])
+            resultado["ref_movstock"] = [dict(r) for r in cursor.fetchall()]
+
+            # Viajantes
+            cursor.execute("SELECT CodViajante, COALESCE(Nombre, '') AS Nombre FROM viajantes WHERE COALESCE(anulado, 'No') = 'No' ORDER BY Nombre")
+            resultado["viajantes"] = [dict(r) for r in cursor.fetchall()]
+
+            # Clientes
+            try:
+                cursor.execute("SELECT Codigo, COALESCE(nombre_cliente, '') AS nombre_cliente FROM cliente WHERE COALESCE(anulado, 'No') = 'No' ORDER BY nombre_cliente LIMIT 300")
+            except Exception:
+                cursor.execute("SELECT Codigo, COALESCE(nombre_cliente, '') AS nombre_cliente FROM cliente ORDER BY nombre_cliente LIMIT 300")
+            resultado["clientes"] = [dict(r) for r in cursor.fetchall()]
+
+        # Motivos (lógica en Python, sin query)
+        resultado["motivos"] = [
+            {"codigo": c, "nombre": n}
+            for c, n in get_motivos_permitidos(base_empresa, id_puesto, incluir_pedidos_produccion)
+        ]
+    except Exception as e:
+        logger.warning("Error en get_datos_iniciales_ingreso_stock (%s): %s", base_empresa, e)
+    return resultado
+
+
 def buscar_articulos(
     base_empresa: str,
     q: str,
