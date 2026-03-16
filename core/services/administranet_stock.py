@@ -785,6 +785,79 @@ def _buscar_articulos_ensamblados_con_precios(
         return []
 
 
+def _bulk_stock_y_lotes(
+    base_empresa: str,
+    ids: List[int],
+    id_deposito: Optional[int] = None,
+) -> Tuple[Dict[int, list], Dict[int, list]]:
+    """Obtiene stock por depósito y lotes para una lista de IDArt en 1 conexión (2 queries)."""
+    stock_map: Dict[int, list] = {}
+    lote_map: Dict[int, list] = {}
+    if not ids:
+        return stock_map, lote_map
+    try:
+        placeholders = ",".join(["%s"] * len(ids))
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo, sd.id_deposito, sd.saldo,
+                       COALESCE(d.NombreDeposito, '') AS nombre_deposito
+                FROM stock_deposito sd
+                INNER JOIN deposito d ON d.CodDeposito = sd.id_deposito
+                WHERE sd.id_articulo IN ({placeholders})
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                ORDER BY d.NombreDeposito
+                """,
+                ids,
+            )
+            for sr in cursor.fetchall():
+                aid = sr.get("id_articulo")
+                stock_map.setdefault(aid, []).append({
+                    "id_deposito": to_int_or_none(sr.get("id_deposito")),
+                    "nombre_deposito": str_or_default(sr.get("nombre_deposito"), "-"),
+                    "saldo": to_decimal_or_none(sr.get("saldo")) or Decimal(0),
+                })
+
+            if id_deposito is not None:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote, ls.stock_lote
+                    FROM lote l INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders}) AND ls.id_deposito = %s
+                      AND COALESCE(l.anulado, 'No') = 'No' AND COALESCE(ls.stock_lote, 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids + [id_deposito],
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote,
+                           COALESCE(SUM(ls.stock_lote), 0) AS stock_lote
+                    FROM lote l INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders})
+                      AND COALESCE(l.anulado, 'No') = 'No'
+                    GROUP BY l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote
+                    HAVING COALESCE(SUM(ls.stock_lote), 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids,
+                )
+            for lr in cursor.fetchall():
+                aid = lr.get("id_articulo")
+                vto_raw = lr.get("fecha_vto_lote")
+                lote_map.setdefault(aid, []).append({
+                    "id_lote": to_int_or_none(lr.get("id_lote")),
+                    "cod_lote": str_or_default(lr.get("cod_lote"), ""),
+                    "fecha_vto_lote": str(vto_raw) if vto_raw else None,
+                    "vto_lote": str(vto_raw) if vto_raw else None,
+                    "stock_lote": to_decimal_or_none(lr.get("stock_lote")) or Decimal(0),
+                })
+    except Exception as e:
+        logger.warning("Error en _bulk_stock_y_lotes (%s): %s", base_empresa, e)
+    return stock_map, lote_map
+
+
 def buscar_articulos_ensamblados_para_movimiento(
     base_empresa: str,
     q: str,
@@ -792,21 +865,23 @@ def buscar_articulos_ensamblados_para_movimiento(
     id_deposito: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Artículos ensamblados con mismo formato que buscar_articulos_para_movimiento (incluye stock_depositos, stock_lotes).
+    Artículos ensamblados con stock bulk (misma optimización que buscar_articulos_para_movimiento).
     """
     articulos = _buscar_articulos_ensamblados_con_precios(base_empresa, q, limit=limit)
     if not articulos:
         return []
+    ids = [a["IDArt"] for a in articulos if a.get("IDArt")]
+    if not ids:
+        return []
+    stock_map, lote_map = _bulk_stock_y_lotes(base_empresa, ids, id_deposito)
     result = []
     for a in articulos:
-        id_art = a.get("IDArt")
-        if not id_art:
+        aid = a.get("IDArt")
+        if not aid:
             continue
-        stock_depositos = get_stock_por_deposito(base_empresa, id_art)
-        stock_lotes = get_stock_por_lote(base_empresa, id_art, id_deposito=id_deposito)
         item = dict(a)
-        item["stock_depositos"] = stock_depositos
-        item["stock_lotes"] = stock_lotes
+        item["stock_depositos"] = stock_map.get(aid, [])
+        item["stock_lotes"] = lote_map.get(aid, [])
         result.append(item)
     return result
 
@@ -865,71 +940,7 @@ def buscar_articulos_para_movimiento(
             if not ids:
                 return []
 
-            placeholders = ",".join(["%s"] * len(ids))
-
-            cursor.execute(
-                f"""
-                SELECT sd.id_articulo, sd.id_deposito, sd.saldo,
-                       COALESCE(d.NombreDeposito, '') AS nombre_deposito
-                FROM stock_deposito sd
-                INNER JOIN deposito d ON d.CodDeposito = sd.id_deposito
-                WHERE sd.id_articulo IN ({placeholders})
-                  AND COALESCE(d.anulado, 'No') = 'No'
-                ORDER BY d.NombreDeposito
-                """,
-                ids,
-            )
-            stock_rows = cursor.fetchall()
-
-            if id_deposito is not None:
-                cursor.execute(
-                    f"""
-                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote, ls.stock_lote
-                    FROM lote l
-                    INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
-                    WHERE l.id_articulo IN ({placeholders}) AND ls.id_deposito = %s
-                      AND COALESCE(l.anulado, 'No') = 'No' AND COALESCE(ls.stock_lote, 0) <> 0
-                    ORDER BY l.fecha_vto_lote ASC
-                    """,
-                    ids + [id_deposito],
-                )
-            else:
-                cursor.execute(
-                    f"""
-                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote,
-                           COALESCE(SUM(ls.stock_lote), 0) AS stock_lote
-                    FROM lote l
-                    INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
-                    WHERE l.id_articulo IN ({placeholders})
-                      AND COALESCE(l.anulado, 'No') = 'No'
-                    GROUP BY l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote
-                    HAVING COALESCE(SUM(ls.stock_lote), 0) <> 0
-                    ORDER BY l.fecha_vto_lote ASC
-                    """,
-                    ids,
-                )
-            lote_rows = cursor.fetchall()
-
-        stock_map: Dict[int, list] = {}
-        for sr in stock_rows:
-            aid = sr.get("id_articulo")
-            stock_map.setdefault(aid, []).append({
-                "id_deposito": to_int_or_none(sr.get("id_deposito")),
-                "nombre_deposito": str_or_default(sr.get("nombre_deposito"), "-"),
-                "saldo": to_decimal_or_none(sr.get("saldo")) or Decimal(0),
-            })
-
-        lote_map: Dict[int, list] = {}
-        for lr in lote_rows:
-            aid = lr.get("id_articulo")
-            vto_raw = lr.get("fecha_vto_lote")
-            lote_map.setdefault(aid, []).append({
-                "id_lote": to_int_or_none(lr.get("id_lote")),
-                "cod_lote": str_or_default(lr.get("cod_lote"), ""),
-                "fecha_vto_lote": str(vto_raw) if vto_raw else None,
-                "vto_lote": str(vto_raw) if vto_raw else None,
-                "stock_lote": to_decimal_or_none(lr.get("stock_lote")) or Decimal(0),
-            })
+        stock_map, lote_map = _bulk_stock_y_lotes(base_empresa, ids, id_deposito)
 
         result = []
         for r in art_rows:
