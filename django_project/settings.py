@@ -228,6 +228,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Configuración HTTPS
 SECURE_SSL_REDIRECT = not DEBUG
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_REDIRECT_EXEMPT = [r'^static/', r'^media/']
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
@@ -316,14 +317,11 @@ CRISPY_TEMPLATE_PACK = "tailwind"
 # CDN CONFIGURATION
 # =============================================================================
 
-# CDN URL Configuration dinámica
-if DEBUG or ENVIRONMENT == 'development':
-    STATIC_URL = '/static/'
-    MEDIA_URL = '/media/'
-else:
-    CLOUDFLARE_DOMAIN = config('CLOUDFLARE_DOMAIN', default='synap.administranet.com.ar')
-    STATIC_URL = f'https://{CLOUDFLARE_DOMAIN}/static/'
-    MEDIA_URL = f'https://{CLOUDFLARE_DOMAIN}/media/'
+# Estáticos y media: STATIC_URL siempre relativa para que WhiteNoise sirva
+# correctamente y no haya redirect loops con SECURE_SSL_REDIRECT.
+# Cloudflare (CDN) cachea los estáticos por la URL relativa /static/*.
+STATIC_URL = '/static/'
+MEDIA_URL = '/media/'
 
 # CDN Cache Headers
 CDN_CACHE_HEADERS = {
