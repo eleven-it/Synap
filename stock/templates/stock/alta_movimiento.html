@@ -3,6 +3,9 @@
 {% block title %}Ingreso Mov. Stock | Synap{% endblock %}
 {% block content %}
 {% csrf_token %}
+{% if request.is_mobile %}
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+{% endif %}
 <div class="max-w-6xl mx-auto" x-data="ingresoMovStock()" x-init="init()">
   <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Ingreso Mov. Stock</h1>
 
@@ -199,12 +202,15 @@
       <!-- Mobile: búsqueda + cards -->
       <div class="md:hidden space-y-3">
         <!-- Búsqueda mobile -->
-        <div class="flex gap-2">
+        <div class="flex gap-2 items-center">
           <input type="text" x-ref="inputBusquedaArtMobile" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true"
             placeholder="Buscar artículo o escanear código"
             class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
           <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" placeholder="Cant."
             class="w-16 text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-2.5 text-sm">
+          <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" title="Escanear código de barras">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>
+          </button>
         </div>
         <p x-show="mensajeCodigoInexistente" x-cloak class="text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
 
@@ -655,6 +661,24 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal Scanner código de barras (solo mobile) -->
+  <div x-show="scannerActivo" x-cloak class="fixed inset-0 z-[100] flex flex-col bg-black" @keydown.escape.window="cerrarScanner()">
+    <div id="scanner-container" class="flex-1 w-full min-h-0 relative flex items-center justify-center">
+      <!-- Zona de encuadre -->
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="w-64 h-40 border-2 border-white rounded-lg shadow-lg"></div>
+      </div>
+      <!-- Overlay oscuro fuera de la zona (opcional, la lib puede pintar el video de fondo) -->
+    </div>
+    <div class="flex-shrink-0 p-4 bg-gray-900 flex flex-col gap-2">
+      <p x-show="scannerError" class="text-sm text-red-400 text-center" x-text="scannerError"></p>
+      <p x-show="!scannerError" class="text-sm text-gray-300 text-center">Encuadra el código de barras</p>
+      <button type="button" @click="cerrarScanner()" class="w-full py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">
+        Cerrar
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -740,6 +764,9 @@ document.addEventListener('alpine:init', function() {
       nuevoNroSerie: '',
       nuevoVtoSerie: '',
       serieSalidaSeleccionada: '',
+      tieneCamera: false,
+      scannerActivo: false,
+      scannerError: '',
       get mostrarDepDestino() {
         const m = parseInt(this.cabecera.motivo_movimiento, 10);
         return m === 6 || m === 9 || m === 10 || m === 11 || m === 12;
@@ -940,6 +967,14 @@ document.addEventListener('alpine:init', function() {
           if (self.renglones && self.renglones.length > 0) { e.preventDefault(); e.returnValue = ''; }
         };
         window.addEventListener('beforeunload', this._onBeforeUnload);
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            this.tieneCamera = devices.some(function(d) { return d.kind === 'videoinput'; });
+          } catch (e) {
+            this.tieneCamera = false;
+          }
+        }
       },
       _escHtml(s) {
         if (s == null || s === undefined) return '';
@@ -1117,6 +1152,10 @@ document.addEventListener('alpine:init', function() {
         this.filaBusqueda.sugerencias = [];
         this.dropdownSugerencias = [];
         this.mostrarDropdownArticulos = false;
+        if (typeof window !== 'undefined' && window.innerWidth < 768 && this.cabeceraMinimaCompleta) {
+          const self = this;
+          this.$nextTick(async function() { await self.confirmarFilaBusqueda(); });
+        }
       },
       async onEnterFilaBusqueda() {
         const texto = (this.filaBusqueda && this.filaBusqueda.texto != null ? this.filaBusqueda.texto : '').trim();
@@ -1164,6 +1203,92 @@ document.addEventListener('alpine:init', function() {
           if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
           const self = this;
           setTimeout(function() { self.mensajeCodigoInexistente = false; }, 3000);
+        }
+      },
+      abrirScanner() {
+        if (!this.tieneCamera || typeof Html5Qrcode === 'undefined') return;
+        this.scannerError = '';
+        this.scannerActivo = true;
+        const self = this;
+        this.$nextTick(function() {
+          const containerId = 'scanner-container';
+          if (!document.getElementById(containerId)) return;
+          if (self._html5QrCode) return;
+          self._html5QrCode = new Html5Qrcode(containerId);
+          const config = { fps: 10, qrbox: { width: 260, height: 160 } };
+          self._html5QrCode.start({ facingMode: 'environment' }, config,
+            function(decodedText, decodedResult) { self.onScanSuccess(decodedText); },
+            function() {}
+          ).catch(function(err) {
+            self.scannerError = 'No se pudo acceder a la cámara.';
+            self.scannerActivo = false;
+            self._html5QrCode = null;
+          });
+        });
+      },
+      cerrarScanner() {
+        const self = this;
+        if (this._html5QrCode) {
+          this._html5QrCode.stop().then(function() {
+            self._html5QrCode.clear();
+            self._html5QrCode = null;
+          }).catch(function() {
+            self._html5QrCode = null;
+          });
+        }
+        this.scannerActivo = false;
+        this.scannerError = '';
+      },
+      async onScanSuccess(codigo) {
+        if (navigator.vibrate) navigator.vibrate(200);
+        if (this._html5QrCode) {
+          await this._html5QrCode.stop().catch(function() {});
+          this._html5QrCode.clear();
+          this._html5QrCode = null;
+        }
+        const urlBase = '{% url "stock:api_ingreso_articulos_por_codigo" %}';
+        const params = new URLSearchParams({ codigo: String(codigo).trim() });
+        if (this.cabecera.deposito_origen) params.set('id_deposito', String(this.cabecera.deposito_origen));
+        const url = urlBase + (urlBase.indexOf('?') >= 0 ? '&' : '?') + params.toString();
+        try {
+          const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } });
+          const d = await r.json().catch(function() { return {}; });
+          const articulos = Array.isArray(d.articulos) ? d.articulos : [];
+          if (articulos.length === 1) {
+            this.scannerActivo = false;
+            this.seleccionarArticuloFilaBusqueda(articulos[0]);
+            this.mensajeCodigoInexistente = false;
+            const self = this;
+            this.$nextTick(async function() {
+              if (self.cabeceraMinimaCompleta) await self.confirmarFilaBusqueda();
+            });
+          } else {
+            this.scannerError = 'Código no encontrado';
+            const self = this;
+            setTimeout(function() {
+              if (!self.scannerActivo || typeof Html5Qrcode === 'undefined') return;
+              const containerId = 'scanner-container';
+              if (!document.getElementById(containerId)) return;
+              self._html5QrCode = new Html5Qrcode(containerId);
+              self._html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } },
+                function(t) { self.onScanSuccess(t); },
+                function() {}
+              ).catch(function() { self.scannerError = 'Error al reiniciar cámara.'; });
+            }, 800);
+          }
+        } catch (err) {
+          this.scannerError = 'Código no encontrado';
+          const self = this;
+          setTimeout(function() {
+            if (!self.scannerActivo || typeof Html5Qrcode === 'undefined') return;
+            const containerId = 'scanner-container';
+            if (!document.getElementById(containerId)) return;
+            self._html5QrCode = new Html5Qrcode(containerId);
+            self._html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } },
+              function(t) { self.onScanSuccess(t); },
+              function() {}
+            ).catch(function() {});
+          }, 800);
         }
       },
       async actualizarSaldo() {
