@@ -83,6 +83,8 @@ misc/documentacion/
 
 # Archivos de backup
 backups/
+# Permitir backups de DB para pruebas versionados explícitamente
+!backups/administranet92_*.zip
 media_bak/
 *.backup
 *.bak
