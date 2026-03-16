@@ -406,9 +406,14 @@
     </section>
   </div>
 
-  <!-- Pie: Confirmar / Cancelar -->
+  <!-- Pie: Continuar / Confirmar / Cancelar -->
   <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
-    <button type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
+    <button x-show="tabActivo === 'datos'" type="button" @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo(); window.scrollTo({top: 0, behavior: 'smooth'})" :disabled="!cabeceraMinimaCompleta"
+      class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
+      <span class="material-icons text-xl">arrow_forward</span>
+      <span>Continuar</span>
+    </button>
+    <button x-show="tabActivo === 'articulos'" x-cloak type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
       class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
       <span class="material-icons text-xl">save</span>
       <span>Confirmar movimiento</span>
