@@ -185,21 +185,23 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
     <!-- Header fijo -->
-    <header class="w-full fixed top-0 left-0 z-40 h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
+    <header class="w-full fixed top-0 left-0 z-40 h-14 md:h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
         {% include 'partials/navbar.html' %}
     </header>
     
-    <div class="pt-16 min-h-screen w-full flex pb-8">
+    <div class="pt-14 md:pt-16 min-h-screen w-full flex pb-8 md:pb-12">
         <!-- Contenido principal -->
         <main class="app-content flex-1 transition-all duration-300 no-sidebar">
-            <div class="p-8">
+            <div class="p-4 md:p-8">
                 {% block content %}{% endblock content %}
             </div>
         </main>
     </div>
 
-    <!-- Barra de estado (fecha/hora, empresa, sucursal, puesto, usuario) -->
-    {% include 'partials/status_bar.html' %}
+    <!-- Barra de estado: solo desktop -->
+    <div class="hidden md:block">
+        {% include 'partials/status_bar.html' %}
+    </div>
 
     {% block extra_js %}{% endblock %}
     
