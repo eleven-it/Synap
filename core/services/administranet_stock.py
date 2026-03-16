@@ -819,24 +819,144 @@ def buscar_articulos_para_movimiento(
 ) -> List[Dict[str, Any]]:
     """
     Búsqueda para ingreso de renglón de movimiento de stock: artículo + precios + stock por depósito + stock por lote.
-    Devuelve lista de dicts con claves: IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, Precio1V,
-    PNOficial, Alicuota, Moneda, stock_depositos (lista), stock_lotes (lista).
+    Usa 1 conexión con 3 queries bulk (artículos + stock + lotes) en vez de N+1.
     """
-    articulos = _buscar_articulos_con_precios(base_empresa, q, limit=limit)
-    if not articulos:
+    if not (q or "").strip():
         return []
-    result = []
-    for a in articulos:
-        id_art = a.get("IDArt")
-        if not id_art:
-            continue
-        stock_depositos = get_stock_por_deposito(base_empresa, id_art)
-        stock_lotes = get_stock_por_lote(base_empresa, id_art, id_deposito=id_deposito)
-        item = dict(a)
-        item["stock_depositos"] = stock_depositos
-        item["stock_lotes"] = stock_lotes
-        result.append(item)
-    return result
+    try:
+        term = f"%{(q or '').strip()}%"
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute("SHOW COLUMNS FROM articulo")
+            art_cols = {r["Field"] for r in cursor.fetchall()}
+
+            opt_cols = []
+            for col in ("cantidad_uni", "unidad_art_peso", "lote_articulo",
+                        "serie_articulo", "marca", "multiplicador_vta"):
+                if col in art_cols:
+                    opt_cols.append(f"a.{col}")
+                else:
+                    opt_cols.append(f"NULL AS {col}")
+            opt_select = ", ".join(opt_cols)
+
+            cursor.execute(
+                f"""
+                SELECT a.IDArt,
+                       COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS CodigoArticulo,
+                       COALESCE(a.NombreArticulo, '') AS Descripcion,
+                       a.id_manual, a.PrecioCosto, a.Precio1V, a.PNOficial,
+                       COALESCE(iva.Alicuota, a.Alicuota, 0) AS Alicuota,
+                       a.Moneda,
+                       {opt_select}
+                FROM articulo a
+                LEFT JOIN iva ON iva.id = a.Alicuota
+                WHERE (a.NombreArticulo LIKE %s OR a.CodigoArticuloT LIKE %s
+                       OR a.NroCodBarra LIKE %s OR CAST(a.CodigoArticulo AS CHAR) LIKE %s)
+                ORDER BY a.NombreArticulo
+                LIMIT %s
+                """,
+                [term, term, term, term, limit],
+            )
+            art_rows = cursor.fetchall()
+
+            if not art_rows:
+                return []
+
+            ids = [r["IDArt"] for r in art_rows if r.get("IDArt")]
+            if not ids:
+                return []
+
+            placeholders = ",".join(["%s"] * len(ids))
+
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo, sd.id_deposito, sd.saldo,
+                       COALESCE(d.NombreDeposito, '') AS nombre_deposito
+                FROM stock_deposito sd
+                INNER JOIN deposito d ON d.CodDeposito = sd.id_deposito
+                WHERE sd.id_articulo IN ({placeholders})
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                ORDER BY d.NombreDeposito
+                """,
+                ids,
+            )
+            stock_rows = cursor.fetchall()
+
+            if id_deposito is not None:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote, ls.stock_lote
+                    FROM lote l
+                    INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders}) AND ls.id_deposito = %s
+                      AND COALESCE(l.anulado, 'No') = 'No' AND COALESCE(ls.stock_lote, 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids + [id_deposito],
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote,
+                           COALESCE(SUM(ls.stock_lote), 0) AS stock_lote
+                    FROM lote l
+                    INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders})
+                      AND COALESCE(l.anulado, 'No') = 'No'
+                    GROUP BY l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote
+                    HAVING COALESCE(SUM(ls.stock_lote), 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids,
+                )
+            lote_rows = cursor.fetchall()
+
+        stock_map: Dict[int, list] = {}
+        for sr in stock_rows:
+            aid = sr.get("id_articulo")
+            stock_map.setdefault(aid, []).append({
+                "id_deposito": to_int_or_none(sr.get("id_deposito")),
+                "nombre_deposito": str_or_default(sr.get("nombre_deposito"), "-"),
+                "saldo": to_decimal_or_none(sr.get("saldo")) or Decimal(0),
+            })
+
+        lote_map: Dict[int, list] = {}
+        for lr in lote_rows:
+            aid = lr.get("id_articulo")
+            vto_raw = lr.get("fecha_vto_lote")
+            lote_map.setdefault(aid, []).append({
+                "id_lote": to_int_or_none(lr.get("id_lote")),
+                "cod_lote": str_or_default(lr.get("cod_lote"), ""),
+                "fecha_vto_lote": str(vto_raw) if vto_raw else None,
+                "vto_lote": str(vto_raw) if vto_raw else None,
+                "stock_lote": to_decimal_or_none(lr.get("stock_lote")) or Decimal(0),
+            })
+
+        result = []
+        for r in art_rows:
+            aid = r.get("IDArt")
+            result.append({
+                "IDArt": to_int_or_none(aid),
+                "CodigoArticulo": str_or_default(r.get("CodigoArticulo"), "-"),
+                "Descripcion": str_or_default(r.get("Descripcion"), "-"),
+                "id_manual": str_or_default(r.get("id_manual"), "-"),
+                "PrecioCosto": to_decimal_or_none(r.get("PrecioCosto")),
+                "Precio1V": to_decimal_or_none(r.get("Precio1V")),
+                "PNOficial": to_decimal_or_none(r.get("PNOficial")),
+                "Alicuota": to_decimal_or_none(r.get("Alicuota")),
+                "Moneda": str_or_default(r.get("Moneda"), "-"),
+                "multiplicador_vta": r.get("multiplicador_vta"),
+                "cantidad_uni": r.get("cantidad_uni"),
+                "unidad_art_peso": r.get("unidad_art_peso"),
+                "lote_articulo": r.get("lote_articulo"),
+                "serie_articulo": r.get("serie_articulo"),
+                "marca": r.get("marca"),
+                "stock_depositos": stock_map.get(aid, []),
+                "stock_lotes": lote_map.get(aid, []),
+            })
+        return result
+    except Exception as e:
+        logger.warning("Error en buscar_articulos_para_movimiento (%s): %s", base_empresa, e)
+        return []
 
 
 def get_saldo_articulo_deposito(
