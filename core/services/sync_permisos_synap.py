@@ -1,25 +1,27 @@
 """
 Sincronización automática de permisos Synap → permiso_sistema (AdministraNET).
 Usado tras login para asegurar que la base de la empresa tenga los key_permiso que Synap usa.
+
+Optimización: usa 1 conexión, 1 SELECT bulk y 1 INSERT batch en vez de N queries.
 """
 import logging
 from typing import List, Dict, Tuple
+
+import MySQLdb
 
 from django.conf import settings
 from django.core.cache import cache
 
 from core.constantes_permisos import PERMISOS_POR_MODULO
-from core.services.administranet_permiso_sistema import AdministraNETPermisoSistemaService
 
 logger = logging.getLogger(__name__)
 
-# Clave de cache por empresa; TTL en segundos (por defecto 24h)
 CACHE_KEY_PREFIX = "synap_perm_sync:"
 MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout")
 
 
 def _lista_permisos_synap(grupo_permiso: str = "Synap") -> List[Dict]:
-    """Construye la lista de permisos a sincronizar (misma lógica que sync_synap_permissions_to_adminet)."""
+    """Construye la lista de permisos a sincronizar."""
     permisos = []
     for modulo, lista_permisos in PERMISOS_POR_MODULO.items():
         for codigo, nombre in lista_permisos:
@@ -45,37 +47,71 @@ def _lista_permisos_synap(grupo_permiso: str = "Synap") -> List[Dict]:
     return permisos
 
 
+def _get_mysql_connection(base_empresa: str):
+    """Abre una conexión directa a la base MySQL de la empresa."""
+    mysql_config = settings.DATABASES['mysql']
+    return MySQLdb.connect(
+        host=mysql_config['HOST'],
+        port=int(mysql_config['PORT']),
+        user=mysql_config['USER'],
+        passwd=mysql_config['PASSWORD'],
+        db=base_empresa,
+        charset='latin1',
+    )
+
+
 def sincronizar_permisos_synap_para_empresa(
     base_empresa: str, grupo_permiso: str = "Synap"
 ) -> Tuple[int, int]:
     """
-    Sincroniza los permisos de Synap en la tabla permiso_sistema de una base de empresa.
-    Solo crea los que no existan (idempotente).
+    Sincroniza los permisos de Synap en permiso_sistema de una empresa.
+    Usa 1 conexión + 1 SELECT bulk + 1 INSERT batch (idempotente).
     Devuelve (creados, existentes).
     """
-    servicio = AdministraNETPermisoSistemaService()
     permisos_synap = _lista_permisos_synap(grupo_permiso)
-    creados = 0
-    existentes = 0
-    for permiso_data in permisos_synap:
-        try:
-            lista = servicio.listar_permisos(
-                base_empresa=base_empresa, busqueda=permiso_data["key_permiso"]
+    if not permisos_synap:
+        return 0, 0
+
+    conn = _get_mysql_connection(base_empresa)
+    try:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT key_permiso FROM permiso_sistema")
+        keys_existentes = {row[0] for row in cursor.fetchall()}
+
+        por_insertar = [
+            p for p in permisos_synap if p["key_permiso"] not in keys_existentes
+        ]
+        existentes = len(permisos_synap) - len(por_insertar)
+
+        if por_insertar:
+            cursor.executemany(
+                """INSERT INTO permiso_sistema
+                   (key_permiso, nombre_permiso, detalle_permiso,
+                    grupo_permiso, tipo_permiso, default_permiso, detalle_valor_permiso)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                [
+                    (
+                        p["key_permiso"].strip(),
+                        p["nombre_permiso"].strip(),
+                        p["detalle_permiso"].strip(),
+                        p["grupo_permiso"].strip(),
+                        p["tipo_permiso"].strip(),
+                        p["default_permiso"].strip(),
+                        p["detalle_valor_permiso"].strip(),
+                    )
+                    for p in por_insertar
+                ],
             )
-            if any(p.get("key_permiso") == permiso_data["key_permiso"] for p in lista):
-                existentes += 1
-            else:
-                nuevo_id = servicio.crear_permiso(base_empresa, permiso_data)
-                if nuevo_id:
-                    creados += 1
-        except Exception as e:
-            logger.warning(
-                "Error al sincronizar permiso %s en %s: %s",
-                permiso_data.get("key_permiso"),
-                base_empresa,
-                e,
-            )
-    return creados, existentes
+            conn.commit()
+
+        cursor.close()
+        return len(por_insertar), existentes
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def asegurar_permisos_synap_si_procede(base_empresa: str) -> None:
