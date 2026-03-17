@@ -189,7 +189,7 @@
     (function() {
         var cookieName = 'synap_prefer_mobile';
         var maxAge = 365 * 24 * 60 * 60;
-        var viewportMax = 1024;
+        var viewportMax = 1366;
         function getCookie(n) {
             var m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
             return m ? m[2] : null;
@@ -197,11 +197,15 @@
         function setCookie(n, v) {
             document.cookie = n + '=' + v + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
         }
-        if (getCookie(cookieName) === null) {
-            var w = window.innerWidth || document.documentElement.clientWidth || viewportMax;
-            var preferMobile = w <= viewportMax ? '1' : '0';
+        var w = window.innerWidth || document.documentElement.clientWidth || viewportMax;
+        var preferMobile = w <= viewportMax ? '1' : '0';
+        var current = getCookie(cookieName);
+        if (current === null) {
             setCookie(cookieName, preferMobile);
             if (preferMobile === '1') { window.location.reload(); }
+        } else if (current === '0' && preferMobile === '1') {
+            setCookie(cookieName, '1');
+            window.location.reload();
         }
     })();
     </script>

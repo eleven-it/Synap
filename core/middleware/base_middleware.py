@@ -459,7 +459,8 @@ class RequestUserMiddleware:
 # (soluciona iPad/tablet con Chrome que envía User-Agent de escritorio)
 SYNAP_PREFER_MOBILE_COOKIE = 'synap_prefer_mobile'
 # Viewport máximo (px) para considerar "mobile" cuando se usa la cookie
-SYNAP_PREFER_MOBILE_VIEWPORT_MAX = 1024
+# 1366 incluye iPad en landscape (típ. 1024–1366 px)
+SYNAP_PREFER_MOBILE_VIEWPORT_MAX = 1366
 
 
 class DeviceDetectionMiddleware(MiddlewareMixin):
