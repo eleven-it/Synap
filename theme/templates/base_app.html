@@ -184,12 +184,11 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
-    <!-- Cookie viewport + detección tablet (iPad/Android) para layout móvil -->
+    <!-- Detección dos capas: iPad, Android tablet, pantalla pequeña → device_hint=mobile -->
     <script>
     (function() {
-        var cookieName = 'synap_prefer_mobile';
-        var maxAge = 365 * 24 * 60 * 60;
-        var viewportMax = 1366;
+        var cookieName = 'device_hint';
+        var maxAge = 86400;
         function getCookie(n) {
             var m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
             return m ? m[2] : null;
@@ -197,16 +196,17 @@
         function setCookie(n, v) {
             document.cookie = n + '=' + v + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
         }
-        var w = window.innerWidth || document.documentElement.clientWidth || viewportMax;
-        var isIPad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
-        var preferMobile = isIPad || w <= viewportMax ? '1' : '0';
+        var ua = navigator.userAgent;
+        var minSide = Math.min(window.screen.width, window.screen.height);
+        var esIPad = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+        var esAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+        var esPantallaPequena = minSide < 768;
+        var esMobile = esIPad || esAndroidTablet || esPantallaPequena;
+        var hint = esMobile ? 'mobile' : 'desktop';
         var current = getCookie(cookieName);
-        if (current === null) {
-            setCookie(cookieName, preferMobile);
-            if (preferMobile === '1') { window.location.reload(); }
-        } else if (current === '0' && preferMobile === '1') {
-            setCookie(cookieName, '1');
-            window.location.reload();
+        if (current === null || current !== hint) {
+            setCookie(cookieName, hint);
+            if (current !== hint) { window.location.reload(); }
         }
     })();
     </script>

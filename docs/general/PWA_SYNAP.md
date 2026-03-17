@@ -106,26 +106,18 @@ El bloque PWA en `base_app.html` está envuelto en:
 {% endif %}
 ```
 
-`request.is_mobile` es inyectado por `DeviceDetectionMiddleware` basándose en el User-Agent y, si existe, en la cookie `synap_prefer_mobile` (ver más abajo).
+`request.is_mobile` es inyectado por `DeviceDetectionMiddleware` con detección en dos capas: (1) cookie `device_hint` (valores `mobile` | `desktop`) seteada por el script en cliente; (2) User-Agent (PHONE_PATTERNS y TABLET_PATTERNS). Se acepta también la cookie legacy `synap_prefer_mobile` (`1`/`0`). Ver **docs/general/DETECCION_TABLET_IPAD_ANDROID.md**.
 
 | Dispositivo | PWA activa |
 |-------------|-----------|
-| Android | Sí |
-| iPhone/iPad (UA con "iPad"/"iPhone") | Sí |
-| iPad/tablet con Chrome (UA tipo Macintosh) | Sí, tras cookie de viewport |
+| Android phone/tablet (UA detectable) | Sí |
+| iPhone (UA con "iPhone") | Sí |
+| iPad con UA tipo Macintosh | Sí, tras cookie device_hint=mobile (script detecta MacIntel + maxTouchPoints) |
 | Desktop | No |
 
-### Tablet / iPad con Chrome (UA de escritorio)
+### Tablet / iPad (detección en dos capas)
 
-En iPadOS 13+, Safari y Chrome pueden enviar un User-Agent de escritorio (p. ej. "Macintosh") sin la cadena "iPad", por lo que el servidor serviría la versión desktop. Para evitarlo:
-
-1. En la primera carga sin cookie, un script en `base_app.html` lee el ancho del viewport.
-2. Si el ancho es ≤ 1366 px (incluye iPad en landscape), se guarda la cookie `synap_prefer_mobile=1` y se recarga la página una vez; en las siguientes peticiones el middleware fuerza `request.is_mobile = True`.
-3. Si el ancho es > 1366 px, se guarda `synap_prefer_mobile=0` (sin recarga).
-4. Si ya existía cookie `0` pero el viewport actual es ≤ 1366 px, se actualiza a `1` y se recarga para mostrar versión móvil.
-5. Además, en cliente se detecta **iPad (iPadOS 13+)** con `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`; si se cumple, se fuerza layout móvil aunque el viewport sea grande (p. ej. iPad 10" en landscape). Ver **docs/general/DETECCION_TABLET_IPAD_ANDROID.md**.
-
-Así, en una iPad con Chrome (o Safari en modo escritorio), la primera carga puede recargar y la segunda ya muestra la versión móvil. La cookie tiene validez de 1 año. Para volver a versión desktop en tablet, el usuario puede borrar la cookie o usar la opción del navegador "Solicitar sitio de escritorio".
+En iPadOS 13+, el UA en servidor es tipo Macintosh; el script en `base_app.html` detecta iPad con `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`, setea `device_hint=mobile` y recarga. El siguiente request ya llega con la cookie y el middleware marca `request.is_mobile = True`. La cookie tiene validez de 1 día. Opcionalmente el cliente puede llamar a POST `/set-device-hint/` para actualizar la cookie sin recarga.
 
 ---
 

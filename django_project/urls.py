@@ -22,6 +22,7 @@ from django.views.generic import TemplateView
 from core.views import error_403_view
 from core.views.media_views import serve_media_file
 from core.views.pwa_views import serve_sw, serve_manifest
+from core.views.device_views import set_device_hint
 from django.shortcuts import redirect
 
 # URLs base (siempre disponibles)
@@ -35,6 +36,7 @@ urlpatterns = [
     path("sw.js", serve_sw, name="pwa_sw"),
     path("manifest.json", serve_manifest, name="pwa_manifest"),
     path("offline/", TemplateView.as_view(template_name="offline.html"), name="pwa_offline"),
+    path("set-device-hint/", set_device_hint, name="set_device_hint"),
     # Vista alternativa para servir archivos media cuando el servidor web no está configurado
     path("media/<path:path>", serve_media_file, name="serve_media"),
     # Mercado Pago se carga por registro de módulos cuando está activo (evita W005 namespace duplicado).

@@ -60,7 +60,13 @@ Conclusión: en Android tablet también conviene combinar UA (cuando indique mó
 
 ---
 
-## Enfoque recomendado para Synap
+## Enfoque implementado en Synap: detección en dos capas
+
+**Capa 1 — Servidor:** Cookie `device_hint` (mobile|desktop); si no hay, PHONE_PATTERNS y TABLET_PATTERNS en UA. iPad con UA Mac no detectable en servidor. **Capa 2 — Cliente:** Script detecta iPad (MacIntel + maxTouchPoints), Android tablet (Android sin Mobile), pantalla &lt; 768 px; setea `device_hint` y recarga. Compatibilidad: cookie `synap_prefer_mobile` (1/0). Endpoint opcional: POST `/set-device-hint/`.
+
+---
+
+## Enfoque recomendado para Synap (referencia)
 
 Combinar **tres señales** (sin depender de servicios externos):
 
