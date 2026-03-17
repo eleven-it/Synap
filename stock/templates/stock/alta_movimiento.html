@@ -10,13 +10,20 @@
   <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Ingreso Mov. Stock</h1>
 
   <!-- Mensajes -->
-  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300" x-text="mensajeError"></div>
+  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 break-words overflow-hidden" x-text="mensajeError"></div>
   <div x-show="mensajeOk" x-cloak class="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
     <p x-text="mensajeOk"></p>
     <template x-if="nroComprobante">
-      <p class="mt-2">
-        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" class="font-medium underline">Descargar comprobante PDF</a>
+      <p class="mt-2 break-words">
+        {% if request.is_mobile %}
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/'" class="font-medium underline">Ver comprobante</a>
         <span class="mx-2">|</span>
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" rel="noopener noreferrer" class="font-medium underline">Descargar PDF</a>
+        <span class="mx-2">|</span>
+        {% else %}
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" rel="noopener noreferrer" class="font-medium underline">Descargar comprobante PDF</a>
+        <span class="mx-2">|</span>
+        {% endif %}
         <a href="{% url 'stock:alta_movimiento' %}" class="font-medium underline">Nuevo movimiento</a>
       </p>
     </template>
@@ -183,10 +190,10 @@
   </div>
 
   <!-- Panel: Artículos (tabla única con fila de búsqueda) -->
-  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6" x-cloak>
-    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6 min-w-0 overflow-hidden" x-cloak>
+    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-w-0 overflow-hidden">
       <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Artículos</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 break-words" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
       <div x-show="mostrarSaldoDeseado" x-cloak class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
         <label for="saldo_deseado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo deseado</label>
         <div class="flex flex-wrap items-center gap-2">
@@ -196,16 +203,16 @@
           <span class="text-xs text-gray-500 dark:text-gray-400">Al salir del campo o Enter se calcula Entrada/Salida y cantidad según la diferencia con el saldo actual.</span>
         </div>
       </div>
-      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 break-words">
         Complete los datos mínimos del movimiento (fecha, motivo, depósito origen<span x-show="mostrarDepDestino">, depósito destino</span>) para poder agregar artículos.
       </p>
       <!-- Mobile: búsqueda + cards -->
-      <div class="md:hidden space-y-3">
+      <div class="md:hidden space-y-3 min-w-0">
         <!-- Búsqueda mobile -->
-        <div class="flex gap-2 items-center">
+        <div class="flex gap-2 items-center min-w-0">
           <input type="text" x-ref="inputBusquedaArtMobile" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true"
             placeholder="Buscar artículo o escanear código"
-            class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
+            class="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
           <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" placeholder="Cant."
             class="w-16 text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-2.5 text-sm">
           <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" title="Escanear código de barras">

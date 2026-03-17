@@ -455,10 +455,22 @@ class RequestUserMiddleware:
         return self.get_response(request)
 
 
+# Cookie que el cliente puede setear por viewport para forzar layout móvil/desktop
+# (soluciona iPad/tablet con Chrome que envía User-Agent de escritorio)
+SYNAP_PREFER_MOBILE_COOKIE = 'synap_prefer_mobile'
+# Viewport máximo (px) para considerar "mobile" cuando se usa la cookie
+SYNAP_PREFER_MOBILE_VIEWPORT_MAX = 1024
+
+
 class DeviceDetectionMiddleware(MiddlewareMixin):
     """
     Middleware para detectar si el dispositivo es móvil o desktop
-    y agregar esta información al request
+    y agregar esta información al request.
+
+    Primero se usa el User-Agent. Si el cliente envió la cookie
+    synap_prefer_mobile (seteada por JS según ancho de viewport),
+    se respeta para corregir casos como iPad con Chrome en modo
+    escritorio, que no envía "iPad" en el UA.
     """
     
     def process_request(self, request):
@@ -484,14 +496,22 @@ class DeviceDetectionMiddleware(MiddlewareMixin):
             r'RIM Tablet OS'
         ]
         
-        # Verificar si es móvil
+        # Verificar si es móvil por User-Agent
         is_mobile = any(re.search(pattern, user_agent, re.IGNORECASE) for pattern in mobile_patterns)
+        
+        # Respetar preferencia por viewport (cookie setada por JS en cliente)
+        # Así iPad/tablet con Chrome (UA tipo Macintosh) reciben layout móvil
+        prefer_mobile = request.COOKIES.get(SYNAP_PREFER_MOBILE_COOKIE)
+        if prefer_mobile == '1':
+            is_mobile = True
+        elif prefer_mobile == '0':
+            is_mobile = False
         
         # Agregar información al request
         request.is_mobile = is_mobile
         request.is_desktop = not is_mobile
         
-        # Detectar tipo específico de dispositivo
+        # Detectar tipo específico de dispositivo (solo por UA; cookie no cambia device_type)
         if 'Android' in user_agent:
             request.device_type = 'android'
         elif 'iPhone' in user_agent:

@@ -184,6 +184,27 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
+    <!-- Cookie de viewport para layout móvil (iPad/tablet con Chrome en modo escritorio) -->
+    <script>
+    (function() {
+        var cookieName = 'synap_prefer_mobile';
+        var maxAge = 365 * 24 * 60 * 60;
+        var viewportMax = 1024;
+        function getCookie(n) {
+            var m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
+            return m ? m[2] : null;
+        }
+        function setCookie(n, v) {
+            document.cookie = n + '=' + v + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+        }
+        if (getCookie(cookieName) === null) {
+            var w = window.innerWidth || document.documentElement.clientWidth || viewportMax;
+            var preferMobile = w <= viewportMax ? '1' : '0';
+            setCookie(cookieName, preferMobile);
+            if (preferMobile === '1') { window.location.reload(); }
+        }
+    })();
+    </script>
     <!-- Header fijo -->
     <header class="w-full fixed top-0 left-0 z-40 h-14 md:h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
         {% include 'partials/navbar.html' %}

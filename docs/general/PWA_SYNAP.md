@@ -106,13 +106,24 @@ El bloque PWA en `base_app.html` está envuelto en:
 {% endif %}
 ```
 
-`request.is_mobile` es inyectado por `DeviceDetectionMiddleware` basándose en el User-Agent.
+`request.is_mobile` es inyectado por `DeviceDetectionMiddleware` basándose en el User-Agent y, si existe, en la cookie `synap_prefer_mobile` (ver más abajo).
 
 | Dispositivo | PWA activa |
 |-------------|-----------|
 | Android | Sí |
-| iPhone/iPad | Sí |
+| iPhone/iPad (UA con "iPad"/"iPhone") | Sí |
+| iPad/tablet con Chrome (UA tipo Macintosh) | Sí, tras cookie de viewport |
 | Desktop | No |
+
+### Tablet / iPad con Chrome (UA de escritorio)
+
+En iPadOS 13+, Safari y Chrome pueden enviar un User-Agent de escritorio (p. ej. "Macintosh") sin la cadena "iPad", por lo que el servidor serviría la versión desktop. Para evitarlo:
+
+1. En la primera carga sin cookie, un script en `base_app.html` lee el ancho del viewport.
+2. Si el ancho es ≤ 1024 px, se guarda la cookie `synap_prefer_mobile=1` y se recarga la página una vez; en las siguientes peticiones el middleware fuerza `request.is_mobile = True`.
+3. Si el ancho es > 1024 px, se guarda `synap_prefer_mobile=0` (sin recarga).
+
+Así, en una iPad con Chrome (o Safari en modo escritorio), la primera carga puede recargar y la segunda ya muestra la versión móvil. La cookie tiene validez de 1 año. Para volver a versión desktop en tablet, el usuario puede borrar la cookie o usar la opción del navegador "Solicitar sitio de escritorio".
 
 ---
 
