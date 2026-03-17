@@ -73,6 +73,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'core.middleware.request_scoped_mysql.RequestScopedMysqlMiddleware',  # Una conexión MySQL por request
     'django.middleware.locale.LocaleMiddleware',  # Middleware para i18n
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

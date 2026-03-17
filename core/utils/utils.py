@@ -633,79 +633,75 @@ def obtener_app_por_id(app_id: str) -> Optional[Dict[str, Any]]:
             return app
     return None
 
-def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=None) -> List[Dict[str, Any]]:
-    """Obtiene los submenús visibles para una app específica según los permisos del usuario"""
+def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optional[Dict[str, Any]]:
+    """Resuelve la URL de un ítem de menú con 'url'. Retorna dict con label, url, icon, permission o None si no aplica."""
     from django.urls import reverse
     from django.urls.exceptions import NoReverseMatch
-    
+
+    if "url" not in item:
+        return None
+    if "*" not in permisos_usuario and item.get("permission", "") not in permisos_usuario:
+        return None
+    try:
+        url_mapping = {}
+        if item["url"] in url_mapping:
+            url = url_mapping[item["url"]]
+        else:
+            url_kwargs = item.get("url_kwargs") or {}
+            url = reverse(item["url"], kwargs=url_kwargs)
+        if request and "{empresa_id}" in url:
+            empresa_activa = None
+            if hasattr(request.user, "empresa_activa") and request.user.empresa_activa:
+                empresa_activa = request.user.empresa_activa
+            elif request.session.get("empresa_activa_id"):
+                try:
+                    from core.models import Empresa
+                    empresa_activa = Empresa.objects.get(id=request.session["empresa_activa_id"], activa=True)
+                except Exception:
+                    pass
+            if empresa_activa:
+                url = url.replace("{empresa_id}", str(empresa_activa.id))
+            else:
+                return None
+        return {
+            "label": str(item.get("label", "")),
+            "url": url,
+            "icon": item.get("icon", ""),
+            "permission": item.get("permission", ""),
+        }
+    except NoReverseMatch:
+        logger.debug("NoReverseMatch para ítem de menú: %s", item.get("url", ""))
+        return {"label": str(item.get("label", "")), "url": "#", "icon": item.get("icon", ""), "permission": item.get("permission", "")}
+    except Exception as e:
+        logger.debug("Error resolviendo URL ítem %s: %s", item.get("url", ""), e)
+        return {"label": str(item.get("label", "")), "url": "#", "icon": item.get("icon", ""), "permission": item.get("permission", "")}
+
+
+def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=None) -> List[Dict[str, Any]]:
+    """Obtiene los submenús visibles para una app específica según los permisos del usuario.
+    Soporta ítems anidados: si un ítem tiene 'items' y no 'url', se procesan solo los hijos."""
     app = obtener_app_por_id(app_id)
     if not app or not app.get("submenus"):
         return []
-    
+
     submenus_visibles = []
     for submenu in app["submenus"]:
         items_visibles = []
         for item in submenu["items"]:
-            if "*" in permisos_usuario or item.get("permission", "") in permisos_usuario:
-                try:
-                    # Verificar que la clave 'url' existe
-                    if "url" not in item:
-                        print(f"Warning: Item missing 'url' key: {item}")
-                        continue
-                    
-                    # Mapeo de URLs hardcodeadas para evitar problemas de resolución
-                    url_mapping = {}
-                    
-                    # Usar mapeo hardcodeado si existe, sino intentar reverse
-                    if item["url"] in url_mapping:
-                        url = url_mapping[item["url"]]
-                        print(f"Using hardcoded URL for '{item['url']}': '{url}'")
-                    else:
-                        # reverse con kwargs si el ítem lo define (ej. core:branch_list con empresa_id=1)
-                        url_kwargs = item.get("url_kwargs") or {}
-                        url = reverse(item["url"], kwargs=url_kwargs)
-                        print(f"Successfully resolved URL '{item['url']}' to '{url}'")
-                    
-                    # Reemplazar {empresa_id} en la URL si existe y tenemos request
-                    if request and '{empresa_id}' in url:
-                        empresa_activa = None
-                        if hasattr(request.user, 'empresa_activa') and request.user.empresa_activa:
-                            empresa_activa = request.user.empresa_activa
-                        elif request.session.get('empresa_activa_id'):
-                            try:
-                                from core.models import Empresa
-                                empresa_activa = Empresa.objects.get(id=request.session['empresa_activa_id'], activa=True)
-                            except:
-                                pass
-                        
-                        if empresa_activa:
-                            url = url.replace('{empresa_id}', str(empresa_activa.id))
-                        else:
-                            # Si no hay empresa activa, ocultar el ítem
-                            continue
-                            
-                except NoReverseMatch:
-                    # Si no se puede resolver la URL, usar una URL por defecto
-                    print(f"Warning: Could not resolve URL '{item.get('url', '')}' for item: {item}")
-                    url = "#"
-                except Exception as e:
-                    # Manejar cualquier otro error
-                    print(f"Error processing item {item}: {e}")
-                    url = "#"
-                
-                items_visibles.append({
-                    "label": str(item.get("label", "")),
-                    "url": url,
-                    "icon": item.get("icon", ""),
-                    "permission": item.get("permission", "")
-                })
-        
+            if "items" in item and "url" not in item:
+                for child in item.get("items", []):
+                    resolved = _resolver_url_item(child, request, permisos_usuario)
+                    if resolved:
+                        items_visibles.append(resolved)
+                continue
+            resolved = _resolver_url_item(item, request, permisos_usuario)
+            if resolved:
+                items_visibles.append(resolved)
         if items_visibles:
             submenus_visibles.append({
                 "seccion": str(submenu.get("seccion", "")),
-                "items": items_visibles
+                "items": items_visibles,
             })
-    
     return submenus_visibles
 
 def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -> List[Dict[str, Any]]:

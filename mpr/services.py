@@ -1132,16 +1132,20 @@ def _listar_unidades_por_demanda(
 def listar_ventana_pack_unidades(
     base_empresa: str,
     limit: int = 200,
+    filas_pack: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Desglose por unidades (componentes de las recetas de los packs). Toma los artículos
     de listar_ventana_pack con Cant a producir > 0, explota sus BOM (en_abm_formula),
     agrega la demanda por id_articulo componente y devuelve filas con las mismas columnas
     que la ventana pack. Solo lectura, sin checkbox.
+    Si se pasa filas_pack (resultado ya calculado de listar_ventana_pack), se reutiliza
+    y no se vuelve a llamar a listar_ventana_pack (reduce conexiones MySQL).
     """
     if not (base_empresa or "").strip():
         return []
-    filas_pack = listar_ventana_pack(base_empresa, limit=limit * 2)
+    if filas_pack is None:
+        filas_pack = listar_ventana_pack(base_empresa, limit=limit * 2)
     art_ids = [to_int_or_none(r.get("id_articulo")) for r in filas_pack if (r.get("cantidad_a_fabricar") or 0) > 0]
     art_ids = [a for a in art_ids if a is not None]
     abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}

@@ -2565,7 +2565,9 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
 
         try:
             context["filas"] = listar_ventana_pack(base_empresa, limit=200)
-            context["filas_unidades"] = listar_ventana_pack_unidades(base_empresa, limit=200)
+            context["filas_unidades"] = listar_ventana_pack_unidades(
+                base_empresa, limit=200, filas_pack=context["filas"]
+            )
             for f in context["filas"]:
                 f["cantidad_a_fabricar_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
                 f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)

@@ -10,6 +10,7 @@ from .base_middleware import (
     RequestUserMiddleware,
     DeviceDetectionMiddleware,
 )
+from .request_scoped_mysql import RequestScopedMysqlMiddleware
 
 __all__ = [
     'RateLimitMiddleware',
@@ -20,4 +21,5 @@ __all__ = [
     'CDNCacheMiddleware',
     'RequestUserMiddleware',
     'DeviceDetectionMiddleware',
+    'RequestScopedMysqlMiddleware',
 ] 
