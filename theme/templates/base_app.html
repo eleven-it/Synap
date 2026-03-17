@@ -184,7 +184,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
-    <!-- Cookie de viewport para layout móvil (iPad/tablet con Chrome en modo escritorio) -->
+    <!-- Cookie viewport + detección tablet (iPad/Android) para layout móvil -->
     <script>
     (function() {
         var cookieName = 'synap_prefer_mobile';
@@ -198,7 +198,8 @@
             document.cookie = n + '=' + v + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
         }
         var w = window.innerWidth || document.documentElement.clientWidth || viewportMax;
-        var preferMobile = w <= viewportMax ? '1' : '0';
+        var isIPad = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+        var preferMobile = isIPad || w <= viewportMax ? '1' : '0';
         var current = getCookie(cookieName);
         if (current === null) {
             setCookie(cookieName, preferMobile);

@@ -123,6 +123,7 @@ En iPadOS 13+, Safari y Chrome pueden enviar un User-Agent de escritorio (p. ej.
 2. Si el ancho es ≤ 1366 px (incluye iPad en landscape), se guarda la cookie `synap_prefer_mobile=1` y se recarga la página una vez; en las siguientes peticiones el middleware fuerza `request.is_mobile = True`.
 3. Si el ancho es > 1366 px, se guarda `synap_prefer_mobile=0` (sin recarga).
 4. Si ya existía cookie `0` pero el viewport actual es ≤ 1366 px, se actualiza a `1` y se recarga para mostrar versión móvil.
+5. Además, en cliente se detecta **iPad (iPadOS 13+)** con `navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1`; si se cumple, se fuerza layout móvil aunque el viewport sea grande (p. ej. iPad 10" en landscape). Ver **docs/general/DETECCION_TABLET_IPAD_ANDROID.md**.
 
 Así, en una iPad con Chrome (o Safari en modo escritorio), la primera carga puede recargar y la segunda ya muestra la versión móvil. La cookie tiene validez de 1 año. Para volver a versión desktop en tablet, el usuario puede borrar la cookie o usar la opción del navegador "Solicitar sitio de escritorio".
 
