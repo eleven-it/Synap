@@ -3,6 +3,7 @@ from .currency import *
 from .system_config import *
 from .uom_models import *
 from .module_config import *
+from .navbar_menu_global import NavbarMenuGlobal
 from .fiscal_responsibility import FiscalResponsibility
 
 # Exportar explícitamente los modelos que se usan en otros módulos

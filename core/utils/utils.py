@@ -39,13 +39,13 @@ APPS_MENU = [
             {
                 "seccion": _("Parámetros"),
                 "items": [
-                    {"label": _("Datos empresa"), "url": "core:empresa_listar", "icon": "business", "permission": "configuracion.sistema"},
-                    {"label": _("Sucursales"), "url": "core:branch_list", "icon": "location_on", "permission": "configuracion.sistema", "url_kwargs": {"empresa_id": 1}},
-                    {"label": _("Administrador de usuario"), "url": "core:usuarios", "icon": "group", "permission": "usuarios.ver"},
-                    {"label": _("Puesto"), "url": "core:listar_roles", "icon": "badge", "permission": "usuarios.roles.ver"},
-                    {"label": _("Permiso en menú"), "url": "core:listar_permisos", "icon": "menu_book", "permission": "usuarios.permisos.ver"},
-                    {"label": _("Permiso en sistema"), "url": "core:permisos_sistema", "icon": "admin_panel_settings", "permission": "usuarios.permisos.ver"},
-                    {"label": _("Referencia de movimiento de stock"), "url": "stock:ref_movstock_list", "icon": "bookmark", "permission": "stock.ref_movstock"},
+                    {"label": _("Datos empresa"), "url": "core:empresa_listar", "icon": "business", "permission": "configuracion.sistema", "menu_item_id": "archivo_param_empresa"},
+                    {"label": _("Sucursales"), "url": "core:branch_list", "icon": "location_on", "permission": "configuracion.sistema", "url_kwargs": {"empresa_id": 1}, "menu_item_id": "archivo_param_sucursales"},
+                    {"label": _("Administrador de usuario"), "url": "core:usuarios", "icon": "group", "permission": "usuarios.ver", "menu_item_id": "archivo_param_usuarios"},
+                    {"label": _("Puesto"), "url": "core:listar_roles", "icon": "badge", "permission": "usuarios.roles.ver", "menu_item_id": "archivo_param_puesto"},
+                    {"label": _("Permiso en menú"), "url": "core:listar_permisos", "icon": "menu_book", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_menu"},
+                    {"label": _("Permiso en sistema"), "url": "core:permisos_sistema", "icon": "admin_panel_settings", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_sistema"},
+                    {"label": _("Referencia de movimiento de stock"), "url": "stock:ref_movstock_list", "icon": "bookmark", "permission": "stock.ref_movstock", "menu_item_id": "archivo_param_ref_movstock"},
                 ]
             },
         ]
@@ -62,26 +62,26 @@ APPS_MENU = [
             {
                 "seccion": _("Movimientos"),
                 "items": [
-                    {"label": _("Ingreso Mov. Stock"), "url": "stock:alta_movimiento", "icon": "add_circle", "permission": "stock.crear_movimiento"},
-                    {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "stock.crear_movimiento"},
-                    {"label": _("Remito de Venta"), "url": "stock:alta_movimiento", "icon": "receipt_long", "permission": "stock.crear_movimiento"},
-                    {"label": _("Pedido interno a depósito / compras"), "url": "stock:alta_movimiento", "icon": "swap_horiz", "permission": "stock.crear_movimiento"},
-                    {"label": _("Inventario"), "url": "stock:consulta_ficha_stock", "icon": "inventory_2", "permission": "stock.consultas"},
+                    {"label": _("Ingreso Mov. Stock"), "url": "stock:alta_movimiento", "icon": "add_circle", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_ingreso"},
+                    {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_compra"},
+                    {"label": _("Remito de Venta"), "url": "stock:alta_movimiento", "icon": "receipt_long", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_venta"},
+                    {"label": _("Pedido interno a depósito / compras"), "url": "stock:alta_movimiento", "icon": "swap_horiz", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_pedido_interno"},
+                    {"label": _("Inventario"), "url": "stock:consulta_ficha_stock", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
                 ]
             },
             {
                 "seccion": _("Consultas"),
                 "items": [
-                    {"label": _("Consulta Ficha de Stock"), "url": "stock:consulta_ficha_stock", "icon": "description", "permission": "stock.consultas"},
-                    {"label": _("Consultas y Anulaciones"), "url": "stock:visualiza_movimientos", "icon": "list_alt", "permission": "stock.consultas"},
-                    {"label": _("Informes"), "url": "stock:visualiza_movimientos", "icon": "assessment", "permission": "stock.informes"},
+                    {"label": _("Consulta Ficha de Stock"), "url": "stock:consulta_ficha_stock", "icon": "description", "permission": "stock.consultas", "menu_item_id": "stock_cons_ficha"},
+                    {"label": _("Consultas y Anulaciones"), "url": "stock:visualiza_movimientos", "icon": "list_alt", "permission": "stock.consultas", "menu_item_id": "stock_cons_anulaciones"},
+                    {"label": _("Informes"), "url": "stock:visualiza_movimientos", "icon": "assessment", "permission": "stock.informes", "menu_item_id": "stock_cons_informes"},
                 ]
             },
             {
                 "seccion": _("Comprobantes de compra"),
                 "items": [
-                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "stock.ver"},
-                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "stock.ver"},
+                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "stock.ver", "menu_item_id": "stock_cc_facturacion"},
+                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "stock.ver", "menu_item_id": "stock_cc_proveedores"},
                 ]
             }
         ]
@@ -98,9 +98,9 @@ APPS_MENU = [
             {
                 "seccion": _("Comprobantes"),
                 "items": [
-                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "compras.ver"},
-                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "compras.ver"},
-                    {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "compras.crear"},
+                    {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "compras.ver", "menu_item_id": "compras_cb_facturacion"},
+                    {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "compras.ver", "menu_item_id": "compras_cb_listado"},
+                    {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "compras.crear", "menu_item_id": "compras_cb_remito"},
                 ]
             }
         ]
@@ -117,21 +117,21 @@ APPS_MENU = [
             {
                 "seccion": _("Órdenes de producción"),
                 "items": [
-                    {"label": _("Asistente de producción"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver"},
-                    {"label": _("Listado de OPT existentes"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver"},
+                    {"label": _("Asistente de producción"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver", "menu_item_id": "mpr_op_wizard"},
+                    {"label": _("Listado de OPT existentes"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver", "menu_item_id": "mpr_op_list"},
                 ]
             },
             {
                 "seccion": _("Reportes"),
                 "items": [
-                    {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": "mpr.ver"},
+                    {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": "mpr.ver", "menu_item_id": "mpr_rep_reportes"},
                 ]
             },
             {
                 "seccion": _("Configuración"),
                 "items": [
-                    {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver"},
-                    {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver"},
+                    {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_depositos"},
+                    {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_operarios"},
                 ]
             },
         ]
@@ -152,7 +152,8 @@ APPS_MENU = [
                         "label": _("Dashboard"),
                         "url": "core:dashboard",
                         "icon": "dashboard",
-                        "permission": "usuarios.dashboard"
+                        "permission": "usuarios.dashboard",
+                        "menu_item_id": "settings_qa_dashboard",
                     }
                 ]
             },
@@ -163,19 +164,22 @@ APPS_MENU = [
                         "label": _("Users"),
                         "url": "core:usuarios",
                         "icon": "group",
-                        "permission": "usuarios.ver"
+                        "permission": "usuarios.ver",
+                        "menu_item_id": "settings_am_users",
                     },
                     {
                         "label": _("Roles"),
                         "url": "core:listar_roles",
                         "icon": "admin_panel_settings",
-                        "permission": "usuarios.roles.ver"
+                        "permission": "usuarios.roles.ver",
+                        "menu_item_id": "settings_am_roles",
                     },
                     {
                         "label": _("Permissions"),
                         "url": "core:listar_permisos",
                         "icon": "vpn_key",
-                        "permission": "usuarios.permisos.ver"
+                        "permission": "usuarios.permisos.ver",
+                        "menu_item_id": "settings_am_permissions",
                     },
                     {
                         "label": _("Universal Contacts"),
@@ -184,19 +188,22 @@ APPS_MENU = [
                                 "label": _("All Contacts"),
                                 "url": "core:contact_list",
                                 "icon": "contacts",
-                                "permission": "core.ver_contact"
+                                "permission": "core.ver_contact",
+                                "menu_item_id": "settings_uc_contacts_all",
                             },
                             {
                                 "label": _("Create Contact"),
                                 "url": "core:contact_create",
                                 "icon": "person_add",
-                                "permission": "core.crear_contact"
+                                "permission": "core.crear_contact",
+                                "menu_item_id": "settings_uc_contacts_create",
                             },
                             {
                                 "label": _("Contact Relationships"),
                                 "url": "core:contact_relationship_list",
                                 "icon": "link",
-                                "permission": "core.ver_contact"
+                                "permission": "core.ver_contact",
+                                "menu_item_id": "settings_uc_relationships",
                             }
                         ]
                     }
@@ -209,13 +216,15 @@ APPS_MENU = [
                         "label": _("Units of Measure"),
                         "url": "core:uom_list",
                         "icon": "straighten",
-                        "permission": "configuracion.uom"
+                        "permission": "configuracion.uom",
+                        "menu_item_id": "settings_gc_uom",
                     },
                     {
                         "label": _("Empresas"),
                         "url": "core:empresa_listar",
                         "icon": "business",
-                        "permission": "configuracion.sistema"
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_gc_empresas",
                     }
                 ]
             },
@@ -226,13 +235,15 @@ APPS_MENU = [
                         "label": _("Currencies"),
                         "url": "core:currency_list",
                         "icon": "payments",
-                        "permission": "configuracion.moneda"
+                        "permission": "configuracion.moneda",
+                        "menu_item_id": "settings_fc_currencies",
                     },
                     {
                         "label": _("Exchange Rates"),
                         "url": "core:exchange_rate_list",
                         "icon": "currency_exchange",
-                        "permission": "configuracion.moneda"
+                        "permission": "configuracion.moneda",
+                        "menu_item_id": "settings_fc_exchange",
                     }
                 ]
             },
@@ -243,19 +254,22 @@ APPS_MENU = [
                         "label": _("Configuration"),
                         "url": "core:system_config_list",
                         "icon": "settings",
-                        "permission": "configuracion.sistema"
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_sc_config",
                     },
                     {
                         "label": _("CDN Wizard"),
                         "url": "core:cdn_wizard",
                         "icon": "cloud",
-                        "permission": "configuracion.sistema"
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_sc_cdn",
                     },
                     {
                         "label": _("Hooks & Events"),
                         "url": "core:hook_dashboard",
                         "icon": "event",
-                        "permission": "configuracion.sistema"
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_sc_hooks",
                     }
                 ]
             }
@@ -273,10 +287,10 @@ APPS_MENU = [
             {
                 "seccion": _("Autoservicio / TPV"),
                 "items": [
-                    {"label": _("Selector de kiosco"), "url": "self_checkout:index", "icon": "storefront", "permission": "self_checkout.ver"},
-                    {"label": _("Configuración autoservicios"), "url": "self_checkout:config_list", "icon": "settings", "permission": "self_checkout.admin"},
-                    {"label": _("Carritos pendientes"), "url": "self_checkout:carritos_pendientes", "icon": "shopping_cart", "permission": "self_checkout.ver"},
-                    {"label": _("Talonarios"), "url": "self_checkout:talonarios_list", "icon": "receipt", "permission": "self_checkout.admin"}
+                    {"label": _("Selector de kiosco"), "url": "self_checkout:index", "icon": "storefront", "permission": "self_checkout.ver", "menu_item_id": "sc_tpv_selector"},
+                    {"label": _("Configuración autoservicios"), "url": "self_checkout:config_list", "icon": "settings", "permission": "self_checkout.admin", "menu_item_id": "sc_tpv_config"},
+                    {"label": _("Carritos pendientes"), "url": "self_checkout:carritos_pendientes", "icon": "shopping_cart", "permission": "self_checkout.ver", "menu_item_id": "sc_tpv_carritos"},
+                    {"label": _("Talonarios"), "url": "self_checkout:talonarios_list", "icon": "receipt", "permission": "self_checkout.admin", "menu_item_id": "sc_tpv_talonarios"}
                 ]
             }
         ]
@@ -308,13 +322,15 @@ APPS_MENU = [
                         "label": _("Catálogo"),
                         "url": "reports:catalog",
                         "icon": "dashboard",
-                        "permission": "reports.ver"
+                        "permission": "reports.ver",
+                        "menu_item_id": "reports_cat_catalogo",
                     },
                     {
                         "label": _("Workspace"),
                         "url": "reports:workspace",
                         "icon": "dashboard_customize",
-                        "permission": "reports.ver"
+                        "permission": "reports.ver",
+                        "menu_item_id": "reports_cat_workspace",
                     }
                 ]
             }
@@ -336,13 +352,15 @@ APPS_MENU = [
                         "label": _("Settings"),
                         "url": "mercadopago:config_list",
                         "icon": "settings",
-                        "permission": "mercadopago.view_mercadopagoconfig"
+                        "permission": "mercadopago.view_mercadopagoconfig",
+                        "menu_item_id": "mp_cfg_settings",
                     },
                     {
                         "label": _("Add Configuration"),
                         "url": "mercadopago:config_create",
                         "icon": "add_circle",
-                        "permission": "mercadopago.add_mercadopagoconfig"
+                        "permission": "mercadopago.add_mercadopagoconfig",
+                        "menu_item_id": "mp_cfg_add",
                     }
                 ]
             },
@@ -353,19 +371,22 @@ APPS_MENU = [
                         "label": _("SmartPOS Devices"),
                         "url": "mercadopago:device_list",
                         "icon": "point_of_sale",
-                        "permission": "mercadopago.view_mercadopagodevice"
+                        "permission": "mercadopago.view_mercadopagodevice",
+                        "menu_item_id": "mp_dev_list",
                     },
                     {
                         "label": _("Add Device"),
                         "url": "mercadopago:device_create",
                         "icon": "add_circle",
-                        "permission": "mercadopago.add_mercadopagodevice"
+                        "permission": "mercadopago.add_mercadopagodevice",
+                        "menu_item_id": "mp_dev_add",
                     },
                     {
                         "label": _("Device Status"),
                         "url": "mercadopago:device_status",
                         "icon": "monitor_heart",
-                        "permission": "mercadopago.view_mercadopagodevice"
+                        "permission": "mercadopago.view_mercadopagodevice",
+                        "menu_item_id": "mp_dev_status",
                     }
                 ]
             },
@@ -376,19 +397,22 @@ APPS_MENU = [
                         "label": _("Transaction History"),
                         "url": "mercadopago:transaction_list",
                         "icon": "receipt_long",
-                        "permission": "mercadopago.view_mercadopagotransaction"
+                        "permission": "mercadopago.view_mercadopagotransaction",
+                        "menu_item_id": "mp_tx_history",
                     },
                     {
                         "label": _("Failed Transactions"),
                         "url": "mercadopago:transaction_failed",
                         "icon": "error_outline",
-                        "permission": "mercadopago.view_mercadopagotransaction"
+                        "permission": "mercadopago.view_mercadopagotransaction",
+                        "menu_item_id": "mp_tx_failed",
                     },
                     {
                         "label": _("Transaction Reports"),
                         "url": "mercadopago:transaction_reports",
                         "icon": "analytics",
-                        "permission": "mercadopago.view_reports"
+                        "permission": "mercadopago.view_reports",
+                        "menu_item_id": "mp_tx_reports",
                     }
                 ]
             },
@@ -399,25 +423,29 @@ APPS_MENU = [
                         "label": _("Sales by Device"),
                         "url": "mercadopago:device_sales_report",
                         "icon": "bar_chart",
-                        "permission": "mercadopago.view_reports"
+                        "permission": "mercadopago.view_reports",
+                        "menu_item_id": "mp_ra_sales_device",
                     },
                     {
                         "label": _("Payment Methods"),
                         "url": "mercadopago:payment_methods_report",
                         "icon": "credit_card",
-                        "permission": "mercadopago.view_reports"
+                        "permission": "mercadopago.view_reports",
+                        "menu_item_id": "mp_ra_payment_methods",
                     },
                     {
                         "label": _("Device Performance"),
                         "url": "mercadopago:device_performance_report",
                         "icon": "speed",
-                        "permission": "mercadopago.view_reports"
+                        "permission": "mercadopago.view_reports",
+                        "menu_item_id": "mp_ra_device_perf",
                     },
                     {
                         "label": _("Export Data"),
                         "url": "mercadopago:export_data",
                         "icon": "download",
-                        "permission": "mercadopago.export_data"
+                        "permission": "mercadopago.export_data",
+                        "menu_item_id": "mp_ra_export",
                     }
                 ]
             }
@@ -439,19 +467,22 @@ APPS_MENU = [
                         "label": _("Devices"),
                         "url": "clover:device_list",
                         "icon": "point_of_sale",
-                        "permission": "clover.view_cloverdevice"
+                        "permission": "clover.view_cloverdevice",
+                        "menu_item_id": "clover_dev_list",
                     },
                     {
                         "label": _("Add Device"),
                         "url": "clover:device_create",
                         "icon": "add_circle",
-                        "permission": "clover.add_cloverdevice"
+                        "permission": "clover.add_cloverdevice",
+                        "menu_item_id": "clover_dev_add",
                     },
                     {
                         "label": _("Device Status"),
                         "url": "clover:device_status",
                         "icon": "monitor_heart",
-                        "permission": "clover.view_cloverdevice"
+                        "permission": "clover.view_cloverdevice",
+                        "menu_item_id": "clover_dev_status",
                     }
                 ]
             },
@@ -462,19 +493,22 @@ APPS_MENU = [
                         "label": _("Transaction History"),
                         "url": "clover:transaction_list",
                         "icon": "receipt_long",
-                        "permission": "clover.view_clovertransaction"
+                        "permission": "clover.view_clovertransaction",
+                        "menu_item_id": "clover_tx_history",
                     },
                     {
                         "label": _("Failed Transactions"),
                         "url": "clover:transaction_failed",
                         "icon": "error_outline",
-                        "permission": "clover.view_clovertransaction"
+                        "permission": "clover.view_clovertransaction",
+                        "menu_item_id": "clover_tx_failed",
                     },
                     {
                         "label": _("Transaction Reports"),
                         "url": "clover:transaction_reports",
                         "icon": "analytics",
-                        "permission": "clover.view_reports"
+                        "permission": "clover.view_reports",
+                        "menu_item_id": "clover_tx_reports",
                     }
                 ]
             },
@@ -485,19 +519,22 @@ APPS_MENU = [
                         "label": _("Settings"),
                         "url": "clover:config_list",
                         "icon": "settings",
-                        "permission": "clover.view_cloverconfig"
+                        "permission": "clover.view_cloverconfig",
+                        "menu_item_id": "clover_cfg_settings",
                     },
                     {
                         "label": _("Webhooks"),
                         "url": "clover:webhook_list",
                         "icon": "webhook",
-                        "permission": "clover.view_cloverwebhook"
+                        "permission": "clover.view_cloverwebhook",
+                        "menu_item_id": "clover_cfg_webhooks",
                     },
                     {
                         "label": _("API Configuration"),
                         "url": "clover:api_config",
                         "icon": "api",
-                        "permission": "clover.change_cloverconfig"
+                        "permission": "clover.change_cloverconfig",
+                        "menu_item_id": "clover_cfg_api",
                     }
                 ]
             },
@@ -508,31 +545,74 @@ APPS_MENU = [
                         "label": _("Sales by Device"),
                         "url": "clover:device_sales_report",
                         "icon": "bar_chart",
-                        "permission": "clover.view_reports"
+                        "permission": "clover.view_reports",
+                        "menu_item_id": "clover_ra_sales_device",
                     },
                     {
                         "label": _("Payment Methods"),
                         "url": "clover:payment_methods_report",
                         "icon": "credit_card",
-                        "permission": "clover.view_reports"
+                        "permission": "clover.view_reports",
+                        "menu_item_id": "clover_ra_payment_methods",
                     },
                     {
                         "label": _("Device Performance"),
                         "url": "clover:device_performance_report",
                         "icon": "speed",
-                        "permission": "clover.view_reports"
+                        "permission": "clover.view_reports",
+                        "menu_item_id": "clover_ra_device_perf",
                     },
                     {
                         "label": _("Export Data"),
                         "url": "clover:export_data",
                         "icon": "download",
-                        "permission": "clover.export_data"
+                        "permission": "clover.export_data",
+                        "menu_item_id": "clover_ra_export",
                     }
                 ]
             }
         ]
     }
 ]
+
+
+def iter_menu_hojas_apps_menu():
+    """
+    Recorre APPS_MENU y produce una tupla por cada ítem hoja con URL y menu_item_id.
+    Usado por la UI de visibilidad granular del navbar y validación de IDs únicos.
+    """
+    for app in APPS_MENU:
+        app_id = app["id"]
+        nombre_mod = str(app["nombre"])
+        for submenu in app.get("submenus") or []:
+            seccion = str(submenu.get("seccion", "") or "")
+            for item in submenu.get("items") or []:
+                if "url" in item:
+                    mid = item.get("menu_item_id")
+                    if mid:
+                        yield (
+                            app_id,
+                            nombre_mod,
+                            seccion,
+                            str(item.get("label", "")),
+                            str(item.get("url", "")),
+                            mid,
+                        )
+                elif "items" in item:
+                    for child in item.get("items") or []:
+                        if "url" not in child:
+                            continue
+                        mid = child.get("menu_item_id")
+                        if mid:
+                            yield (
+                                app_id,
+                                nombre_mod,
+                                seccion,
+                                str(child.get("label", "")),
+                                str(child.get("url", "")),
+                                mid,
+                            )
+
 
 # Apps comentadas para futuras implementaciones
 # {
@@ -666,9 +746,16 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
 def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=None) -> List[Dict[str, Any]]:
     """Obtiene los submenús visibles para una app específica según los permisos del usuario.
     Soporta ítems anidados: si un ítem tiene 'items' y no 'url', se procesan solo los hijos."""
+    from core.services.navbar_visibilidad import (
+        cargar_estado_granular,
+        item_visible_en_navbar_granular,
+    )
+
     app = obtener_app_por_id(app_id)
     if not app or not app.get("submenus"):
         return []
+
+    modulos_oc_gran, items_oc_gran = cargar_estado_granular()
 
     submenus_visibles = []
     for submenu in app["submenus"]:
@@ -676,9 +763,23 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=No
         for item in submenu["items"]:
             if "items" in item and "url" not in item:
                 for child in item.get("items", []):
+                    if not item_visible_en_navbar_granular(
+                        app_id,
+                        child.get("menu_item_id"),
+                        modulos_oc_gran,
+                        items_oc_gran,
+                    ):
+                        continue
                     resolved = _resolver_url_item(child, request, permisos_usuario)
                     if resolved:
                         items_visibles.append(resolved)
+                continue
+            if not item_visible_en_navbar_granular(
+                app_id,
+                item.get("menu_item_id"),
+                modulos_oc_gran,
+                items_oc_gran,
+            ):
                 continue
             resolved = _resolver_url_item(item, request, permisos_usuario)
             if resolved:
@@ -689,6 +790,21 @@ def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=No
                 "items": items_visibles,
             })
     return submenus_visibles
+
+
+def _navbar_menu_oculto_global() -> bool:
+    """
+    True si el supervisor activó la ocultación global del menú navbar (Synap).
+    Ver NavbarMenuGlobal y docs/general/NAVBAR_OCULTACION_GLOBAL_SUPERVISOR.md
+    """
+    try:
+        from core.models import NavbarMenuGlobal
+
+        return bool(NavbarMenuGlobal.get_solo().ocultar_todos_items)
+    except Exception as e:
+        logger.debug("NavbarMenuGlobal no disponible: %s", e)
+        return False
+
 
 def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -> List[Dict[str, Any]]:
     """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús"""
@@ -720,10 +836,20 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'mpr', 'compras', 'self_checkout'}
     active_modules.update(core_modules)
 
+    from core.services.navbar_visibilidad import (
+        app_visible_en_navbar_granular,
+        cargar_estado_granular,
+    )
+
+    modulos_oc_gran, _items_oc_gran = cargar_estado_granular()
+
     apps_filtradas = []
     for app in APPS_MENU:
         app_id = app.get("id")
-        
+
+        if not app_visible_en_navbar_granular(app_id, modulos_oc_gran):
+            continue
+
         # REGLA 1: Archivo, Module Management y Settings solo visibles para el usuario 'supervisor' (superuser)
         # NOTA: El puesto/rol "Supervisor" NO puede ver estos módulos
         if app_id in ["archivo", "module_management", "settings"]:
@@ -784,8 +910,14 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
             
             apps_filtradas.append(app_copy)
     
-    # Ordenar por el campo 'orden'
-    return sorted(apps_filtradas, key=lambda x: x.get('orden', 999))
+    resultado = sorted(apps_filtradas, key=lambda x: x.get("orden", 999))
+    # Ocultación global del navbar (solo supervisor puede revertir; ve solo Archivo)
+    if _navbar_menu_oculto_global():
+        es_sup = hasattr(user, "cod_usuario") and (user.cod_usuario or "").lower() == "supervisor"
+        if es_sup:
+            return [a for a in resultado if a.get("id") == "archivo"]
+        return []
+    return resultado
 
 # ─────────────────────────────────────────────
 # COMPATIBILIDAD CON CÓDIGO EXISTENTE

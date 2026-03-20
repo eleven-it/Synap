@@ -1,14 +1,25 @@
 # core/views/views_permisos_sistema.py
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.views.decorators.csrf import csrf_protect
-from core.decorators import tiene_permiso
+from django.views.decorators.http import require_POST
+from core.decorators import tiene_permiso, solo_usuario_supervisor
 from core.services.administranet_permisos_sistema import AdministraNETPermisosSistemaService
+import json
 import logging
+from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
+
+
+def _usuario_es_supervisor_cod(request) -> bool:
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    return (getattr(user, "cod_usuario", None) or "").strip().lower() == "supervisor"
 
 
 @tiene_permiso("administrar.usuarios")
@@ -42,12 +53,150 @@ def listar_puestos_permisos_view(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
     
+    tab = (request.GET.get("tab") or "puestos").strip().lower()
+    if tab not in ("puestos", "navbar"):
+        tab = "puestos"
+    if tab == "navbar" and not _usuario_es_supervisor_cod(request):
+        messages.warning(
+            request,
+            "La pestaña de menú navbar solo está disponible para el usuario supervisor.",
+        )
+        tab = "puestos"
+
+    navbar_global = None
+    navbar_grupos_vis = []
+    q_navbar = ""
+    total_filas_navbar = 0
+    if _usuario_es_supervisor_cod(request):
+        try:
+            from core.models import NavbarMenuGlobal
+
+            navbar_global = NavbarMenuGlobal.get_solo()
+        except Exception as e:
+            logger.warning("No se pudo cargar NavbarMenuGlobal: %s", e)
+        if tab == "navbar":
+            from core.services.navbar_visibilidad import construir_grupos_visibilidad_navbar_ui
+
+            q_navbar = (request.GET.get("q_navbar") or "").strip()
+            q_navbar_lower = q_navbar.lower()
+            navbar_grupos_vis = construir_grupos_visibilidad_navbar_ui()
+            if q_navbar_lower:
+                filtrados = []
+                for g in navbar_grupos_vis:
+                    nombre_l = (g.get("nombre") or "").lower()
+                    aid_l = (g.get("app_id") or "").lower()
+                    if q_navbar_lower in nombre_l or q_navbar_lower in aid_l:
+                        filtrados.append(g)
+                        continue
+                    filas_f = [
+                        r
+                        for r in g.get("filas") or []
+                        if q_navbar_lower in (r.get("label") or "").lower()
+                        or q_navbar_lower in (r.get("menu_item_id") or "").lower()
+                        or q_navbar_lower in (r.get("seccion") or "").lower()
+                        or q_navbar_lower in (r.get("url_name") or "").lower()
+                    ]
+                    if filas_f:
+                        g2 = {**g, "filas": filas_f}
+                        filtrados.append(g2)
+                navbar_grupos_vis = filtrados
+            total_filas_navbar = sum(len(g.get("filas") or []) for g in navbar_grupos_vis)
+
     context = {
         "puestos": page_obj,
         "q": q,
         "base_empresa": base_empresa,
+        "tab_activa": tab,
+        "es_supervisor_cod": _usuario_es_supervisor_cod(request),
+        "navbar_global": navbar_global,
+        "navbar_grupos_vis": navbar_grupos_vis,
+        "q_navbar": q_navbar,
+        "total_filas_navbar": total_filas_navbar,
     }
     return render(request, "core/permisos_sistema_list.html", context)
+
+
+@require_POST
+@solo_usuario_supervisor
+@csrf_protect
+def toggle_navbar_menu_global_view(request):
+    """
+    Activa o desactiva la ocultación global del menú de la navbar (todos los usuarios).
+    Solo usuario cod_usuario supervisor.
+    """
+    from core.models import NavbarMenuGlobal
+
+    estado = (request.POST.get("estado_navbar") or "").strip().lower()
+    row = NavbarMenuGlobal.get_solo()
+    if estado == "oculto":
+        row.ocultar_todos_items = True
+        row.save()
+        messages.success(
+            request,
+            "Menú navbar oculto para todos los usuarios. Usted sigue viendo «Archivo» para revertir.",
+        )
+    elif estado == "visible":
+        row.ocultar_todos_items = False
+        row.save()
+        messages.success(request, "Menú navbar visible según permisos habituales.")
+    else:
+        messages.error(request, "Solicitud inválida.")
+    return redirect(f"{reverse('core:permisos_sistema')}?tab=navbar")
+
+
+@require_POST
+@solo_usuario_supervisor
+@csrf_protect
+def toggle_navbar_granular_view(request):
+    """
+    Actualiza visibilidad granular (módulo o ítem hoja) del menú navbar. JSON POST.
+    """
+    from core.services.navbar_visibilidad import (
+        establecer_item_visible,
+        establecer_modulo_visible,
+    )
+
+    ct = (request.content_type or "").split(";")[0].strip().lower()
+    if ct != "application/json":
+        return JsonResponse(
+            {"success": False, "error": "Content-Type debe ser application/json"},
+            status=415,
+        )
+    try:
+        data = json.loads(request.body.decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "JSON inválido"}, status=400)
+
+    tipo = (data.get("tipo") or "").strip().lower()
+    app_id = (data.get("app_id") or "").strip()
+    visible_raw = data.get("visible")
+
+    if visible_raw is True:
+        visible_bool = True
+    elif visible_raw is False:
+        visible_bool = False
+    elif isinstance(visible_raw, str):
+        visible_bool = visible_raw.strip().lower() in ("true", "1", "si", "yes")
+    else:
+        return JsonResponse(
+            {"success": False, "error": "Campo visible inválido"},
+            status=400,
+        )
+
+    if tipo == "modulo":
+        ok = establecer_modulo_visible(app_id, visible_bool)
+    elif tipo == "item":
+        menu_item_id = (data.get("menu_item_id") or "").strip()
+        ok = establecer_item_visible(app_id, menu_item_id, visible_bool)
+    else:
+        return JsonResponse({"success": False, "error": "tipo debe ser modulo o item"}, status=400)
+
+    if not ok:
+        return JsonResponse(
+            {"success": False, "error": "No se pudo actualizar (app o ítem inválido)"},
+            status=400,
+        )
+    return JsonResponse({"success": True})
 
 
 @tiene_permiso("administrar.usuarios")

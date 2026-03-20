@@ -4,20 +4,184 @@
 
 {% block admin_content %}
 <div class="max-w-7xl mx-auto">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Permisos del Sistema por Puesto</h1>
+  <div class="flex justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Permisos del sistema</h1>
+  </div>
+
+  <!-- Pestañas: Puestos (MySQL) | Navbar Synap (solo supervisor) -->
+  <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
+    <nav class="flex flex-wrap gap-2" aria-label="Secciones permisos sistema">
+      <a href="{% url 'core:permisos_sistema' %}?tab=puestos"
+         class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors
+                {% if tab_activa == 'puestos' %}border-purple-600 text-purple-700 dark:text-purple-300 bg-white dark:bg-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200{% endif %}">
+        <span class="material-icons text-base">badge</span>
+        Permisos por puesto
+      </a>
+      {% if es_supervisor_cod %}
+      <a href="{% url 'core:permisos_sistema' %}?tab=navbar"
+         class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 transition-colors
+                {% if tab_activa == 'navbar' %}border-purple-600 text-purple-700 dark:text-purple-300 bg-white dark:bg-gray-900{% else %}border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200{% endif %}">
+        <span class="material-icons text-base">menu</span>
+        Menú navbar Synap
+      </a>
+      {% endif %}
+    </nav>
+  </div>
+
+  {% if tab_activa == 'navbar' and es_supervisor_cod %}
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-6 border border-gray-100 dark:border-gray-800">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Visibilidad del menú superior</h2>
+    <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-3xl">
+      Puede ocultar <strong>todos</strong> los ítems del menú horizontal (navbar) para <strong>todos los usuarios</strong>,
+      sin tener en cuenta sus permisos. Útil en fases de desarrollo o demos. Solo el usuario <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">supervisor</code> ve entonces el módulo <strong>Archivo</strong> y puede volver a mostrar el menú desde aquí.
+    </p>
+    {% if navbar_global %}
+    <div class="flex items-center gap-3 mb-6">
+      <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium
+        {% if navbar_global.ocultar_todos_items %}bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200{% else %}bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200{% endif %}">
+        Estado actual: {% if navbar_global.ocultar_todos_items %}Menú oculto (resto de usuarios){% else %}Menú visible según permisos{% endif %}
+      </span>
+    </div>
+    <form method="post" action="{% url 'core:toggle_navbar_menu_global' %}" class="flex flex-wrap gap-3">
+      {% csrf_token %}
+      <button type="submit" name="estado_navbar" value="visible"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow transition">
+        <span class="material-icons text-base">visibility</span>
+        Mostrar menú navbar (todos)
+      </button>
+      <button type="submit" name="estado_navbar" value="oculto"
+              class="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg shadow transition">
+        <span class="material-icons text-base">visibility_off</span>
+        Ocultar menú navbar (todos)
+      </button>
+    </form>
+
+    <div class="border-t border-gray-200 dark:border-gray-700 mt-8 pt-8">
+      <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Visibilidad por módulo e ítem</h3>
+      <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-3xl">
+        Cuando el menú global está visible, puede ocultar módulos completos o enlaces sueltos del menú superior para <strong>todos los usuarios</strong>.
+        El módulo <strong>Archivo</strong> no se lista aquí (siempre visible). Si apaga un módulo, los ítems del submenú quedan deshabilitados hasta reactivarlo.
+      </p>
+      <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
+        <form method="get" class="flex flex-wrap gap-2 items-center">
+          <input type="hidden" name="tab" value="navbar">
+          <input type="text" name="q_navbar" value="{{ q_navbar }}" placeholder="Buscar por módulo, ítem, ruta o identificador…"
+                 class="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-purple-500 focus:border-purple-500">
+          <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
+            <span class="material-icons text-base">search</span>
+          </button>
+          {% if q_navbar %}
+          <a href="{% url 'core:permisos_sistema' %}?tab=navbar" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-xs transition-colors" title="Limpiar">
+            <span class="material-icons text-base">clear</span>
+          </a>
+          {% endif %}
+        </form>
+      </div>
+      <div class="flex items-center justify-between mb-4">
+        <div class="text-xs text-gray-600 dark:text-gray-400">
+          Total: <span class="font-semibold">{{ total_filas_navbar }}</span> ítems en <span class="font-semibold">{{ navbar_grupos_vis|length }}</span> módulos
+        </div>
+        <div class="flex gap-2">
+          <button type="button" onclick="navbarExpandirTodos()" class="text-xs text-purple-600 dark:text-purple-400 hover:underline px-2 py-1">Expandir todos</button>
+          <button type="button" onclick="navbarColapsarTodos()" class="text-xs text-gray-600 dark:text-gray-400 hover:underline px-2 py-1">Colapsar todos</button>
+        </div>
+      </div>
+      <div class="space-y-4">
+        {% for grupo in navbar_grupos_vis %}
+        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden border border-gray-100 dark:border-gray-800 nav-granular-grupo" data-app-id="{{ grupo.app_id }}">
+          <div class="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/40 dark:to-blue-950/40 border-b border-purple-200 dark:border-purple-900/50">
+            <div class="w-full px-4 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onclick="navbarToggleModulo('nav_modulo_{{ forloop.counter0 }}')" class="flex items-center gap-3 flex-1 min-w-0 text-left hover:bg-purple-100/80 dark:hover:bg-purple-900/20 rounded-lg py-1 pr-2 transition-colors focus:outline-none">
+                <span class="material-icons text-purple-600 dark:text-purple-400 expand-icon-nav" id="icon_nav_modulo_{{ forloop.counter0 }}">expand_more</span>
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{{ grupo.nombre }}</h4>
+                  <p class="text-xs text-gray-600 dark:text-gray-400">{{ grupo.filas|length }} ítem{{ grupo.filas|length|pluralize }}</p>
+                </div>
+              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-xs text-gray-600 dark:text-gray-400 hidden sm:inline">Módulo visible</span>
+                <label class="relative inline-flex items-center cursor-pointer shrink-0 {% if not navbar_global or navbar_global.ocultar_todos_items %}opacity-40 cursor-not-allowed{% endif %}">
+                  <input type="checkbox" class="peer sr-only nav-granular-modulo"
+                         data-tipo="modulo" data-app-id="{{ grupo.app_id }}"
+                         {% if navbar_global and not navbar_global.ocultar_todos_items %}{% if grupo.modulo_visible %}checked{% endif %}{% else %}disabled{% endif %}
+                         onchange="navGranularToggle(this)">
+                  <span class="w-9 h-5 flex items-center rounded-full p-1 bg-gray-300 dark:bg-gray-600 peer-checked:bg-purple-500 dark:peer-checked:bg-purple-600 transition-colors peer-disabled:opacity-50" aria-hidden="true"></span>
+                  <span class="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ease-out peer-checked:translate-x-3 peer-disabled:opacity-80" aria-hidden="true"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="modulo-contenido-nav" id="nav_modulo_{{ forloop.counter0 }}" style="display: block;">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead class="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nombre</th>
+                  <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Identificador</th>
+                  <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Visible</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                {% for fila in grupo.filas %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/80 {% if not grupo.modulo_visible %}opacity-50{% endif %}">
+                  <td class="px-4 md:px-6 py-3 text-xs">
+                    <div class="font-medium text-gray-900 dark:text-gray-100">{{ fila.label }}</div>
+                    <div class="text-gray-500 dark:text-gray-400 mt-0.5">{{ fila.seccion }} · <code class="text-[10px]">{{ fila.url_name }}</code></div>
+                  </td>
+                  <td class="px-4 md:px-6 py-3 text-xs font-mono text-gray-600 dark:text-gray-300">{{ fila.menu_item_id }}</td>
+                  <td class="px-4 md:px-6 py-3 whitespace-nowrap">
+                    <label class="relative inline-flex items-center cursor-pointer shrink-0 {% if not grupo.modulo_visible or not navbar_global or navbar_global.ocultar_todos_items %}opacity-40 cursor-not-allowed{% endif %}">
+                      <input type="checkbox" class="peer sr-only nav-granular-item"
+                             data-tipo="item" data-app-id="{{ grupo.app_id }}" data-menu-item-id="{{ fila.menu_item_id }}"
+                             {% if navbar_global and not navbar_global.ocultar_todos_items and grupo.modulo_visible %}{% if fila.item_visible %}checked{% endif %}{% else %}disabled{% endif %}
+                             onchange="navGranularToggle(this)">
+                      <span class="w-9 h-5 flex items-center rounded-full p-1 bg-gray-300 dark:bg-gray-600 peer-checked:bg-purple-500 dark:peer-checked:bg-purple-600 transition-colors peer-disabled:opacity-50" aria-hidden="true"></span>
+                      <span class="pointer-events-none absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ease-out peer-checked:translate-x-3 peer-disabled:opacity-80" aria-hidden="true"></span>
+                    </label>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="3" class="px-4 md:px-6 py-4 text-center text-xs text-gray-500 dark:text-gray-400">Este módulo no tiene subítems en el menú (solo enlace principal).</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-sm text-gray-500 dark:text-gray-400">No hay módulos que coincidan con la búsqueda.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-500 dark:text-gray-500 mt-6">
+      Documentación: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">docs/general/NAVBAR_OCULTACION_GLOBAL_SUPERVISOR.md</code>
+    </p>
+    {% else %}
+    <div class="text-sm text-red-600 dark:text-red-400 space-y-2">
+      <p>No se pudo cargar la configuración del menú navbar. Suele deberse a que falta aplicar la migración de <code>NavbarMenuGlobal</code> en la base por defecto de Django.</p>
+      <p class="text-xs text-gray-600 dark:text-gray-400">En Docker: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">docker exec Synap_app python manage.py migrate core</code></p>
+      <p class="text-xs text-gray-600 dark:text-gray-400">Luego recargue esta página.</p>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200">Permisos del sistema por puesto</h2>
   </div>
 
   <!-- Búsqueda -->
-  <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
     <form method="get" class="flex gap-2">
-      <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto por nombre..." 
-             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-xs focus:ring-purple-500 focus:border-purple-500">
+      <input type="hidden" name="tab" value="puestos">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto por nombre..."
+             class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-purple-500 focus:border-purple-500">
       <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-xs transition-colors" title="Buscar">
         <span class="material-icons text-base">search</span>
       </button>
       {% if q %}
-      <a href="{% url 'core:permisos_sistema' %}" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-xs transition-colors" title="Limpiar">
+      <a href="{% url 'core:permisos_sistema' %}?tab=puestos" class="inline-flex items-center justify-center px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 text-xs transition-colors" title="Limpiar">
         <span class="material-icons text-base">clear</span>
       </a>
       {% endif %}
@@ -25,30 +189,30 @@
   </div>
 
   <!-- Tabla de puestos -->
-  <div class="bg-white rounded-lg shadow-md overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden border border-gray-100 dark:border-gray-800">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <thead class="bg-gray-50 dark:bg-gray-800">
         <tr>
-          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
-          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Puesto</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Acciones</th>
         </tr>
       </thead>
-      <tbody class="bg-white divide-y divide-gray-200">
+      <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
         {% for puesto in puestos %}
-        <tr class="hover:bg-gray-50">
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/80">
           <td class="px-6 py-4 whitespace-nowrap">
-            <div class="text-sm font-medium text-gray-900">{{ puesto.nombre }}</div>
+            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ puesto.nombre }}</div>
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-            <a href="{% url 'core:editar_permisos_puesto' puesto.id %}" 
-               class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded transition-colors" title="Gestionar Permisos">
+            <a href="{% url 'core:editar_permisos_puesto' puesto.id %}"
+               class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors" title="Gestionar permisos">
               <span class="material-icons text-base">settings</span>
             </a>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="2" class="px-6 py-4 text-center text-xs text-gray-500">No se encontraron puestos</td>
+          <td colspan="2" class="px-6 py-4 text-center text-xs text-gray-500 dark:text-gray-400">No se encontraron puestos</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -57,22 +221,111 @@
 
   <!-- Paginación -->
   {% if puestos.has_other_pages %}
-  <div class="px-6 py-4 border-t flex items-center justify-between bg-white rounded-lg shadow-md mt-4">
-    <div class="text-xs text-gray-700">
+  <div class="px-6 py-4 border-t flex items-center justify-between bg-white dark:bg-gray-900 rounded-lg shadow-md mt-4 border border-gray-100 dark:border-gray-800">
+    <div class="text-xs text-gray-700 dark:text-gray-300">
       Mostrando {{ puestos.start_index }} a {{ puestos.end_index }} de {{ puestos.paginator.count }} puestos
     </div>
     <div class="flex gap-2">
       {% if puestos.has_previous %}
-      <a href="?page={{ puestos.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" 
-         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Anterior</a>
+      <a href="?tab=puestos&page={{ puestos.previous_page_number }}{% if q %}&q={{ q }}{% endif %}"
+         class="px-3 py-1 text-xs border dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300">Anterior</a>
       {% endif %}
       {% if puestos.has_next %}
-      <a href="?page={{ puestos.next_page_number }}{% if q %}&q={{ q }}{% endif %}" 
-         class="px-3 py-1 text-xs border rounded hover:bg-gray-50">Siguiente</a>
+      <a href="?tab=puestos&page={{ puestos.next_page_number }}{% if q %}&q={{ q }}{% endif %}"
+         class="px-3 py-1 text-xs border dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300">Siguiente</a>
       {% endif %}
     </div>
   </div>
   {% endif %}
+  {% endif %}
 </div>
-{% endblock %}
+{% endblock admin_content %}
 
+{% block admin_extra_js %}
+<script>
+function getCookieNav(name) {
+  var cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    var cookies = document.cookie.split(';');
+    for (var i = 0; i < cookies.length; i++) {
+      var cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+function navGranularToggle(el) {
+  var revertTo = !el.checked;
+  var tipo = el.getAttribute('data-tipo');
+  var appId = el.getAttribute('data-app-id');
+  var visible = el.checked;
+  var body = { tipo: tipo, app_id: appId, visible: visible };
+  if (tipo === 'item') {
+    body.menu_item_id = el.getAttribute('data-menu-item-id');
+  }
+  el.disabled = true;
+  fetch('{% url "core:toggle_navbar_granular" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookieNav('csrftoken')
+    },
+    body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+    .then(function (res) {
+      if (res.ok && res.data.success) {
+        window.location.reload();
+        return;
+      }
+      el.checked = revertTo;
+      alert((res.data && res.data.error) ? res.data.error : 'No se pudo actualizar');
+    })
+    .catch(function () {
+      el.checked = revertTo;
+      alert('Error de red');
+    })
+    .finally(function () {
+      el.disabled = false;
+    });
+}
+
+function navbarToggleModulo(moduloId) {
+  var contenido = document.getElementById(moduloId);
+  var icon = document.getElementById('icon_' + moduloId);
+  if (!contenido) return;
+  if (contenido.style.display === 'none') {
+    contenido.style.display = 'block';
+    if (icon) { icon.textContent = 'expand_more'; icon.classList.remove('rotate-180'); }
+  } else {
+    contenido.style.display = 'none';
+    if (icon) { icon.textContent = 'chevron_right'; icon.classList.add('rotate-180'); }
+  }
+}
+
+function navbarExpandirTodos() {
+  document.querySelectorAll('.modulo-contenido-nav').forEach(function (el) { el.style.display = 'block'; });
+  document.querySelectorAll('.expand-icon-nav').forEach(function (icon) {
+    icon.textContent = 'expand_more';
+    icon.classList.remove('rotate-180');
+  });
+}
+
+function navbarColapsarTodos() {
+  document.querySelectorAll('.modulo-contenido-nav').forEach(function (el) { el.style.display = 'none'; });
+  document.querySelectorAll('.expand-icon-nav').forEach(function (icon) {
+    icon.textContent = 'chevron_right';
+    icon.classList.add('rotate-180');
+  });
+}
+</script>
+<style>
+.modulo-contenido-nav { display: block; }
+.expand-icon-nav { transition: transform 0.2s; }
+.expand-icon-nav.rotate-180 { transform: rotate(-90deg); }
+</style>
+{% endblock admin_extra_js %}

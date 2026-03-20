@@ -1,8 +1,23 @@
 from django.test import TestCase, Client
 from django.urls import reverse, NoReverseMatch
-from core.utils.utils import APPS_MENU
+from core.utils.utils import APPS_MENU, iter_menu_hojas_apps_menu
 from core.models import UsuarioExtendido
 from django.contrib.auth.models import Permission
+
+class MenuItemIdsNavbarTest(TestCase):
+    """Cada hoja de APPS_MENU debe tener menu_item_id único (visibilidad granular)."""
+
+    def test_menu_item_ids_unicos_y_presentes(self):
+        ids_encontrados = []
+        for row in iter_menu_hojas_apps_menu():
+            self.assertTrue(row[5], msg=f"Falta menu_item_id en {row[0]} / {row[3]}")
+            ids_encontrados.append(row[5])
+        self.assertEqual(
+            len(ids_encontrados),
+            len(set(ids_encontrados)),
+            msg=f"menu_item_id duplicados: {[x for x in ids_encontrados if ids_encontrados.count(x) > 1]}",
+        )
+
 
 # Test para verificar las URLs del navbar de accounting (módulo accounting eliminado)
 class NavbarAccountingURLsTest(TestCase):
