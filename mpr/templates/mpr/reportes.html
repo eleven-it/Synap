@@ -20,6 +20,9 @@
             <a href="{% url 'mpr:reportes' %}?tipo=wip" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'wip' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">WIP</a>
             <a href="{% url 'mpr:reportes' %}?tipo=stock" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'stock' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">Stock</a>
             <a href="{% url 'mpr:reportes' %}?tipo=bajo_minimo" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'bajo_minimo' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">Bajo mínimo</a>
+            <a href="{% url 'mpr:reportes' %}?tipo=desperdicio" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'desperdicio' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">Desperdicio</a>
+            <a href="{% url 'mpr:reportes' %}?tipo=produccion_operario" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'produccion_operario' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">Producción por operario</a>
+            <a href="{% url 'mpr:reportes' %}?tipo=opt_cerradas" class="inline-flex px-4 py-2 rounded-lg text-sm font-medium {% if tipo_reporte == 'opt_cerradas' %}bg-purple-600 text-white{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700{% endif %} transition-colors">OPT cerradas</a>
         </div>
 
         <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
@@ -75,7 +78,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
-                {% else %}
+                {% elif tipo_reporte == 'bajo_minimo' %}
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead class="bg-gray-50 dark:bg-gray-800/50">
                         <tr>
@@ -95,6 +98,73 @@
                         </tr>
                         {% empty %}
                         <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">Sin datos o no hay artículos bajo mínimo.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% elif tipo_reporte == 'desperdicio' %}
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Artículo</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad desperdicio</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">OPT asociada</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for r in filas %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ r.articulo|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ r.cantidad_desperdicio|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ r.opt_asociada|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ r.fecha|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">Sin datos.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% elif tipo_reporte == 'produccion_operario' %}
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Operario</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Nº OPT asignadas</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad packs</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for r in filas %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ r.operario|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ r.nro_opt_asignadas|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ r.cantidad_packs|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">Sin datos.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% elif tipo_reporte == 'opt_cerradas' %}
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">OPT</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Artículo(s)</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cantidad total</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Fecha cierre</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for r in filas %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ r.id_opt|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.articulos|default:r.articulo|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300">{{ r.cantidad_total|default:"-" }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ r.fecha_cierre|default:r.ultima_actividad|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">Sin datos.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>

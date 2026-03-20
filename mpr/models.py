@@ -1,5 +1,5 @@
 # MPR - Modelos para agrupar OPT (Pedidos de producción) con múltiples artículos.
-# La OPT se representa en MySQL en lista_produccion_agrupada (id_opt, codigo_movimiento_opt, id_operario_opt).
+# La OPT se representa en MySQL en lista_produccion_agrupada (codigo_movimiento_opt, id_operario_opt; id_opt heredado opcional).
 # Opt y OptLinea están en desuso (managed=False); los datos viven en MySQL, no en Django.
 from django.db import models
 
@@ -31,7 +31,7 @@ class Opt(models.Model):
 
 
 class OptLinea(models.Model):
-    """Línea de una OPT. En desuso: datos en lista_produccion_agrupada (MySQL, id_opt, id_operario_opt)."""
+    """Línea de una OPT. En desuso: datos en lista_produccion_agrupada (MySQL, codigo_movimiento_opt, id_operario_opt)."""
 
     opt = models.ForeignKey(Opt, on_delete=models.CASCADE, related_name="lineas")
     id_lista_produccion = models.BigIntegerField()

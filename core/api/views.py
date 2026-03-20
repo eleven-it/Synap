@@ -424,7 +424,7 @@ def movimiento_stock_alta_api(request):
         return JsonResponse({'error': 'Debe enviar al menos un renglón en renglones.'}, status=400)
 
     from core.services.administranet_stock import alta_movimiento
-    ok, codigo_mov, nro_comp, mensaje = alta_movimiento(
+    ok, codigo_mov, nro_comp, mensaje, schema_errores = alta_movimiento(
         base_empresa=base_empresa,
         id_usuario=int(id_usuario),
         id_puesto=int(id_puesto) if id_puesto else None,
@@ -432,7 +432,14 @@ def movimiento_stock_alta_api(request):
         renglones=renglones,
     )
     if not ok:
-        return JsonResponse({'error': mensaje or 'Error al grabar el movimiento.'}, status=400)
+        payload = {'error': mensaje or 'Error al grabar el movimiento.'}
+        if schema_errores is not None:
+            payload['schema_error'] = True
+            payload['detalle'] = [
+                {'tabla': e.get('tabla'), 'campo': e.get('campo'), 'mensaje': e.get('mensaje', '')}
+                for e in schema_errores
+            ]
+        return JsonResponse(payload, status=400)
     return JsonResponse({
         'ok': True,
         'codigo_movimiento': str(codigo_mov),

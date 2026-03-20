@@ -35,6 +35,68 @@ MOTIVOS_MOVIMIENTO = [
 # Mapa código -> nombre para escribir motivo_movimiento y TipoComp como en VB6 (Motivo.Text).
 MOTIVO_CODIGO_A_NOMBRE = {c: n for c, n in MOTIVOS_MOVIMIENTO}
 
+# Esquema mínimo requerido para ingreso de movimientos de stock (tabla -> columnas obligatorias).
+# Si falta una tabla o una columna, no se debe guardar para asegurar consistencia.
+ESQUEMA_INGRESO_MOVIMIENTO: Dict[str, List[str]] = {
+    "codmov": ["codigo", "CodigoMovimiento"],
+    "talonarios": ["Orden", "Nro", "TipoComprobante", "id_punto_venta"],
+    "movimiento_stock": [
+        "codigo_movimiento", "nro_comprobante", "motivo_movimiento", "fecha",
+        "deposito_origen", "deposito_destino", "detalle", "id_usuario", "tipo_comprobante",
+        "anulado", "id_ref_movstock", "id_proyecto", "id_cliente", "id_vendedor",
+    ],
+    "stock": [
+        "CodigoMovimiento", "IDArt", "CodigoArticulo", "Descripcion", "Fecha",
+        "Entrada", "Salida", "saldo", "CodDeposito", "id_ref_movstock", "Orden",
+        "IdUsuario", "Tipo", "TipoComp", "Comprobante", "NroComprobante", "anulado", "CodViajante",
+    ],
+    "stock_deposito": ["id_stock_deposito", "id_articulo", "id_deposito", "saldo"],
+    "deposito": ["CodDeposito", "NombreDeposito"],
+    "cuerpostock_mstock": ["CodUsuario", "visualiza", "Orden"],
+}
+
+
+def verificar_esquema_ingreso_movimiento(
+    base_empresa: str,
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """
+    Comprueba que existan las tablas y columnas necesarias para el ingreso de movimientos de stock.
+    Devuelve (True, []) si todo está bien; (False, lista_errores) si falta alguna tabla o columna.
+    Cada error es {"tabla": str, "campo": Optional[str], "mensaje": str}.
+    """
+    errores: List[Dict[str, Any]] = []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute("SHOW TABLES")
+            tablas_existentes = {list(r.values())[0].lower() for r in cursor.fetchall()}
+            for tabla, columnas_requeridas in ESQUEMA_INGRESO_MOVIMIENTO.items():
+                tabla_lower = tabla.lower()
+                if tabla_lower not in tablas_existentes:
+                    errores.append({
+                        "tabla": tabla,
+                        "campo": None,
+                        "mensaje": f"Falta la tabla «{tabla}» en la base de datos.",
+                    })
+                    continue
+                cursor.execute("SHOW COLUMNS FROM `{}`".format(tabla.replace("`", "``")))
+                columnas_existentes = {r["Field"].lower() for r in cursor.fetchall()}
+                for col in columnas_requeridas:
+                    if col.lower() not in columnas_existentes:
+                        errores.append({
+                            "tabla": tabla,
+                            "campo": col,
+                            "mensaje": f"En la tabla «{tabla}» falta el campo «{col}».",
+                        })
+        return (len(errores) == 0, errores)
+    except Exception as e:
+        logger.warning("Error al verificar esquema ingreso movimiento (%s): %s", base_empresa, e)
+        errores.append({
+            "tabla": None,
+            "campo": None,
+            "mensaje": f"No se pudo comprobar la estructura de la base de datos: {e!s}.",
+        })
+        return (False, errores)
+
 
 def _get_permisos_puesto(base_empresa: str, id_puesto: Optional[int]) -> Dict[str, Any]:
     """Obtiene permisos del puesto desde permisos_sistema (tabla wide por puesto)."""
@@ -1745,20 +1807,28 @@ def alta_movimiento(
     id_puesto: Optional[int],
     cabecera: Dict[str, Any],
     renglones: List[Dict[str, Any]],
-) -> Tuple[bool, Optional[Decimal], Optional[str], Optional[str]]:
+) -> Tuple[bool, Optional[Decimal], Optional[str], Optional[str], Optional[List[Dict[str, Any]]]]:
     """
     Alta de movimiento en una sola transacción.
-    (1) UPDATE codmov, (2) talonarios FOR UPDATE + Nro, (3) INSERT movimiento_stock,
-    (4) por cada renglón: INSERT stock, UPDATE/INSERT stock_deposito,
-    (5) limpieza temporales.
-    Devuelve (ok, codigo_movimiento, nro_comprobante, mensaje_error).
+    (1) Verificación de esquema, (2) UPDATE codmov, (3) talonarios + Nro, (4) INSERT movimiento_stock,
+    (5) por cada renglón: INSERT stock, UPDATE/INSERT stock_deposito, (6) limpieza temporales.
+    Devuelve (ok, codigo_movimiento, nro_comprobante, mensaje_error, schema_errores).
+    Si falta alguna tabla o campo, schema_errores es una lista de {tabla, campo, mensaje} y no se guarda nada.
     """
     if not renglones:
-        return False, None, None, "Debe haber al menos un renglón."
+        return False, None, None, "Debe haber al menos un renglón.", None
 
     err = _validar_permisos_alta(base_empresa, id_puesto, cabecera)
     if err:
-        return False, None, None, err
+        return False, None, None, err, None
+
+    ok_esquema, esquema_errores = verificar_esquema_ingreso_movimiento(base_empresa)
+    if not ok_esquema and esquema_errores:
+        mensaje_natural = (
+            "La base de datos no tiene la estructura necesaria para guardar movimientos de stock. "
+            "Faltan tablas o campos obligatorios; no se ha guardado ningún dato para mantener la consistencia."
+        )
+        return False, None, None, mensaje_natural, esquema_errores
 
     pool = get_mysql_pool()
     try:
@@ -1772,7 +1842,7 @@ def alta_movimiento(
                 row = cursor.fetchone()
                 if not row:
                     conn.rollback()
-                    return False, None, None, "No se pudo obtener código de movimiento."
+                    return False, None, None, "No se pudo obtener código de movimiento.", None
                 codigo_mov = Decimal(str(row[0] or 0)) + 1
                 cursor.execute("UPDATE codmov SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
 
@@ -1785,7 +1855,7 @@ def alta_movimiento(
                 talon_row = cursor.fetchone()
                 if not talon_row:
                     conn.rollback()
-                    return False, None, None, "No existe talonario MSTOCK para el punto de venta."
+                    return False, None, None, "No existe talonario MSTOCK para el punto de venta.", None
                 orden_talon, nro_actual = talon_row[0], (talon_row[1] or 0)
                 nro_nuevo = nro_actual + 1
                 cursor.execute("UPDATE talonarios SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
@@ -1796,7 +1866,7 @@ def alta_movimiento(
                 err_series = _validar_series_renglones(cursor, id_usuario, renglones)
                 if err_series:
                     conn.rollback()
-                    return False, None, None, err_series
+                    return False, None, None, err_series, None
 
                 # Texto del motivo para movimiento_stock.motivo_movimiento y stock.TipoComp (paridad VB6: Motivo.Text).
                 motivo_num = to_int_or_none(cabecera.get("motivo_movimiento")) or 0
@@ -1923,14 +1993,14 @@ def alta_movimiento(
 
                     if not id_art and not codigo_art:
                         conn.rollback()
-                        return False, None, None, f"Renglón {idx + 1}: artículo obligatorio."
+                        return False, None, None, f"Renglón {idx + 1}: artículo obligatorio.", None
 
                     if motivo_num == 6:
                         # Transferencia: dos filas por renglón (salida origen + entrada destino), paridad VB6.
                         cantidad_transfer = salida if es == "S" else entrada
                         if cantidad_transfer <= 0:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: cantidad de transferencia debe ser mayor a cero."
+                            return False, None, None, f"Renglón {idx + 1}: cantidad de transferencia debe ser mayor a cero.", None
                         # Validar saldo en origen
                         cursor.execute(
                             "SELECT id_stock_deposito, saldo FROM stock_deposito WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
@@ -1940,7 +2010,7 @@ def alta_movimiento(
                         saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
                         if saldo_actual < cantidad_transfer:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente en origen (disponible: {saldo_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente en origen (disponible: {saldo_actual}).", None
                         saldo_origen_despues = saldo_actual - cantidad_transfer
                         # 1) Salida en origen
                         cursor.execute(
@@ -1967,11 +2037,11 @@ def alta_movimiento(
                             ls_row = cursor.fetchone()
                             if not ls_row:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito origen."
+                                return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito origen.", None
                             stock_actual = Decimal(str(ls_row[1] or 0))
                             if stock_actual < cantidad_transfer:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente en origen (disponible: {stock_actual})."
+                                return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente en origen (disponible: {stock_actual}).", None
                             cursor.execute("UPDATE lote_stock SET stock_lote = %s WHERE id_lote_stock = %s", [stock_actual - cantidad_transfer, ls_row[0]])
                             cursor.execute("UPDATE lote SET stock_total_lote = COALESCE(stock_total_lote, 0) - %s WHERE id_lote = %s", [cantidad_transfer, id_lote_reng])
                         # Saldo en destino después de la entrada (para el informe)
@@ -2048,7 +2118,7 @@ def alta_movimiento(
                                 )
                             elif id_lote_reng:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: lote no encontrado."
+                                return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
                         continue
 
                     # No transferencia: una fila por renglón (leer saldo actual para INSERT y validación)
@@ -2061,7 +2131,7 @@ def alta_movimiento(
                     if es == "S" or salida > 0:
                         if saldo_actual < salida:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual}).", None
                     saldo_despues = saldo_actual + (entrada - salida)
 
                     cursor.execute(
@@ -2090,11 +2160,11 @@ def alta_movimiento(
                         ls_row = cursor.fetchone()
                         if not ls_row:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito."
+                            return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito.", None
                         stock_actual = Decimal(str(ls_row[1] or 0))
                         if stock_actual < salida:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente (disponible: {stock_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente (disponible: {stock_actual}).", None
                         nuevo_stock_lote = stock_actual - salida
                         cursor.execute("UPDATE lote_stock SET stock_lote = %s WHERE id_lote_stock = %s", [nuevo_stock_lote, ls_row[0]])
                         cursor.execute(
@@ -2148,7 +2218,7 @@ def alta_movimiento(
                             )
                         elif id_lote_reng:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: lote no encontrado."
+                            return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
 
                 # (4a) movstock_pedi: una fila por renglón que tenga pedido (codmov_nro_pedi), paridad VB6
                 codigo_mov_int = to_int_or_none(codigo_mov) or int(codigo_mov)
@@ -2184,7 +2254,7 @@ def alta_movimiento(
                     )
                     if err_guardar:
                         conn.rollback()
-                        return False, None, None, f"Error al grabar series: {err_guardar}"
+                        return False, None, None, f"Error al grabar series: {err_guardar}", None
 
                 # (5) Limpiar temporales del usuario (cuerpo y series)
                 cursor.execute(
@@ -2201,16 +2271,16 @@ def alta_movimiento(
                 )
 
                 conn.commit()
-                return True, codigo_mov, nro_comprobante, None
+                return True, codigo_mov, nro_comprobante, None, None
 
             except Exception as e:
                 conn.rollback()
                 logger.exception("Error en alta_movimiento")
-                return False, None, None, str(e)
+                return False, None, None, str(e), None
 
     except Exception as e:
         logger.exception("Error de conexión en alta_movimiento")
-        return False, None, None, str(e)
+        return False, None, None, str(e), None
 
 
 def listar_movimientos(

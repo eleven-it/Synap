@@ -1,7 +1,8 @@
 # Módulo MPR - Vistas
+import json
 import logging
 import traceback
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponse, JsonResponse
@@ -36,6 +37,8 @@ from .services import (
     get_articulo_armado_por_bom,
     get_bom_detalle,
     get_cantidades_armadas_por_opt,
+    get_cantidad_opp_por_destino_opt,
+    componentes_a_equivalentes_pack,
     get_id_en_abm_por_articulo,
     bulk_id_en_abm,
     bulk_bom_detalle,
@@ -57,6 +60,7 @@ from .services import (
     listar_depositos_config,
     listar_detalle_pedidos_por_articulo,
     listar_lista_produccion_agrupada,
+    listar_opt_listado,
     listar_movimientos_recientes_mpr,
     listar_operarios_crud,
     listar_ventana_pack,
@@ -70,6 +74,7 @@ from .services import (
     listar_opa_por_opt,
     listar_opp_por_opt,
     listar_pedidos_fabrica,
+    listar_opts_por_pedido,
     get_depositos_con_suma_stock,
     get_deposito_produccion_mpr,
     get_deposito_semi_elaborado_mpr,
@@ -81,6 +86,9 @@ from .services import (
     reporte_mpr_wip,
     reporte_mpr_stock,
     reporte_mpr_bajo_minimo,
+    reporte_mpr_desperdicio,
+    reporte_mpr_produccion_por_operario,
+    reporte_mpr_opt_cerradas,
     TIPO_MPR_2DA_SELECCION,
     TIPO_MPR_PRODUCCION,
     TIPO_MPR_SCRAP,
@@ -176,7 +184,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
             except MprSchemaError as e:
                 _log_mpr_schema_error(e)
                 context["mpr_schema_error_modal"] = str(e)
-                context["kpi_op_in_progress"] = 0
+                context["kpi_pedidos_pendientes"] = 0
                 context["kpi_delayed_ops"] = 0
                 context["kpi_pending_units"] = 0
                 context["kpi_urgent_items"] = 0
@@ -188,11 +196,15 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                 return context
             total_pendiente = sum(r["cantidad_pendiente_prod"] for r in agrupada)
             try:
+                pedidos_pendientes = listar_pedidos_fabrica(base_empresa, limit=500, estado="Pendiente")
+                context["kpi_pedidos_pendientes"] = len(pedidos_pendientes)
+            except MprSchemaError:
+                context["kpi_pedidos_pendientes"] = 0
+            try:
                 ventana_pack = listar_ventana_pack(base_empresa, limit=15)
             except MprSchemaError as e:
                 _log_mpr_schema_error(e)
                 context["mpr_schema_error_modal"] = str(e)
-                context["kpi_op_in_progress"] = len(agrupada)
                 context["kpi_delayed_ops"] = 0
                 context["kpi_pending_units"] = total_pendiente
                 context["kpi_urgent_items"] = 0
@@ -202,16 +214,40 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                 context["recent_movements"] = []
                 context["top_urgencies"] = []
                 return context
-            context["kpi_op_in_progress"] = len(agrupada)
-            context["kpi_delayed_ops"] = 0
+            atrasadas = []
+            try:
+                atrasadas = listar_opt_listado(base_empresa, limit=500, solo_atrasadas=True)
+            except MprSchemaError:
+                pass
+            kpi_delayed_ops = len(set(r["id_lista_produccion"] for r in atrasadas if r.get("id_lista_produccion")))
+            context["kpi_delayed_ops"] = kpi_delayed_ops
             context["kpi_pending_units"] = total_pendiente
-            context["kpi_urgent_items"] = min(15, len(ventana_pack))
-            context["top_urgencies"] = []
-            for r in ventana_pack[:10]:
+            context["kpi_urgent_items"] = min(15, len(ventana_pack) + kpi_delayed_ops)
+            top_urgencies = []
+            seen_id_lista = set()
+            for r in atrasadas:
+                id_lista = r.get("id_lista_produccion")
+                if id_lista is None or id_lista in seen_id_lista:
+                    continue
+                seen_id_lista.add(id_lista)
+                detail_url = reverse("mpr:opt_detail", kwargs={"id_lista": id_lista})
+                top_urgencies.append({
+                    "id_articulo": None,
+                    "article_id": f"OPT Nº {id_lista}",
+                    "description": (r.get("descripcion_articulo") or "-")[:50],
+                    "stock": "—",
+                    "demand": r.get("cantidad_pendiente_prod") if r.get("cantidad_pendiente_prod") is not None else "—",
+                    "status": "Vencida",
+                    "status_class": "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300",
+                    "detail_url": detail_url,
+                })
+                if len(top_urgencies) >= 10:
+                    break
+            max_demanda = 10 - len(top_urgencies)
+            for r in ventana_pack[:max_demanda]:
                 id_art = r.get("id_articulo")
-                # Enlace a creación de OPT con este artículo preseleccionado (ventana pack → agrupar con pedidos pendientes)
                 detail_url = (reverse("mpr:ventana_pack") + "?articulo=" + str(id_art)) if id_art else None
-                context["top_urgencies"].append({
+                top_urgencies.append({
                     "id_articulo": id_art,
                     "article_id": r.get("codigo_articulo", "-"),
                     "description": (r.get("descripcion_articulo") or "")[:50],
@@ -221,6 +257,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                     "status_class": "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300" if (r.get("cantidad_a_fabricar", 0) or 0) > 0 else "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
                     "detail_url": detail_url,
                 })
+            context["top_urgencies"] = top_urgencies
             context["ops_to_release"] = []
             context["ops_to_close"] = []
             try:
@@ -262,7 +299,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                 context["ops_to_close"] = []
                 context["recent_movements"] = []
         else:
-            context["kpi_op_in_progress"] = 0
+            context["kpi_pedidos_pendientes"] = 0
             context["kpi_delayed_ops"] = 0
             context["kpi_pending_units"] = 0
             context["kpi_urgent_items"] = 0
@@ -333,7 +370,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         wizard = request.session.get(WIZARD_SESSION_KEY) or {}
         paso = wizard.get("paso", 1)
         if paso == 1:
-            messages.info(request, "Use la pantalla de demanda (Pedido producción trabajo) para crear la OPT.")
+            messages.info(request, "Use la pantalla de demanda (Orden de Producción de Trabajo) para crear la OPT.")
             return redirect("mpr:ventana_pack")
         if paso == 2:
             return self._post_paso2(request, base_empresa, wizard)
@@ -403,6 +440,9 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             if raw:
                 try:
                     fecha_objetivo = datetime.strptime(raw, "%Y-%m-%d").date()
+                    if fecha_objetivo < date.today():
+                        messages.error(request, "La fecha objetivo no puede ser anterior a la fecha de hoy.")
+                        return redirect("mpr:wizard")
                 except ValueError:
                     pass
         wizard["paso"] = 2
@@ -447,6 +487,9 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if fecha_raw:
             try:
                 fecha_objetivo = datetime.strptime(fecha_raw, "%Y-%m-%d").date()
+                if fecha_objetivo < date.today():
+                    messages.error(request, "La fecha objetivo no puede ser anterior a la fecha de hoy.")
+                    return redirect("mpr:wizard")
             except (ValueError, TypeError):
                 pass
         ok, id_lista, error = crear_op_agrupada(
@@ -523,6 +566,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 continue
             por_deposito[cod_dep] = []
         comp_por_id = {to_int_or_none(c.get("id_articulo")): c for c in componentes_opp}
+        id_operario_por_componente = {}
         for id_comp, comp in comp_por_id.items():
             if id_comp is None:
                 continue
@@ -544,13 +588,26 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 codigo = comp.get("codigo_articulo") or id_comp
                 messages.error(request, f"Componente {codigo}: la suma por depósitos ({suma_comp}) no puede superar el disponible ({disponible} unidades).")
                 return redirect("mpr:wizard")
+            if suma_comp > 0:
+                id_operario_raw = (request.POST.get(f"operario_{id_comp}") or "").strip()
+                id_operario_comp = to_int_or_none(id_operario_raw)
+                if id_operario_comp is None:
+                    codigo = comp.get("codigo_articulo") or id_comp
+                    messages.error(request, f"Seleccione un operario para el componente {codigo}.")
+                    return redirect("mpr:wizard")
+                id_operario_por_componente[id_comp] = id_operario_comp
         distribucion_por_deposito = {cod_dep: list(pairs) for cod_dep, pairs in por_deposito.items() if pairs}
         if not distribucion_por_deposito:
             messages.error(request, "Indique al menos una cantidad mayor a 0 en algún depósito.")
             return redirect("mpr:wizard")
         try:
             ok, codigo_mov, nro_comp, error = ejecutar_opp_por_componentes(
-                base_empresa, id_usuario, id_lista, deposito_origen, distribucion_por_deposito,
+                base_empresa,
+                id_usuario,
+                id_lista,
+                deposito_origen,
+                distribucion_por_deposito,
+                id_operario_por_componente=id_operario_por_componente,
             )
         except MprSchemaError as e:
             return _mpr_schema_error_redirect(request, e)
@@ -612,13 +669,17 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 qty = 0
             qty = max(0, qty)
             if qty > 0:
-                cantidades.append((linea, qty))
+                id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
+                if id_operario_linea is None:
+                    messages.error(request, f"Seleccione operario para el pack {linea.get('codigo_articulo') or id_art}.")
+                    return redirect("mpr:wizard")
+                cantidades.append((linea, qty, id_operario_linea))
         if not cantidades:
             messages.error(request, "Indique al menos una cantidad mayor a 0 en algún pack para ejecutar el armado.")
             return redirect("mpr:wizard")
         consumo_por_componente = {}
         saldo_por_componente = {}
-        for linea, qty in cantidades:
+        for linea, qty, _id_operario_linea in cantidades:
             for comp in linea.get("bom", {}).get("componentes") or []:
                 cid = to_int_or_none(comp.get("id_articulo"))
                 if cid is None:
@@ -631,7 +692,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             saldo = saldo_por_componente.get(cid, 0)
             if necesario > saldo:
                 codigo_comp = None
-                for linea, _ in cantidades:
+                for linea, _qty, _id_operario_linea in cantidades:
                     for comp in linea.get("bom", {}).get("componentes") or []:
                         if to_int_or_none(comp.get("id_articulo")) == cid:
                             codigo_comp = comp.get("codigo_articulo") or cid
@@ -643,7 +704,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                     f"Stock insuficiente del componente {codigo_comp or cid} en Semi Elaborado: se necesitan {int(necesario)}, hay {int(saldo)}.",
                 )
                 return redirect("mpr:wizard")
-        for linea, qty in cantidades:
+        for linea, qty, id_operario_linea in cantidades:
             id_en_abm = linea.get("id_en_abm")
             articulo_armado = linea.get("articulo_armado") or {}
             id_art_armado = articulo_armado.get("id_articulo")
@@ -657,6 +718,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                     deposito_terminado,
                     id_lista_produccion=id_lista,
                     id_articulo_armado=id_art_armado,
+                    id_operario=id_operario_linea,
                 )
             except MprSchemaError as e:
                 return _mpr_schema_error_redirect(request, e)
@@ -677,6 +739,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         context["wizard_paso"] = paso
         context["base_empresa"] = base_empresa
         context["wizard"] = wizard
+        context["fecha_hoy"] = date.today()
         if paso == 1:
             context["articulos"] = listar_articulos_para_op(base_empresa, limit=300)
             context["depositos"] = get_depositos_con_suma_stock(base_empresa, _get_id_puesto(self.request))
@@ -720,6 +783,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             context["lineas"] = lineas or []
             context["componentes_opp"] = componentes_opp
             context["depositos_opp"] = depositos_opp
+            context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
             context["total_pendiente"] = sum(c.get("disponible_unidades") or 0 for c in componentes_opp) if componentes_opp else sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
             try:
                 opp_registradas = listar_opp_por_opt(base_empresa, id_lista) if id_lista else []
@@ -734,6 +798,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             context["id_lista"] = id_lista
             context["lineas_armado"] = lineas_armado
             context["mostrar_armado"] = bool(lineas_armado)
+            context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
             context["id_deposito_semi"] = get_deposito_semi_elaborado_mpr(base_empresa)
             context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
             depositos_config = listar_depositos_config(base_empresa)
@@ -763,17 +828,35 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             context["lineas_armado_json"] = json.dumps(data_by_art)
         elif paso == 5:
             id_lista = wizard.get("id_lista")
-            lineas = get_op_detalle(base_empresa, id_lista) if id_lista else []
+            lineas = get_opt_detalle(base_empresa, id_lista) if id_lista else []
             en_proceso = (lineas[0].get("en_proceso_produccion") or "No").strip().lower() == "si" if lineas else False
             context["id_lista"] = id_lista
-            context["total_pendiente"] = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            total_pendiente_opp = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            context["total_pendiente"] = total_pendiente_opp
             context["opt_en_proceso"] = en_proceso
             context["opt_cerrar_url"] = reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista}) if id_lista else None
+            # Restante por armar: solo lo que está en Semi elaborado (no lo enviado a desperdicio/otros)
+            hay_restante_armar = False
+            if id_lista and lineas:
+                cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+                opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
+                all_art_ids = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+                abm_map = bulk_id_en_abm(base_empresa, all_art_ids) if all_art_ids else {}
+                for l in lineas:
+                    id_art = l.get("id_articulo")
+                    if not id_art or not abm_map.get(id_art):
+                        continue
+                    cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
+                    cantidad_disponible_armar = opp_semi.get(id_art, 0)
+                    if cantidad_disponible_armar - cantidad_ya_armada > 0:
+                        hay_restante_armar = True
+                        break
+            context["hay_restante_armar"] = hay_restante_armar
         return context
 
 
 class OptListView(MprLoginRequiredMixin, TemplateView):
-    """Lista de OPT (Pedidos de producción)."""
+    """Órdenes de Producción de Trabajo (OPT). Listado con estado y fase según flujo del asistente."""
 
     template_name = "mpr/opt_list.html"
 
@@ -788,8 +871,6 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
-        articulo_filter = self.request.GET.get("articulo", "").strip()
-        id_articulo = int(articulo_filter) if articulo_filter.isdigit() else None
         estado_filter = (self.request.GET.get("estado", "") or "todos").strip().lower()
         estado_en_proceso = None
         solo_atrasadas = False
@@ -799,16 +880,55 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
             estado_en_proceso = "No"
         elif estado_filter == "atrasadas":
             solo_atrasadas = True
-        ordenes = listar_lista_produccion_agrupada(
+        ordenes = listar_opt_listado(
             base_empresa,
-            limit=200,
-            id_articulo=id_articulo,
+            limit=500,
             estado_en_proceso=estado_en_proceso,
             solo_atrasadas=solo_atrasadas,
         )
+        # Enriquecer cada fila: pendiente del pedido y fase (OPTs creadas) o "Demanda" (aún no liberada)
+        for opt in ordenes:
+            id_lista = opt.get("id_lista_produccion")
+            en_proceso = (opt.get("en_proceso_produccion") or "No").strip() == "Si"
+            es_opt_creada = opt.get("es_opt_creada", False)
+            cantidad_pedida = opt.get("cantidad_pedida") or 0
+            cantidad_pendiente_prod = opt.get("cantidad_pendiente_prod") or 0
+            cantidad_asignada_opt = opt.get("cantidad_asignada_opt")
+            if cantidad_asignada_opt is not None and int(cantidad_asignada_opt or 0) > 0:
+                opt["cantidad_pendiente_mostrar"] = max(0, cantidad_pedida - int(cantidad_asignada_opt))
+            else:
+                opt["cantidad_pendiente_mostrar"] = cantidad_pendiente_prod
+            if not es_opt_creada:
+                opt["etiqueta_fase"] = "Demanda"
+                opt["fase_clave"] = "demanda"
+            elif not en_proceso:
+                # Cerrada = esta OPT no tiene más pendiente de producir (cantidad_pendiente_prod),
+                # no el "pend. del pedido" (cantidad_pendiente_mostrar) que puede ser > 0 para otras OPT.
+                if int(cantidad_pendiente_prod or 0) == 0:
+                    opt["etiqueta_fase"] = "Cerrada"
+                    opt["fase_clave"] = "cerrada"
+                else:
+                    opt["etiqueta_fase"] = "Pendiente"
+                    opt["fase_clave"] = "pendiente"
+            elif id_lista is None:
+                opt["etiqueta_fase"] = "Pendiente"
+                opt["fase_clave"] = "pendiente"
+            else:
+                estado = estado_acciones_opt(base_empresa, id_lista)
+                if estado.get("puede_cerrar"):
+                    opt["etiqueta_fase"] = "Lista para cerrar"
+                    opt["fase_clave"] = "lista_cerrar"
+                elif estado.get("puede_crear_opa"):
+                    opt["etiqueta_fase"] = "Lista para armado (OPA)"
+                    opt["fase_clave"] = "lista_opa"
+                elif estado.get("puede_crear_opp"):
+                    opt["etiqueta_fase"] = "En producción (OPP pendiente)"
+                    opt["fase_clave"] = "en_produccion_opp"
+                else:
+                    opt["etiqueta_fase"] = "En producción"
+                    opt["fase_clave"] = "en_produccion"
         context["base_empresa"] = base_empresa
         context["ordenes"] = ordenes
-        context["filtro_articulo"] = articulo_filter
         context["filtro_estado"] = estado_filter
         return context
 
@@ -853,85 +973,141 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         # Estado del flujo: Pedida → En producción → Producida (OPP) → Pendiente 0 → Armado → Cerrado
         en_proceso = (lineas[0].get("en_proceso_produccion") or "No").strip().lower() == "si"
         paso_pedida = True
-        paso_liberada_opt = en_proceso or (total_pendiente == 0)
-        paso_producida_opp = total_pendiente == 0
-        paso_pendiente_cero = total_pendiente == 0
         paso_cerrado = not en_proceso
+        # Si la OPT está cerrada, mostrar todos los pasos como cumplidos (persistencia del estado al cierre)
+        if paso_cerrado:
+            paso_liberada_opt = True
+            paso_producida_opp = True
+            paso_pendiente_cero = True
+            paso_armado = True
+        else:
+            paso_liberada_opt = en_proceso or (total_pendiente == 0)
+            paso_producida_opp = total_pendiente == 0
+            paso_pendiente_cero = total_pendiente == 0
+            paso_armado = None  # se calcula más abajo
 
         # Cantidades ya armadas por artículo (solo si OPT con id_lista)
         cantidades_armadas = {}
+        opp_semi_por_articulo = {}
+        opp_otros_por_articulo = {}
         if id_lista and id_lista != 0:
             cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+            opp_semi_por_articulo, opp_otros_por_articulo, opp_desperdicio_por_articulo = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
 
         all_art_ids = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
         abm_map = bulk_id_en_abm(base_empresa, all_art_ids) if all_art_ids else {}
         lineas_with_armado = []
         for l in lineas:
             id_art = l.get("id_articulo")
-            id_en_abm = abm_map.get(id_art)
+            cantidad_pendiente_prod = l.get("cantidad_pendiente_prod") or 0
+            cantidad_ya_armada = cantidades_armadas.get(id_art, 0) if id_art else 0
+            # Cantidad comprometida en esta OPT: si existe cantidad_asignada_opt (guardada al crear la OPT), usarla;
+            # si no, usar pendiente + ya armado (para OPTs creadas antes de tener la columna o sin columna).
+            cantidad_asignada = l.get("cantidad_asignada_opt")
+            if cantidad_asignada is not None and int(cantidad_asignada or 0) > 0:
+                cantidad_en_esta_opt = int(cantidad_asignada)
+            else:
+                cantidad_en_esta_opt = cantidad_pendiente_prod + cantidad_ya_armada
+            l["cantidad_en_esta_opt"] = cantidad_en_esta_opt
+            # OPP guarda por componente (medias); convertir a equivalente en packs para esta línea (BOM)
+            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi_por_articulo) if id_art else 0
+            cantidad_a_otros_dep = componentes_a_equivalentes_pack(base_empresa, id_art, opp_otros_por_articulo) if id_art else 0
+            l["cantidad_a_otros_depositos"] = cantidad_a_otros_dep if id_art and abm_map.get(id_art) else None
+            l["cantidad_ya_armada"] = cantidad_ya_armada if id_art and abm_map.get(id_art) else None
+            cantidad_pedida = l.get("cantidad_pedida") or 0
+            # Restante por armar: solo lo que está en Semi elaborado y aún no se armó (no se cuenta lo enviado a desperdicio/otros)
+            cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
+            l["cantidad_restante_armar"] = cantidad_restante_armar if id_art and abm_map.get(id_art) else None
+            id_en_abm = abm_map.get(id_art) if id_art else None
             if id_en_abm:
-                cantidad_pedida = l.get("cantidad_pedida") or 0
-                cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-                cantidad_restante_armar = max(0, cantidad_pedida - cantidad_ya_armada)
                 lineas_with_armado.append({
                     "linea": l,
                     "id_en_abm": id_en_abm,
-                    "cantidad_pendiente": l.get("cantidad_pendiente_prod") or 0,
+                    "cantidad_pendiente": cantidad_pendiente_prod,
                     "cantidad_pedida": cantidad_pedida,
                     "cantidad_ya_armada": cantidad_ya_armada,
                     "cantidad_restante_armar": cantidad_restante_armar,
+                    "cantidad_disponible_armar": cantidad_disponible_armar,
+                    "cantidad_a_otros_depositos": cantidad_a_otros_dep,
                 })
-        # Armado habilitado solo si Pendiente 0 y hay al menos una línea con restante por armar
+        # Armado habilitado solo si Pendiente 0 y hay al menos una línea con restante por armar (solo Semi elaborado)
         hay_restante_armar = any(item["cantidad_restante_armar"] > 0 for item in lineas_with_armado)
-        # Enriquecer cada línea con datos de armado para la tabla (cantidad_ya_armada, cantidad_restante_armar o None)
+        # Equivalentes en packs para mostrar (OPP está en unidades de componente; 1 pack = N medias)
+        primer_pack_id = lineas[0].get("id_articulo") if lineas else None
+        total_a_desperdicio_otro = componentes_a_equivalentes_pack(base_empresa, primer_pack_id, opp_otros_por_articulo) if primer_pack_id else 0
+        hay_unidades_a_desperdicio_otro = total_a_desperdicio_otro > 0
+        # Enriquecer cada línea con datos de armado para la tabla (ya asignados arriba en l)
         armado_por_articulo = {
             item["linea"]["id_articulo"]: {
                 "cantidad_ya_armada": item["cantidad_ya_armada"],
                 "cantidad_restante_armar": item["cantidad_restante_armar"],
+                "cantidad_a_otros_depositos": item["cantidad_a_otros_depositos"],
             }
             for item in lineas_with_armado
         }
         for l in lineas:
             d = armado_por_articulo.get(l.get("id_articulo"))
-            l["cantidad_ya_armada"] = d["cantidad_ya_armada"] if d else None
-            l["cantidad_restante_armar"] = d["cantidad_restante_armar"] if d else None
+            if d:
+                l["cantidad_ya_armada"] = d["cantidad_ya_armada"]
+                l["cantidad_restante_armar"] = d["cantidad_restante_armar"]
+                l["cantidad_a_otros_depositos"] = d.get("cantidad_a_otros_depositos")
+            if l.get("cantidad_en_esta_opt") is None:
+                l["cantidad_en_esta_opt"] = (l.get("cantidad_pendiente_prod") or 0) + (l.get("cantidad_ya_armada") or 0)
+        total_en_esta_opt = sum(l.get("cantidad_en_esta_opt") or 0 for l in lineas)
+        pendiente_del_pedido = max(0, total_pedida - total_en_esta_opt)
         if lineas_with_armado and id_lista:
             armado_opt_url = reverse("mpr:armado_opt", kwargs={"id_lista": id_lista})
             for item in lineas_with_armado:
                 item["armado_url"] = armado_opt_url
-        paso_armado = (
-            not lineas_with_armado
-            or all(item["cantidad_ya_armada"] >= item["cantidad_pedida"] for item in lineas_with_armado)
-        )
+        if not paso_cerrado:
+            # Paso armado completo cuando todo lo disponible en Semi elaborado ya se armó (no se exige lo que fue a otros depósitos)
+            paso_armado = (
+                not lineas_with_armado
+                or all(
+                    item["cantidad_ya_armada"] >= item.get("cantidad_disponible_armar", 0)
+                    for item in lineas_with_armado
+                )
+            )
+        # si paso_cerrado, paso_armado ya quedó True arriba
 
         # Porcentaje según 6 pasos: Pedida, En producción, Producida (OPP), Pendiente 0, Armado, Cerrado
-        num_pasos = sum([
-            paso_pedida,
-            paso_liberada_opt,
-            paso_producida_opp,
-            paso_pendiente_cero,
-            paso_armado,
-            paso_cerrado,
-        ])
-        porcentaje_estado = min(100, round(100 * num_pasos / 6)) if num_pasos else 0
-
-        if total_pendiente == 0 and en_proceso:
-            estado_actual_texto = "Completada (pendiente 0). Puede cerrar la OPT."
-        elif total_pendiente == 0:
-            estado_actual_texto = "Producida (OPP). Pendiente: 0 unidades."
-        elif en_proceso:
-            estado_actual_texto = "En producción. Pendiente: {} unidades.".format(total_pendiente)
+        # OPT cerrada: 100 % (todos los pasos cumplidos de forma persistente)
+        if paso_cerrado:
+            porcentaje_estado = 100
         else:
-            estado_actual_texto = "En producción (pendiente: {}).".format(total_pendiente)
+            num_pasos = sum([
+                paso_pedida,
+                paso_liberada_opt,
+                paso_producida_opp,
+                paso_pendiente_cero,
+                paso_armado,
+                paso_cerrado,
+            ])
+            porcentaje_estado = min(100, round(100 * num_pasos / 6)) if num_pasos else 0
+
+        if paso_cerrado:
+            estado_actual_texto = "OPT cerrada."
+        elif total_pendiente == 0 and en_proceso:
+            estado_actual_texto = "Completada (pendiente OPP 0). Puede cerrar la OPT."
+        elif total_pendiente == 0:
+            estado_actual_texto = "Producida (OPP). Pendiente OPP: 0 Packs."
+        elif en_proceso:
+            estado_actual_texto = "En producción. Pendiente OPP (por producir en esta OPT): {} Packs.".format(total_pendiente)
+        else:
+            estado_actual_texto = "En producción. Pendiente OPP: {} Packs.".format(total_pendiente)
 
         context["lineas_with_armado"] = lineas_with_armado
         context["hay_restante_armar"] = hay_restante_armar
+        context["hay_unidades_a_desperdicio_otro"] = hay_unidades_a_desperdicio_otro
+        context["total_a_desperdicio_otro"] = total_a_desperdicio_otro
         context["base_empresa"] = base_empresa
         context["id_lista"] = id_lista
         context["opt_numero"] = opt_numero
         context["lineas"] = lineas
         context["total_pedida"] = total_pedida
         context["total_pendiente"] = total_pendiente
+        context["total_en_esta_opt"] = total_en_esta_opt
+        context["pendiente_del_pedido"] = pendiente_del_pedido
         context["porcentaje_completado"] = porcentaje_estado
         context["estado_actual_texto"] = estado_actual_texto
         context["paso_pedida"] = paso_pedida
@@ -1070,6 +1246,7 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
                 qty = max(0, qty)
                 if qty > 0:
                     por_deposito[cod_dep].append((id_comp, qty))
+        id_operario_por_componente = {}
         for id_comp, comp in comp_por_id.items():
             if id_comp is None:
                 continue
@@ -1083,13 +1260,26 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
                 codigo = comp.get("codigo_articulo") or id_comp
                 messages.error(request, f"Componente {codigo}: la suma por depósitos ({suma_comp}) no puede superar el disponible ({disponible} unidades).")
                 return redirect("mpr:registrar_opp", id_lista=id_lista)
+            if suma_comp > 0:
+                id_operario_raw = (request.POST.get(f"operario_{id_comp}") or "").strip()
+                id_operario_comp = to_int_or_none(id_operario_raw)
+                if id_operario_comp is None:
+                    codigo = comp.get("codigo_articulo") or id_comp
+                    messages.error(request, f"Seleccione un operario para el componente {codigo}.")
+                    return redirect("mpr:registrar_opp", id_lista=id_lista)
+                id_operario_por_componente[id_comp] = id_operario_comp
         distribucion_por_deposito = {cod_dep: list(pairs) for cod_dep, pairs in por_deposito.items() if pairs}
         if not distribucion_por_deposito:
             messages.error(request, "Indique al menos una cantidad mayor a 0 en algún depósito.")
             return redirect("mpr:registrar_opp", id_lista=id_lista)
         try:
             ok, codigo_mov, nro_comp, error = ejecutar_opp_por_componentes(
-                base_empresa, id_usuario, id_lista, deposito_origen, distribucion_por_deposito,
+                base_empresa,
+                id_usuario,
+                id_lista,
+                deposito_origen,
+                distribucion_por_deposito,
+                id_operario_por_componente=id_operario_por_componente,
             )
         except MprSchemaError as e:
             return _mpr_schema_error_redirect(request, e)
@@ -1300,19 +1490,19 @@ def _opt_comprobante_pdf(request, id_lista):
     opp_list = listar_opp_por_opt(base_empresa, id_lista)
     opa_list = listar_opa_por_opt(base_empresa, id_lista)
 
-    # Bloques a imprimir: (título sección, codigo_movimiento)
+    # Bloques a imprimir: (título sección, subtítulo contexto, codigo_movimiento)
     bloques = []
     if codigo_opt:
-        bloques.append(("1. Liberación OPT", codigo_opt))
+        bloques.append(("1. Liberación OPT", "Movimiento a producción", codigo_opt))
     for i, opp in enumerate(opp_list or [], 1):
-        bloques.append((f"2.{i}. OPP - Comprobante {opp.get('nro_comprobante', '-')}", opp["codigo_movimiento"]))
+        bloques.append((f"2.{i}. OPP – Parte de producción", f"Comprobante {opp.get('nro_comprobante', '-')}", opp["codigo_movimiento"]))
     for i, opa in enumerate(opa_list or [], 1):
-        bloques.append((f"3.{i}. OPA - Comprobante {opa.get('nro_comprobante', '-')}", opa["codigo_movimiento"]))
+        bloques.append((f"3.{i}. OPA – Armado", f"Comprobante {opa.get('nro_comprobante', '-')}", opa["codigo_movimiento"]))
 
     if not bloques:
         return None
 
-    todos_cod_mov = [cod for _, cod in bloques]
+    todos_cod_mov = [cod for _, __, cod in bloques]
     mov_cache = {}
     renglones_cache = {}
     dep_ids_set = set()
@@ -1348,11 +1538,11 @@ def _opt_comprobante_pdf(request, id_lista):
     primera_pagina = True
     y_content = 210 * mm
 
-    for titulo_seccion, cod_mov in bloques:
+    for titulo_seccion, subtitulo_seccion, cod_mov in bloques:
         mov = mov_cache.get(cod_mov)
         if not mov:
             continue
-        renglones = renglones_cache.get(cod_mov, [])
+        renglones = renglones_cache.get(cod_mov, []) or []
         nombre_dep_origen = dep_nombres.get(mov.get("deposito_origen"), "-")
         nombre_dep_destino = dep_nombres.get(mov.get("deposito_destino"), "-")
 
@@ -1366,69 +1556,105 @@ def _opt_comprobante_pdf(request, id_lista):
                 draw_report_footer(p)
                 p.showPage()
                 y_content = 210 * mm - 25 * mm
-            p.setFont("Helvetica-Bold", 11)
-            p.drawString(margin, y_content, titulo_seccion)
-            y_content -= 8 * mm
+            # Separador visual entre secciones
+            y_content -= 4 * mm
+            p.setStrokeColorRGB(0.75, 0.75, 0.75)
+            p.setLineWidth(0.3)
+            p.line(margin, y_content, x_fin_tabla, y_content)
+            y_content -= 6 * mm
+
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(margin, y_content, titulo_seccion)
+        y_content -= 5 * mm
+        p.setFont("Helvetica", 9)
+        p.setFillColorRGB(0.3, 0.3, 0.3)
+        p.drawString(margin, y_content, subtitulo_seccion)
+        p.setFillColorRGB(0, 0, 0)
+        y_content -= 6 * mm
 
         p.setFont("Helvetica", 10)
         p.drawString(margin, y_content, f"Nro: {mov.get('nro_comprobante') or '-'}  |  Fecha: {str(mov.get('fecha') or '')}  |  Motivo: {mov.get('motivo_movimiento') or '-'}")
-        y_content -= 6 * mm
+        y_content -= 5 * mm
         p.drawString(margin, y_content, f"Dep. origen: {nombre_dep_origen}  |  Dep. destino: {nombre_dep_destino}")
-        y_content -= 6 * mm
-        p.drawString(margin, y_content, f"Detalle: {(mov.get('detalle') or '')[:80]}")
-        y_content -= 8 * mm
+        y_content -= 5 * mm
+        detalle_texto = (mov.get("detalle") or "").strip()
+        if detalle_texto:
+            p.drawString(margin, y_content, f"Detalle: {detalle_texto[:80]}")
+            y_content -= 6 * mm
+        y_content -= 4 * mm
 
         if y_content < y_min:
             draw_report_footer(p)
             p.showPage()
             y_content = 210 * mm - 25 * mm
 
-        p.setStrokeColorRGB(0.2, 0.2, 0.2)
-        p.setLineWidth(0.5)
-        p.line(margin, y_content, x_fin_tabla, y_content)
-        y_content -= cabecera_altura
-        p.setFont("Helvetica-Bold", 10)
-        p.drawString(margin + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Artículo / Descripción")
-        p.drawString(margin + col_articulo + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Entrada")
-        p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Salida")
-        p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Saldo")
-        p.line(margin, y_content + cabecera_altura, margin, y_content)
-        p.line(margin + col_articulo, y_content + cabecera_altura, margin + col_articulo, y_content)
-        p.line(margin + col_articulo + col_entrada, y_content + cabecera_altura, margin + col_articulo + col_entrada, y_content)
-        p.line(margin + col_articulo + col_entrada + col_salida, y_content + cabecera_altura, margin + col_articulo + col_entrada + col_salida, y_content)
-        p.line(x_fin_tabla, y_content + cabecera_altura, x_fin_tabla, y_content)
-        y_content -= fila_altura
+        if not renglones:
+            p.setFont("Helvetica", 9)
+            p.setFillColorRGB(0.4, 0.4, 0.4)
+            p.drawString(margin, y_content, "Sin líneas de movimiento registradas.")
+            p.setFillColorRGB(0, 0, 0)
+            y_content -= 10 * mm
+        else:
+            p.setFont("Helvetica", 9)
+            p.setFillColorRGB(0.35, 0.35, 0.35)
+            p.drawString(margin, y_content, "Detalle de movimientos (Artículo, Entrada, Salida, Saldo):")
+            p.setFillColorRGB(0, 0, 0)
+            y_content -= 5 * mm
 
-        p.setFont("Helvetica", 10)
-        for r in (renglones or [])[:25]:
             if y_content < y_min:
                 draw_report_footer(p)
                 p.showPage()
                 y_content = 210 * mm - 25 * mm
-                p.setFont("Helvetica", 10)
-            p.line(margin, y_content + fila_altura, x_fin_tabla, y_content + fila_altura)
-            art_desc = f"{r.get('CodigoArticulo') or ''} {str(r.get('Descripcion') or '')[:70]}".strip()
-            if len(art_desc) > 73:
-                art_desc = art_desc[:70] + "..."
-            p.drawString(margin + 2 * mm, y_content + (fila_altura - 3.5 * mm), art_desc)
-            p.drawString(margin + col_articulo + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Entrada") or "0"))
-            p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Salida") or "0"))
-            saldo_val = r.get("saldo", r.get("Saldo"))
-            saldo_str = str(saldo_val) if saldo_val is not None else "-"
-            p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (fila_altura - 3.5 * mm), saldo_str)
-            p.line(margin, y_content + fila_altura, margin, y_content)
-            p.line(margin + col_articulo, y_content + fila_altura, margin + col_articulo, y_content)
-            p.line(margin + col_articulo + col_entrada, y_content + fila_altura, margin + col_articulo + col_entrada, y_content)
-            p.line(margin + col_articulo + col_entrada + col_salida, y_content + fila_altura, margin + col_articulo + col_entrada + col_salida, y_content)
-            p.line(x_fin_tabla, y_content + fila_altura, x_fin_tabla, y_content)
+
+            p.setStrokeColorRGB(0.2, 0.2, 0.2)
+            p.setLineWidth(0.5)
+            p.line(margin, y_content, x_fin_tabla, y_content)
+            y_content -= cabecera_altura
+            p.setFont("Helvetica-Bold", 10)
+            p.drawString(margin + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Artículo / Descripción")
+            p.drawString(margin + col_articulo + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Entrada")
+            p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Salida")
+            p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Saldo")
+            p.line(margin, y_content + cabecera_altura, margin, y_content)
+            p.line(margin + col_articulo, y_content + cabecera_altura, margin + col_articulo, y_content)
+            p.line(margin + col_articulo + col_entrada, y_content + cabecera_altura, margin + col_articulo + col_entrada, y_content)
+            p.line(margin + col_articulo + col_entrada + col_salida, y_content + cabecera_altura, margin + col_articulo + col_entrada + col_salida, y_content)
+            p.line(x_fin_tabla, y_content + cabecera_altura, x_fin_tabla, y_content)
             y_content -= fila_altura
 
-        p.line(margin, y_content, x_fin_tabla, y_content)
-        if (renglones or []) and len(renglones) > 25:
-            y_content -= 4 * mm
-            p.setFont("Helvetica", 9)
-            p.drawString(margin, y_content, f"... y {len(renglones) - 25} renglones más.")
-        y_content -= 12 * mm
+            p.setFont("Helvetica", 10)
+            for r in renglones[:25]:
+                if y_content < y_min:
+                    draw_report_footer(p)
+                    p.showPage()
+                    y_content = 210 * mm - 25 * mm
+                    p.setFont("Helvetica", 10)
+                p.line(margin, y_content + fila_altura, x_fin_tabla, y_content + fila_altura)
+                art_desc = f"{r.get('CodigoArticulo') or ''} {str(r.get('Descripcion') or '')[:70]}".strip()
+                if len(art_desc) > 73:
+                    art_desc = art_desc[:70] + "..."
+                p.drawString(margin + 2 * mm, y_content + (fila_altura - 3.5 * mm), art_desc)
+                p.drawString(margin + col_articulo + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Entrada") or "0"))
+                p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Salida") or "0"))
+                saldo_val = r.get("saldo", r.get("Saldo"))
+                saldo_str = str(saldo_val) if saldo_val is not None else "-"
+                p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (fila_altura - 3.5 * mm), saldo_str)
+                p.line(margin, y_content + fila_altura, margin, y_content)
+                p.line(margin + col_articulo, y_content + fila_altura, margin + col_articulo, y_content)
+                p.line(margin + col_articulo + col_entrada, y_content + fila_altura, margin + col_articulo + col_entrada, y_content)
+                p.line(margin + col_articulo + col_entrada + col_salida, y_content + fila_altura, margin + col_articulo + col_entrada + col_salida, y_content)
+                p.line(x_fin_tabla, y_content + fila_altura, x_fin_tabla, y_content)
+                y_content -= fila_altura
+
+            p.line(margin, y_content, x_fin_tabla, y_content)
+            if len(renglones) > 25:
+                y_content -= 4 * mm
+                p.setFont("Helvetica", 9)
+                p.drawString(margin, y_content, f"... y {len(renglones) - 25} renglones más.")
+                y_content -= 4 * mm
+            y_content -= 8 * mm
+
+        y_content -= 6 * mm
 
     draw_report_footer(p)
     p.showPage()
@@ -1695,8 +1921,18 @@ class BomEditView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:bom_edit", id_en_abm=id_en_abm)
 
 
+# Opciones de estado_pedido_opt para filtro en Pedidos fábrica
+ESTADOS_PEDIDO_OPT_CHOICES = [
+    ("", "Todos"),
+    ("Pendiente", "Pendiente"),
+    ("Produccion", "Producción"),
+    ("Parcial", "Parcial"),
+    ("Terminado", "Terminado"),
+]
+
+
 class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
-    """Listado de pedidos con estado de producción (comp_ped estado_pedido_opt: Pendiente, Produccion, Terminado)."""
+    """Listado de pedidos con estado de producción (comp_ped estado_pedido_opt: Pendiente, Produccion, Parcial, Terminado)."""
 
     template_name = "mpr/pedidos_fabrica_list.html"
 
@@ -1713,6 +1949,7 @@ class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
         base_empresa = _get_base_empresa(self.request)
         estado = self.request.GET.get("estado", "").strip() or None
         context["base_empresa"] = base_empresa
+        context["opciones_estado"] = ESTADOS_PEDIDO_OPT_CHOICES
         try:
             context["pedidos"] = listar_pedidos_fabrica(base_empresa, limit=100, estado=estado)
         except MprSchemaError as e:
@@ -1720,6 +1957,44 @@ class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
             context["mpr_schema_error_modal"] = str(e)
             context["pedidos"] = []
         context["filtro_estado"] = estado or ""
+        return context
+
+
+class OptsPorPedidoView(MprLoginRequiredMixin, TemplateView):
+    """Trazabilidad: OPTs vinculadas a un pedido (codigo_movimiento). GET ?codigo=."""
+
+    template_name = "mpr/opts_por_pedido.html"
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            from django.contrib import messages
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:pedidos_fabrica_list")
+        codigo = request.GET.get("codigo")
+        if not codigo:
+            from django.contrib import messages
+            messages.warning(request, "Indique el número de movimiento del pedido.")
+            return redirect("mpr:pedidos_fabrica_list")
+        try:
+            codigo = int(codigo)
+        except (TypeError, ValueError):
+            from django.contrib import messages
+            messages.error(request, "Código de movimiento inválido.")
+            return redirect("mpr:pedidos_fabrica_list")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        codigo = int(self.request.GET.get("codigo", 0))
+        context["codigo_movimiento"] = codigo
+        try:
+            context["opts"] = listar_opts_por_pedido(base_empresa, codigo)
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            context["mpr_schema_error_modal"] = str(e)
+            context["opts"] = []
         return context
 
 
@@ -2031,6 +2306,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             context["opt_numero"] = None
             context["depositos"] = get_depositos_con_suma_stock(base_empresa, _get_id_puesto(self.request))
             context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
+            context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
             return context
         lineas = get_opt_detalle(base_empresa, id_lista)
         if not lineas:
@@ -2039,8 +2315,10 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             context["opt_numero"] = id_lista
             context["depositos"] = get_depositos_con_suma_stock(base_empresa, _get_id_puesto(self.request))
             context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
+            context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
             return context
         cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+        opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
         art_ids_liberar = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
         abm_map_liberar = bulk_id_en_abm(base_empresa, art_ids_liberar) if art_ids_liberar else {}
         lineas_armado = []
@@ -2049,9 +2327,9 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             id_en_abm = abm_map_liberar.get(id_art)
             if not id_en_abm:
                 continue
-            cantidad_pedida = l.get("cantidad_pedida") or 0
             cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-            cantidad_restante_armar = max(0, cantidad_pedida - cantidad_ya_armada)
+            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi)
+            cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
             producto_label = f"{l.get('codigo_articulo') or '-'} — {l.get('descripcion_articulo') or '-'}"
             lineas_armado.append({
                 "producto_label": producto_label,
@@ -2066,6 +2344,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
         context["depositos"] = get_depositos_con_suma_stock(base_empresa, _get_id_puesto(self.request))
         context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
         context["hay_restante_armar"] = any(item["cantidad"] > 0 for item in lineas_armado)
+        context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2106,6 +2385,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             messages.error(request, "El armado solo está disponible cuando el pendiente de la OPT es 0.")
             return redirect("mpr:opt_detail", id_lista=id_lista)
         cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista)
+        opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
         art_ids_post = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
         abm_map_post = bulk_id_en_abm(base_empresa, art_ids_post) if art_ids_post else {}
         ejecutados = 0
@@ -2115,11 +2395,15 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             id_en_abm = abm_map_post.get(id_art)
             if not id_en_abm:
                 continue
-            cantidad_pedida = l.get("cantidad_pedida") or 0
             cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-            cantidad_restante_armar = max(0, cantidad_pedida - cantidad_ya_armada)
+            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi)
+            cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
             if cantidad_restante_armar <= 0:
                 continue
+            id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
+            if id_operario_linea is None:
+                messages.error(request, f"Seleccione operario para el pack {l.get('codigo_articulo') or id_art}.")
+                return redirect(f"{reverse('mpr:armado')}?id_lista={id_lista}")
             try:
                 ok, codigo_mov, nro_comp, error = ejecutar_armado(
                     base_empresa,
@@ -2130,6 +2414,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
                     deposito_destino,
                     id_lista_produccion=id_lista,
                     id_articulo_armado=id_art,
+                    id_operario=id_operario_linea,
                 )
             except MprSchemaError as e:
                 return _mpr_schema_error_redirect(request, e)
@@ -2228,10 +2513,13 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
         tipo = (self.request.GET.get("tipo") or "pendiente").strip().lower()
-        if tipo not in ("pendiente", "wip", "stock", "bajo_minimo"):
+        tipos_validos = ("pendiente", "wip", "stock", "bajo_minimo", "desperdicio", "produccion_operario", "opt_cerradas")
+        if tipo not in tipos_validos:
             tipo = "pendiente"
         context["base_empresa"] = base_empresa
         context["tipo_reporte"] = tipo
+        fecha_desde = (self.request.GET.get("fecha_desde") or "").strip() or None
+        fecha_hasta = (self.request.GET.get("fecha_hasta") or "").strip() or None
         if tipo == "pendiente":
             context["filas"] = reporte_mpr_pendiente(base_empresa, limit=200)
             context["titulo_reporte"] = "Pendiente por artículo / pedido"
@@ -2241,14 +2529,23 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
         elif tipo == "stock":
             context["filas"] = reporte_mpr_stock(base_empresa, limit=500)
             context["titulo_reporte"] = "Stock por tipo / depósito"
-        else:
+        elif tipo == "bajo_minimo":
             context["filas"] = reporte_mpr_bajo_minimo(base_empresa, limit=200)
             context["titulo_reporte"] = "Bajo mínimo"
+        elif tipo == "desperdicio":
+            context["filas"] = reporte_mpr_desperdicio(base_empresa, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, limit=200)
+            context["titulo_reporte"] = "Desperdicio / Scrap"
+        elif tipo == "produccion_operario":
+            context["filas"] = reporte_mpr_produccion_por_operario(base_empresa, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, limit=200)
+            context["titulo_reporte"] = "Producción por operario"
+        else:  # opt_cerradas
+            context["filas"] = reporte_mpr_opt_cerradas(base_empresa, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, limit=200)
+            context["titulo_reporte"] = "OPT cerradas"
         return context
 
 
 class VentanaPackActualizarView(MprLoginRequiredMixin, TemplateView):
-    """POST: ejecuta actualizar_pedidos_produccion y redirige a Pedido producción trabajo (OPT) con mensaje."""
+    """POST: ejecuta actualizar_pedidos_produccion y redirige a Orden de Producción de Trabajo (OPT) con mensaje."""
 
     http_method_names = ["post"]
 
@@ -2305,7 +2602,7 @@ class EmpleadosOperariosAPIView(MprLoginRequiredMixin, View):
 
 
 class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
-    """Pantalla 2: recibe selección desde Pedido producción trabajo (OPT), muestra tabla con cantidades editables y tooltip; POST 'Generar OPT' crea la OPT."""
+    """Pantalla 2: recibe selección desde Orden de Producción de Trabajo (OPT), muestra tabla con cantidades editables y tooltip; POST 'Generar OPT' crea la OPT."""
 
     template_name = "mpr/ventana_pack_agrupar.html"
 
@@ -2317,7 +2614,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
             return redirect("core:dashboard")
         seleccion = request.session.get("ventana_pack_seleccion")
         if not seleccion or not seleccion.get("filas"):
-            messages.info(request, "No hay selección. Elija artículos en Pedido producción trabajo (OPT) y pulse Continuar.")
+            messages.info(request, "No hay selección. Elija artículos en Orden de Producción de Trabajo (OPT) y pulse Continuar.")
             return redirect("mpr:ventana_pack")
         # Solo al cargar la pantalla por GET: descartar mensajes previos (Actualizar, Continuar, etc.).
         # Las validaciones/errores se muestran solo al hacer clic en «Generar OPT» (POST).
@@ -2336,7 +2633,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         if accion == "generar_opt":
             seleccion = request.session.get("ventana_pack_seleccion")
             if not seleccion or not seleccion.get("filas"):
-                messages.error(request, "La selección expiró. Vuelva a Pedido producción trabajo (OPT) y seleccione de nuevo.")
+                messages.error(request, "La selección expiró. Vuelva a Orden de Producción de Trabajo (OPT) y seleccione de nuevo.")
                 return redirect("mpr:ventana_pack")
             # OPT se genera por pack (lista_produccion_agrupada tiene id_articulo = pack).
             # El formulario muestra unidades (componentes); mapeamos cantidades/operario al pack.
@@ -2344,18 +2641,25 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
             if not lineas:
                 messages.error(request, "Indique al menos un artículo con cantidad mayor a 0.")
                 return self.get(request, *args, **kwargs)
-            # Generar OPT no permitido si falta operario en alguna línea con cantidad > 0
-            sin_operario = [id_art for id_art, qty, id_op in lineas if id_op is None]
-            if sin_operario:
-                messages.error(request, "Debe seleccionar un operario para cada artículo con cantidad a fabricar.")
-                return self.get(request, *args, **kwargs)
             session_user = request.session.get("user", {})
             try:
                 id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
             except (TypeError, ValueError):
                 id_usuario = None
+            fecha_objetivo = None
+            raw_fecha = (request.POST.get("fecha_objetivo") or "").strip()
+            if raw_fecha:
+                try:
+                    fecha_objetivo = datetime.strptime(raw_fecha, "%Y-%m-%d").date()
+                    if fecha_objetivo < date.today():
+                        messages.error(request, "La fecha objetivo no puede ser anterior a la fecha de hoy.")
+                        return self.get(request, *args, **kwargs)
+                except (ValueError, TypeError):
+                    pass
             try:
-                ok, id_lista_principal, error = crear_opt_multiples_articulos(base_empresa, id_usuario, lineas)
+                ok, id_lista_principal, error = crear_opt_multiples_articulos(
+                    base_empresa, id_usuario, lineas, fecha_objetivo=fecha_objetivo
+                )
             except MprSchemaError as e:
                 return _mpr_schema_error_redirect(request, e)
             if ok and id_lista_principal:
@@ -2472,11 +2776,16 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         context["filas_unidades"] = filas_unidades
         context["en_wizard"] = wizard.get("paso") == 1
         context["wizard_paso"] = 2
+        context["fecha_hoy"] = date.today()
+        if base_empresa:
+            context["opcional_op"] = listar_columnas_opcionales_nueva_op(base_empresa)
+        else:
+            context["opcional_op"] = {"has_fecha_objetivo": False, "has_deposito_produccion": False, "has_prioridad": False}
         return context
 
 
 class VentanaPackView(MprLoginRequiredMixin, TemplateView):
-    """Pedido producción trabajo (OPT) Pantalla 1: demanda por artículo; formulario envía a ventana_pack_agrupar (Continuar)."""
+    """Orden de Producción de Trabajo (OPT) Pantalla 1: demanda por artículo; formulario envía a ventana_pack_agrupar (Continuar)."""
 
     template_name = "mpr/ventana_pack.html"
 
@@ -2535,34 +2844,25 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
             filtros["fecha_hasta"] = ultimo_dia.isoformat()
         context["filtros_actualizar"] = filtros
 
-        # Al ingresar o refrescar la página se ejecuta "Actualizar" para mostrar datos actualizados
+        # Actualizar lista_produccion_detalle y agrupada con los filtros de sesión (o por defecto).
+        fecha_desde = (filtros.get("fecha_desde") or "").strip() or None
+        fecha_hasta = (filtros.get("fecha_hasta") or "").strip() or None
+        busqueda = (filtros.get("busqueda") or "").strip() or None
         session_user = self.request.session.get("user", {})
         try:
             id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
         except (TypeError, ValueError):
             id_usuario = None
-        fecha_desde = (filtros.get("fecha_desde") or "").strip() or None
-        fecha_hasta = (filtros.get("fecha_hasta") or "").strip() or None
-        busqueda = (filtros.get("busqueda") or "").strip() or None
         try:
-            ok, msg = actualizar_pedidos_produccion(
+            actualizar_pedidos_produccion(
                 base_empresa,
                 id_usuario=id_usuario,
                 fecha_desde=fecha_desde,
                 fecha_hasta=fecha_hasta,
                 busqueda=busqueda,
             )
-            if not ok:
-                messages.error(self.request, msg)
-        except MprSchemaError as e:
-            _log_mpr_schema_error(e)
-            context["mpr_schema_error_modal"] = str(e)
-            context["filas"] = []
-            context["filas_unidades"] = []
-            context["en_wizard"] = wizard.get("paso") == 1
-            context["wizard_paso"] = 1
-            return context
-
+        except MprSchemaError:
+            pass  # Se muestra tabla vacía o error en contexto
         try:
             context["filas"] = listar_ventana_pack(base_empresa, limit=200)
             context["filas_unidades"] = listar_ventana_pack_unidades(
@@ -2571,6 +2871,7 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
             for f in context["filas"]:
                 f["cantidad_a_fabricar_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
                 f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)
+                f["pedidos_resumen_json"] = json.dumps(f.get("pedidos_resumen") or [])
             for f in context["filas_unidades"]:
                 f["cantidad_a_fabricar_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
                 f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)

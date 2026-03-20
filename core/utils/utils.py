@@ -122,20 +122,6 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Ejecución"),
-                "items": [
-                    {"label": _("Creación Pedido Producción Trabajo (OPT)"), "url": "mpr:ventana_pack", "icon": "rocket_launch", "permission": "mpr.ver"},
-                    {"label": _("Parte de producción (OPP)"), "url": "mpr:opt_list", "icon": "assignment", "permission": "mpr.ver"},
-                    {"label": _("Reclasificación (2da/Scrap)"), "url": "mpr:reclasificacion", "icon": "swap_horiz", "permission": "mpr.ver"},
-                ]
-            },
-            {
-                "seccion": _("Lista de materiales"),
-                "items": [
-                    {"label": _("Armado / desarmado de artículos"), "url": "mpr:bom_list", "icon": "list_alt", "permission": "mpr.ver"},
-                ]
-            },
-            {
                 "seccion": _("Reportes"),
                 "items": [
                     {"label": _("Reportes MPR"), "url": "mpr:reportes", "icon": "assessment", "permission": "mpr.ver"},

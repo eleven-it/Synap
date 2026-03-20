@@ -17,6 +17,8 @@ Módulo de movimientos de stock alineado con AdministraNET VB6. Mismas tablas y 
 | stock.ref_movstock | ABM referencias de movimiento |
 | stock.informes | Informes de stock |
 
+El acceso a "Ingreso Mov. Stock" se otorga si el puesto tiene `stock.crear_movimiento` en **permiso_sistema_puesto** o la Clavemenu `keyCompStock` en la tabla **permisos** (mapeo automático). El comportamiento (depósitos, referencia, motivos) se lee de **permisos_sistema**. Ver [PERMISOS_STOCK_SYNAP_VS_VB6.md](PERMISOS_STOCK_SYNAP_VS_VB6.md).
+
 El backend revalida permisos de puesto (cambia_deposito, acceso_ref_movstock, acceso_motivo_movstock, deposito_usr) en cada alta.
 
 ## URLs principales
@@ -36,10 +38,15 @@ El backend revalida permisos de puesto (cambia_deposito, acceso_ref_movstock, ac
 ## Flujo de alta y mitigación de riesgos
 
 1. Renglones en temporal `cuerpostock_mstock` (por usuario).
-2. Al confirmar: una sola transacción MySQL: UPDATE codmov, SELECT talonarios FOR UPDATE, INSERT movimiento_stock, por cada renglón INSERT stock y UPDATE/INSERT stock_deposito, DELETE temporales del usuario.
-3. En error: rollback total (incluido codmov y talonarios).
+2. **Verificación de esquema:** antes de abrir transacción, se comprueba que existan las tablas y columnas obligatorias (`verificar_esquema_ingreso_movimiento`). Si falta alguna tabla o campo, no se guarda ningún dato y se devuelve un error estructurado para mostrar en modal.
+3. Al confirmar: una sola transacción MySQL: UPDATE codmov, SELECT talonarios FOR UPDATE, INSERT movimiento_stock, por cada renglón INSERT stock y UPDATE/INSERT stock_deposito, DELETE temporales del usuario.
+4. En error: rollback total (incluido codmov y talonarios).
 
 Véase `core/services/administranet_stock.py` y plan de migración (Fase 1).
+
+### Error de esquema (tablas o campos faltantes)
+
+Si la base de datos no tiene la estructura esperada (tabla o columna inexistente), el alta **no se ejecuta** y la API responde con `schema_error: true` y `detalle` (lista de `{tabla, campo, mensaje}`). La pantalla de ingreso muestra un **modal** con el mensaje en lenguaje natural y el detalle (tabla y campo faltante) para que el usuario o el administrador puedan corregir la base sin perder datos.
 
 ## Limpieza de temporales
 

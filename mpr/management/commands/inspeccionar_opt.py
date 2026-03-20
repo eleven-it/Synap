@@ -6,6 +6,8 @@ import logging
 from django.core.management.base import BaseCommand
 
 from core.mysql_pool import mysql_cursor
+from core.utils.administranet_types import to_int_or_none
+from mpr.services import _mpr_es_codigo_movimiento_opt_mstock
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +53,25 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"No existe la tabla lista_produccion_agrupada en {base_empresa}."))
                 return
 
-            # Resolver OPT desde agrupada: id_opt y codigo_movimiento_opt
             try:
                 cursor.execute(
-                    f"SELECT id_opt, codigo_movimiento_opt FROM {tbl_agrupada} WHERE id_lista_produccion = %s LIMIT 1",
+                    f"SELECT id_lista_produccion, codigo_movimiento_opt, id_opt FROM {tbl_agrupada} "
+                    f"WHERE id_lista_produccion = %s LIMIT 1",
                     [id_lista],
                 )
                 row = cursor.fetchone()
             except Exception as e:
                 if "1054" in str(e) or "unknown column" in str(e).lower():
-                    row = None
+                    try:
+                        cursor.execute(
+                            f"SELECT id_lista_produccion, codigo_movimiento_opt FROM {tbl_agrupada} "
+                            f"WHERE id_lista_produccion = %s LIMIT 1",
+                            [id_lista],
+                        )
+                        row = cursor.fetchone()
+                    except Exception as e2:
+                        self.stdout.write(self.style.ERROR(f"No se pudo leer agrupada: {e2}"))
+                        return
                 else:
                     raise
 
@@ -68,68 +79,90 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"No hay fila en {tbl_agrupada} para id_lista_produccion={id_lista}."))
                 return
 
-            id_opt = row.get("id_opt")
             codigo_mov = row.get("codigo_movimiento_opt")
+            id_opt_legacy = to_int_or_none(row.get("id_opt"))
+            cod_int = to_int_or_none(codigo_mov)
 
-            # Si la fila no es la principal (id_lista != id_opt), leer codigo_movimiento_opt de la fila principal
-            if id_opt is not None and id_lista != id_opt:
-                cursor.execute(
-                    f"SELECT codigo_movimiento_opt FROM {tbl_agrupada} WHERE id_lista_produccion = %s LIMIT 1",
-                    [id_opt],
-                )
-                row_principal = cursor.fetchone()
-                codigo_mov = row_principal.get("codigo_movimiento_opt") if row_principal else codigo_mov
+            id_lista_principal = id_lista
+            if cod_int is not None and cod_int < 0:
+                id_lista_principal = -cod_int
+            elif id_opt_legacy is not None and id_opt_legacy != 0:
+                id_lista_principal = id_opt_legacy
 
-            id_lista_principal = id_opt if id_opt is not None else id_lista
+            codigo_mov_efectivo = codigo_mov
+            if cod_int is not None and cod_int < 0:
+                codigo_mov_efectivo = None
+            elif not _mpr_es_codigo_movimiento_opt_mstock(cod_int):
+                codigo_mov_efectivo = None
+
             self.stdout.write(
-                f"OPT (id_lista_principal={id_lista_principal}, id_lista consultado={id_lista}), "
-                f"base_empresa={base_empresa}, codigo_movimiento_opt={codigo_mov}"
+                f"OPT id_lista consultado={id_lista}, id_lista_principal (número OPT)≈{id_lista_principal}, "
+                f"base_empresa={base_empresa}, codigo_movimiento_opt almacenado={codigo_mov}"
             )
+            if id_opt_legacy is not None and id_opt_legacy != 0:
+                self.stdout.write(f"  (columna heredada id_opt={id_opt_legacy})")
 
-            # Líneas de la OPT (todas las filas con el mismo id_opt)
-            if id_opt is not None:
+            grupo_cod = cod_int
+            if grupo_cod is None and id_opt_legacy is not None and id_opt_legacy != 0:
+                try:
+                    cursor.execute(
+                        f"SELECT codigo_movimiento_opt FROM {tbl_agrupada} WHERE id_lista_produccion = %s LIMIT 1",
+                        [id_opt_legacy],
+                    )
+                    r2 = cursor.fetchone()
+                    if r2 and r2.get("codigo_movimiento_opt") is not None:
+                        grupo_cod = to_int_or_none(r2.get("codigo_movimiento_opt"))
+                except Exception:
+                    pass
+
+            lineas = []
+            if grupo_cod is not None and grupo_cod != 0:
+                try:
+                    cursor.execute(
+                        f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod, id_operario_opt "
+                        f"FROM {tbl_agrupada} WHERE codigo_movimiento_opt = %s ORDER BY id_lista_produccion",
+                        [grupo_cod],
+                    )
+                    lineas = cursor.fetchall() or []
+                except Exception:
+                    lineas = []
+            if not lineas and id_opt_legacy is not None and id_opt_legacy != 0:
                 try:
                     cursor.execute(
                         f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod, id_operario_opt "
                         f"FROM {tbl_agrupada} WHERE id_opt = %s ORDER BY id_lista_produccion",
-                        [id_opt],
+                        [id_opt_legacy],
                     )
+                    lineas = cursor.fetchall() or []
                 except Exception:
-                    cursor.execute(
-                        f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod "
-                        f"FROM {tbl_agrupada} WHERE id_opt = %s ORDER BY id_lista_produccion",
-                        [id_opt],
-                    )
-                lineas = cursor.fetchall()
-                if lineas:
-                    self.stdout.write("")
-                    self.stdout.write(f"Líneas OPT (id_opt={id_opt}):")
-                    for r in lineas:
-                        extra = f" id_operario_opt={r.get('id_operario_opt')}" if "id_operario_opt" in (r or {}) else ""
-                        self.stdout.write(
-                            f"  id_lista_produccion={r.get('id_lista_produccion')} id_articulo={r.get('id_articulo')} "
-                            f"en_proceso_produccion={r.get('en_proceso_produccion')} cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}{extra}"
-                        )
-            else:
+                    lineas = []
+            if not lineas:
                 cursor.execute(
-                    f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod "
+                    f"SELECT id_lista_produccion, id_articulo, en_proceso_produccion, cantidad_pendiente_prod, id_operario_opt "
                     f"FROM {tbl_agrupada} WHERE id_lista_produccion = %s",
                     [id_lista],
                 )
-                lineas = cursor.fetchall()
-                if lineas:
-                    self.stdout.write("")
-                    self.stdout.write(f"lista_produccion_agrupada (id_lista_produccion={id_lista}, sin id_opt):")
-                    for r in lineas:
-                        self.stdout.write(
-                            f"  id_articulo={r.get('id_articulo')} en_proceso_produccion={r.get('en_proceso_produccion')} "
-                            f"cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}"
-                        )
+                lineas = cursor.fetchall() or []
 
-            if not codigo_mov:
+            if lineas:
+                self.stdout.write("")
+                self.stdout.write("Líneas lista_produccion_agrupada (mismo lote OPT):")
+                for r in lineas:
+                    extra = f" id_operario_opt={r.get('id_operario_opt')}" if "id_operario_opt" in (r or {}) else ""
+                    self.stdout.write(
+                        f"  id_lista_produccion={r.get('id_lista_produccion')} id_articulo={r.get('id_articulo')} "
+                        f"en_proceso_produccion={r.get('en_proceso_produccion')} cantidad_pendiente_prod={r.get('cantidad_pendiente_prod')}{extra}"
+                    )
+
+            cod_para_mov = codigo_mov_efectivo
+            if cod_para_mov is None and grupo_cod is not None and _mpr_es_codigo_movimiento_opt_mstock(grupo_cod):
+                cod_para_mov = grupo_cod
+
+            if cod_para_mov is None or not _mpr_es_codigo_movimiento_opt_mstock(to_int_or_none(cod_para_mov)):
                 self.stdout.write(
                     self.style.WARNING(
-                        "La OPT no tiene codigo_movimiento_opt (puede no haberse liberado aún)."
+                        "La OPT no tiene codigo_movimiento_opt de MSTOCK (puede no haberse liberado aún; "
+                        "si hay placeholder negativo, es normal hasta liberar)."
                     )
                 )
                 tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
@@ -148,6 +181,8 @@ class Command(BaseCommand):
                                 f"fecha={m.get('fecha')} nro={m.get('nro_comprobante')}"
                             )
                 return
+
+        codigo_mov = cod_para_mov
 
         # Mostrar movimiento_stock y stock para codigo_mov
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:

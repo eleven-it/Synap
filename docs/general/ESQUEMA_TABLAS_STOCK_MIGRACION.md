@@ -34,7 +34,16 @@ Se sincronizan con `sync_synap_permissions_to_adminet` / `asegurar_permisos_syna
 | **stock.informes** | Informes de stock | keyInformesStock |
 | **stock.*** | Acceso total Stock | Comodín para todos los anteriores |
 
-Los puestos en AdministraNET siguen usando permiso_sistema_puesto (cambia_deposito, acceso_ref_movstock, acceso_motivo_movstock, deposito_usr, id_refmovstock, mov_stock_utiliza_cbarra). El backend revalida estos en cada alta/modificación.
+Los puestos en AdministraNET siguen usando **permisos_sistema** (tabla ancha por IDPuesto: cambia_deposito, acceso_ref_movstock, acceso_motivo_movstock, deposito_usr, id_refmovstock, mov_stock_utiliza_cbarra). El backend revalida estos en cada alta/modificación.
+
+### 2.1 Equivalencia menú VB6 (CargaMovStock) y acceso en Synap
+
+El acceso a **"Ingreso Mov. Stock"** en Synap se considera equivalente a:
+
+- **Menú y acceso al módulo:** tener `stock.crear_movimiento` en **permiso_sistema_puesto** **o** tener Clavemenu `keyCompStock` en la tabla **permisos** (mapeo automático en `get_permisos_totales_administranet`). Si el puesto tiene solo `keyCompStock` en permisos (asignado desde el formulario de roles en Synap o desde VB6), Synap otorga igualmente `stock.crear_movimiento` para menú y vistas.
+- **Comportamiento dentro del formulario (depósitos, referencia, motivos):** mismos que CargaMovStock en VB6, gobernados por **permisos_sistema** (cambia_deposito, acceso_ref_movstock, acceso_motivo_movstock, id_refmovstock, id_deposito). Se editan en Synap en "Permisos del sistema" por puesto.
+
+Al guardar permisos del menú para un puesto (`guardar_permisos_puesto`), si se asigna `keyCompStock` (y otras Clavemenu mapeadas en `MAPEO_MENU_A_PERMISO`), se sincroniza también **permiso_sistema_puesto** con el `key_permiso` correspondiente (`stock.crear_movimiento`, etc.) para mantener alineación. Ver [PERMISOS_STOCK_SYNAP_VS_VB6.md](PERMISOS_STOCK_SYNAP_VS_VB6.md).
 
 ## 3. Índices recomendados
 

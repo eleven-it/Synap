@@ -1,18 +1,18 @@
 {% extends "mpr/base_mpr.html" %}
 {% load static %}
 
-{% block title %}Pedido producción trabajo (OPT) - Demanda - MPR - Synap{% endblock %}
+{% block title %}Orden de Producción de Trabajo (OPT) - Demanda - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-slate-50 dark:bg-slate-900 py-6 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col w-full">
+<section class="flex flex-col bg-slate-50 dark:bg-slate-900 py-6 transition-colors duration-300 w-full">
+    <div class="w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 flex flex-col max-w-[1920px]">
         {# Encabezado fijo (siempre visible) #}
         <div class="flex-shrink-0">
         {# Breadcrumbs #}
         <nav class="flex text-xs text-slate-500 dark:text-slate-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
             <span class="mx-2">/</span>
-            <span class="text-slate-700 dark:text-slate-300 font-medium">Pedido producción trabajo (OPT)</span>
+            <span class="text-slate-700 dark:text-slate-300 font-medium">Orden de Producción de Trabajo (OPT)</span>
         </nav>
 
         {# Frame oscuro exterior; dentro va el frame violeta original y el header #}
@@ -29,7 +29,7 @@
             <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 class="text-xl md:text-2xl font-semibold text-white tracking-tight">
-                        Pedido producción trabajo (OPT)
+                        Orden de Producción de Trabajo (OPT)
                     </h1>
                 </div>
                 <div class="flex flex-wrap items-end gap-3">
@@ -84,7 +84,7 @@
         <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-crear-opt" class="flex flex-col">
             {% csrf_token %}
             <div class="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
-                <div class="h-[21.125rem] min-h-[21.125rem] max-h-[21.125rem] overflow-auto" title="Altura fija: 5 filas. Scroll si hay más.">
+                <div class="h-[24.3rem] min-h-[24.3rem] max-h-[24.3rem] overflow-auto">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                         <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 shadow-sm">
                             <tr class="align-bottom">
@@ -96,6 +96,8 @@
                                 <th class="px-4 py-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider align-bottom" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
                                 <th class="px-4 py-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider align-bottom" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">Reserva</th>
                                 <th class="px-4 py-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider align-bottom">Cant. Pedida</th>
+                                <th class="px-2 py-2 text-right text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider align-bottom w-24 max-w-[7rem]" title="Cantidad ya fabricada para este pedido (Cant. pedida − Pendiente por producir). Relación: Cant. a fabricar = Cant. pedida − Saldo cuando aplica reserva.">Cant. parcial fabricada</th>
+                                <th class="px-4 py-2 text-center text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider align-bottom w-14">Pedido(s)</th>
                                 <th colspan="2" class="px-4 py-2 text-center text-xs font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wider align-bottom bg-slate-300 dark:bg-slate-600">Cantidad a fabricar</th>
                                 <th colspan="2" class="px-4 py-2 text-center text-xs font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider align-bottom bg-zinc-300 dark:bg-zinc-600">Urgente</th>
                             </tr>
@@ -106,6 +108,8 @@
                                 <th class="px-4 py-2 align-bottom"></th>
                                 <th class="px-4 py-2 align-bottom"></th>
                                 <th class="px-4 py-2 align-bottom"></th>
+                                <th class="px-2 py-2 align-bottom w-24 max-w-[7rem]"></th>
+                                <th class="px-4 py-2 align-bottom w-14"></th>
                                 <th class="px-4 py-2 text-right text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider align-bottom bg-slate-200 dark:bg-slate-700">Unidades</th>
                                 <th class="px-4 py-2 text-right text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider align-bottom bg-slate-200 dark:bg-slate-700">Docenas</th>
                                 <th class="px-4 py-2 text-right text-xs font-medium text-zinc-700 dark:text-zinc-400 uppercase tracking-wider align-bottom bg-zinc-200 dark:bg-zinc-700">Unidades</th>
@@ -115,7 +119,7 @@
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for f in filas %}
                             <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }}"
+                                data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida|floatformat:0 }} {{ f.cantidad_parcial_fabricada|floatformat:0 }} {% for p in f.pedidos_resumen %}{{ p.nro_pedido|default:'' }} {{ p.estado_pedido_opt|default:'' }} {{ p.nombre_cliente|default:''|escape }} {% endfor %} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
                                 x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                                 <td class="px-4 py-3">
                                     <input type="checkbox" name="sel" value="{{ f.id_articulo }}" class="row-sel rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500" aria-label="Incluir en OPT"/>
@@ -123,8 +127,8 @@
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.id_articulo }}</td>
                                 <td class="px-4 py-3">
                                     <span class="receta-tooltip-trigger cursor-help inline-block" data-receta="{{ f.receta_json|default:'[]'|escape }}" title="">
-                                        <span class="font-semibold text-slate-900 dark:text-white text-xs">{{ f.codigo_manual }}</span>
-                                        <span class="block text-[10px] text-slate-500 dark:text-slate-400">{{ f.descripcion_articulo|truncatewords:12 }}</span>
+                                        <span class="font-semibold text-slate-900 dark:text-white text-sm">{{ f.codigo_manual }}</span>
+                                        <span class="block text-sm text-slate-600 dark:text-slate-300">{{ f.descripcion_articulo|truncatewords:12 }}</span>
                                     </span>
                                 </td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">
@@ -134,6 +138,16 @@
                                 </td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_pedida|floatformat:0 }}</td>
+                                <td class="px-2 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs w-24 max-w-[7rem]" title="Cant. pedida − Pendiente por producir. Ayuda a ver cómo se calcula Cant. a fabricar con reserva y saldo.">{{ f.cantidad_parcial_fabricada|floatformat:0 }}</td>
+                                <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300">
+                                    {% if f.pedidos_resumen %}
+                                        <span class="pedidos-tooltip-trigger cursor-help inline-flex items-center justify-center w-8 h-8 rounded text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" data-pedidos="{{ f.pedidos_resumen_json|escape }}" aria-label="Ver estado del pedido, número de comprobante y cliente">
+                                            <span class="material-icons text-xl">description</span>
+                                        </span>
+                                    {% else %}
+                                        <span class="text-slate-300 dark:text-slate-500 inline-flex items-center justify-center w-8 h-8" aria-hidden="true">—</span>
+                                    {% endif %}
+                                </td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs bg-slate-100 dark:bg-slate-700/50">
                                     {{ f.cantidad_a_fabricar|floatformat:0 }}
                                     <input type="hidden" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|floatformat:0 }}"/>
@@ -148,7 +162,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="9" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                                <td colspan="11" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                                     No hay artículos con demanda de producción.
                                 </td>
                             </tr>
@@ -175,7 +189,7 @@
             Desglose por unidades: artículos de las recetas (BOM) de cada pack con cantidades agregadas. Solo consulta.
         </p>
         <div class="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
-            <div class="h-[21.125rem] min-h-[21.125rem] max-h-[21.125rem] overflow-auto" title="Altura fija: 5 filas. Scroll si hay más.">
+            <div class="h-[24.3rem] min-h-[24.3rem] max-h-[24.3rem] overflow-auto">
                 <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                     <thead class="sticky top-0 z-10 bg-slate-50 dark:bg-slate-800 shadow-sm">
                         <tr class="align-bottom">
@@ -202,12 +216,12 @@
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for f in filas_unidades %}
                         <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                            data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }}"
+                            data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida|floatformat:0 }} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
                             x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.id_articulo }}</td>
                             <td class="px-4 py-3">
-                                <span class="font-semibold text-slate-900 dark:text-white text-xs">{{ f.codigo_manual }}</span>
-                                <span class="block text-[10px] text-slate-500 dark:text-slate-400">{{ f.descripcion_articulo|truncatewords:12 }}</span>
+                                <span class="font-semibold text-slate-900 dark:text-white text-sm">{{ f.codigo_manual }}</span>
+                                <span class="block text-sm text-slate-600 dark:text-slate-300">{{ f.descripcion_articulo|truncatewords:12 }}</span>
                             </td>
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">
                                 <span class="stock-terminado-tooltip-trigger cursor-help inline-block"
@@ -243,6 +257,7 @@
 
         <div id="tooltip-stock-deposito" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[280px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none; font-family: system-ui, sans-serif;" role="tooltip"></div>
         <div id="tooltip-receta" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[320px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none; font-family: system-ui, sans-serif;" role="tooltip"></div>
+        <div id="tooltip-pedidos" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white w-max max-w-[min(56rem,calc(100vw-2rem))] max-h-[70vh] overflow-x-auto overflow-y-auto pointer-events-none" style="display: none; font-family: system-ui, sans-serif;" role="tooltip"></div>
 
         <script>
         document.getElementById('sel-todos')?.addEventListener('change', function() {
@@ -371,6 +386,82 @@
                         if (tipReceta.style.display === 'block') positionRecetaTip(ev);
                     });
                     el.addEventListener('mouseleave', hideRecetaTip);
+                });
+            })();
+            // Tooltip pedidos (listado + estado), mismo look que receta
+            (function() {
+                var tipPedidos = document.getElementById('tooltip-pedidos');
+                if (!tipPedidos) return;
+                function escPedidos(s) {
+                    if (s == null || s === '') return '-';
+                    var d = document.createElement('div');
+                    d.textContent = s;
+                    return d.innerHTML;
+                }
+                function estadoClass(estado) {
+                    if (estado === 'Parcial') return 'text-amber-300';
+                    if (estado === 'Terminado') return 'text-emerald-300';
+                    if (estado === 'Produccion') return 'text-blue-300';
+                    return 'text-slate-300';
+                }
+                function positionPedidosTip(ev) {
+                    var rect = ev.currentTarget.getBoundingClientRect();
+                    var pad = 10;
+                    var tw = Math.min(tipPedidos.offsetWidth || 896, window.innerWidth - 2 * pad);
+                    var left = ev.clientX + pad;
+                    if (left + tw > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - tw - pad);
+                    tipPedidos.style.left = Math.max(pad, left) + 'px';
+                    var top = rect.top;
+                    tipPedidos.style.top = top + 'px';
+                    if (tipPedidos.offsetHeight && top + tipPedidos.offsetHeight > window.innerHeight - pad) {
+                        tipPedidos.style.top = (rect.bottom - tipPedidos.offsetHeight - 4) + 'px';
+                    }
+                }
+                function showPedidosTip(ev, pedidos) {
+                    var title = '<div class="text-sky-300 text-[10px] font-medium uppercase tracking-wider">Pedido(s)</div>';
+                    var body = '';
+                    if (pedidos && pedidos.length) {
+                        body =
+                            '<div class="border-t border-slate-700 pt-1.5 mt-1 min-w-0 overflow-x-auto">' +
+                            '<table class="w-full min-w-[20rem] text-left text-xs table-fixed border-separate border-spacing-0" role="presentation">' +
+                            '<colgroup><col style="width:9.5rem"/><col style="width:12rem"/><col/></colgroup>' +
+                            '<tbody>';
+                        pedidos.forEach(function(p) {
+                            var nro = (p && p.nro_pedido != null) ? escPedidos(String(p.nro_pedido)) : '-';
+                            var estado = (p && p.estado_pedido_opt != null) ? String(p.estado_pedido_opt) : 'Pendiente';
+                            var nomCli = (p && p.nombre_cliente != null) ? String(p.nombre_cliente).trim() : '';
+                            var cliTxt = (nomCli && nomCli !== '-') ? escPedidos(nomCli) : '—';
+                            body +=
+                                '<tr class="border-b border-slate-700/40 last:border-b-0">' +
+                                '<td class="py-1.5 pr-2 align-top whitespace-nowrap font-medium ' + estadoClass(estado) + '">' + escPedidos(estado) + '</td>' +
+                                '<td class="py-1.5 pr-3 align-top whitespace-nowrap tabular-nums text-slate-200">' + nro + '</td>' +
+                                '<td class="py-1.5 align-top text-slate-200 min-w-0 leading-snug break-words">' +
+                                '<span class="text-slate-400">Cliente:</span> ' + cliTxt + '</td>' +
+                                '</tr>';
+                        });
+                        body += '</tbody></table></div>';
+                    } else {
+                        body = '<div class="border-t border-slate-700 pt-1 mt-1 text-slate-400 text-[10px] py-0.5">Sin pedidos</div>';
+                    }
+                    tipPedidos.innerHTML = title + body;
+                    tipPedidos.style.display = 'block';
+                    requestAnimationFrame(function() { positionPedidosTip(ev); });
+                }
+                function hidePedidosTip() { tipPedidos.style.display = 'none'; }
+                document.querySelectorAll('.pedidos-tooltip-trigger').forEach(function(el) {
+                    var raw = el.getAttribute('data-pedidos');
+                    var pedidos = [];
+                    try {
+                        if (raw) {
+                            var s = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                            pedidos = JSON.parse(s);
+                        }
+                    } catch (e) {}
+                    el.addEventListener('mouseenter', function(ev) { showPedidosTip(ev, pedidos); });
+                    el.addEventListener('mousemove', function(ev) {
+                        if (tipPedidos.style.display === 'block') positionPedidosTip(ev);
+                    });
+                    el.addEventListener('mouseleave', hidePedidosTip);
                 });
             })();
         })();

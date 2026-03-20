@@ -1,7 +1,7 @@
 {% extends "mpr/base_mpr.html" %}
 {% load static %}
 
-{% block title %}Confirmar OPT - Pedido producción trabajo (OPT) - MPR - Synap{% endblock %}
+{% block title %}Confirmar OPT - Orden de Producción de Trabajo (OPT) - MPR - Synap{% endblock %}
 
 {% block content %}
 <section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
@@ -9,7 +9,7 @@
         <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
             <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
             <span class="mx-2">/</span>
-            <a href="{% url 'mpr:ventana_pack' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Pedido producción trabajo (OPT)</a>
+            <a href="{% url 'mpr:ventana_pack' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Orden de Producción de Trabajo (OPT)</a>
             <span class="mx-2">/</span>
             <span class="text-gray-700 dark:text-gray-300 font-medium">Confirmar OPT</span>
         </nav>
@@ -23,15 +23,24 @@
 
         <header class="mb-6">
             <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Confirmar orden de producción</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                Revise las cantidades y pulse «Generar OPT» para crear la orden.
-            </p>
+            <div class="flex flex-wrap items-center justify-between gap-3 mt-1">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    Revise las cantidades y pulse «Generar OPT» para crear la orden.
+                </p>
+                {% if opcional_op.has_fecha_objetivo %}
+                <div class="flex items-center gap-2 shrink-0">
+                    <label for="fecha_objetivo" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Fecha objetivo</label>
+                    <input type="date" id="fecha_objetivo" name="fecha_objetivo" min="{{ fecha_hoy|date:'Y-m-d' }}"
+                           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                </div>
+                {% endif %}
+            </div>
         </header>
 
         {# En Confirmar OPT solo mostramos errores/advertencias de esta pantalla (Generar OPT). No mostramos mensajes del paso 1 (Actualizar). #}
         {% if messages %}
         {% for message in messages %}
-        {% if message.tags != 'success' and 'Pedido producción trabajo (OPT)»' not in message %}
+        {% if message.tags != 'success' and 'Orden de Producción de Trabajo (OPT)»' not in message %}
         <div class="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm shadow-sm {% if message.tags == 'error' %}bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800{% else %}bg-amber-500/10 dark:bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800{% endif %}" role="alert">
             <span>{{ message }}</span>
             <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" aria-label="Cerrar">
@@ -79,7 +88,7 @@
                                 <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ f.id_articulo }}</td>
                                 <td class="px-4 py-3">
                                     <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ f.codigo_manual }}</span>
-                                    <span class="block text-xs text-gray-500 dark:text-gray-400">{{ f.descripcion_articulo|truncatewords:12 }}</span>
+                                    <span class="block text-sm text-gray-600 dark:text-gray-300">{{ f.descripcion_articulo|truncatewords:12 }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">
                                     <span class="stock-terminado-tooltip-trigger cursor-help inline-block" data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}">{{ f.stock_terminado|floatformat:0 }}</span>
@@ -101,7 +110,7 @@
                                     <div class="operario-cell relative" data-id-art="{{ f.id_articulo }}">
                                         <div class="operario-chip hidden flex items-center gap-2 flex-wrap">
                                             <span class="operario-chip-label text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]"></span>
-                                            <button type="button" class="operario-chip-clear text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline" title="Quitar o cambiar operario">Cambiar</button>
+                                            <button type="button" class="operario-chip-clear inline-flex items-center justify-center w-7 h-7 rounded-md text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-700 dark:hover:text-purple-300 transition-colors" title="Quitar o cambiar operario" aria-label="Quitar o cambiar operario"><span class="material-icons text-lg">sync</span></button>
                                         </div>
                                         <input type="text" class="operario-search w-full min-w-[160px] px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500" placeholder="Buscar operario..." autocomplete="off"/>
                                         <div class="operario-dropdown absolute top-full left-0 right-0 z-[9999] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-xl overflow-y-auto hidden" style="max-height: 14rem;" data-operario-dropdown role="listbox"></div>
@@ -121,7 +130,7 @@
             </div>
             <div class="mt-6 flex flex-wrap items-center gap-3">
                 <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-                    Volver a Pedido producción trabajo (OPT)
+                    Volver a Orden de Producción de Trabajo (OPT)
                 </a>
                 {% if filas_unidades %}
                 <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-all">
@@ -132,18 +141,6 @@
             </div>
         </form>
 
-        {# Modal validación operario (reemplaza alert nativo) #}
-        <div id="modal-operario-error" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 hidden" aria-hidden="true" role="dialog" aria-labelledby="modal-operario-title">
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl max-w-md w-full p-6" role="document">
-                <h2 id="modal-operario-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-3">No se puede generar la OPT</h2>
-                <p class="text-sm text-gray-600 dark:text-gray-300 mb-6">Debe seleccionar un operario para cada artículo con cantidad a fabricar.</p>
-                <div class="flex justify-end">
-                    <button type="button" id="modal-operario-aceptar" class="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">
-                        Aceptar
-                    </button>
-                </div>
-            </div>
-        </div>
 
         <div id="tooltip-stock-deposito" class="fixed z-[9999] px-3 py-2 text-xs rounded-lg shadow-2xl border border-slate-700 bg-slate-900 text-white max-w-[280px] max-h-[70vh] overflow-auto pointer-events-none" style="display: none;" role="tooltip"></div>
     </div>
@@ -387,12 +384,11 @@
         });
     });
 
-    // Generar OPT: validar unidades y docenas > 0, y operario en filas con cantidad
+    // Generar OPT: validar solo unidades y docenas > 0. Operario en esta pantalla es opcional.
     if (form && form.id === 'form-generar-opt') {
         form.addEventListener('submit', function(ev) {
             var filasConCantidad = 0;
             var unidadesDocenasInvalidas = false;
-            var sinOperario = [];
             form.querySelectorAll('input.operario-hidden').forEach(function(hidden) {
                 var idArt = hidden.getAttribute('data-id-art');
                 if (!idArt) return;
@@ -400,11 +396,9 @@
                 var docInp = document.getElementById('doc_' + idArt);
                 var cant = cantInp ? (parseInt(cantInp.value, 10) || 0) : 0;
                 var doc = docInp ? (parseFloat(docInp.value) || 0) : 0;
-                var idOp = (hidden.value || '').trim();
                 if (cant > 0 || doc > 0) {
                     filasConCantidad++;
                     if (cant <= 0 || doc <= 0) unidadesDocenasInvalidas = true;
-                    if (!idOp) sinOperario.push(idArt);
                 }
             });
             if (filasConCantidad === 0) {
@@ -417,31 +411,6 @@
                 alert('Las cantidades a fabricar deben ser mayor a 0 tanto en Unidades como en Docenas.');
                 return false;
             }
-            if (sinOperario.length > 0) {
-                ev.preventDefault();
-                var modal = document.getElementById('modal-operario-error');
-                if (modal) {
-                    modal.classList.remove('hidden');
-                    modal.setAttribute('aria-hidden', 'false');
-                    var btn = document.getElementById('modal-operario-aceptar');
-                    if (btn) btn.focus();
-                }
-                return false;
-            }
-        });
-    }
-
-    // Cerrar modal operario al pulsar Aceptar o clic en el backdrop
-    var modalOperario = document.getElementById('modal-operario-error');
-    var btnAceptar = document.getElementById('modal-operario-aceptar');
-    if (modalOperario && btnAceptar) {
-        function cerrarModalOperario() {
-            modalOperario.classList.add('hidden');
-            modalOperario.setAttribute('aria-hidden', 'true');
-        }
-        btnAceptar.addEventListener('click', cerrarModalOperario);
-        modalOperario.addEventListener('click', function(ev) {
-            if (ev.target === modalOperario) cerrarModalOperario();
         });
     }
 })();

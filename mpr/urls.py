@@ -25,6 +25,7 @@ urlpatterns = [
     path("demanda/ventana-pack/agrupar/", views.VentanaPackAgruparView.as_view(), name="ventana_pack_agrupar"),
     path("api/empleados/", views.EmpleadosOperariosAPIView.as_view(), name="api_empleados"),
     path("demanda/pedidos-fabrica/", views.PedidosFabricaListView.as_view(), name="pedidos_fabrica_list"),
+    path("demanda/opts-por-pedido/", views.OptsPorPedidoView.as_view(), name="opts_por_pedido"),
     path("opt/", views.OptListView.as_view(), name="opt_list"),
     path("opt/nueva/", views.NuevaOptView.as_view(), name="opt_create"),
     path("opt/<int:id_lista>/", views.OptDetailView.as_view(), name="opt_detail"),

@@ -346,6 +346,10 @@ const formatCurrencyCompact = (value) => {
 };
 
 const isCurrencyField = (fieldName) => {
+  // Contadores MPR: mostrar como número entero, no moneda
+  const normalized = String(fieldName).toLowerCase().trim();
+  if (normalized === "total_pedidos" || normalized === "total_opt_atrasadas" || normalized === "total_movimientos") return false;
+
   const currencyFields = [
     "ventas_brutas",
     "notas_credito",
@@ -807,7 +811,7 @@ const renderBarChart = (container, data, config) => {
     .attr("width", xScale.bandwidth())
     .attr("height", (item) => margin.top + innerHeight - yScale(item.value))
     .attr("rx", 6)
-    .attr("fill", COLORS[0]);
+    .attr("fill", (_, i) => COLORS[i % COLORS.length]);
 };
 
 const renderGroupedBarChart = (container, data, config) => {
@@ -4003,7 +4007,12 @@ const renderSummary = (meta, totals) => {
   const isSalesSummary = reportSlug === "sales_summary";
   const isTotalConsolidadoOperativo = reportSlug === "total-consolidado-operativo";
   const isBoStockFacturacion = reportSlug === "bo-stock-facturacion";
+  const isMprReportSummary = reportSlug && reportSlug.startsWith("mpr-");
   const isCashFlowReport = reportSlug === "cash_flow_waterfall" || reportSlug === "cash_flow_by_account" || reportSlug === "cash_flow_detailed_movements";
+
+  if (isMprReportSummary && totals && Object.keys(totals).length > 0) {
+    summaryContainer.classList.remove("hidden");
+  }
 
   // Helper: formatear fecha YYYY-MM-DD -> DD-MM-YYYY
   const formatDateForPeriod = (dateStr) => {
@@ -4049,8 +4058,11 @@ const renderSummary = (meta, totals) => {
   
   // Orden específico: total-consolidado-operativo (4 KPIs verticales), ventas_netas, otros
   const isVentasNetasReport = isVentasNetasSlug(reportSlug);
+  const isMprReport = reportSlug && reportSlug.startsWith("mpr-");
   const order = isTotalConsolidadoOperativo
     ? ["ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
+    : isMprReport
+    ? ["total_pedidos", "total_opt_atrasadas", "total_movimientos", "ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
     : isVentasNetasReport
     ? ["ventas_brutas", "notas_credito", "ventas_netas", "saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"]
     : ["saldo_inicial", "operating_flow", "investing_flow", "financing_flow", "cash_variation", "saldo_final", "total_subtotal_desc", "ventas_brutas", "notas_credito", "ventas_netas", "remitos_no_facturados", "pedidos_pendientes", "total_consolidado"];
@@ -4082,8 +4094,11 @@ const renderSummary = (meta, totals) => {
   
   totalKeys.forEach((key) => {
     const card = document.createElement("div");
-    const isCurrency = isCurrencyField(key);
     const keyLower = key.toLowerCase();
+    const isTotalPedidos = keyLower === "total_pedidos";
+    const isTotalOptAtrasadas = keyLower === "total_opt_atrasadas";
+    const isTotalMovimientos = keyLower === "total_movimientos";
+    const isCurrency = isCurrencyField(key);
     
     // Destacar la tarjeta de "ventas_netas" con un color más llamativo
     const isVentasNetas = keyLower.includes("ventas_netas") || keyLower.includes("ventas netas");
@@ -4111,6 +4126,14 @@ const renderSummary = (meta, totals) => {
       cardBgClass = "bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800";
       cardShadowClass = "shadow-lg shadow-purple-500/30";
       textColorClass = "text-purple-100";
+    } else if (isTotalPedidos) {
+      cardBgClass = "bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-800";
+      cardShadowClass = "shadow-lg shadow-indigo-500/30";
+      textColorClass = "text-indigo-100";
+    } else if (isTotalMovimientos) {
+      cardBgClass = "bg-gradient-to-br from-cyan-600 via-cyan-700 to-cyan-800";
+      cardShadowClass = "shadow-lg shadow-cyan-500/30";
+      textColorClass = "text-cyan-100";
     } else if (isVentasNetas || keyLower.includes("ventas_netas")) {
       // Tarjeta de Ventas Netas - naranja/rojo (destacada)
       cardBgClass = "bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700";
@@ -4167,7 +4190,11 @@ const renderSummary = (meta, totals) => {
     
     // Formatear el label según la key
     let displayLabel = toTitle(key);
-    if (isTotalRemitos) {
+    if (isTotalPedidos) {
+      displayLabel = "TOTAL PEDIDOS";
+    } else if (isTotalMovimientos) {
+      displayLabel = "TOTAL MOVIMIENTOS";
+    } else if (isTotalRemitos) {
       displayLabel = "TOTAL DE REMITOS NO FACTURADOS";
     } else if (isVentasBrutas) {
       displayLabel = "VENTAS BRUTAS";
@@ -4183,10 +4210,16 @@ const renderSummary = (meta, totals) => {
       displayLabel = "TOTAL CONSOLIDADO";
     }
     
-    const fmtValue = isCurrency ? (isCashFlowReport ? formatCurrency : formatCurrencyCompact) : formatNumber;
+    // Total pedidos / OPT atrasadas / movimientos: siempre número entero sin decimales (nunca moneda)
+    const isCountCard = isTotalPedidos || isTotalOptAtrasadas || isTotalMovimientos;
+    const formatCardValue = (v) => {
+      if (isCountCard && typeof v === "number") return Math.round(v).toLocaleString("es-AR", { maximumFractionDigits: 0 });
+      if (isCurrency) return (isCashFlowReport ? formatCurrency : formatCurrencyCompact)(v);
+      return formatNumber(v);
+    };
     card.innerHTML = `
         <p class="text-[10px] uppercase tracking-[0.25em] ${textColorClass} mb-2">${displayLabel}</p>
-        <p class="text-xl font-semibold text-right">${fmtValue(totals[key])}</p>
+        <p class="text-xl font-semibold text-right">${formatCardValue(totals[key])}</p>
         ${subtitle}
       `;
     summaryGrid.appendChild(card);
@@ -4263,14 +4296,15 @@ const renderWidgets = (payload) => {
     setupWorkspaces();
   }
   const widgets = dashboardRoot.querySelectorAll("[data-widget-id]");
+  const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
+
   widgets.forEach((widget) => {
     const config = getWidgetConfig(widget);
     const cacheKey = widget.dataset.widgetId;
     widgetDataCache.set(cacheKey, { data: payload.data, config, meta: payload.meta || {} });
 
     const widgetType = widget.dataset.widgetType;
-    const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
-    
+
     // HÍBRIDO: Para Ventas Netas, usar WidgetEngine para el gráfico de barras (tooltips, valores por serie, etc.)
     const isVentasNetasBarChart = isVentasNetasSlug(currentReportSlug) &&
       (widgetType === "d3-bar-grouped" || widgetType === "d3-bar" || widgetType === "d3-bar-stacked" || widgetType === "bar") &&
@@ -4333,6 +4367,31 @@ const renderWidgets = (payload) => {
       widget.appendChild(info);
     }
   });
+
+  // Reportes MPR sin widgets: mostrar tabla por defecto con los datos
+  if (widgets.length === 0) {
+    const placeholder = document.getElementById("widgets-placeholder");
+    if (placeholder && currentReportSlug && currentReportSlug.startsWith("mpr-") && payload.data && payload.data.length > 0) {
+      const fakeWidget = document.createElement("div");
+      fakeWidget.dataset.reportSlug = currentReportSlug;
+      fakeWidget.dataset.emptyLabel = "Sin datos disponibles.";
+      const tableWrapper = document.createElement("div");
+      tableWrapper.setAttribute("data-widget-table-wrapper", "");
+      fakeWidget.appendChild(tableWrapper);
+      placeholder.innerHTML = "";
+      placeholder.classList.remove("p-12", "text-center");
+      placeholder.classList.add("rounded-2xl", "border", "border-slate-200", "dark:border-slate-800", "bg-white", "dark:bg-slate-950", "overflow-hidden");
+      const section = document.createElement("section");
+      section.className = "rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg overflow-hidden";
+      const header = document.createElement("header");
+      header.className = "px-6 py-4 border-b border-slate-100 dark:border-slate-800";
+      header.innerHTML = "<h2 class=\"text-sm font-semibold text-slate-900 dark:text-white\">Datos del reporte</h2>";
+      section.appendChild(header);
+      section.appendChild(tableWrapper);
+      placeholder.appendChild(section);
+      renderTable(fakeWidget, payload.data, { show: true });
+    }
+  }
 
   if (!resizeObserver && "ResizeObserver" in window) {
     resizeObserver = new ResizeObserver((entries) => {

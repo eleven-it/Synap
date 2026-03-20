@@ -232,32 +232,36 @@
     {% block extra_js %}{% endblock %}
     
     <script>
-    // Soporte para dark mode
+    // Soporte para dark mode (desktop y mobile: ambos switches sincronizados)
     document.addEventListener('DOMContentLoaded', function() {
         const html = document.documentElement;
         const darkSwitch = document.getElementById('dark-mode-switch');
-        
+        const darkSwitchMobile = document.getElementById('dark-mode-switch-mobile');
+        const switches = [darkSwitch, darkSwitchMobile].filter(Boolean);
+
+        function setTheme(isDark) {
+            if (isDark) {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            }
+            switches.forEach(function(s) { s.checked = isDark; });
+        }
+
         // Cargar preferencia previa
-        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            html.classList.add('dark');
-            if (darkSwitch) darkSwitch.checked = true;
-        } else {
-            html.classList.remove('dark');
-            if (darkSwitch) darkSwitch.checked = false;
-        }
-        
-        // Alternar al cambiar el switch
-        if (darkSwitch) {
-            darkSwitch.addEventListener('change', function() {
-                if (darkSwitch.checked) {
-                    html.classList.add('dark');
-                    localStorage.setItem('theme', 'dark');
-                } else {
-                    html.classList.remove('dark');
-                    localStorage.setItem('theme', 'light');
-                }
+        var isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) html.classList.add('dark');
+        else html.classList.remove('dark');
+        switches.forEach(function(s) { s.checked = isDark; });
+
+        // Alternar al cambiar cualquier switch
+        switches.forEach(function(s) {
+            s.addEventListener('change', function() {
+                setTheme(s.checked);
             });
-        }
+        });
         
         // Animación de entrada para elementos
         const observerOptions = {

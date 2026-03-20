@@ -669,6 +669,31 @@
     </div>
   </div>
 
+  <!-- Modal: estructura de base de datos incompleta (tablas/campos faltantes) -->
+  <div x-show="mostrarModalEsquemaFaltante" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="mostrarModalEsquemaFaltante = false">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6" @click.outside="mostrarModalEsquemaFaltante = false">
+      <div class="flex items-start gap-3">
+        <span class="material-icons text-3xl text-amber-500 flex-shrink-0">warning</span>
+        <div class="min-w-0 flex-1">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No se puede guardar el movimiento</h3>
+          <p class="text-gray-700 dark:text-gray-300 text-sm mb-4" x-text="mensajeEsquema"></p>
+          <p class="text-gray-600 dark:text-gray-400 text-sm font-medium mb-2">Detalle:</p>
+          <ul class="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 max-h-48 overflow-y-auto" x-show="detalleEsquema.length">
+            <template x-for="(item, i) in detalleEsquema" :key="i">
+              <li x-text="item.mensaje || (item.tabla ? (item.campo ? (item.tabla + ' → campo «' + item.campo + '»') : ('Tabla «' + item.tabla + '»')) : '')"></li>
+            </template>
+          </ul>
+          <p class="text-gray-500 dark:text-gray-500 text-xs mt-3">No se ha guardado ningún dato para mantener la consistencia de la información.</p>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end">
+        <button type="button" @click="mostrarModalEsquemaFaltante = false" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Scanner código de barras (solo mobile) -->
   <div x-show="scannerActivo" x-cloak class="fixed inset-0 z-[100] flex flex-col bg-black" @keydown.escape.window="cerrarScanner()">
     <div id="scanner-container" class="flex-1 w-full min-h-0 relative flex items-center justify-center">
@@ -733,6 +758,9 @@ document.addEventListener('alpine:init', function() {
       agregando: false,
       confirmando: false,
       mostrarModalResumen: false,
+      mostrarModalEsquemaFaltante: false,
+      mensajeEsquema: '',
+      detalleEsquema: [],
       renglonEditando: null,
       edicionRenglon: null,
       renglonDetalle: null,
@@ -1739,7 +1767,16 @@ document.addEventListener('alpine:init', function() {
         const d = await r.json().catch(() => ({}));
         this.confirmando = false;
         this.mostrarModalResumen = false;
-        if (!r.ok) { this.mensajeError = d.error || 'Error al confirmar.'; return; }
+        if (!r.ok) {
+          if (d.schema_error && Array.isArray(d.detalle)) {
+            this.mensajeEsquema = d.error || 'Faltan tablas o campos en la base de datos.';
+            this.detalleEsquema = d.detalle;
+            this.mostrarModalEsquemaFaltante = true;
+          } else {
+            this.mensajeError = d.error || 'Error al confirmar.';
+          }
+          return;
+        }
         this.mensajeOk = d.mensaje || 'Movimiento generado.';
         this.codigoMovimiento = d.codigo_movimiento;
         this.nroComprobante = d.nro_comprobante;

@@ -293,6 +293,14 @@ class QueryRunnerService:
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
+        elif report.slug == "mpr-opt-atrasadas":
+            result = self._run_mpr_opt_atrasadas(report, payload)
+        elif report.slug == "mpr-pedidos-estado":
+            result = self._run_mpr_pedidos_estado(report, payload)
+        elif report.slug == "mpr-brecha-demanda":
+            result = self._run_mpr_brecha_demanda(report, payload)
+        elif report.slug == "mpr-movimientos-produccion":
+            result = self._run_mpr_movimientos_produccion(report, payload)
         else:
             # Para otros reportes, usar datos de muestra por ahora
             meta, data, totals, notes = get_sample_data(report.slug, payload)
@@ -3855,4 +3863,102 @@ class QueryRunnerService:
                 totals={},
                 notes=notes_err,
             )
+
+    def _resolve_base_empresa_mpr(self, payload: Dict) -> Optional[str]:
+        """Resuelve base_empresa desde filters, user o settings (para reportes MPR)."""
+        filters = payload.get("filters", {})
+        base_empresa = filters.get("base_empresa")
+        if isinstance(base_empresa, str) and base_empresa.strip():
+            return base_empresa.strip()
+        if hasattr(self.user, "base_empresa") and isinstance(getattr(self.user, "base_empresa"), str):
+            be = (self.user.base_empresa or "").strip()
+            if be:
+                return be
+        be = getattr(settings, "DEFAULT_BASE_EMPRESA", None)
+        return (be.strip() if isinstance(be, str) and be else None) or None
+
+    def _run_mpr_opt_atrasadas(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """Reporte OPT atrasadas (fecha objetivo vencida, pendiente > 0). Ver docs/reports/mpr/ESPEC_MPR_OPT_ATRASADAS.md."""
+        base_empresa = self._resolve_base_empresa_mpr(payload)
+        meta = {"slug": report.slug, "name": report.name, "category": report.category, "version": report.version}
+        if not base_empresa:
+            return QueryResult(
+                meta=meta,
+                data=[],
+                totals={"total_opt_atrasadas": 0},
+                notes=["No se pudo determinar la base de datos de la empresa (base_empresa)."],
+            )
+        try:
+            from mpr.services import listar_opt_listado
+            filas = listar_opt_listado(base_empresa, limit=200, solo_atrasadas=True)
+        except Exception as e:
+            logger.warning("Error reporte MPR OPT atrasadas: %s", e, exc_info=True)
+            return QueryResult(meta=meta, data=[], totals={"total_opt_atrasadas": 0}, notes=[f"Error: {e}"])
+        totals = {"total_opt_atrasadas": len(filas)}
+        return QueryResult(meta=meta, data=filas, totals=totals, notes=[f"Base: {base_empresa}"])
+
+    def _run_mpr_pedidos_estado(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """Resumen pedidos por estado (Pendiente, Produccion, Parcial, Terminado). Ver ESPEC_MPR_PEDIDOS_ESTADO."""
+        base_empresa = self._resolve_base_empresa_mpr(payload)
+        meta = {"slug": report.slug, "name": report.name, "category": report.category, "version": report.version}
+        if not base_empresa:
+            return QueryResult(
+                meta=meta,
+                data=[],
+                totals={"total_pedidos": 0},
+                notes=["No se pudo determinar la base de datos de la empresa (base_empresa)."],
+            )
+        try:
+            from mpr.services import reporte_mpr_pedidos_por_estado
+            filas = reporte_mpr_pedidos_por_estado(base_empresa)
+        except Exception as e:
+            logger.warning("Error reporte MPR pedidos por estado: %s", e, exc_info=True)
+            return QueryResult(meta=meta, data=[], totals={"total_pedidos": 0}, notes=[f"Error: {e}"])
+        total_pedidos = sum(f.get("cantidad", 0) for f in filas)
+        return QueryResult(meta=meta, data=filas, totals={"total_pedidos": total_pedidos}, notes=[f"Base: {base_empresa}"])
+
+    def _run_mpr_brecha_demanda(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """Demanda vs stock (brecha) por artículo. Ver ESPEC_MPR_BRECHA_DEMANDA."""
+        base_empresa = self._resolve_base_empresa_mpr(payload)
+        meta = {"slug": report.slug, "name": report.name, "category": report.category, "version": report.version}
+        if not base_empresa:
+            return QueryResult(
+                meta=meta,
+                data=[],
+                totals={},
+                notes=["No se pudo determinar la base de datos de la empresa (base_empresa)."],
+            )
+        try:
+            from mpr.services import reporte_mpr_brecha_demanda
+            limit = (payload.get("filters") or {}).get("limit", 200)
+            filas = reporte_mpr_brecha_demanda(base_empresa, limit=int(limit) if limit else 200)
+        except Exception as e:
+            logger.warning("Error reporte MPR brecha demanda: %s", e, exc_info=True)
+            return QueryResult(meta=meta, data=[], totals={}, notes=[f"Error: {e}"])
+        return QueryResult(meta=meta, data=filas, totals={}, notes=[f"Base: {base_empresa}"])
+
+    def _run_mpr_movimientos_produccion(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """Movimientos de producción (OPT/OPP/OPA/Armado) en formato tabla. Ver ESPEC_MPR_MOVIMIENTOS_PRODUCCION."""
+        base_empresa = self._resolve_base_empresa_mpr(payload)
+        meta = {"slug": report.slug, "name": report.name, "category": report.category, "version": report.version}
+        if not base_empresa:
+            return QueryResult(
+                meta=meta,
+                data=[],
+                totals={"total_movimientos": 0},
+                notes=["No se pudo determinar la base de datos de la empresa (base_empresa)."],
+            )
+        try:
+            from mpr.services import reporte_mpr_movimientos
+            limit = (payload.get("filters") or {}).get("limit", 200)
+            filas = reporte_mpr_movimientos(base_empresa, limit=int(limit) if limit else 200)
+        except Exception as e:
+            logger.warning("Error reporte MPR movimientos producción: %s", e, exc_info=True)
+            return QueryResult(meta=meta, data=[], totals={"total_movimientos": 0}, notes=[f"Error: {e}"])
+        return QueryResult(
+            meta=meta,
+            data=filas,
+            totals={"total_movimientos": len(filas)},
+            notes=[f"Base: {base_empresa}"],
+        )
 

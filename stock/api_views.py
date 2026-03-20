@@ -498,7 +498,7 @@ def api_ingreso_confirmar(request):
         renglones = data["renglones"]
     if not renglones:
         return JsonResponse({"error": "Debe agregar al menos un ítem a la lista."}, status=400)
-    ok, codigo_mov, nro_comp, mensaje = svc.alta_movimiento(
+    ok, codigo_mov, nro_comp, mensaje, schema_errores = svc.alta_movimiento(
         base_empresa=ctx["base_empresa"],
         id_usuario=ctx["id_usuario"],
         id_puesto=ctx["id_puesto"],
@@ -506,7 +506,14 @@ def api_ingreso_confirmar(request):
         renglones=renglones,
     )
     if not ok:
-        return JsonResponse({"error": mensaje or "Error al grabar el movimiento."}, status=400)
+        payload = {"error": mensaje or "Error al grabar el movimiento."}
+        if schema_errores is not None:
+            payload["schema_error"] = True
+            payload["detalle"] = [
+                {"tabla": e.get("tabla"), "campo": e.get("campo"), "mensaje": e.get("mensaje", "")}
+                for e in schema_errores
+            ]
+        return JsonResponse(payload, status=400)
     return JsonResponse({
         "ok": True,
         "codigo_movimiento": int(codigo_mov),

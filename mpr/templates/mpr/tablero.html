@@ -26,11 +26,11 @@
 
         {# Fila 1 – KPI cards (cada uno enlaza al detalle que representa) #}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <a href="{% url 'mpr:opt_list' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 transition-all cursor-pointer block">
+            <a href="{% url 'mpr:pedidos_fabrica_list' %}?estado=Pendiente" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 transition-all cursor-pointer block">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Pedidos pendientes</p>
-                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_op_in_progress }}</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_pedidos_pendientes }}</p>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ver listado</p>
                     </div>
                     <span class="material-icons text-purple-500 dark:text-purple-400 text-3xl">pending_actions</span>
@@ -46,26 +46,24 @@
                     <span class="material-icons text-red-500 dark:text-red-400 text-3xl">priority_high</span>
                 </div>
             </a>
-            <a href="{% url 'mpr:opt_list' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer block">
+            <div class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all cursor-default block">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Unidades pendientes</p>
                         <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_pending_units }}</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ver órdenes</p>
                     </div>
                     <span class="material-icons text-amber-500 dark:text-amber-400 text-3xl">inventory_2</span>
                 </div>
-            </a>
-            <a href="{% url 'mpr:ventana_pack' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer block">
+            </div>
+            <div class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all cursor-default block">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ítems urgentes</p>
                         <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_urgent_items }}</p>
-                        <span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Ver demanda</span>
                     </div>
                     <span class="material-icons text-amber-500 dark:text-amber-400 text-3xl">warning</span>
                 </div>
-            </a>
+            </div>
         </div>
 
         {# Dos columnas: izquierda = OPTs en progreso, derecha = Top urgencias #}
@@ -92,7 +90,7 @@
                             {% elif op.accion_principal == 'crear_opa' %}
                             <a href="{{ op.crear_opa_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">Crear OPA</a>
                             {% elif op.accion_principal == 'cerrar' %}
-                            <form method="post" action="{{ op.cerrar_url }}" class="inline" onsubmit="return confirm('¿Cerrar esta OPT?');">
+                            <form method="post" action="{{ op.cerrar_url }}" class="inline">
                                 {% csrf_token %}
                                 <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors">Cerrar</button>
                             </form>

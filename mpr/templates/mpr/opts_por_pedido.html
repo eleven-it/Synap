@@ -1,0 +1,67 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}OPTs del pedido {{ codigo_movimiento }} - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span class="mx-2">/</span>
+            <a href="{% url 'mpr:pedidos_fabrica_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Pedidos con estado de producción</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">OPTs del pedido {{ codigo_movimiento }}</span>
+        </nav>
+        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">OPTs del pedido {{ codigo_movimiento }}</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Trazabilidad: órdenes de producción de trabajo vinculadas a este pedido (lista_produccion_detalle → lista_produccion_agrupada).</p>
+            </div>
+            <a href="{% url 'mpr:pedidos_fabrica_list' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Volver a pedidos</a>
+        </header>
+        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">id_lista_produccion</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Lista principal (OPT)</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">id_articulo</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. pedida</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pendiente prod.</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">En proceso</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for o in opts %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ o.id_lista_produccion }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ o.id_lista_principal|default:o.id_opt|default:"—" }}</td>
+                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ o.id_articulo }}</td>
+                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300 tabular-nums">{{ o.cantidad_pedida }}</td>
+                            <td class="px-4 py-3 text-sm text-right text-amber-600 dark:text-amber-400 tabular-nums">{{ o.cantidad_pendiente_prod }}</td>
+                            <td class="px-4 py-3 text-center">
+                                {% if o.en_proceso_produccion == 'Si' %}
+                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Sí</span>
+                                {% else %}
+                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">No</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                <a href="{% url 'mpr:opt_detail' o.id_lista_produccion %}" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline">Ver OPT</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No hay OPTs vinculadas a este pedido.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

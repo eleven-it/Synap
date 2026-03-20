@@ -34,7 +34,7 @@
             {% endif %}
         </div>
 
-        <form method="post" action="" id="form-opp-registrar" class="space-y-6">
+        <form method="post" action="" id="form-opp-registrar" data-empleados-url="{% url 'mpr:api_empleados' %}" class="space-y-6">
             {% csrf_token %}
             <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                 <div class="flex items-center gap-4 p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
@@ -63,6 +63,7 @@
                                     {% elif forloop.counter0 == 2 %}bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-200
                                     {% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">{{ dep.NombreDeposito|default:dep.CodDeposito }}</th>
                                 {% endfor %}
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[180px] align-bottom">Operario</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -79,9 +80,20 @@
                                     <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}" value="0" min="0" max="{{ comp.disponible_unidades|default:0 }}" step="1" data-opp-matrix="1" data-id-art="{{ comp.id_articulo }}" class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
                                 </td>
                                 {% endfor %}
+                                <td class="px-4 py-3 min-w-[180px]">
+                                    <input type="hidden" name="operario_{{ comp.id_articulo }}" value="" class="operario-hidden" data-id-art="{{ comp.id_articulo }}"/>
+                                    <div class="operario-cell relative" data-id-art="{{ comp.id_articulo }}">
+                                        <div class="operario-chip hidden flex items-center gap-2 flex-wrap">
+                                            <span class="operario-chip-label text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]"></span>
+                                            <button type="button" class="operario-chip-clear inline-flex items-center justify-center w-7 h-7 rounded-md text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-700 dark:hover:text-purple-300 transition-colors" title="Quitar o cambiar operario" aria-label="Quitar o cambiar operario"><span class="material-icons text-lg">sync</span></button>
+                                        </div>
+                                        <input type="text" class="operario-search w-full min-w-[160px] px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500" placeholder="Buscar operario..." autocomplete="off"/>
+                                        <div class="operario-dropdown absolute top-full left-0 right-0 z-[9999] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-xl overflow-y-auto hidden" style="max-height: 14rem;" data-operario-dropdown role="listbox"></div>
+                                    </div>
+                                </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="100" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">No hay componentes para distribuir en esta OPT.</td></tr>
+                            <tr><td colspan="101" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">No hay componentes para distribuir en esta OPT.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -156,8 +168,13 @@
                     var idArt = rows[i].getAttribute('data-id-art');
                     var pendiente = parseInt(rows[i].getAttribute('data-pendiente'), 10) || 0;
                     var suma = getSumaPorArticulo(idArt);
+                    var hiddenOp = form.querySelector('input.operario-hidden[data-id-art="' + idArt + '"]');
+                    var idOp = hiddenOp ? (hiddenOp.value || '').trim() : '';
                     if (suma > pendiente) {
                         return 'Componente ' + idArt + ': la suma por depósitos (' + suma + ') no puede superar el disponible (' + pendiente + ' unidades).';
+                    }
+                    if (suma > 0 && !idOp) {
+                        return 'Debe seleccionar un operario para el componente ' + idArt + '.';
                     }
                     totalAsignado += suma;
                 }
@@ -180,6 +197,136 @@
                     form.submit();
                 });
             }
+
+            function positionOperarioDropdown(dropdown, input) {
+                var rect = input.getBoundingClientRect();
+                var spaceBelow = window.innerHeight - rect.bottom - 12;
+                var maxH = Math.min(224, Math.max(120, spaceBelow));
+                dropdown.style.position = 'fixed';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.width = Math.max(rect.width, 220) + 'px';
+                dropdown.style.maxHeight = maxH + 'px';
+                if (spaceBelow >= 140) {
+                    dropdown.style.top = (rect.bottom + 4) + 'px';
+                    dropdown.style.bottom = 'auto';
+                } else {
+                    dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+                    dropdown.style.top = 'auto';
+                }
+                dropdown.style.zIndex = '9999';
+            }
+            var empleadosUrl = form ? (form.getAttribute('data-empleados-url') || '/mpr/api/empleados/') : '/mpr/api/empleados/';
+            var debounceTimer;
+            document.querySelectorAll('.operario-cell').forEach(function(cell) {
+                var td = cell.closest('td');
+                var hidden = td ? td.querySelector('input.operario-hidden') : null;
+                var chip = cell.querySelector('.operario-chip');
+                var searchInp = cell.querySelector('.operario-search');
+                var dropdown = cell.querySelector('.operario-dropdown');
+                if (!searchInp || !dropdown || !hidden) return;
+                var chipLabel = cell.querySelector('.operario-chip-label');
+                var chipClear = cell.querySelector('.operario-chip-clear');
+                var highlightedIndex = -1;
+                function getSelectableItems() { return Array.prototype.slice.call(dropdown.querySelectorAll('[data-id]')); }
+                function setHighlight(index) {
+                    var items = getSelectableItems();
+                    items.forEach(function(el, i) {
+                        el.classList.toggle('bg-purple-200', i === index);
+                        el.classList.toggle('dark:bg-purple-800', i === index);
+                        el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+                    });
+                    highlightedIndex = index;
+                    if (index >= 0 && items[index]) items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                }
+                function selectHighlighted() {
+                    var items = getSelectableItems();
+                    if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+                        var el = items[highlightedIndex];
+                        selectEmpleado(el.getAttribute('data-id'), el.textContent.trim());
+                    }
+                }
+                function showChip(label) {
+                    if (label) {
+                        if (chipLabel) chipLabel.textContent = label;
+                        chip.classList.remove('hidden');
+                        searchInp.classList.add('hidden');
+                    } else {
+                        chip.classList.add('hidden');
+                        if (chipLabel) chipLabel.textContent = '';
+                        searchInp.classList.remove('hidden');
+                    }
+                }
+                function clearOperario() {
+                    hidden.value = '';
+                    showChip('');
+                    dropdown.classList.add('hidden');
+                    dropdown.innerHTML = '';
+                    searchInp.value = '';
+                }
+                function selectEmpleado(id, label) {
+                    hidden.value = id || '';
+                    showChip(label || '');
+                    dropdown.classList.add('hidden');
+                    dropdown.innerHTML = '';
+                    searchInp.value = '';
+                }
+                function showDropdown() {
+                    dropdown.classList.remove('hidden');
+                    positionOperarioDropdown(dropdown, searchInp);
+                }
+                if (chipClear) {
+                    chipClear.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        clearOperario();
+                        searchInp.focus();
+                    });
+                }
+                function bindDropdownItems() {
+                    var items = getSelectableItems();
+                    items.forEach(function(el, i) {
+                        el.setAttribute('role', 'option');
+                        el.addEventListener('click', function() { selectEmpleado(el.getAttribute('data-id'), el.textContent.trim()); });
+                        el.addEventListener('mouseenter', function() { setHighlight(i); });
+                    });
+                    setHighlight(items.length > 0 ? 0 : -1);
+                }
+                searchInp.addEventListener('focus', function() {
+                    if (searchInp.value.trim().length >= 1) return;
+                    fetch(empleadosUrl + '?q=' + encodeURIComponent('')).then(function(r) { return r.json(); }).then(function(data) {
+                        var list = data.empleados || [];
+                        dropdown.innerHTML = list.slice(0, 15).map(function(e) {
+                            return '<div class="px-3 py-2 cursor-pointer text-gray-900 dark:text-gray-100 hover:bg-purple-100 dark:hover:bg-gray-600 text-sm" data-id="' + (e.id || '') + '">' + (e.label || '').replace(/</g, '&lt;') + '</div>';
+                        }).join('') || '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Escriba para buscar</div>';
+                        showDropdown();
+                        bindDropdownItems();
+                    }).catch(function() { dropdown.innerHTML = '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Error al cargar</div>'; showDropdown(); setHighlight(-1); });
+                });
+                searchInp.addEventListener('input', function() {
+                    clearTimeout(debounceTimer);
+                    var q = searchInp.value.trim();
+                    debounceTimer = setTimeout(function() {
+                        fetch(empleadosUrl + '?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
+                            var list = data.empleados || [];
+                            dropdown.innerHTML = list.slice(0, 15).map(function(e) {
+                                return '<div class="px-3 py-2 cursor-pointer text-gray-900 dark:text-gray-100 hover:bg-purple-100 dark:hover:bg-gray-600 text-sm" data-id="' + (e.id || '') + '">' + (e.label || '').replace(/</g, '&lt;') + '</div>';
+                            }).join('') || '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Sin resultados</div>';
+                            showDropdown();
+                            bindDropdownItems();
+                        });
+                    }, 200);
+                });
+                searchInp.addEventListener('keydown', function(e) {
+                    if (dropdown.classList.contains('hidden')) return;
+                    var items = getSelectableItems();
+                    if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight(highlightedIndex < items.length - 1 ? highlightedIndex + 1 : 0); return; }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight(highlightedIndex <= 0 ? (items.length > 0 ? items.length - 1 : -1) : highlightedIndex - 1); return; }
+                    if (e.key === 'Enter') { e.preventDefault(); selectHighlighted(); return; }
+                    if (e.key === 'Escape') { e.preventDefault(); dropdown.classList.add('hidden'); setHighlight(-1); }
+                });
+                document.addEventListener('click', function(ev) {
+                    if (!cell.contains(ev.target) && !dropdown.contains(ev.target)) dropdown.classList.add('hidden');
+                });
+            });
         })();
         </script>
     </div>
