@@ -70,17 +70,6 @@ class AdministraNETEmpresaService:
         self.user = mysql_config['USER']
         self.password = mysql_config['PASSWORD']
     
-    def _get_connection(self, db_name: str):
-        """Conexión directa MySQL (para guardar y otros métodos que requieren transacción explícita)."""
-        return MySQLdb.connect(
-            host=self.server,
-            port=int(self.port),
-            user=self.user,
-            passwd=self.password,
-            db=db_name,
-            charset='latin1',
-        )
-    
     def obtener_empresa(self, base_empresa: str) -> Optional[Dict]:
         """
         Obtiene los datos de la empresa desde la tabla DatosEmpresa.
@@ -306,24 +295,22 @@ class AdministraNETEmpresaService:
         Tolera variación de mayúsculas en el nombre de la tabla.
         """
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla(cursor, "pais")
-            if not tabla:
-                logger.warning("No existe tabla pais en la base '%s'", base_empresa)
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla(cursor, "pais")
+                if not tabla:
+                    logger.warning("No existe tabla pais en la base '%s'", base_empresa)
+                    cursor.close()
+                    return []
+                cursor.execute(f"SELECT id_pais, nombre FROM {tabla} ORDER BY nombre")
+                paises = []
+                for row in cursor.fetchall():
+                    paises.append({
+                        'id': row[0],
+                        'nombre': row[1] or ''
+                    })
                 cursor.close()
-                conn.close()
-                return []
-            cursor.execute(f"SELECT id_pais, nombre FROM {tabla} ORDER BY nombre")
-            paises = []
-            for row in cursor.fetchall():
-                paises.append({
-                    'id': row[0],
-                    'nombre': row[1] or ''
-                })
-            cursor.close()
-            conn.close()
-            return paises
+                return paises
         except Exception as e:
             logger.error(f"Error al obtener países: {e}")
             return []
@@ -335,27 +322,25 @@ class AdministraNETEmpresaService:
         Tolera variación de mayúsculas en el nombre de la tabla.
         """
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla(cursor, "provincia")
-            if not tabla:
-                logger.warning("No existe tabla Provincia en la base '%s'", base_empresa)
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla(cursor, "provincia")
+                if not tabla:
+                    logger.warning("No existe tabla Provincia en la base '%s'", base_empresa)
+                    cursor.close()
+                    return []
+                if id_pais:
+                    cursor.execute(f"SELECT CodProvincia, Provincia FROM {tabla} WHERE id_pais = %s ORDER BY Provincia", [id_pais])
+                else:
+                    cursor.execute(f"SELECT CodProvincia, Provincia FROM {tabla} ORDER BY Provincia")
+                provincias = []
+                for row in cursor.fetchall():
+                    provincias.append({
+                        'id': int(row[0]) if row[0] is not None else None,
+                        'nombre': row[1] or ''
+                    })
                 cursor.close()
-                conn.close()
-                return []
-            if id_pais:
-                cursor.execute(f"SELECT CodProvincia, Provincia FROM {tabla} WHERE id_pais = %s ORDER BY Provincia", [id_pais])
-            else:
-                cursor.execute(f"SELECT CodProvincia, Provincia FROM {tabla} ORDER BY Provincia")
-            provincias = []
-            for row in cursor.fetchall():
-                provincias.append({
-                    'id': int(row[0]) if row[0] is not None else None,
-                    'nombre': row[1] or ''
-                })
-            cursor.close()
-            conn.close()
-            return provincias
+                return provincias
         except Exception as e:
             logger.error(f"Error al obtener provincias: {e}")
             return []
@@ -367,32 +352,30 @@ class AdministraNETEmpresaService:
         Tolera variación de mayúsculas en el nombre de la tabla.
         """
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla(cursor, "departamento")
-            if not tabla:
-                logger.warning("No existe tabla Departamento en la base '%s'", base_empresa)
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla(cursor, "departamento")
+                if not tabla:
+                    logger.warning("No existe tabla Departamento en la base '%s'", base_empresa)
+                    cursor.close()
+                    return []
+                if cod_provincia:
+                    cursor.execute(f"""
+                        SELECT IDDepartamento, NombreDepartamento
+                        FROM {tabla}
+                        WHERE CodProvincia = %s OR idDepartamento = 1
+                        ORDER BY NombreDepartamento
+                    """, [cod_provincia])
+                else:
+                    cursor.execute(f"SELECT IDDepartamento, NombreDepartamento FROM {tabla} ORDER BY NombreDepartamento")
+                departamentos = []
+                for row in cursor.fetchall():
+                    departamentos.append({
+                        'id': int(row[0]) if row[0] is not None else None,
+                        'nombre': row[1] or ''
+                    })
                 cursor.close()
-                conn.close()
-                return []
-            if cod_provincia:
-                cursor.execute(f"""
-                    SELECT IDDepartamento, NombreDepartamento
-                    FROM {tabla}
-                    WHERE CodProvincia = %s OR idDepartamento = 1
-                    ORDER BY NombreDepartamento
-                """, [cod_provincia])
-            else:
-                cursor.execute(f"SELECT IDDepartamento, NombreDepartamento FROM {tabla} ORDER BY NombreDepartamento")
-            departamentos = []
-            for row in cursor.fetchall():
-                departamentos.append({
-                    'id': int(row[0]) if row[0] is not None else None,
-                    'nombre': row[1] or ''
-                })
-            cursor.close()
-            conn.close()
-            return departamentos
+                return departamentos
         except Exception as e:
             logger.error(f"Error al obtener departamentos: {e}")
             return []
@@ -411,21 +394,19 @@ class AdministraNETEmpresaService:
             'Fabricante',
         ]
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla_empresa(cursor)
-            if not tabla:
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla_empresa(cursor)
+                if not tabla:
+                    cursor.close()
+                    return default_rubro
+                cursor.execute(f"""
+                    SELECT DISTINCT rubro_canal
+                    FROM {tabla}
+                    ORDER BY rubro_canal
+                """)
+                resultados = cursor.fetchall()
                 cursor.close()
-                conn.close()
-                return default_rubro
-            cursor.execute(f"""
-                SELECT DISTINCT rubro_canal
-                FROM {tabla}
-                ORDER BY rubro_canal
-            """)
-            resultados = cursor.fetchall()
-            cursor.close()
-            conn.close()
             # Incluir todo valor presente en la DB (strip, excluir solo vacíos)
             desde_db = []
             for r in resultados:
@@ -460,21 +441,19 @@ class AdministraNETEmpresaService:
             'Otros',
         ]
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla_empresa(cursor)
-            if not tabla:
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla_empresa(cursor)
+                if not tabla:
+                    cursor.close()
+                    return default_actividad
+                cursor.execute(f"""
+                    SELECT DISTINCT actividad
+                    FROM {tabla}
+                    ORDER BY actividad
+                """)
+                resultados = cursor.fetchall()
                 cursor.close()
-                conn.close()
-                return default_actividad
-            cursor.execute(f"""
-                SELECT DISTINCT actividad
-                FROM {tabla}
-                ORDER BY actividad
-            """)
-            resultados = cursor.fetchall()
-            cursor.close()
-            conn.close()
             # Incluir todo valor presente en la DB (strip, excluir solo vacíos)
             desde_db = []
             for r in resultados:
@@ -501,25 +480,23 @@ class AdministraNETEmpresaService:
         Tolera variación de mayúsculas en el nombre de la tabla.
         """
         try:
-            conn = self._get_connection(base_empresa)
-            cursor = conn.cursor()
-            tabla = _nombre_tabla(cursor, "contribuyentes")
-            if not tabla:
-                logger.warning("No existe tabla Contribuyentes en la base '%s'", base_empresa)
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                tabla = _nombre_tabla(cursor, "contribuyentes")
+                if not tabla:
+                    logger.warning("No existe tabla Contribuyentes en la base '%s'", base_empresa)
+                    cursor.close()
+                    return []
+                cursor.execute(f"SELECT IDIva, Iva, Abreviado FROM {tabla} ORDER BY IDIva")
+                contribuyentes = []
+                for row in cursor.fetchall():
+                    contribuyentes.append({
+                        'id': row[0],
+                        'nombre': row[1] or '',
+                        'abreviado': row[2] or ''
+                    })
                 cursor.close()
-                conn.close()
-                return []
-            cursor.execute(f"SELECT IDIva, Iva, Abreviado FROM {tabla} ORDER BY IDIva")
-            contribuyentes = []
-            for row in cursor.fetchall():
-                contribuyentes.append({
-                    'id': row[0],
-                    'nombre': row[1] or '',
-                    'abreviado': row[2] or ''
-                })
-            cursor.close()
-            conn.close()
-            return contribuyentes
+                return contribuyentes
         except Exception as e:
             logger.error(f"Error al obtener contribuyentes: {e}")
             return []

@@ -45,6 +45,9 @@ tiendanube_administranet/
 # Archivos de desarrollo y prueba
 debug_*.py
 test_*.py
+# Permitir tests Django dentro de paquetes de apps
+!*/tests/test_*.py
+!*/tests/**/test_*.py
 investigate_*.py
 build_*.sh
 verify_*.sh
@@ -80,6 +83,8 @@ misc/documentacion/
 
 # Archivos de backup
 backups/
+# Permitir backups de DB para pruebas versionados explícitamente
+!backups/administranet92_*.zip
 media_bak/
 *.backup
 *.bak

@@ -32,37 +32,14 @@ def _session_context(request):
 @tiene_permiso("stock.crear_movimiento")
 @require_http_methods(["GET"])
 def api_ingreso_datos_iniciales(request):
-    """GET: depósitos, referencias de movimiento, motivos permitidos, viajantes (Operario)."""
+    """GET: depósitos, referencias de movimiento, motivos permitidos, viajantes, clientes, config."""
     ctx, err = _session_context(request)
     if err:
         return err
-    depositos = svc.get_depositos(ctx["base_empresa"], ctx["id_puesto"])
-    ref_movstock = svc.get_ref_movstock(ctx["base_empresa"], ctx["id_puesto"])
-    # Armado (9), Pedido producción (11), Parte producción (12) solo desde MPR
-    motivos = svc.get_motivos_permitidos(ctx["base_empresa"], ctx["id_puesto"], incluir_pedidos_produccion=False)
-    motivos_list = [{"codigo": c, "nombre": n} for c, n in motivos]
-    viajantes = svc.get_viajantes(ctx["base_empresa"])
-    clientes = svc.get_clientes(ctx["base_empresa"], limit=300)
-    activ_proyecto = svc.get_activ_proyecto(ctx["base_empresa"])
-    calculo_stock_saldo = svc.get_calculo_stock_saldo(ctx["base_empresa"])
-    config_embalaje = svc.get_config_unidad_bulto_display(ctx["base_empresa"])
-    config_peso = svc.get_config_peso_balanza(ctx["base_empresa"])
-    pedidos_parte_produccion = svc.get_pedidos_parte_produccion(ctx["base_empresa"])
-    return JsonResponse({
-        "depositos": depositos,
-        "ref_movstock": ref_movstock,
-        "motivos": motivos_list,
-        "viajantes": viajantes,
-        "clientes": clientes,
-        "activ_proyecto": activ_proyecto,
-        "calculo_stock_saldo": calculo_stock_saldo,
-        "utiliza_bulto_cerrado": config_embalaje.get("utiliza_bulto_cerrado", "No"),
-        "utiliza_display": config_embalaje.get("utiliza_display", "No"),
-        "tipo_unidad_defecto": config_embalaje.get("tipo_unidad_defecto", "Unidad"),
-        "usa_multiplica_bulto_promedio": config_peso.get("usa_multiplica_bulto_promedio", "No"),
-        "tipo_balanza": config_peso.get("tipo_balanza", ""),
-        "pedidos_parte_produccion": pedidos_parte_produccion,
-    })
+    datos = svc.get_datos_iniciales_ingreso_stock(
+        ctx["base_empresa"], ctx["id_puesto"], incluir_pedidos_produccion=False,
+    )
+    return JsonResponse(datos)
 
 
 @tiene_permiso("stock.crear_movimiento")
@@ -521,7 +498,7 @@ def api_ingreso_confirmar(request):
         renglones = data["renglones"]
     if not renglones:
         return JsonResponse({"error": "Debe agregar al menos un ítem a la lista."}, status=400)
-    ok, codigo_mov, nro_comp, mensaje = svc.alta_movimiento(
+    ok, codigo_mov, nro_comp, mensaje, schema_errores = svc.alta_movimiento(
         base_empresa=ctx["base_empresa"],
         id_usuario=ctx["id_usuario"],
         id_puesto=ctx["id_puesto"],
@@ -529,7 +506,14 @@ def api_ingreso_confirmar(request):
         renglones=renglones,
     )
     if not ok:
-        return JsonResponse({"error": mensaje or "Error al grabar el movimiento."}, status=400)
+        payload = {"error": mensaje or "Error al grabar el movimiento."}
+        if schema_errores is not None:
+            payload["schema_error"] = True
+            payload["detalle"] = [
+                {"tabla": e.get("tabla"), "campo": e.get("campo"), "mensaje": e.get("mensaje", "")}
+                for e in schema_errores
+            ]
+        return JsonResponse(payload, status=400)
     return JsonResponse({
         "ok": True,
         "codigo_movimiento": int(codigo_mov),

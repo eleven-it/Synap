@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <title>AdministraNET Login</title>
+  <title>Synap - Iniciar sesión</title>
   {% get_media_prefix as MEDIA_URL %}
   {% get_administranet_logo as logo_path %}
   {% if logo_path %}
@@ -13,7 +13,7 @@
   {% endif %}
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet"/>
   <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
@@ -38,18 +38,16 @@
 </head>
 <body class="bg-background-light dark:bg-background-dark font-display antialiased min-h-screen">
   <div class="relative flex min-h-[100dvh] min-h-screen w-full flex-col items-center justify-center overflow-x-hidden p-4 sm:p-6">
-    <!-- Logo: mismo origen que desktop (get_administranet_logo), mismo criterio que login_administranet.html -->
     <div class="mb-8 sm:mb-12 flex flex-col items-center w-full">
       <div class="logo-container mb-3 sm:mb-4 flex items-center justify-center rounded-xl overflow-hidden">
         {% if logo_path %}
-        <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="logo max-h-20 max-w-[240px] w-auto object-contain sm:max-h-24"/>
+        <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="logo max-h-32 max-w-[280px] w-auto object-contain sm:max-h-36"/>
         {% else %}
-        <div class="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/30">
-          <span class="material-symbols-outlined text-4xl">storefront</span>
+        <div class="flex h-28 w-28 sm:h-32 sm:w-32 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/30">
+          <svg class="h-14 w-14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/></svg>
         </div>
         {% endif %}
       </div>
-      <h1 class="text-slate-900 dark:text-slate-100 tracking-tight text-2xl sm:text-[32px] font-bold leading-tight text-center px-2">AdministraNET</h1>
     </div>
     <!-- Mensaje -->
     <div class="mb-6 sm:mb-8 text-center px-2">
@@ -65,8 +63,8 @@
       <div class="flex flex-col gap-2">
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Empresa</label>
         <div class="relative flex items-center">
-          <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">business</span>
-          <select id="empresa" name="empresa" required class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-4 text-base text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none min-h-[44px]">
+          <svg class="absolute left-4 h-5 w-5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5M3.75 3v18m4.5-18v18m4.5-18v18m4.5-18v18M5.25 3h13.5M5.25 21h13.5M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15"/></svg>
+          <select id="empresa" name="empresa" required class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-12 pr-4 text-base text-slate-900 dark:text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none appearance-none min-h-[44px]">
             <option value="">Seleccione una empresa</option>
             {% for empresa in empresas %}
             <option value="{{ empresa.base_empresa }}">{{ empresa.nombre_empresa }}</option>
@@ -78,18 +76,19 @@
       <div class="flex flex-col gap-2">
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Usuario</label>
         <div class="relative flex items-center">
-          <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">person</span>
-          <input id="usuario" type="text" name="usuario" autocomplete="username" required placeholder="Código de usuario" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-4 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
+          <svg class="absolute left-4 h-5 w-5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/></svg>
+          <input id="usuario" type="text" name="usuario" autocomplete="username" required placeholder="Código de usuario" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-12 pr-4 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
         </div>
       </div>
       <!-- Contraseña -->
       <div class="flex flex-col gap-2">
         <label class="text-slate-700 dark:text-slate-300 text-sm font-medium px-1">Contraseña</label>
         <div class="relative flex items-center">
-          <span class="absolute left-4 text-slate-400 material-symbols-outlined text-[22px]">lock</span>
-          <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-11 sm:pl-12 pr-12 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
-          <button type="button" class="absolute right-4 text-slate-400 hover:text-primary transition-colors" onclick="var i=document.getElementById('password');i.type=i.type==='password'?'text':'password';">
-            <span class="material-symbols-outlined text-[22px]">visibility</span>
+          <svg class="absolute left-4 h-5 w-5 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
+          <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••" class="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3.5 sm:py-4 pl-12 pr-12 text-base text-slate-900 dark:text-white shadow-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none placeholder:text-slate-400 min-h-[44px]"/>
+          <button type="button" id="toggle-password" class="absolute right-4 text-slate-400 hover:text-primary transition-colors p-1" onclick="togglePasswordVisibility()">
+            <svg id="icon-eye" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+            <svg id="icon-eye-slash" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88"/></svg>
           </button>
         </div>
       </div>
@@ -104,6 +103,20 @@
   </div>
 
   <script>
+    function togglePasswordVisibility() {
+      var input = document.getElementById('password');
+      var iconEye = document.getElementById('icon-eye');
+      var iconSlash = document.getElementById('icon-eye-slash');
+      if (input.type === 'password') {
+        input.type = 'text';
+        iconEye.classList.add('hidden');
+        iconSlash.classList.remove('hidden');
+      } else {
+        input.type = 'password';
+        iconEye.classList.remove('hidden');
+        iconSlash.classList.add('hidden');
+      }
+    }
     function showError(message) {
       var el = document.getElementById('error-message');
       el.textContent = message;

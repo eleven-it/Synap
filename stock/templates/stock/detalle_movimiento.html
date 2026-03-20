@@ -10,10 +10,19 @@
   <span class="text-gray-900 dark:text-gray-100">Detalle {{ mov.nro_comprobante|default:codigo_movimiento }}</span>
 </nav>
 <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Movimiento {{ mov.nro_comprobante|default:codigo_movimiento }}</h1>
-  <a href="{% url 'stock:movimiento_pdf' codigo_movimiento=codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700">
-    Descargar comprobante PDF
-  </a>
+  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white min-w-0 break-words">Movimiento {{ mov.nro_comprobante|default:codigo_movimiento }}</h1>
+  <div class="flex flex-wrap items-center gap-2 min-w-0">
+    {% if request.is_mobile %}
+    <span class="text-sm text-gray-500 dark:text-gray-400">Comprobante</span>
+    <a href="{% url 'stock:movimiento_pdf' codigo_movimiento=codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+      Descargar PDF
+    </a>
+    {% else %}
+    <a href="{% url 'stock:movimiento_pdf' codigo_movimiento=codigo_movimiento %}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700">
+      Descargar comprobante PDF
+    </a>
+    {% endif %}
+  </div>
 </div>
 
 <div class="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -48,7 +57,28 @@
 
 <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Renglones</h2>
 {% if renglones %}
-<div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
+<!-- Móvil: renglones en cards (sin scroll horizontal) -->
+<div class="md:hidden space-y-3">
+  {% for r in renglones %}
+  <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+    <div class="flex justify-between items-start gap-2 mb-2">
+      <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ r.CodigoArticulo|default:"—" }}</span>
+      <span class="text-sm text-right text-gray-700 dark:text-gray-300">{% if r.saldo is not None %}{{ r.saldo|floatformat:2 }}{% else %}0,00{% endif %} <span class="text-gray-500 dark:text-gray-400">saldo</span></span>
+    </div>
+    <p class="text-sm text-gray-700 dark:text-gray-300 break-words mb-2">{{ r.Descripcion|default:"—" }}</p>
+    <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      <dt class="text-gray-500 dark:text-gray-400">Depósito</dt>
+      <dd class="text-gray-900 dark:text-gray-100">{{ r.nombre_deposito|default:"—" }}</dd>
+      <dt class="text-gray-500 dark:text-gray-400">Entrada</dt>
+      <dd class="text-gray-900 dark:text-gray-100 text-right">{{ r.Entrada|default:"0" }}</dd>
+      <dt class="text-gray-500 dark:text-gray-400">Salida</dt>
+      <dd class="text-gray-900 dark:text-gray-100 text-right">{{ r.Salida|default:"0" }}</dd>
+    </dl>
+  </div>
+  {% endfor %}
+</div>
+<!-- Desktop: tabla -->
+<div class="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow">
   <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
     <thead class="bg-gray-50 dark:bg-gray-700">
       <tr>

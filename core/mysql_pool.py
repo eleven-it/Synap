@@ -2,6 +2,11 @@
 Pool de conexiones MySQL para Synap (acceso a administraNET).
 Patrón único para todo el proyecto: core, login, reports, self_checkout.
 
+Una conexión por request: cuando el middleware RequestScopedMysqlMiddleware
+asigna una conexión para el request, get_connection/mysql_cursor la reutilizan
+vía request_mysql_conn_var (contextvars) y no la devuelven al pool; el middleware
+la libera al final del request.
+
 Uso:
     from core.mysql_pool import mysql_cursor, get_connection, get_mysql_pool
 
@@ -18,11 +23,18 @@ import MySQLdb
 import threading
 import logging
 from contextlib import contextmanager
-from typing import Dict, Optional
+from contextvars import ContextVar
+from typing import Dict, Optional, Tuple, Any
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# Variable de contexto: (base_empresa, conn) cuando el middleware asignó una conexión por request.
+# Usado por get_connection() para reutilizar la misma conexión sin devolverla al pool.
+request_mysql_conn_var: ContextVar[Optional[Tuple[str, Any]]] = ContextVar(
+    "request_mysql_conn", default=None
+)
 
 
 class MySQLConnectionPool:
@@ -116,6 +128,13 @@ class MySQLConnectionPool:
                         logger.warning("Pool lleno, creando conexión temporal para %s", database)
                         conn = self._create_connection(database)
                         self._in_use_connections.add(conn)
+                else:
+                    # Reutilizada: asegurar que está en la base correcta (evita leer de otra empresa)
+                    if database:
+                        try:
+                            conn.select_db(database)
+                        except Exception as e:
+                            logger.warning("No se pudo select_db(%s) en conexión reutilizada: %s", database, e)
             self._init_connection_session(conn)
             yield conn
         finally:
@@ -172,8 +191,28 @@ def get_mysql_pool() -> MySQLConnectionPool:
 
 
 @contextmanager
+def _noop_connection_manager(conn: Any):
+    """Context manager que solo hace yield conn y en exit no libera (para conexión de request)."""
+    yield conn
+
+
+@contextmanager
 def get_connection(base_empresa: str):
-    """Context manager para obtener una conexión del pool (transacciones largas)."""
+    """
+    Context manager para obtener una conexión del pool (transacciones largas).
+    Si hay una conexión de request para esta base_empresa (vía RequestScopedMysqlMiddleware),
+    la reutiliza y no la devuelve al pool.
+    """
+    base_empresa = (base_empresa or "").strip()
+    try:
+        current = request_mysql_conn_var.get()
+        if current is not None and len(current) >= 2 and current[0] == base_empresa:
+            conn = current[1]
+            with _noop_connection_manager(conn):
+                yield conn
+            return
+    except LookupError:
+        pass
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:
         yield conn

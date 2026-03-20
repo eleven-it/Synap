@@ -1,5 +1,15 @@
 # core/constantes_permisos.py
 
+# Mapeo Clavemenu (tabla permisos VB6/Principal) → key_permiso (permiso_sistema Synap).
+# Si el puesto tiene la Clavemenu en permisos con Permiso = '1', se otorga el key_permiso en Synap.
+# Equivalencia CargaMovStock / Ingreso Mov. Stock y resto del módulo Stock.
+MAPEO_MENU_A_PERMISO = {
+    "keyCompStock": "stock.crear_movimiento",
+    "keyConsultaStock": "stock.consultas",
+    "keyConsultaStockRap": "stock.consultas",
+    "keyInformesStock": "stock.informes",
+}
+
 PERMISOS_POR_MODULO = {
     "Clientes": [
         ("clientes.ver", "Ver clientes"),

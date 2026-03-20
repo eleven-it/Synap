@@ -1,11 +1,12 @@
 """
 Permisos de usuario según AdministraNET (MySQL).
-Única fuente de verdad: permiso_sistema + permiso_sistema_puesto.
+Fuentes: permiso_sistema + permiso_sistema_puesto; y tabla permisos (Clavemenu) mapeada a key_permiso.
 Usado por middleware (request.user.get_permisos_totales) y self_checkout (has_permission).
 """
 import logging
 from typing import Optional, Set
 
+from core.constantes_permisos import MAPEO_MENU_A_PERMISO
 from core.mysql_pool import mysql_cursor
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,27 @@ def get_permisos_totales_administranet(
                     key_permiso = row[0] if row else None
                     if key_permiso:
                         permisos.add(key_permiso)
+
+                # Incluir permisos mapeados desde tabla permisos (Clavemenu VB6)
+                # para que keyCompStock etc. otorguen stock.crear_movimiento en Synap
+                try:
+                    cursor.execute(
+                        """
+                        SELECT Clavemenu FROM permisos
+                        WHERE IDpuesto = %s AND (Permiso = '1' OR Permiso = 'Si')
+                        """,
+                        [str(id_puesto)],
+                    )
+                    for row in cursor.fetchall():
+                        clavemenu = row[0] if row else None
+                        if clavemenu and clavemenu in MAPEO_MENU_A_PERMISO:
+                            permisos.add(MAPEO_MENU_A_PERMISO[clavemenu])
+                except Exception as e_permisos:
+                    logger.debug(
+                        "No se pudo leer tabla permisos para puesto %s (puede no existir): %s",
+                        id_puesto,
+                        e_permisos,
+                    )
         except Exception as e:
             logger.warning(
                 "Error al obtener permisos desde MySQL para puesto %s: %s",

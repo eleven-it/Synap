@@ -8,6 +8,8 @@ import MySQLdb
 from django.conf import settings
 from typing import Optional, Dict, List, Set
 
+from core.constantes_permisos import MAPEO_MENU_A_PERMISO
+
 logger = logging.getLogger(__name__)
 
 
@@ -510,11 +512,58 @@ class AdministraNETPermisosMenuService:
                     INSERT INTO permisos (Clavemenu, IDpuesto, Permiso) 
                     VALUES (%s, %s, '1')
                 """, [clavemenu, str(id_puesto)])
-            
+
+            # Sincronizar a permiso_sistema_puesto: Clavemenu mapeados otorgan key_permiso en Synap
+            key_permisos_a_activar = [
+                MAPEO_MENU_A_PERMISO[clavemenu]
+                for clavemenu in permisos
+                if clavemenu in MAPEO_MENU_A_PERMISO
+            ]
+            if key_permisos_a_activar:
+                try:
+                    placeholders = ",".join(["%s"] * len(key_permisos_a_activar))
+                    cursor.execute(
+                        f"SELECT id_permiso_sistema, key_permiso FROM permiso_sistema WHERE key_permiso IN ({placeholders})",
+                        key_permisos_a_activar,
+                    )
+                    filas_permiso = cursor.fetchall()
+                    for row in filas_permiso:
+                        id_ps, key_permiso = row[0], row[1]
+                        cursor.execute(
+                            """
+                            SELECT id_permiso_sistema_puesto FROM permiso_sistema_puesto
+                            WHERE id_permiso_sistema = %s AND id_puesto = %s
+                            """,
+                            [id_ps, id_puesto],
+                        )
+                        existe = cursor.fetchone()
+                        if existe:
+                            cursor.execute(
+                                """
+                                UPDATE permiso_sistema_puesto SET valor_permiso = 'Si'
+                                WHERE id_permiso_sistema = %s AND id_puesto = %s
+                                """,
+                                [id_ps, id_puesto],
+                            )
+                        else:
+                            cursor.execute(
+                                """
+                                INSERT INTO permiso_sistema_puesto (id_permiso_sistema, key_permiso, valor_permiso, id_puesto)
+                                VALUES (%s, %s, 'Si', %s)
+                                """,
+                                [id_ps, key_permiso, id_puesto],
+                            )
+                except Exception as e_sync:
+                    logger.warning(
+                        "No se pudo sincronizar permisos del menú a permiso_sistema_puesto (puesto %s): %s",
+                        id_puesto,
+                        e_sync,
+                    )
+
             conn.commit()
             cursor.close()
             conn.close()
-            
+
             logger.info(f"✅ Permisos del menú guardados para puesto {id_puesto}")
             return True
             

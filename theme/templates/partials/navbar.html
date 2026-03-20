@@ -80,255 +80,243 @@
 </style>
 
 <!-- NAVBAR PRINCIPAL -->
-<div class="flex items-center justify-between w-full h-20 px-6 bg-white border-b border-transparent font-inter relative shadow-sm">
-  <!-- Logo -->
-  <a href="/" class="flex items-center">
-    {% get_administranet_logo as logo_path %}
-    {% if logo_path %}
-      <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-12 w-auto mr-2" />
-    {% endif %}
-  </a>
+{% get_dynamic_menu as modules %}
+{% get_administranet_logo as logo_path %}
 
-  <!-- Menú horizontal (desktop) -->
-  <nav class="hidden md:flex items-center gap-6 text-sm font-medium" x-data="{ openApp: null, closeTimeout: null, openMenu(id) { clearTimeout(this.closeTimeout); this.openApp = id }, scheduleClose() { this.closeTimeout = setTimeout(() => this.openApp = null, 200) } }">
-    {% get_dynamic_menu as modules %}
-    {% for module in modules %}
-      <div class="relative" @mouseenter="openMenu('{{ module.id }}')" @mouseleave="scheduleClose()">
-        <a href="{{ module.url }}" class="flex items-center gap-1 text-gray-700 hover:text-indigo-600">
-          {{ module.nombre }}
-          {% if module.submenus %}<span class="material-icons text-xs">expand_more</span>{% endif %}
-        </a>
-        {% if module.submenus %}
-        <template x-if="openApp === '{{ module.id }}'">
-          <div class="fixed left-0 top-20 w-full z-50 bg-[#f9fbfd] px-12 py-10 dropdown-fade shadow-xl border-t border-gray-200 rounded-b-xl">
-            <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {% for submenu in module.submenus %}
-                <div class="app-card">
-                  <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">{{ submenu.seccion }}</h3>
-                  <div class="space-y-1">
-                    {% for item in submenu.items %}
-                      <a href="{{ item.url }}" class="app-menu-item">
-                        <span class="material-icons text-base mr-2">{{ item.icon }}</span>
-                        {{ item.label }}
-                      </a>
-                    {% endfor %}
+<div x-data="{
+  mobileMenuOpen: false,
+  mobileExpandedModule: null,
+  branchDropdownOpen: false,
+  userMenuOpen: false,
+  activeBranch: null,
+  availableBranches: [],
+  openApp: null, closeTimeout: null,
+  openMenu(id) { clearTimeout(this.closeTimeout); this.openApp = id },
+  scheduleClose() { this.closeTimeout = setTimeout(() => this.openApp = null, 200) },
+  init() {
+    {% if branch_activa %}
+    this.activeBranch = { id: {{ branch_activa.id }}, name: '{{ branch_activa.name|escapejs }}', city: '{{ branch_activa.city|default:""|escapejs }}' };
+    {% endif %}
+    this.availableBranches = [{% for sucursal in sucursales_disponibles %}{ id: {{ sucursal.id }}, name: '{{ sucursal.name|escapejs }}', city: '{{ sucursal.city|default:""|escapejs }}' }{% if not forloop.last %},{% endif %}{% endfor %}];
+  },
+  async changeBranch(branchId) {
+    try {
+      const r = await fetch('{% url "core:cambiar_empresa_branch" %}', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }, body: JSON.stringify({ branch_id: branchId }) });
+      if (r.ok) { this.activeBranch = this.availableBranches.find(b => b.id === branchId); this.branchDropdownOpen = false; window.location.reload(); }
+    } catch (e) { console.error('Error:', e); }
+  }
+}" class="w-full font-inter">
+
+  <!-- Barra superior -->
+  <div class="flex items-center justify-between w-full h-14 md:h-16 px-3 md:px-6 bg-white dark:bg-gray-950 shadow-sm">
+    
+    <!-- Izquierda: hamburguesa (mobile) + logo -->
+    <div class="flex items-center gap-2">
+      <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 active:bg-gray-200 dark:active:bg-gray-700 transition" aria-label="Menú">
+        <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        <svg x-show="mobileMenuOpen" x-cloak class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+      <a href="/" class="flex items-center flex-shrink-0">
+        {% if logo_path %}
+          <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-8 md:h-10 w-auto object-contain" />
+        {% endif %}
+      </a>
+    </div>
+
+    <!-- Centro: menú horizontal (desktop) -->
+    <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
+      {% for module in modules %}
+        <div class="relative" @mouseenter="openMenu('{{ module.id }}')" @mouseleave="scheduleClose()">
+          <a href="{{ module.url }}" class="flex items-center gap-1 text-gray-700 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-300 transition">
+            {{ module.nombre }}
+            {% if module.submenus %}<span class="material-icons text-xs">expand_more</span>{% endif %}
+          </a>
+          {% if module.submenus %}
+          <template x-if="openApp === '{{ module.id }}'">
+            <div class="fixed left-0 top-16 w-full z-50 bg-[#f9fbfd] px-12 py-10 dropdown-fade shadow-xl border-t border-gray-200 rounded-b-xl">
+              <div class="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {% for submenu in module.submenus %}
+                  <div class="app-card">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase mb-3">{{ submenu.seccion }}</h3>
+                    <div class="space-y-1">
+                      {% for item in submenu.items %}
+                        <a href="{{ item.url }}" class="app-menu-item">
+                          <span class="material-icons text-base mr-2">{{ item.icon }}</span>
+                          {{ item.label }}
+                        </a>
+                      {% endfor %}
+                    </div>
                   </div>
-                </div>
-              {% endfor %}
+                {% endfor %}
+              </div>
+              <div class="mt-8 text-center">
+                <a href="{{ module.url }}" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow text-sm font-semibold transition">
+                  <span class="material-icons mr-2">apps</span>
+                  Ir a {{ module.nombre }}
+                </a>
+              </div>
             </div>
-            <div class="mt-8 text-center">
-              <a href="{{ module.url }}" class="inline-flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow text-sm font-semibold transition">
-                <span class="material-icons mr-2">apps</span>
-                Ir a {{ module.nombre }}
-              </a>
-            </div>
+          </template>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </nav>
+
+    <!-- Derecha: badges empresa/sucursal (desktop), usuario, dark mode -->
+    <div class="flex items-center gap-2 md:gap-3">
+      {% if empresa_activa %}
+      <span class="hidden md:inline-flex items-center px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-200 text-xs font-medium">
+        <span class="material-icons text-base mr-1.5">business</span>
+        <span class="truncate max-w-[10rem]">{{ empresa_activa.nombre }}</span>
+      </span>
+      {% endif %}
+
+      {% if sucursales_disponibles %}
+      <div class="relative hidden md:block">
+        <button @click="branchDropdownOpen = !branchDropdownOpen" class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800/80 transition">
+          <span class="material-icons text-base mr-1.5">location_on</span>
+          <span x-text="activeBranch ? activeBranch.name : 'Sin sucursal'" class="truncate max-w-[8rem]"></span>
+          <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
+        </button>
+        <div x-show="branchDropdownOpen" x-transition @click.away="branchDropdownOpen = false" class="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          <div class="p-3 border-b border-gray-200">
+            <h3 class="text-xs font-semibold text-gray-900">Sucursal activa</h3>
           </div>
-        </template>
+          <div class="max-h-48 overflow-y-auto">
+            <template x-for="branch in availableBranches" :key="branch.id">
+              <button @click="changeBranch(branch.id)" class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 transition" :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'">
+                <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600' : 'text-gray-400'">location_on</span>
+                <div class="flex-1 min-w-0"><div class="text-xs font-medium" x-text="branch.name"></div></div>
+                <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 text-sm">check</span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="relative">
+        <button @click="userMenuOpen = !userMenuOpen" class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition shadow-sm" aria-label="Menú de usuario">
+          <span class="material-icons text-sm">person</span>
+        </button>
+        <div x-show="userMenuOpen" @click.away="userMenuOpen = false" x-transition class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          <div class="px-4 py-3 border-b border-gray-200">
+            <p class="text-xs font-medium text-gray-900">{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}{{ request.user.nombre|default:request.user.email }}{% endif %}</p>
+            <p class="text-xs text-gray-500 truncate">{% if session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}{{ request.user.email|default:"" }}{% endif %}</p>
+          </div>
+          <div class="py-1">
+            <a href="{% url 'core:perfil' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">account_circle</span>Mi perfil</a>
+            <a href="{% url 'core:historial' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">history</span>Historial</a>
+            {% if request.user.is_staff %}<a href="/admin/" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">admin_panel_settings</span>Admin</a>{% endif %}
+          </div>
+          <div class="border-t border-gray-200 py-1">
+            <a href="{% url 'login:logout' %}" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"><span class="material-icons text-sm mr-3">logout</span>Salir</a>
+          </div>
+        </div>
+      </div>
+
+      <label class="hidden md:flex ml-1 items-center cursor-pointer relative">
+        <input id="dark-mode-switch" type="checkbox" class="peer sr-only">
+        <span class="w-9 h-5 flex items-center rounded-full p-1 bg-gray-300 dark:bg-gray-600 peer-checked:bg-purple-500 dark:peer-checked:bg-purple-600 transition-colors" aria-hidden="true"></span>
+        <span class="dot absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ease-out peer-checked:translate-x-3" aria-hidden="true"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Menú mobile desplegable (fullscreen overlay) -->
+  <div x-show="mobileMenuOpen" x-cloak
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0 -translate-y-2"
+       x-transition:enter-end="opacity-100 translate-y-0"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100 translate-y-0"
+       x-transition:leave-end="opacity-0 -translate-y-2"
+       class="md:hidden fixed inset-0 top-14 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
+
+    <!-- Contexto: empresa + sucursal -->
+    <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      {% if empresa_activa %}
+      <div class="flex items-center gap-2 mb-2">
+        <span class="material-icons text-purple-600 dark:text-purple-400 text-base">business</span>
+        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ empresa_activa.nombre }}</span>
+      </div>
+      {% endif %}
+      {% if sucursales_disponibles %}
+      <div class="flex items-center gap-2">
+        <span class="material-icons text-blue-600 dark:text-blue-400 text-base">location_on</span>
+        <select @change="changeBranch(parseInt($event.target.value))" class="flex-1 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 text-gray-700 dark:text-gray-200 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 outline-none">
+          <template x-for="branch in availableBranches" :key="branch.id">
+            <option :value="branch.id" :selected="activeBranch && activeBranch.id === branch.id" x-text="branch.name"></option>
+          </template>
+        </select>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Modo oscuro / claro (mobile) -->
+    <div class="px-4 py-3 flex items-center justify-between border-b border-gray-200 dark:border-gray-700">
+      <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Modo oscuro</span>
+      <label class="flex items-center cursor-pointer relative">
+        <input id="dark-mode-switch-mobile" type="checkbox" class="peer sr-only">
+        <span class="w-9 h-5 flex items-center rounded-full p-1 bg-gray-300 dark:bg-gray-600 peer-checked:bg-purple-500 dark:peer-checked:bg-purple-600 transition-colors" aria-hidden="true"></span>
+        <span class="dot absolute left-1 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md transition-transform duration-200 ease-out peer-checked:translate-x-3" aria-hidden="true"></span>
+      </label>
+    </div>
+
+    <!-- Módulos y submenús -->
+    <nav class="divide-y divide-gray-100 dark:divide-gray-700">
+      {% for module in modules %}
+      <div>
+        {% if module.submenus %}
+        <button @click="mobileExpandedModule = mobileExpandedModule === '{{ module.id }}' ? null : '{{ module.id }}'"
+                class="w-full flex items-center justify-between px-4 py-3.5 text-left text-gray-800 dark:text-gray-100 text-[15px] font-medium active:bg-gray-50 dark:active:bg-gray-800 transition">
+          <div class="flex items-center gap-3">
+            {% if module.icon %}<span class="material-icons text-lg text-gray-500 dark:text-gray-400">{{ module.icon }}</span>{% endif %}
+            <span>{{ module.nombre }}</span>
+          </div>
+          <span class="material-icons text-gray-400 text-xl transition-transform duration-200" :class="mobileExpandedModule === '{{ module.id }}' ? 'rotate-180' : ''">expand_more</span>
+        </button>
+        <div x-show="mobileExpandedModule === '{{ module.id }}'" x-collapse class="bg-gray-50 dark:bg-gray-800">
+          {% for submenu in module.submenus %}
+            {% if submenu.seccion %}
+            <div class="px-4 pt-3 pb-1">
+              <span class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{{ submenu.seccion }}</span>
+            </div>
+            {% endif %}
+            {% for item in submenu.items %}
+              <a href="{{ item.url }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-6 py-2.5 text-sm text-gray-600 dark:text-gray-300 active:bg-gray-100 dark:active:bg-gray-700 transition">
+                <span class="material-icons text-base text-gray-400 dark:text-gray-500">{{ item.icon }}</span>
+                {{ item.label }}
+              </a>
+            {% endfor %}
+          {% endfor %}
+        </div>
+        {% else %}
+        <a href="{{ module.url }}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3.5 text-gray-800 dark:text-gray-100 text-[15px] font-medium active:bg-gray-50 dark:active:bg-gray-800 transition">
+          {% if module.icon %}<span class="material-icons text-lg text-gray-500 dark:text-gray-400">{{ module.icon }}</span>{% endif %}
+          <span>{{ module.nombre }}</span>
+        </a>
         {% endif %}
       </div>
-    {% endfor %}
-  </nav>
+      {% endfor %}
+    </nav>
 
-  <!-- Controles derecha -->
-  <div class="ml-auto flex items-center gap-3" x-data="{ 
-    branchDropdownOpen: false,
-    activeBranch: null,
-    availableBranches: [],
-    loading: false,
-    
-    init() {
-      // Inicializar datos desde el contexto de Django
-      {% if branch_activa %}
-      this.activeBranch = {
-        id: {{ branch_activa.id }},
-        name: '{{ branch_activa.name|escapejs }}',
-        city: '{{ branch_activa.city|default:""|escapejs }}'
-      };
+    <!-- Accesos rápidos mobile -->
+    <div class="border-t border-gray-200 dark:border-gray-700 mt-2">
+      <a href="{% url 'core:perfil' %}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
+        <span class="material-icons text-base text-gray-400 dark:text-gray-500">account_circle</span>Mi perfil
+      </a>
+      <a href="{% url 'core:historial' %}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
+        <span class="material-icons text-base text-gray-400 dark:text-gray-500">history</span>Historial
+      </a>
+      {% if request.user.is_staff %}
+      <a href="/admin/" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
+        <span class="material-icons text-base text-gray-400 dark:text-gray-500">admin_panel_settings</span>Administración
+      </a>
       {% endif %}
-      
-      this.availableBranches = [
-        {% for sucursal in sucursales_disponibles %}
-        {
-          id: {{ sucursal.id }},
-          name: '{{ sucursal.name|escapejs }}',
-          city: '{{ sucursal.city|default:""|escapejs }}'
-        }{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      ];
-    },
-    
-    async changeBranch(branchId) {
-      try {
-        const response = await fetch('{% url "core:cambiar_empresa_branch" %}', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-          },
-          body: JSON.stringify({
-            branch_id: branchId
-          })
-        });
-        
-        if (response.ok) {
-          this.activeBranch = this.availableBranches.find(b => b.id === branchId);
-          this.branchDropdownOpen = false;
-          // Recargar la página para aplicar los cambios
-          window.location.reload();
-        }
-      } catch (error) {
-        console.error('Error changing branch:', error);
-      }
-    }
-  }">
-    
-    <!-- Empresa -->
-    {% if empresa_activa %}
-    <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 text-xs font-medium">
-      <span class="material-icons text-base mr-1.5">business</span>
-      <span class="truncate max-w-[10rem]">{{ empresa_activa.nombre }}</span>
-    </span>
-    {% endif %}
-    
-    <!-- Sucursal activa con dropdown -->
-    {% if sucursales_disponibles %}
-    <div class="relative">
-      <button 
-        @click="branchDropdownOpen = !branchDropdownOpen"
-        class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors duration-200"
-      >
-        <span class="material-icons text-base mr-1.5">location_on</span>
-        <span x-text="activeBranch ? activeBranch.name : 'Sin sucursal'" class="truncate max-w-[8rem]"></span>
-        <span class="material-icons text-xs ml-1 transition-transform duration-200" :class="branchDropdownOpen ? 'rotate-180' : ''">expand_more</span>
-      </button>
-      
-      <!-- Dropdown de sucursales -->
-      <div 
-        x-show="branchDropdownOpen" 
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 scale-95"
-        x-transition:enter-end="opacity-100 scale-100"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 scale-100"
-        x-transition:leave-end="opacity-0 scale-95"
-        @click.away="branchDropdownOpen = false"
-        class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
-      >
-        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
-          <h3 class="text-xs font-semibold text-gray-900 dark:text-gray-100">Sucursal activa</h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Seleccione la sucursal con la que trabajar</p>
-        </div>
-        
-        <div class="max-h-48 overflow-y-auto">
-          <template x-for="branch in availableBranches" :key="branch.id">
-            <button
-              @click="changeBranch(branch.id)"
-              class="w-full flex items-center px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150"
-              :class="activeBranch && activeBranch.id === branch.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'"
-            >
-              <span class="material-icons text-base mr-2" :class="activeBranch && activeBranch.id === branch.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'">
-                location_on
-              </span>
-              <div class="flex-1 min-w-0">
-                <div class="text-xs font-medium" x-text="branch.name"></div>
-                <div class="text-xs text-gray-500 dark:text-gray-400" x-text="branch.city || ''"></div>
-              </div>
-              <span x-show="activeBranch && activeBranch.id === branch.id" class="material-icons text-blue-600 dark:text-blue-400 text-sm">check</span>
-            </button>
-          </template>
-        </div>
-        
-        <div x-show="availableBranches.length === 0" class="p-3 text-center text-gray-500 dark:text-gray-400 text-xs">
-          No hay sucursales disponibles
-        </div>
-      </div>
+      <a href="{% url 'login:logout' %}" class="flex items-center gap-3 px-4 py-3 text-sm text-red-600 dark:text-red-400 active:bg-red-50 dark:active:bg-red-900/30">
+        <span class="material-icons text-base">logout</span>Cerrar sesión
+      </a>
     </div>
-    {% endif %}
-    
-    <!-- Usuario -->
-    <div class="relative" x-data="{ userMenuOpen: false }">
-      <button @click="userMenuOpen = !userMenuOpen" 
-              class="w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors duration-200 shadow-sm" 
-              aria-label="Menú de usuario"
-              title="{% if session_user.nombre_completo %}{{ session_user.nombre_completo }}{% elif session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}Usuario{% endif %}">
-        <span class="material-icons text-sm">person</span>
-      </button>
-      
-      <!-- Dropdown Menu -->
-      <div x-show="userMenuOpen" 
-           @click.away="userMenuOpen = false"
-           x-transition:enter="transition ease-out duration-200"
-           x-transition:enter-start="opacity-0 scale-95"
-           x-transition:enter-end="opacity-100 scale-100"
-           x-transition:leave="transition ease-in duration-150"
-           x-transition:leave-start="opacity-100 scale-100"
-           x-transition:leave-end="opacity-0 scale-95"
-           class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-        
-        <!-- User Info -->
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <p class="text-xs font-medium text-gray-900 dark:text-white">
-            {% if session_user.nombre_completo %}
-              {{ session_user.nombre_completo }}
-            {% elif session_user.cod_usuario %}
-              {{ session_user.cod_usuario }}
-            {% else %}
-              {{ request.user.nombre|default:request.user.email }}
-            {% endif %}
-          </p>
-          <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
-            {% if session_user.cod_usuario %}
-              {{ session_user.cod_usuario }}
-            {% else %}
-              {{ request.user.email|default:"" }}
-            {% endif %}
-          </p>
-        </div>
-        
-        <!-- Menu Items -->
-        <div class="py-1">
-          <a href="{% url 'core:perfil' %}" 
-             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-            <span class="material-icons text-sm mr-3">account_circle</span>
-            Mi perfil
-          </a>
-          
-          <a href="{% url 'core:historial' %}" 
-             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-            <span class="material-icons text-sm mr-3">history</span>
-            Historial de actividad
-          </a>
-          
-          {% if request.user.is_staff %}
-          <a href="/admin/" 
-             class="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150">
-            <span class="material-icons text-sm mr-3">admin_panel_settings</span>
-            Panel de administración
-          </a>
-          {% endif %}
-          
-        </div>
-        
-        <!-- Salir -->
-        <div class="border-t border-gray-200 dark:border-gray-700 py-1">
-          <a href="{% url 'login:logout' %}" 
-             class="flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-150">
-            <span class="material-icons text-sm mr-3">logout</span>
-            Salir
-          </a>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Dark mode -->
-    <label class="ml-2 flex items-center cursor-pointer">
-      <input id="dark-mode-switch" type="checkbox" class="sr-only">
-      <span class="w-9 h-5 flex items-center bg-gray-300 rounded-full p-1">
-        <span class="dot w-4 h-4 bg-white rounded-full shadow transform transition"></span>
-      </span>
-    </label>
   </div>
 </div>
-
-<!-- Alpine.js -->
-<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

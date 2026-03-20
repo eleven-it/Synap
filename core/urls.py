@@ -36,6 +36,16 @@ urlpatterns = [
     
     # Permisos del Sistema por Puesto (administraNET Gestión)
     path('permisos-sistema/', views.listar_puestos_permisos_view, name='permisos_sistema'),
+    path(
+        'permisos-sistema/toggle-navbar-menu/',
+        views.toggle_navbar_menu_global_view,
+        name='toggle_navbar_menu_global',
+    ),
+    path(
+        'permisos-sistema/toggle-navbar-granular/',
+        views.toggle_navbar_granular_view,
+        name='toggle_navbar_granular',
+    ),
     path('permisos-sistema/puesto/<int:id_puesto>/', views.editar_permisos_puesto_view, name='editar_permisos_puesto'),
 
     # Permisos del Sistema (administraNET Gestión) - Solo lectura con toggle de valores

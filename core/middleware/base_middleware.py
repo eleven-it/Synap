@@ -455,52 +455,67 @@ class RequestUserMiddleware:
         return self.get_response(request)
 
 
+# --- Detección móvil en dos capas: cookie device_hint (cliente) + UA (servidor) ---
+DEVICE_HINT_COOKIE = 'device_hint'
+SYNAP_PREFER_MOBILE_COOKIE = 'synap_prefer_mobile'  # compatibilidad temporal
+
+# UA: teléfonos (iPhone, Android con "Mobile", etc.)
+PHONE_PATTERNS = re.compile(
+    r'(?:iphone|ipod|android.*mobile|windows phone|blackberry|opera mini|iemobile)',
+    re.IGNORECASE
+)
+# UA: tablets (Android sin "Mobile", Kindle, etc.). iPad con UA Mac no detectable en servidor.
+TABLET_PATTERNS = re.compile(
+    r'(?:android(?!.*mobile)|tablet|kindle|silk|playbook|bb10|rim tablet os)',
+    re.IGNORECASE
+)
+
+MOBILE_BYPASS_PREFIXES = (
+    '/login/', '/logout/', '/sw.js', '/manifest.json', '/offline/',
+    '/static/', '/media/', '/mobile/proximamente/', '/set-device-hint/',
+    '/admin/',
+)
+
+
 class DeviceDetectionMiddleware(MiddlewareMixin):
     """
-    Middleware para detectar si el dispositivo es móvil o desktop
-    y agregar esta información al request
+    Detección en dos capas: (1) cookie device_hint del cliente; (2) User-Agent.
+    El servidor no puede distinguir iPad con UA Macintosh; el JS en cliente setea
+    device_hint=mobile y recarga. Acepta también synap_prefer_mobile (1/0) por compatibilidad.
     """
     
     def process_request(self, request):
-        # Obtener el User-Agent
         user_agent = request.META.get('HTTP_USER_AGENT', '')
-        
-        # Patrones para detectar dispositivos móviles
-        mobile_patterns = [
-            r'Android',
-            r'iPhone',
-            r'iPad',
-            r'iPod',
-            r'BlackBerry',
-            r'Windows Phone',
-            r'Mobile',
-            r'Opera Mini',
-            r'IEMobile',
-            r'webOS',
-            r'Kindle',
-            r'Silk',
-            r'PlayBook',
-            r'BB10',
-            r'RIM Tablet OS'
-        ]
-        
-        # Verificar si es móvil
-        is_mobile = any(re.search(pattern, user_agent, re.IGNORECASE) for pattern in mobile_patterns)
-        
-        # Agregar información al request
+        is_mobile = self._detectar_dispositivo(request, user_agent)
         request.is_mobile = is_mobile
         request.is_desktop = not is_mobile
-        
-        # Detectar tipo específico de dispositivo
-        if 'Android' in user_agent:
-            request.device_type = 'android'
-        elif 'iPhone' in user_agent:
-            request.device_type = 'iphone'
-        elif 'iPad' in user_agent:
-            request.device_type = 'ipad'
-        elif 'Windows Phone' in user_agent:
-            request.device_type = 'windows_phone'
-        else:
-            request.device_type = 'desktop' if not is_mobile else 'mobile'
-        
+        request.device_type = self._device_type_from_ua(user_agent, is_mobile)
         return None
+    
+    def _detectar_dispositivo(self, request, user_agent):
+        hint = request.COOKIES.get(DEVICE_HINT_COOKIE, '').strip().lower()
+        if hint == 'mobile':
+            return True
+        if hint == 'desktop':
+            return False
+        prefer = request.COOKIES.get(SYNAP_PREFER_MOBILE_COOKIE)
+        if prefer == '1':
+            return True
+        if prefer == '0':
+            return False
+        if PHONE_PATTERNS.search(user_agent):
+            return True
+        if TABLET_PATTERNS.search(user_agent):
+            return True
+        return False
+    
+    def _device_type_from_ua(self, user_agent, is_mobile):
+        if 'Android' in user_agent:
+            return 'android'
+        if 'iPhone' in user_agent:
+            return 'iphone'
+        if 'iPad' in user_agent:
+            return 'ipad'
+        if 'Windows Phone' in user_agent:
+            return 'windows_phone'
+        return 'desktop' if not is_mobile else 'mobile'

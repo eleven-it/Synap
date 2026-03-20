@@ -3,17 +3,27 @@
 {% block title %}Ingreso Mov. Stock | Synap{% endblock %}
 {% block content %}
 {% csrf_token %}
+{% if request.is_mobile %}
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+{% endif %}
 <div class="max-w-6xl mx-auto" x-data="ingresoMovStock()" x-init="init()">
   <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Ingreso Mov. Stock</h1>
 
   <!-- Mensajes -->
-  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300" x-text="mensajeError"></div>
+  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 break-words overflow-hidden" x-text="mensajeError"></div>
   <div x-show="mensajeOk" x-cloak class="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
     <p x-text="mensajeOk"></p>
     <template x-if="nroComprobante">
-      <p class="mt-2">
-        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" class="font-medium underline">Descargar comprobante PDF</a>
+      <p class="mt-2 break-words">
+        {% if request.is_mobile %}
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/'" class="font-medium underline">Ver comprobante</a>
         <span class="mx-2">|</span>
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" rel="noopener noreferrer" class="font-medium underline">Descargar PDF</a>
+        <span class="mx-2">|</span>
+        {% else %}
+        <a :href="'/stock/movimientos/' + (codigoMovimiento != null ? parseInt(codigoMovimiento, 10) : '') + '/pdf/'" target="_blank" rel="noopener noreferrer" class="font-medium underline">Descargar comprobante PDF</a>
+        <span class="mx-2">|</span>
+        {% endif %}
         <a href="{% url 'stock:alta_movimiento' %}" class="font-medium underline">Nuevo movimiento</a>
       </p>
     </template>
@@ -180,10 +190,10 @@
   </div>
 
   <!-- Panel: Artículos (tabla única con fila de búsqueda) -->
-  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6" x-cloak>
-    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6 min-w-0 overflow-hidden" x-cloak>
+    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-w-0 overflow-hidden">
       <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Artículos</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 break-words" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
       <div x-show="mostrarSaldoDeseado" x-cloak class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
         <label for="saldo_deseado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo deseado</label>
         <div class="flex flex-wrap items-center gap-2">
@@ -193,10 +203,62 @@
           <span class="text-xs text-gray-500 dark:text-gray-400">Al salir del campo o Enter se calcula Entrada/Salida y cantidad según la diferencia con el saldo actual.</span>
         </div>
       </div>
-      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 break-words">
         Complete los datos mínimos del movimiento (fecha, motivo, depósito origen<span x-show="mostrarDepDestino">, depósito destino</span>) para poder agregar artículos.
       </p>
-      <div class="overflow-x-auto">
+      <!-- Mobile: búsqueda + cards -->
+      <div class="md:hidden space-y-3 min-w-0">
+        <!-- Búsqueda mobile -->
+        <div class="flex gap-2 items-center min-w-0">
+          <input type="text" x-ref="inputBusquedaArtMobile" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true"
+            placeholder="Buscar artículo o escanear código"
+            class="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
+          <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" placeholder="Cant."
+            class="w-16 text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-2.5 text-sm">
+          <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" title="Escanear código de barras">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>
+          </button>
+        </div>
+        <p x-show="mensajeCodigoInexistente" x-cloak class="text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
+
+        <!-- Cards de renglones -->
+        <template x-for="r in renglones" :key="r.Orden">
+          <div class="bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 p-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 dark:text-white truncate" x-text="r.Descripcion || '—'"></p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <span x-text="r.CodigoArticulo || ''"></span>
+                  <span x-show="r.id_manual" x-text="' · ' + r.id_manual"></span>
+                </p>
+              </div>
+              <button type="button" @click="quitarRenglon(r.Orden)" class="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0"><span class="material-icons text-lg">delete</span></button>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="r.ES === 'E' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'" x-text="r.ES === 'E' ? 'Entrada' : 'Salida'"></span>
+              <div class="flex items-center gap-1">
+                <span class="text-xs text-gray-500">Cant:</span>
+                <input type="number" x-model.number="r.Cantidad" @change="actualizarMovimientoCantidad(r)" min="1" step="1"
+                  class="w-16 text-center rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-600 px-1 py-0.5 text-sm">
+              </div>
+              <template x-if="r.lote_articulo === 'Si'">
+                <button type="button" @click="abrirModalLote(r)" class="text-xs text-indigo-600 dark:text-indigo-400">
+                  <span x-text="r.cod_lote ? ('Lote: ' + r.cod_lote) : 'Elegir lote'"></span>
+                </button>
+              </template>
+              <template x-if="r.serie_articulo === 'Si'">
+                <button type="button" @click="abrirModalSeries(r)" class="text-xs text-indigo-600 dark:text-indigo-400">Series</button>
+              </template>
+            </div>
+          </div>
+        </template>
+        <p x-show="renglones.length === 0 && !filaBusqueda.articuloSeleccionado" x-cloak class="text-center text-sm text-gray-500 dark:text-gray-400 py-4">
+          Busque un artículo arriba para agregar.
+        </p>
+      </div>
+
+      <!-- Desktop: tabla completa -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full table-fixed text-sm text-left text-gray-700 dark:text-gray-300">
           <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100">
             <tr>
@@ -357,14 +419,19 @@
     </section>
   </div>
 
-  <!-- Pie: Confirmar / Cancelar -->
-  <div class="flex flex-wrap gap-4">
-    <button type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
-      class="inline-flex items-center gap-2 px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition">
+  <!-- Pie: Continuar / Confirmar / Cancelar -->
+  <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+    <button x-show="tabActivo === 'datos'" type="button" @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo(); window.scrollTo({top: 0, behavior: 'smooth'})" :disabled="!cabeceraMinimaCompleta"
+      class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
+      <span class="material-icons text-xl">arrow_forward</span>
+      <span>Continuar</span>
+    </button>
+    <button x-show="tabActivo === 'articulos'" x-cloak type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
+      class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
       <span class="material-icons text-xl">save</span>
       <span>Confirmar movimiento</span>
     </button>
-    <button type="button" @click="cancelarYSalir()" class="inline-flex items-center gap-2 px-6 py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition">
+    <button type="button" @click="cancelarYSalir()" class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition w-full sm:w-auto">
       <span class="material-icons text-xl">close</span>
       <span>Cancelar</span>
     </button>
@@ -601,6 +668,49 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal: estructura de base de datos incompleta (tablas/campos faltantes) -->
+  <div x-show="mostrarModalEsquemaFaltante" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" @keydown.escape.window="mostrarModalEsquemaFaltante = false">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full p-6" @click.outside="mostrarModalEsquemaFaltante = false">
+      <div class="flex items-start gap-3">
+        <span class="material-icons text-3xl text-amber-500 flex-shrink-0">warning</span>
+        <div class="min-w-0 flex-1">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">No se puede guardar el movimiento</h3>
+          <p class="text-gray-700 dark:text-gray-300 text-sm mb-4" x-text="mensajeEsquema"></p>
+          <p class="text-gray-600 dark:text-gray-400 text-sm font-medium mb-2">Detalle:</p>
+          <ul class="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 space-y-1 max-h-48 overflow-y-auto" x-show="detalleEsquema.length">
+            <template x-for="(item, i) in detalleEsquema" :key="i">
+              <li x-text="item.mensaje || (item.tabla ? (item.campo ? (item.tabla + ' → campo «' + item.campo + '»') : ('Tabla «' + item.tabla + '»')) : '')"></li>
+            </template>
+          </ul>
+          <p class="text-gray-500 dark:text-gray-500 text-xs mt-3">No se ha guardado ningún dato para mantener la consistencia de la información.</p>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end">
+        <button type="button" @click="mostrarModalEsquemaFaltante = false" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Scanner código de barras (solo mobile) -->
+  <div x-show="scannerActivo" x-cloak class="fixed inset-0 z-[100] flex flex-col bg-black" @keydown.escape.window="cerrarScanner()">
+    <div id="scanner-container" class="flex-1 w-full min-h-0 relative flex items-center justify-center">
+      <!-- Zona de encuadre -->
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="w-64 h-40 border-2 border-white rounded-lg shadow-lg"></div>
+      </div>
+      <!-- Overlay oscuro fuera de la zona (opcional, la lib puede pintar el video de fondo) -->
+    </div>
+    <div class="flex-shrink-0 p-4 bg-gray-900 flex flex-col gap-2">
+      <p x-show="scannerError" class="text-sm text-red-400 text-center" x-text="scannerError"></p>
+      <p x-show="!scannerError" class="text-sm text-gray-300 text-center">Encuadra el código de barras</p>
+      <button type="button" @click="cerrarScanner()" class="w-full py-3 rounded-lg bg-gray-600 hover:bg-gray-500 text-white font-medium">
+        Cerrar
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -648,6 +758,9 @@ document.addEventListener('alpine:init', function() {
       agregando: false,
       confirmando: false,
       mostrarModalResumen: false,
+      mostrarModalEsquemaFaltante: false,
+      mensajeEsquema: '',
+      detalleEsquema: [],
       renglonEditando: null,
       edicionRenglon: null,
       renglonDetalle: null,
@@ -686,6 +799,9 @@ document.addEventListener('alpine:init', function() {
       nuevoNroSerie: '',
       nuevoVtoSerie: '',
       serieSalidaSeleccionada: '',
+      tieneCamera: false,
+      scannerActivo: false,
+      scannerError: '',
       get mostrarDepDestino() {
         const m = parseInt(this.cabecera.motivo_movimiento, 10);
         return m === 6 || m === 9 || m === 10 || m === 11 || m === 12;
@@ -886,6 +1002,14 @@ document.addEventListener('alpine:init', function() {
           if (self.renglones && self.renglones.length > 0) { e.preventDefault(); e.returnValue = ''; }
         };
         window.addEventListener('beforeunload', this._onBeforeUnload);
+        if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+          try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            this.tieneCamera = devices.some(function(d) { return d.kind === 'videoinput'; });
+          } catch (e) {
+            this.tieneCamera = false;
+          }
+        }
       },
       _escHtml(s) {
         if (s == null || s === undefined) return '';
@@ -1063,6 +1187,10 @@ document.addEventListener('alpine:init', function() {
         this.filaBusqueda.sugerencias = [];
         this.dropdownSugerencias = [];
         this.mostrarDropdownArticulos = false;
+        if (typeof window !== 'undefined' && window.innerWidth < 768 && this.cabeceraMinimaCompleta) {
+          const self = this;
+          this.$nextTick(async function() { await self.confirmarFilaBusqueda(); });
+        }
       },
       async onEnterFilaBusqueda() {
         const texto = (this.filaBusqueda && this.filaBusqueda.texto != null ? this.filaBusqueda.texto : '').trim();
@@ -1110,6 +1238,92 @@ document.addEventListener('alpine:init', function() {
           if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
           const self = this;
           setTimeout(function() { self.mensajeCodigoInexistente = false; }, 3000);
+        }
+      },
+      abrirScanner() {
+        if (!this.tieneCamera || typeof Html5Qrcode === 'undefined') return;
+        this.scannerError = '';
+        this.scannerActivo = true;
+        const self = this;
+        this.$nextTick(function() {
+          const containerId = 'scanner-container';
+          if (!document.getElementById(containerId)) return;
+          if (self._html5QrCode) return;
+          self._html5QrCode = new Html5Qrcode(containerId);
+          const config = { fps: 10, qrbox: { width: 260, height: 160 } };
+          self._html5QrCode.start({ facingMode: 'environment' }, config,
+            function(decodedText, decodedResult) { self.onScanSuccess(decodedText); },
+            function() {}
+          ).catch(function(err) {
+            self.scannerError = 'No se pudo acceder a la cámara.';
+            self.scannerActivo = false;
+            self._html5QrCode = null;
+          });
+        });
+      },
+      cerrarScanner() {
+        const self = this;
+        if (this._html5QrCode) {
+          this._html5QrCode.stop().then(function() {
+            self._html5QrCode.clear();
+            self._html5QrCode = null;
+          }).catch(function() {
+            self._html5QrCode = null;
+          });
+        }
+        this.scannerActivo = false;
+        this.scannerError = '';
+      },
+      async onScanSuccess(codigo) {
+        if (navigator.vibrate) navigator.vibrate(200);
+        if (this._html5QrCode) {
+          await this._html5QrCode.stop().catch(function() {});
+          this._html5QrCode.clear();
+          this._html5QrCode = null;
+        }
+        const urlBase = '{% url "stock:api_ingreso_articulos_por_codigo" %}';
+        const params = new URLSearchParams({ codigo: String(codigo).trim() });
+        if (this.cabecera.deposito_origen) params.set('id_deposito', String(this.cabecera.deposito_origen));
+        const url = urlBase + (urlBase.indexOf('?') >= 0 ? '&' : '?') + params.toString();
+        try {
+          const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-CSRFToken': csrfToken } });
+          const d = await r.json().catch(function() { return {}; });
+          const articulos = Array.isArray(d.articulos) ? d.articulos : [];
+          if (articulos.length === 1) {
+            this.scannerActivo = false;
+            this.seleccionarArticuloFilaBusqueda(articulos[0]);
+            this.mensajeCodigoInexistente = false;
+            const self = this;
+            this.$nextTick(async function() {
+              if (self.cabeceraMinimaCompleta) await self.confirmarFilaBusqueda();
+            });
+          } else {
+            this.scannerError = 'Código no encontrado';
+            const self = this;
+            setTimeout(function() {
+              if (!self.scannerActivo || typeof Html5Qrcode === 'undefined') return;
+              const containerId = 'scanner-container';
+              if (!document.getElementById(containerId)) return;
+              self._html5QrCode = new Html5Qrcode(containerId);
+              self._html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } },
+                function(t) { self.onScanSuccess(t); },
+                function() {}
+              ).catch(function() { self.scannerError = 'Error al reiniciar cámara.'; });
+            }, 800);
+          }
+        } catch (err) {
+          this.scannerError = 'Código no encontrado';
+          const self = this;
+          setTimeout(function() {
+            if (!self.scannerActivo || typeof Html5Qrcode === 'undefined') return;
+            const containerId = 'scanner-container';
+            if (!document.getElementById(containerId)) return;
+            self._html5QrCode = new Html5Qrcode(containerId);
+            self._html5QrCode.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 160 } },
+              function(t) { self.onScanSuccess(t); },
+              function() {}
+            ).catch(function() {});
+          }, 800);
         }
       },
       async actualizarSaldo() {
@@ -1553,7 +1767,16 @@ document.addEventListener('alpine:init', function() {
         const d = await r.json().catch(() => ({}));
         this.confirmando = false;
         this.mostrarModalResumen = false;
-        if (!r.ok) { this.mensajeError = d.error || 'Error al confirmar.'; return; }
+        if (!r.ok) {
+          if (d.schema_error && Array.isArray(d.detalle)) {
+            this.mensajeEsquema = d.error || 'Faltan tablas o campos en la base de datos.';
+            this.detalleEsquema = d.detalle;
+            this.mostrarModalEsquemaFaltante = true;
+          } else {
+            this.mensajeError = d.error || 'Error al confirmar.';
+          }
+          return;
+        }
         this.mensajeOk = d.mensaje || 'Movimiento generado.';
         this.codigoMovimiento = d.codigo_movimiento;
         this.nroComprobante = d.nro_comprobante;

@@ -35,6 +35,68 @@ MOTIVOS_MOVIMIENTO = [
 # Mapa código -> nombre para escribir motivo_movimiento y TipoComp como en VB6 (Motivo.Text).
 MOTIVO_CODIGO_A_NOMBRE = {c: n for c, n in MOTIVOS_MOVIMIENTO}
 
+# Esquema mínimo requerido para ingreso de movimientos de stock (tabla -> columnas obligatorias).
+# Si falta una tabla o una columna, no se debe guardar para asegurar consistencia.
+ESQUEMA_INGRESO_MOVIMIENTO: Dict[str, List[str]] = {
+    "codmov": ["codigo", "CodigoMovimiento"],
+    "talonarios": ["Orden", "Nro", "TipoComprobante", "id_punto_venta"],
+    "movimiento_stock": [
+        "codigo_movimiento", "nro_comprobante", "motivo_movimiento", "fecha",
+        "deposito_origen", "deposito_destino", "detalle", "id_usuario", "tipo_comprobante",
+        "anulado", "id_ref_movstock", "id_proyecto", "id_cliente", "id_vendedor",
+    ],
+    "stock": [
+        "CodigoMovimiento", "IDArt", "CodigoArticulo", "Descripcion", "Fecha",
+        "Entrada", "Salida", "saldo", "CodDeposito", "id_ref_movstock", "Orden",
+        "IdUsuario", "Tipo", "TipoComp", "Comprobante", "NroComprobante", "anulado", "CodViajante",
+    ],
+    "stock_deposito": ["id_stock_deposito", "id_articulo", "id_deposito", "saldo"],
+    "deposito": ["CodDeposito", "NombreDeposito"],
+    "cuerpostock_mstock": ["CodUsuario", "visualiza", "Orden"],
+}
+
+
+def verificar_esquema_ingreso_movimiento(
+    base_empresa: str,
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """
+    Comprueba que existan las tablas y columnas necesarias para el ingreso de movimientos de stock.
+    Devuelve (True, []) si todo está bien; (False, lista_errores) si falta alguna tabla o columna.
+    Cada error es {"tabla": str, "campo": Optional[str], "mensaje": str}.
+    """
+    errores: List[Dict[str, Any]] = []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute("SHOW TABLES")
+            tablas_existentes = {list(r.values())[0].lower() for r in cursor.fetchall()}
+            for tabla, columnas_requeridas in ESQUEMA_INGRESO_MOVIMIENTO.items():
+                tabla_lower = tabla.lower()
+                if tabla_lower not in tablas_existentes:
+                    errores.append({
+                        "tabla": tabla,
+                        "campo": None,
+                        "mensaje": f"Falta la tabla «{tabla}» en la base de datos.",
+                    })
+                    continue
+                cursor.execute("SHOW COLUMNS FROM `{}`".format(tabla.replace("`", "``")))
+                columnas_existentes = {r["Field"].lower() for r in cursor.fetchall()}
+                for col in columnas_requeridas:
+                    if col.lower() not in columnas_existentes:
+                        errores.append({
+                            "tabla": tabla,
+                            "campo": col,
+                            "mensaje": f"En la tabla «{tabla}» falta el campo «{col}».",
+                        })
+        return (len(errores) == 0, errores)
+    except Exception as e:
+        logger.warning("Error al verificar esquema ingreso movimiento (%s): %s", base_empresa, e)
+        errores.append({
+            "tabla": None,
+            "campo": None,
+            "mensaje": f"No se pudo comprobar la estructura de la base de datos: {e!s}.",
+        })
+        return (False, errores)
+
 
 def _get_permisos_puesto(base_empresa: str, id_puesto: Optional[int]) -> Dict[str, Any]:
     """Obtiene permisos del puesto desde permisos_sistema (tabla wide por puesto)."""
@@ -519,6 +581,98 @@ def get_motivos_permitidos(
     return motivos
 
 
+def get_datos_iniciales_ingreso_stock(
+    base_empresa: str,
+    id_puesto: Optional[int],
+    incluir_pedidos_produccion: bool = False,
+) -> Dict[str, Any]:
+    """
+    Carga todos los datos iniciales para el formulario de ingreso mov. stock en 1 conexión.
+    Consolida: depósitos, ref_movstock, motivos, viajantes, clientes, y toda la configuración.
+    """
+    resultado = {
+        "depositos": [],
+        "ref_movstock": [],
+        "motivos": [],
+        "viajantes": [],
+        "clientes": [],
+        "activ_proyecto": "No",
+        "calculo_stock_saldo": "No",
+        "utiliza_bulto_cerrado": "No",
+        "utiliza_display": "No",
+        "tipo_unidad_defecto": "Unidad",
+        "usa_multiplica_bulto_promedio": "No",
+        "tipo_balanza": "",
+        "pedidos_parte_produccion": "No",
+    }
+    try:
+        permisos = _get_permisos_puesto(base_empresa, id_puesto)
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            # Configuración (1 query)
+            config_cols = ["activ_proyecto"]
+            opt_config = [
+                "calculo_stock_saldo", "utiliza_bulto_cerrado", "utiliza_display",
+                "tipo_unidad_defecto", "usa_multiplica_bulto_promedio", "tipo_balanza",
+                "pedidos_parte_produccion",
+            ]
+            cursor.execute("SHOW COLUMNS FROM configuracion")
+            existing = {r["Field"] for r in cursor.fetchall()}
+            select_parts = []
+            for col in config_cols + opt_config:
+                if col in existing:
+                    select_parts.append(f"COALESCE({col}, '') AS {col}")
+            if select_parts:
+                cursor.execute(f"SELECT {', '.join(select_parts)} FROM configuracion LIMIT 1")
+                cfg = cursor.fetchone()
+                if cfg:
+                    resultado["activ_proyecto"] = (cfg.get("activ_proyecto") or "No").strip() or "No"
+                    resultado["calculo_stock_saldo"] = (cfg.get("calculo_stock_saldo") or "No").strip() or "No"
+                    resultado["utiliza_bulto_cerrado"] = (cfg.get("utiliza_bulto_cerrado") or "No").strip() or "No"
+                    resultado["utiliza_display"] = (cfg.get("utiliza_display") or "No").strip() or "No"
+                    resultado["tipo_unidad_defecto"] = (cfg.get("tipo_unidad_defecto") or "Unidad").strip() or "Unidad"
+                    resultado["usa_multiplica_bulto_promedio"] = (cfg.get("usa_multiplica_bulto_promedio") or "No").strip() or "No"
+                    resultado["tipo_balanza"] = (cfg.get("tipo_balanza") or "").strip()
+                    resultado["pedidos_parte_produccion"] = (cfg.get("pedidos_parte_produccion") or "No").strip() or "No"
+
+            # Depósitos
+            acceso_dep = (permisos.get("acceso_deposito") or "").strip()
+            id_dep = permisos.get("id_deposito")
+            if acceso_dep == "Todos" or not id_dep:
+                cursor.execute("SELECT CodDeposito, COALESCE(NombreDeposito, '') AS NombreDeposito FROM deposito WHERE COALESCE(anulado, 'No') = 'No' ORDER BY NombreDeposito")
+            else:
+                cursor.execute("SELECT CodDeposito, COALESCE(NombreDeposito, '') AS NombreDeposito FROM deposito WHERE CodDeposito = %s AND COALESCE(anulado, 'No') = 'No'", [id_dep])
+            resultado["depositos"] = [dict(r) for r in cursor.fetchall()]
+
+            # Ref movstock
+            acceso_ref = (permisos.get("acceso_ref_movstock") or "").strip()
+            id_ref = permisos.get("id_refmovstock")
+            if acceso_ref == "Todos" or not id_ref:
+                cursor.execute("SELECT id_ref_movstock, COALESCE(nombre_ref_movstock, '') AS nombre_ref_movstock FROM ref_movstock WHERE COALESCE(anulado, 'No') = 'No' ORDER BY nombre_ref_movstock")
+            else:
+                cursor.execute("SELECT id_ref_movstock, COALESCE(nombre_ref_movstock, '') AS nombre_ref_movstock FROM ref_movstock WHERE id_ref_movstock = %s AND COALESCE(anulado, 'No') = 'No'", [int(id_ref)])
+            resultado["ref_movstock"] = [dict(r) for r in cursor.fetchall()]
+
+            # Viajantes
+            cursor.execute("SELECT CodViajante, COALESCE(Nombre, '') AS Nombre FROM viajantes WHERE COALESCE(anulado, 'No') = 'No' ORDER BY Nombre")
+            resultado["viajantes"] = [dict(r) for r in cursor.fetchall()]
+
+            # Clientes
+            try:
+                cursor.execute("SELECT Codigo, COALESCE(nombre_cliente, '') AS nombre_cliente FROM cliente WHERE COALESCE(anulado, 'No') = 'No' ORDER BY nombre_cliente LIMIT 300")
+            except Exception:
+                cursor.execute("SELECT Codigo, COALESCE(nombre_cliente, '') AS nombre_cliente FROM cliente ORDER BY nombre_cliente LIMIT 300")
+            resultado["clientes"] = [dict(r) for r in cursor.fetchall()]
+
+        # Motivos (lógica en Python, sin query)
+        resultado["motivos"] = [
+            {"codigo": c, "nombre": n}
+            for c, n in get_motivos_permitidos(base_empresa, id_puesto, incluir_pedidos_produccion)
+        ]
+    except Exception as e:
+        logger.warning("Error en get_datos_iniciales_ingreso_stock (%s): %s", base_empresa, e)
+    return resultado
+
+
 def buscar_articulos(
     base_empresa: str,
     q: str,
@@ -785,6 +939,79 @@ def _buscar_articulos_ensamblados_con_precios(
         return []
 
 
+def _bulk_stock_y_lotes(
+    base_empresa: str,
+    ids: List[int],
+    id_deposito: Optional[int] = None,
+) -> Tuple[Dict[int, list], Dict[int, list]]:
+    """Obtiene stock por depósito y lotes para una lista de IDArt en 1 conexión (2 queries)."""
+    stock_map: Dict[int, list] = {}
+    lote_map: Dict[int, list] = {}
+    if not ids:
+        return stock_map, lote_map
+    try:
+        placeholders = ",".join(["%s"] * len(ids))
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo, sd.id_deposito, sd.saldo,
+                       COALESCE(d.NombreDeposito, '') AS nombre_deposito
+                FROM stock_deposito sd
+                INNER JOIN deposito d ON d.CodDeposito = sd.id_deposito
+                WHERE sd.id_articulo IN ({placeholders})
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                ORDER BY d.NombreDeposito
+                """,
+                ids,
+            )
+            for sr in cursor.fetchall():
+                aid = sr.get("id_articulo")
+                stock_map.setdefault(aid, []).append({
+                    "id_deposito": to_int_or_none(sr.get("id_deposito")),
+                    "nombre_deposito": str_or_default(sr.get("nombre_deposito"), "-"),
+                    "saldo": to_decimal_or_none(sr.get("saldo")) or Decimal(0),
+                })
+
+            if id_deposito is not None:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote, ls.stock_lote
+                    FROM lote l INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders}) AND ls.id_deposito = %s
+                      AND COALESCE(l.anulado, 'No') = 'No' AND COALESCE(ls.stock_lote, 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids + [id_deposito],
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    SELECT l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote,
+                           COALESCE(SUM(ls.stock_lote), 0) AS stock_lote
+                    FROM lote l INNER JOIN lote_stock ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo IN ({placeholders})
+                      AND COALESCE(l.anulado, 'No') = 'No'
+                    GROUP BY l.id_articulo, l.id_lote, l.cod_lote, l.fecha_vto_lote
+                    HAVING COALESCE(SUM(ls.stock_lote), 0) <> 0
+                    ORDER BY l.fecha_vto_lote ASC
+                    """,
+                    ids,
+                )
+            for lr in cursor.fetchall():
+                aid = lr.get("id_articulo")
+                vto_raw = lr.get("fecha_vto_lote")
+                lote_map.setdefault(aid, []).append({
+                    "id_lote": to_int_or_none(lr.get("id_lote")),
+                    "cod_lote": str_or_default(lr.get("cod_lote"), ""),
+                    "fecha_vto_lote": str(vto_raw) if vto_raw else None,
+                    "vto_lote": str(vto_raw) if vto_raw else None,
+                    "stock_lote": to_decimal_or_none(lr.get("stock_lote")) or Decimal(0),
+                })
+    except Exception as e:
+        logger.warning("Error en _bulk_stock_y_lotes (%s): %s", base_empresa, e)
+    return stock_map, lote_map
+
+
 def buscar_articulos_ensamblados_para_movimiento(
     base_empresa: str,
     q: str,
@@ -792,21 +1019,23 @@ def buscar_articulos_ensamblados_para_movimiento(
     id_deposito: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Artículos ensamblados con mismo formato que buscar_articulos_para_movimiento (incluye stock_depositos, stock_lotes).
+    Artículos ensamblados con stock bulk (misma optimización que buscar_articulos_para_movimiento).
     """
     articulos = _buscar_articulos_ensamblados_con_precios(base_empresa, q, limit=limit)
     if not articulos:
         return []
+    ids = [a["IDArt"] for a in articulos if a.get("IDArt")]
+    if not ids:
+        return []
+    stock_map, lote_map = _bulk_stock_y_lotes(base_empresa, ids, id_deposito)
     result = []
     for a in articulos:
-        id_art = a.get("IDArt")
-        if not id_art:
+        aid = a.get("IDArt")
+        if not aid:
             continue
-        stock_depositos = get_stock_por_deposito(base_empresa, id_art)
-        stock_lotes = get_stock_por_lote(base_empresa, id_art, id_deposito=id_deposito)
         item = dict(a)
-        item["stock_depositos"] = stock_depositos
-        item["stock_lotes"] = stock_lotes
+        item["stock_depositos"] = stock_map.get(aid, [])
+        item["stock_lotes"] = lote_map.get(aid, [])
         result.append(item)
     return result
 
@@ -819,24 +1048,80 @@ def buscar_articulos_para_movimiento(
 ) -> List[Dict[str, Any]]:
     """
     Búsqueda para ingreso de renglón de movimiento de stock: artículo + precios + stock por depósito + stock por lote.
-    Devuelve lista de dicts con claves: IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, Precio1V,
-    PNOficial, Alicuota, Moneda, stock_depositos (lista), stock_lotes (lista).
+    Usa 1 conexión con 3 queries bulk (artículos + stock + lotes) en vez de N+1.
     """
-    articulos = _buscar_articulos_con_precios(base_empresa, q, limit=limit)
-    if not articulos:
+    if not (q or "").strip():
         return []
-    result = []
-    for a in articulos:
-        id_art = a.get("IDArt")
-        if not id_art:
-            continue
-        stock_depositos = get_stock_por_deposito(base_empresa, id_art)
-        stock_lotes = get_stock_por_lote(base_empresa, id_art, id_deposito=id_deposito)
-        item = dict(a)
-        item["stock_depositos"] = stock_depositos
-        item["stock_lotes"] = stock_lotes
-        result.append(item)
-    return result
+    try:
+        term = f"%{(q or '').strip()}%"
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute("SHOW COLUMNS FROM articulo")
+            art_cols = {r["Field"] for r in cursor.fetchall()}
+
+            opt_cols = []
+            for col in ("cantidad_uni", "unidad_art_peso", "lote_articulo",
+                        "serie_articulo", "marca", "multiplicador_vta"):
+                if col in art_cols:
+                    opt_cols.append(f"a.{col}")
+                else:
+                    opt_cols.append(f"NULL AS {col}")
+            opt_select = ", ".join(opt_cols)
+
+            cursor.execute(
+                f"""
+                SELECT a.IDArt,
+                       COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS CodigoArticulo,
+                       COALESCE(a.NombreArticulo, '') AS Descripcion,
+                       a.id_manual, a.PrecioCosto, a.Precio1V, a.PNOficial,
+                       COALESCE(iva.Alicuota, a.Alicuota, 0) AS Alicuota,
+                       a.Moneda,
+                       {opt_select}
+                FROM articulo a
+                LEFT JOIN iva ON iva.id = a.Alicuota
+                WHERE (a.NombreArticulo LIKE %s OR a.CodigoArticuloT LIKE %s
+                       OR a.NroCodBarra LIKE %s OR CAST(a.CodigoArticulo AS CHAR) LIKE %s)
+                ORDER BY a.NombreArticulo
+                LIMIT %s
+                """,
+                [term, term, term, term, limit],
+            )
+            art_rows = cursor.fetchall()
+
+            if not art_rows:
+                return []
+
+            ids = [r["IDArt"] for r in art_rows if r.get("IDArt")]
+            if not ids:
+                return []
+
+        stock_map, lote_map = _bulk_stock_y_lotes(base_empresa, ids, id_deposito)
+
+        result = []
+        for r in art_rows:
+            aid = r.get("IDArt")
+            result.append({
+                "IDArt": to_int_or_none(aid),
+                "CodigoArticulo": str_or_default(r.get("CodigoArticulo"), "-"),
+                "Descripcion": str_or_default(r.get("Descripcion"), "-"),
+                "id_manual": str_or_default(r.get("id_manual"), "-"),
+                "PrecioCosto": to_decimal_or_none(r.get("PrecioCosto")),
+                "Precio1V": to_decimal_or_none(r.get("Precio1V")),
+                "PNOficial": to_decimal_or_none(r.get("PNOficial")),
+                "Alicuota": to_decimal_or_none(r.get("Alicuota")),
+                "Moneda": str_or_default(r.get("Moneda"), "-"),
+                "multiplicador_vta": r.get("multiplicador_vta"),
+                "cantidad_uni": r.get("cantidad_uni"),
+                "unidad_art_peso": r.get("unidad_art_peso"),
+                "lote_articulo": r.get("lote_articulo"),
+                "serie_articulo": r.get("serie_articulo"),
+                "marca": r.get("marca"),
+                "stock_depositos": stock_map.get(aid, []),
+                "stock_lotes": lote_map.get(aid, []),
+            })
+        return result
+    except Exception as e:
+        logger.warning("Error en buscar_articulos_para_movimiento (%s): %s", base_empresa, e)
+        return []
 
 
 def get_saldo_articulo_deposito(
@@ -1522,20 +1807,28 @@ def alta_movimiento(
     id_puesto: Optional[int],
     cabecera: Dict[str, Any],
     renglones: List[Dict[str, Any]],
-) -> Tuple[bool, Optional[Decimal], Optional[str], Optional[str]]:
+) -> Tuple[bool, Optional[Decimal], Optional[str], Optional[str], Optional[List[Dict[str, Any]]]]:
     """
     Alta de movimiento en una sola transacción.
-    (1) UPDATE codmov, (2) talonarios FOR UPDATE + Nro, (3) INSERT movimiento_stock,
-    (4) por cada renglón: INSERT stock, UPDATE/INSERT stock_deposito,
-    (5) limpieza temporales.
-    Devuelve (ok, codigo_movimiento, nro_comprobante, mensaje_error).
+    (1) Verificación de esquema, (2) UPDATE codmov, (3) talonarios + Nro, (4) INSERT movimiento_stock,
+    (5) por cada renglón: INSERT stock, UPDATE/INSERT stock_deposito, (6) limpieza temporales.
+    Devuelve (ok, codigo_movimiento, nro_comprobante, mensaje_error, schema_errores).
+    Si falta alguna tabla o campo, schema_errores es una lista de {tabla, campo, mensaje} y no se guarda nada.
     """
     if not renglones:
-        return False, None, None, "Debe haber al menos un renglón."
+        return False, None, None, "Debe haber al menos un renglón.", None
 
     err = _validar_permisos_alta(base_empresa, id_puesto, cabecera)
     if err:
-        return False, None, None, err
+        return False, None, None, err, None
+
+    ok_esquema, esquema_errores = verificar_esquema_ingreso_movimiento(base_empresa)
+    if not ok_esquema and esquema_errores:
+        mensaje_natural = (
+            "La base de datos no tiene la estructura necesaria para guardar movimientos de stock. "
+            "Faltan tablas o campos obligatorios; no se ha guardado ningún dato para mantener la consistencia."
+        )
+        return False, None, None, mensaje_natural, esquema_errores
 
     pool = get_mysql_pool()
     try:
@@ -1549,7 +1842,7 @@ def alta_movimiento(
                 row = cursor.fetchone()
                 if not row:
                     conn.rollback()
-                    return False, None, None, "No se pudo obtener código de movimiento."
+                    return False, None, None, "No se pudo obtener código de movimiento.", None
                 codigo_mov = Decimal(str(row[0] or 0)) + 1
                 cursor.execute("UPDATE codmov SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
 
@@ -1562,7 +1855,7 @@ def alta_movimiento(
                 talon_row = cursor.fetchone()
                 if not talon_row:
                     conn.rollback()
-                    return False, None, None, "No existe talonario MSTOCK para el punto de venta."
+                    return False, None, None, "No existe talonario MSTOCK para el punto de venta.", None
                 orden_talon, nro_actual = talon_row[0], (talon_row[1] or 0)
                 nro_nuevo = nro_actual + 1
                 cursor.execute("UPDATE talonarios SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
@@ -1573,7 +1866,7 @@ def alta_movimiento(
                 err_series = _validar_series_renglones(cursor, id_usuario, renglones)
                 if err_series:
                     conn.rollback()
-                    return False, None, None, err_series
+                    return False, None, None, err_series, None
 
                 # Texto del motivo para movimiento_stock.motivo_movimiento y stock.TipoComp (paridad VB6: Motivo.Text).
                 motivo_num = to_int_or_none(cabecera.get("motivo_movimiento")) or 0
@@ -1700,14 +1993,14 @@ def alta_movimiento(
 
                     if not id_art and not codigo_art:
                         conn.rollback()
-                        return False, None, None, f"Renglón {idx + 1}: artículo obligatorio."
+                        return False, None, None, f"Renglón {idx + 1}: artículo obligatorio.", None
 
                     if motivo_num == 6:
                         # Transferencia: dos filas por renglón (salida origen + entrada destino), paridad VB6.
                         cantidad_transfer = salida if es == "S" else entrada
                         if cantidad_transfer <= 0:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: cantidad de transferencia debe ser mayor a cero."
+                            return False, None, None, f"Renglón {idx + 1}: cantidad de transferencia debe ser mayor a cero.", None
                         # Validar saldo en origen
                         cursor.execute(
                             "SELECT id_stock_deposito, saldo FROM stock_deposito WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
@@ -1717,7 +2010,7 @@ def alta_movimiento(
                         saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
                         if saldo_actual < cantidad_transfer:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente en origen (disponible: {saldo_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente en origen (disponible: {saldo_actual}).", None
                         saldo_origen_despues = saldo_actual - cantidad_transfer
                         # 1) Salida en origen
                         cursor.execute(
@@ -1744,11 +2037,11 @@ def alta_movimiento(
                             ls_row = cursor.fetchone()
                             if not ls_row:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito origen."
+                                return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito origen.", None
                             stock_actual = Decimal(str(ls_row[1] or 0))
                             if stock_actual < cantidad_transfer:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente en origen (disponible: {stock_actual})."
+                                return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente en origen (disponible: {stock_actual}).", None
                             cursor.execute("UPDATE lote_stock SET stock_lote = %s WHERE id_lote_stock = %s", [stock_actual - cantidad_transfer, ls_row[0]])
                             cursor.execute("UPDATE lote SET stock_total_lote = COALESCE(stock_total_lote, 0) - %s WHERE id_lote = %s", [cantidad_transfer, id_lote_reng])
                         # Saldo en destino después de la entrada (para el informe)
@@ -1825,7 +2118,7 @@ def alta_movimiento(
                                 )
                             elif id_lote_reng:
                                 conn.rollback()
-                                return False, None, None, f"Renglón {idx + 1}: lote no encontrado."
+                                return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
                         continue
 
                     # No transferencia: una fila por renglón (leer saldo actual para INSERT y validación)
@@ -1838,7 +2131,7 @@ def alta_movimiento(
                     if es == "S" or salida > 0:
                         if saldo_actual < salida:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual}).", None
                     saldo_despues = saldo_actual + (entrada - salida)
 
                     cursor.execute(
@@ -1867,11 +2160,11 @@ def alta_movimiento(
                         ls_row = cursor.fetchone()
                         if not ls_row:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito."
+                            return False, None, None, f"Renglón {idx + 1}: lote sin stock en el depósito.", None
                         stock_actual = Decimal(str(ls_row[1] or 0))
                         if stock_actual < salida:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente (disponible: {stock_actual})."
+                            return False, None, None, f"Renglón {idx + 1}: stock del lote insuficiente (disponible: {stock_actual}).", None
                         nuevo_stock_lote = stock_actual - salida
                         cursor.execute("UPDATE lote_stock SET stock_lote = %s WHERE id_lote_stock = %s", [nuevo_stock_lote, ls_row[0]])
                         cursor.execute(
@@ -1925,7 +2218,7 @@ def alta_movimiento(
                             )
                         elif id_lote_reng:
                             conn.rollback()
-                            return False, None, None, f"Renglón {idx + 1}: lote no encontrado."
+                            return False, None, None, f"Renglón {idx + 1}: lote no encontrado.", None
 
                 # (4a) movstock_pedi: una fila por renglón que tenga pedido (codmov_nro_pedi), paridad VB6
                 codigo_mov_int = to_int_or_none(codigo_mov) or int(codigo_mov)
@@ -1961,7 +2254,7 @@ def alta_movimiento(
                     )
                     if err_guardar:
                         conn.rollback()
-                        return False, None, None, f"Error al grabar series: {err_guardar}"
+                        return False, None, None, f"Error al grabar series: {err_guardar}", None
 
                 # (5) Limpiar temporales del usuario (cuerpo y series)
                 cursor.execute(
@@ -1978,16 +2271,16 @@ def alta_movimiento(
                 )
 
                 conn.commit()
-                return True, codigo_mov, nro_comprobante, None
+                return True, codigo_mov, nro_comprobante, None, None
 
             except Exception as e:
                 conn.rollback()
                 logger.exception("Error en alta_movimiento")
-                return False, None, None, str(e)
+                return False, None, None, str(e), None
 
     except Exception as e:
         logger.exception("Error de conexión en alta_movimiento")
-        return False, None, None, str(e)
+        return False, None, None, str(e), None
 
 
 def listar_movimientos(

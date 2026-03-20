@@ -2,7 +2,7 @@
 """
 Aplica el schema MPR en la base administranet (base_empresa): columnas
 deposito.suma_stock y articulo.stock_reserva. Si ya existen, no hace nada.
-Referencia: docs/general/SCHEMA_MPR_ADMINISTRANET92.md
+Referencia: docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md
 """
 from django.core.management.base import BaseCommand
 

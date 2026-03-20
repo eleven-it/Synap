@@ -1,0 +1,41 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}{% if es_edicion %}Editar operario{% else %}Nuevo operario{% endif %} - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
+    <div class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
+            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
+            <span aria-hidden="true">/</span>
+            <a href="{% url 'mpr:operarios_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Operarios</a>
+            <span aria-hidden="true">/</span>
+            <span class="text-gray-700 dark:text-gray-300 font-medium">{% if es_edicion %}Editar{% else %}Nuevo{% endif %}</span>
+        </nav>
+
+        <div class="mb-6">
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">{% if es_edicion %}Editar operario{% else %}Nuevo operario{% endif %}</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Los operarios se utilizan al confirmar la orden de producción (OPT) para asignar quién fabrica cada artículo.</p>
+        </div>
+
+        <form method="post" action="" class="space-y-6 border border-gray-200 dark:border-gray-700 rounded-2xl bg-white dark:bg-gray-800 shadow-sm p-6 sm:p-8">
+            {% csrf_token %}
+            <div>
+                <label for="nombre_empleado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nombre del operario <span class="text-red-500">*</span></label>
+                <input type="text" id="nombre_empleado" name="nombre_empleado" value="{{ operario.nombre_empleado|default:'' }}" maxlength="200" required
+                       class="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                       placeholder="Ej. Juan Pérez"/>
+            </div>
+            <div class="flex flex-wrap gap-3 pt-2">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-colors">
+                    {% if es_edicion %}Guardar cambios{% else %}Crear operario{% endif %}
+                </button>
+                <a href="{% url 'mpr:operarios_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}

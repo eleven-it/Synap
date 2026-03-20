@@ -4,8 +4,8 @@
 {% block title %}Tablero MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="min-h-screen bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300 min-h-screen">
+    <div class="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         {# Header #}
         <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
@@ -17,11 +17,7 @@
                 </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
-                    <span class="material-icons text-lg">inventory_2</span>
-                    Armado (Lista de materiales)
-                </a>
-                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
                     <span class="material-icons text-lg">visibility</span>
                     Ver demanda
                 </a>
@@ -30,11 +26,11 @@
 
         {# Fila 1 – KPI cards (cada uno enlaza al detalle que representa) #}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <a href="{% url 'mpr:opt_list' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 transition-all cursor-pointer block">
+            <a href="{% url 'mpr:pedidos_fabrica_list' %}?estado=Pendiente" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-purple-400 dark:hover:border-purple-500 transition-all cursor-pointer block">
                 <div class="flex items-start justify-between">
                     <div>
-                        <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">OPT en progreso</p>
-                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_op_in_progress }}</p>
+                        <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Pedidos pendientes</p>
+                        <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_pedidos_pendientes }}</p>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ver listado</p>
                     </div>
                     <span class="material-icons text-purple-500 dark:text-purple-400 text-3xl">pending_actions</span>
@@ -50,38 +46,71 @@
                     <span class="material-icons text-red-500 dark:text-red-400 text-3xl">priority_high</span>
                 </div>
             </a>
-            <a href="{% url 'mpr:opt_list' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer block">
+            <div class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all cursor-default block">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Unidades pendientes</p>
                         <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_pending_units }}</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ver órdenes</p>
                     </div>
                     <span class="material-icons text-amber-500 dark:text-amber-400 text-3xl">inventory_2</span>
                 </div>
-            </a>
-            <a href="{% url 'mpr:ventana_pack' %}" class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm hover:shadow-md hover:border-amber-400 dark:hover:border-amber-500 transition-all cursor-pointer block">
+            </div>
+            <div class="stat-card rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5 shadow-sm transition-all cursor-default block">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ítems urgentes</p>
                         <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ kpi_urgent_items }}</p>
-                        <span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Ver demanda</span>
                     </div>
                     <span class="material-icons text-amber-500 dark:text-amber-400 text-3xl">warning</span>
                 </div>
-            </a>
+            </div>
         </div>
 
-        {# Fila 2 – Dos paneles #}
+        {# Dos columnas: izquierda = OPTs en progreso, derecha = Top urgencias #}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            {# Columna izquierda – OPTs en proceso de producción #}
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col min-h-[546px]">
+                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 flex-shrink-0">
+                    <span class="material-icons text-purple-500 dark:text-purple-400">pending_actions</span>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OPTs en proceso de producción</h2>
+                    <span class="px-2 py-0.5 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300">En curso</span>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700 flex-1 overflow-y-auto min-h-0">
+                    {% for op in ops_en_proceso %}
+                    <div class="px-5 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <div class="min-w-0 flex-1">
+                            <a href="{{ op.detail_url }}" class="text-sm font-medium text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400">OPT {{ op.numero }}</a>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ op.descripcion }}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ op.unidades }} unidades</p>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0 items-center">
+                            <a href="{{ op.detail_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-gray-700 dark:text-gray-200 transition-colors">Ver</a>
+                            {% if op.accion_principal == 'crear_opp' %}
+                            <a href="{{ op.crear_opp_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">Crear OPP</a>
+                            {% elif op.accion_principal == 'crear_opa' %}
+                            <a href="{{ op.crear_opa_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">Crear OPA</a>
+                            {% elif op.accion_principal == 'cerrar' %}
+                            <form method="post" action="{{ op.cerrar_url }}" class="inline">
+                                {% csrf_token %}
+                                <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors">Cerrar</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay OPTs en proceso de producción</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {# Columna derecha – Top urgencias #}
+            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col min-h-[546px]">
+                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Top urgencias</h2>
                     <a href="{% url 'mpr:opt_list' %}" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline">Ver todo</a>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="overflow-x-auto flex-1 min-h-0">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+                        <thead class="bg-gray-50 dark:bg-gray-800/50 sticky top-0">
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Artículo</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Descripción</th>
@@ -109,96 +138,7 @@
                     </table>
                 </div>
             </div>
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Movimientos recientes</h2>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-gray-700 max-h-80 overflow-y-auto">
-                    {% for mov in recent_movements %}
-                    {% if mov.detail_url %}
-                    <a href="{{ mov.detail_url }}" class="block px-5 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer">
-                        <span class="material-icons text-purple-500 dark:text-purple-400 text-xl flex-shrink-0">{{ mov.icon }}</span>
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium text-gray-900 dark:text-white">{{ mov.title }}</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ mov.detail }}</p>
-                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ mov.time }}</p>
-                        </div>
-                        <span class="material-icons text-gray-400 dark:text-gray-500 text-lg flex-shrink-0">chevron_right</span>
-                    </a>
-                    {% else %}
-                    <div class="px-5 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <span class="material-icons text-purple-500 dark:text-purple-400 text-xl flex-shrink-0">{{ mov.icon }}</span>
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium text-gray-900 dark:text-white">{{ mov.title }}</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ mov.detail }}</p>
-                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{{ mov.time }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                    {% empty %}
-                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin movimientos recientes</div>
-                    {% endfor %}
-                </div>
-            </div>
         </div>
-
-        {# Fila 3 – OPTs to Release / OPTs to Close #}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-                    <span class="material-icons text-purple-500 dark:text-purple-400">rocket_launch</span>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OPT a liberar</h2>
-                    <span class="px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">Confirmado</span>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto">
-                    {% for op in ops_to_release %}
-                    <div class="px-5 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <div class="min-w-0 flex-1">
-                            <a href="{{ op.detail_url }}" class="text-sm font-medium text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400">OPT {{ op.numero }}</a>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ op.cliente_resumen }}</p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ op.unidades }} unidades</p>
-                        </div>
-                        <div class="flex gap-2 flex-shrink-0">
-                            <a href="{{ op.detail_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-gray-700 dark:text-gray-200 transition-colors">Ver</a>
-                            <a href="{{ op.detail_url }}" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-colors">Liberar</a>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay OPT pendientes de liberar</div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
-                    <span class="material-icons text-green-500 dark:text-green-400">task_alt</span>
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white">OPTs a cerrar</h2>
-                    <span class="px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Producción completada</span>
-                </div>
-                <div class="divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto">
-                    {% for op in ops_to_close %}
-                    <div class="px-5 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <div class="min-w-0 flex-1">
-                            <a href="{{ op.detail_url }}" class="text-sm font-medium text-gray-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400">OPT {{ op.numero }}</a>
-                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ op.descripcion }}</p>
-                        </div>
-                        <form method="post" action="{{ op.cerrar_url }}" class="inline">
-                            {% csrf_token %}
-                            <button type="submit" class="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors">Cerrar OPT</button>
-                        </form>
-                    </div>
-                    {% empty %}
-                    <div class="px-5 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay OPTs listas para cerrar</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        {# CTA footer #}
-        <footer class="mt-10 pt-6 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-            <a href="#" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Reportes</a>
-            <a href="#" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Config. MPR</a>
-            <span>Sistema en línea</span>
-        </footer>
     </div>
 </section>
 {% endblock %}

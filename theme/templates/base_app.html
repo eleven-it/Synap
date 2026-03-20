@@ -2,7 +2,17 @@
 <html lang="es" x-data="{ openMenu: false, openUserMenu: false, sidebarOpen: true }" @click.away="openMenu = false; openUserMenu = false" class="bg-gray-100 dark:bg-gray-900">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {% block extra_meta %}{% endblock %}
+    {% if request.is_mobile %}
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#7c3aed">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Synap">
+    <meta name="msapplication-TileColor" content="#7c3aed">
+    {% endif %}
     <title>{% block title %}Synap{% endblock %}</title>
     {% load static %}
     {% load i18n %}
@@ -12,6 +22,9 @@
     {% get_administranet_logo as logo_path %}
     {% if logo_path %}
       <link rel="icon" type="image/png" href="{{ MEDIA_URL }}{{ logo_path }}" />
+    {% endif %}
+    {% if request.is_mobile %}
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/pwa/icon-180.png' %}">
     {% endif %}
     <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -171,52 +184,84 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen font-inter">
+    <!-- Detección dos capas: iPad, Android tablet, pantalla pequeña → device_hint=mobile -->
+    <script>
+    (function() {
+        var cookieName = 'device_hint';
+        var maxAge = 86400;
+        function getCookie(n) {
+            var m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
+            return m ? m[2] : null;
+        }
+        function setCookie(n, v) {
+            document.cookie = n + '=' + v + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+        }
+        var ua = navigator.userAgent;
+        var minSide = Math.min(window.screen.width, window.screen.height);
+        var esIPad = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+        var esAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+        var esPantallaPequena = minSide < 768;
+        var esMobile = esIPad || esAndroidTablet || esPantallaPequena;
+        var hint = esMobile ? 'mobile' : 'desktop';
+        var current = getCookie(cookieName);
+        if (current === null || current !== hint) {
+            setCookie(cookieName, hint);
+            if (current !== hint) { window.location.reload(); }
+        }
+    })();
+    </script>
     <!-- Header fijo -->
-    <header class="w-full fixed top-0 left-0 z-40 h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
+    <header class="w-full fixed top-0 left-0 z-40 h-14 md:h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
         {% include 'partials/navbar.html' %}
     </header>
     
-    <div class="pt-16 min-h-screen w-full flex pb-8">
+    <div class="pt-14 md:pt-16 min-h-screen w-full flex pb-8 md:pb-12">
         <!-- Contenido principal -->
         <main class="app-content flex-1 transition-all duration-300 no-sidebar">
-            <div class="p-8">
+            <div class="p-4 md:p-8">
                 {% block content %}{% endblock content %}
             </div>
         </main>
     </div>
 
-    <!-- Barra de estado (fecha/hora, empresa, sucursal, puesto, usuario) -->
-    {% include 'partials/status_bar.html' %}
+    <!-- Barra de estado: solo desktop -->
+    <div class="hidden md:block">
+        {% include 'partials/status_bar.html' %}
+    </div>
 
     {% block extra_js %}{% endblock %}
     
     <script>
-    // Soporte para dark mode
+    // Soporte para dark mode (desktop y mobile: ambos switches sincronizados)
     document.addEventListener('DOMContentLoaded', function() {
         const html = document.documentElement;
         const darkSwitch = document.getElementById('dark-mode-switch');
-        
+        const darkSwitchMobile = document.getElementById('dark-mode-switch-mobile');
+        const switches = [darkSwitch, darkSwitchMobile].filter(Boolean);
+
+        function setTheme(isDark) {
+            if (isDark) {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            }
+            switches.forEach(function(s) { s.checked = isDark; });
+        }
+
         // Cargar preferencia previa
-        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            html.classList.add('dark');
-            if (darkSwitch) darkSwitch.checked = true;
-        } else {
-            html.classList.remove('dark');
-            if (darkSwitch) darkSwitch.checked = false;
-        }
-        
-        // Alternar al cambiar el switch
-        if (darkSwitch) {
-            darkSwitch.addEventListener('change', function() {
-                if (darkSwitch.checked) {
-                    html.classList.add('dark');
-                    localStorage.setItem('theme', 'dark');
-                } else {
-                    html.classList.remove('dark');
-                    localStorage.setItem('theme', 'light');
-                }
+        var isDark = localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) html.classList.add('dark');
+        else html.classList.remove('dark');
+        switches.forEach(function(s) { s.checked = isDark; });
+
+        // Alternar al cambiar cualquier switch
+        switches.forEach(function(s) {
+            s.addEventListener('change', function() {
+                setTheme(s.checked);
             });
-        }
+        });
         
         // Animación de entrada para elementos
         const observerOptions = {
@@ -238,5 +283,14 @@
         });
     });
     </script>
+    {% if request.is_mobile %}
+    <script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function(reg) { console.log('SW registrado:', reg.scope); })
+            .catch(function(err) { console.warn('SW error:', err); });
+    }
+    </script>
+    {% endif %}
 </body>
-</html> 
+</html>
