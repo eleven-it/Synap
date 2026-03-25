@@ -33,6 +33,7 @@ RUN node -v && npm -v
 # Copiar requirements antes del resto para aprovechar cache de Docker
 COPY requirements.txt .
 
+# Python: incluye opencv-python-headless (preprocesado OCR Stage 1, factura compra).
 # Instalar dependencias Python en una sola capa con optimizaciones
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt \
@@ -46,6 +47,14 @@ RUN apt-get purge -y build-essential gcc python3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/* \
     && rm -rf /var/tmp/*
+
+# Tesseract OCR + idiomas spa/eng (OCR plano y TSV estructurado Stage 1, factura compra)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-spa \
+        tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 
 # Crear directorio para archivos estáticos
 RUN mkdir -p /app/staticfiles

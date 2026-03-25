@@ -1,12 +1,12 @@
 # Vista para que el cliente actualice la cookie device_hint vía POST (opcional).
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_protect
 
 from core.middleware.base_middleware import DEVICE_HINT_COOKIE
 
 
-@csrf_exempt
+@csrf_protect
 @require_POST
 def set_device_hint(request):
     hint = (request.POST.get('hint') or '').strip().lower()

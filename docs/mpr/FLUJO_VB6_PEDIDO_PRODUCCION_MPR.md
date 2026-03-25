@@ -194,6 +194,12 @@ Al crear OPT (y OPP, Armado, Reclasificación) en MPR se replica la lógica de C
 - **nro_comprobante_busq:** Se persiste en movimiento_stock el valor numérico actual del talonario (NroBusq = NroComp en VB6); fallback sin esta columna si la tabla no la tiene.
 - **stock:** INSERT por cada línea con CodigoMovimiento = codigo_mov (equivalente al AddNew con contador en VB6).
 
+### 12.1 Indicadores de fase en detalle OPT (`/mpr/opt/<id>/`)
+
+La barra y los seis pasos (Pedida → En producción → Producida (OPP) → Pendiente 0 → Armado → Cerrado) se calculan en `OptDetailView`. El paso **Armado** solo puede mostrarse cumplido si **ya no hay pendiente de OPP en la OPT** (`cantidad_pendiente_prod` sumada en cero). Si no hay líneas armables (artículo sin conjunto/BOM en ABM), con pendiente OPP ya en cero el paso Armado se considera cumplido (no aplica armado); mientras el pendiente de producción sea mayor que cero, Armado no debe figurar completado aunque no existan filas de armado en pantalla.
+
+En las tablas **Partes de producción (OPP) registradas** y **Armados (OPA) registrados**, **Ver comprobante** abre un modal con fecha, comprobante, origen/destino, cantidad resumida y una tabla de **artículos** (código y descripción) con **entrada**, **salida** y **saldo** por renglón (misma fuente que el detalle de stock: `obtener_renglones_movimiento`); el botón **Descargar** enlaza al PDF del movimiento (`stock:movimiento_pdf`).
+
 ---
 
 ## 13. Imprimir comprobante (PDF)

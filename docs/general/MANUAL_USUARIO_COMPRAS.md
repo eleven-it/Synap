@@ -1,10 +1,10 @@
 # Manual de usuario – Módulo Compras
 
-Este manual describe el uso del módulo Compras en Synap: **pantalla única de Factura de Compra** (Facturación), listado de proveedores (hub), Remito de Compra, y accesos a Cuenta Corriente e imputación. La lógica de validación y persistencia replica AdministraNET (VB6) para convivencia sobre la misma base MySQL.
+Este manual describe el uso del módulo Compras en Synap: **captura y expedientes** (flujo Synap con documento y API), **pantalla única de Factura de Compra** (Facturación), listado de proveedores (hub), Remito de Compra, y accesos a Cuenta Corriente e imputación. La facturación clásica y el hub replican AdministraNET (VB6) para convivencia sobre la misma base MySQL; el flujo de expedientes vive en Synap (PostgreSQL).
 
-**Requisitos:** Usuario con permiso **compras.ver** (para Facturación y listado) o **compras.crear** (para Remito de Compra). **Empresa activa** seleccionada en sesión. Sin empresa activa, el sistema redirige al dashboard.
+**Requisitos:** Usuario con permiso **compras.ver** (para Captura y expedientes, Facturación y listado) o **compras.crear** (para Remito de Compra). **Empresa activa** seleccionada en sesión. Sin empresa activa, el sistema redirige al dashboard.
 
-**Referencias:** [MIGRACION_HUB_COMPROBANTES_STOCK.md](MIGRACION_HUB_COMPROBANTES_STOCK.md), [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md), [CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md](CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md).
+**Referencias:** [MIGRACION_HUB_COMPROBANTES_STOCK.md](MIGRACION_HUB_COMPROBANTES_STOCK.md), [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md), [CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md](CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md).
 
 ---
 
@@ -12,6 +12,8 @@ Este manual describe el uso del módulo Compras en Synap: **pantalla única de F
 
 - Desde la barra de navegación de Synap, hacer clic en **Compras**.
 - Submenú:
+  - **Expedientes captura** → listado de expedientes del flujo Synap filtrados por empresa activa en sesión (`/compras/captura/expedientes/`). Desde ahí podés abrir **Revisar** si tenés permiso de edición del módulo captura.
+  - **Captura y expedientes** → pantalla para crear expediente, subir foto/PDF y continuar el workflow (`/compras/captura/movil/`). Requiere el mismo permiso que Facturación (**compras.ver**).
   - **Facturación** → pantalla única para cargar Factura de Compra (proveedor predictivo, origen de los datos, Ver Cuenta Corriente, Agregar Proveedor, Informes).
   - **Listado de proveedores** → listado de proveedores y acciones por fila (hub).
   - **Remito de Compra** → formulario de Remito de Compra.
@@ -91,7 +93,7 @@ Formulario operativo para cargar remitos de compra: cabecera (proveedor, depósi
 
 | Permiso        | Uso                                                                 |
 |----------------|---------------------------------------------------------------------|
-| **compras.ver**   | Ver menú Compras, Facturación (pantalla única) y Listado de proveedores (hub). |
+| **compras.ver**   | Ver menú Compras, Captura y expedientes, Facturación (pantalla única) y Listado de proveedores (hub). |
 | **compras.crear** | Registrar compras (Remito de Compra y, cuando estén implementados, Factura, OP, NC, ND). |
 
 Si no ve el menú **Compras** en la barra:
@@ -106,6 +108,8 @@ El módulo Compras no se activa desde Module Management; siempre está disponibl
 
 ## 6. Plantillas creadas
 
+- `factura_compra_captura/lista_expedientes.html` — Listado web de expedientes (empresa de sesión), enlace a revisión y a nueva captura.
+- `factura_compra_captura/captura_movil.html` — Captura y expedientes: misma base que el resto de Synap (`base_app.html`), tarjeta y formulario alineados al módulo Compras; crear expediente y subir documento vía API.
 - `compras/factura_compra.html` — Pantalla única Factura de Compra (Facturación): proveedor predictivo, origen de los datos, encabezado/cuerpo/pie.
 - `compras/hub_comprobantes.html` — Listado de proveedores y acciones.
 - `compras/comprobante_en_construccion.html` — Pantalla “En construcción” para Factura, OP, NC, ND, Cta Cte, Imputación, Desimputación.
@@ -117,6 +121,6 @@ El módulo Compras no se activa desde Module Management; siempre está disponibl
 ## Referencias
 
 - [MIGRACION_HUB_COMPROBANTES_STOCK.md](MIGRACION_HUB_COMPROBANTES_STOCK.md)
-- [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)
+- [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)
 - [INVENTARIO_INGENIERIA_INVERSA_CARGA_COMPROBANTES_P.md](INVENTARIO_INGENIERIA_INVERSA_CARGA_COMPROBANTES_P.md)
 - [CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md](CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md)

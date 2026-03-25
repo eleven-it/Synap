@@ -74,7 +74,7 @@ Comparando [Principal.frm (informe)](PRINCIPAL_FRM_INFORME_DETALLADO.md) con el 
 ## 5. Resumen ejecutivo
 
 - **Falta en Synap:** Barra de estado; Cierra_Logueo_Vendedor en logout; auth-cashier y caja en TPV; obliga_cierre_caja; fecha servidor en contexto/API; opcional menú BD, sesión única, mensajería/CRM, avisos.
-- **Compras — Factura:** El selector es **origen de datos** (Manual, Desde Remito, Desde OC, Desde Vale), no “tipo de factura”; ver 6.6 y [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md).
+- **Compras — Factura:** El selector es **origen de datos** (Manual, Desde Remito, Desde OC, Desde Vale), no “tipo de factura”; ver 6.6 y [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md).
 - **Optimizaciones:** Session store acotado, endpoint fecha servidor, menú en código + filtro BD, logout unificado.
 - **Seguridad:** Activar cuando **ENVIRONMENT=production** (o produccion). Ver secciones 8 y 9.
 
@@ -145,7 +145,7 @@ En VB6 el selector que abre la factura de compra **no son “tipos de factura”
 | **Desde Orden de compra** | keyFactOC → "Factura OC" | OC pendientes; renglones desde stockp con codmov_oc | stock, stock_deposito, stockp, saldo_pedido_proveedor, pedido_factura |
 | **Desde Vale** | keyFactVALE → "Factura Vale" | Vales (en_vale_viaje, en_vale_factura_temp) | en_vale_factura, en_vale_viaje.estado |
 
-**Regla en Synap:** En la pantalla de Factura de Compra no usar “tipo de factura” para estas opciones; usar **“Origen de los datos”** (Manual, Desde Remito, Desde Orden de compra, Desde Vale) y mostrar el panel correspondiente según la opción. Documentación detallada: [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md).
+**Regla en Synap:** En la pantalla de Factura de Compra no usar “tipo de factura” para estas opciones; usar **“Origen de los datos”** (Manual, Desde Remito, Desde Orden de compra, Desde Vale) y mostrar el panel correspondiente según la opción. Documentación detallada: [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md).
 
 ---
 

@@ -33,6 +33,14 @@ Documentación de la interfaz del kiosco autoservicio Synap.
 
 ---
 
+## Refinamiento visual (plantillas)
+
+Ajustes solo de HTML/Tailwind en `kiosco.html` e includes (`_header_kiosk`, `_search_scan`, `_promo_ofertas_footer`, `_cart_*`, `_payment_keypad`): jerarquía (total y CTA principal), menos ruido en la barra TPV (un contenedor con separadores), espaciado coherente en columnas y pie de carrito, textos de ayuda de búsqueda acotados sin duplicar el placeholder.
+
+**Banner “Aprovecha nuestras ofertas”:** vive en `includes/_promo_ofertas_footer.html`, al pie de la tarjeta del kiosco (debajo del `main`), con `x-show="!modoTpv && estado !== 'success'"` — solo autoservicio, no TPV. En mobile (`_kiosk_main_mobile.html`) va justo encima de la barra fija inferior.
+
+**Lista del carrito (columna derecha):** el contenedor de ítems usa `min-h-0` y `flex-[1_1_28rem]` sobre la tarjeta con `min-h-0` para que el scroll vertical sea interno (no se recorten filas por `overflow:hidden` del layout flex). La base `28rem` apunta a mostrar del orden de **10 líneas** de grilla TPV; con más ítems, scroll dentro de esa zona. Cabecera “Tus productos”, bloque de totales y teclado de pago llevan `shrink-0` donde aplica.
+
 ## Componentes UI
 
 - **KioskHeader**: Cabecera con kiosk_id
@@ -43,6 +51,25 @@ Documentación de la interfaz del kiosco autoservicio Synap.
 - **PaymentStatus**: Badge estado (pendiente/aprobado/rechazado)
 - **ReceiptOptionsModal**: Comprobante, opciones impresión/email (placeholder)
 - **ConnectionErrorModal**: "Problemas de conexión con servidor \<host\>" — **sin usuarios ni claves**
+
+## Foco en modales
+
+Al abrir un modal del kiosco, el foco pasa al primer campo de formulario visible (`input`, `select` o `textarea` habilitado) dentro del overlay, cuando existe. En pantallas solo con botones no hay campo que enfocar. En el modal de factura, al cambiar de paso (p. ej. Ticket Factura / Consumidor Final con email) se vuelve a aplicar el mismo criterio. En el modal de números de serie, el foco se intenta tras terminar de cargar la lista.
+
+## Atajos de teclado TPV
+
+En la barra TPV del header, las etiquetas muestran la tecla entre paréntesis (p. ej. `Cliente (F1)`). En el header mobile, el atajo va junto al texto del chip.
+
+Atajos activos solo cuando `modoTpv` está habilitado y no hay modal abierto.  
+Se ejecutan aunque el foco esté en el input de búsqueda u otros campos editables.
+
+- `F1`: abrir clientes
+- `F2`: abrir listas de precio
+- `F3`: abrir vendedor
+- `F4`: abrir descuentos y vouchers
+- `F5`: abrir cuenta corriente (solo si el cliente no es Consumidor final; el botón **Ver** de cta. cte. se muestra siempre y queda deshabilitado si no aplica)
+- `F8`: eliminar la línea con foco en carrito (sin confirmación)
+- `F12`: ir a pagar ahora
 
 ---
 

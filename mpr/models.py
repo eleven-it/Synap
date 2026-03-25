@@ -53,24 +53,3 @@ class OptLinea(models.Model):
 
     def __str__(self):
         return f"OPT {self.opt_id} · lista {self.id_lista_produccion} · art. {self.id_articulo}"
-
-
-class MprConfig(models.Model):
-    """
-    Configuración MPR por base de datos (empresa).
-    id_deposito_produccion: depósito donde se lleva el stock al liberar OPT (automático, sin selección).
-    """
-    base_empresa = models.CharField(max_length=64, unique=True, db_index=True)
-    id_deposito_produccion = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Depósito de producción: donde se registra el stock al liberar la OPT (automático).",
-    )
-
-    class Meta:
-        db_table = "mpr_config"
-        verbose_name = "Configuración MPR"
-        verbose_name_plural = "Configuraciones MPR"
-
-    def __str__(self):
-        return f"MPR config {self.base_empresa} (dep. prod. {self.id_deposito_produccion})"

@@ -17,6 +17,7 @@ A partir de este momento, **todo cambio de desarrollo (features, refactors, corr
 - **Decisiones de diseño o arquitectura:** en el doc del módulo o en `docs/general/` si afecta al proyecto.
 - **APIs o contratos:** endpoints, parámetros, respuestas (en `docs/reports/`, `docs/self_checkout/`, etc., según módulo).
 - **Configuración o despliegue:** en `docs/general/` (ej. Docker, instalación mínima) o en el módulo correspondiente.
+- **Seguridad (endurecimientos globales):** actualizar o referenciar [SEGURIDAD_CAMBIOS_SYNAP.md](SEGURIDAD_CAMBIOS_SYNAP.md) cuando se modifiquen CSRF, JWT/RAG, rate limits, media, filtros XSS o secretos en `settings`.
 
 ### Dónde documentar
 

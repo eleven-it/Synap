@@ -4,67 +4,89 @@
 {% block title %}Config. Depósitos - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Config. Depósitos</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-5 transition-colors duration-300 dark:bg-gray-900 sm:py-6">
+    <div class="mx-auto w-full min-w-0 max-w-5xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-5 text-sm text-gray-500 dark:text-gray-400 sm:mb-6" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Config. Depósitos</span></li>
+            </ol>
         </nav>
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Configuración depósitos (MPR)</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Indique si cada depósito suma al stock total (Suma stock) y asigne un <strong>tipo de uso</strong> único: Producción (OPT), Semi Elaborado / Scrap / 2da Selección (OPP), o Terminado (Armado). Configure el depósito de producción para que al confirmar la OPT el stock se lleve allí en forma automática.</p>
 
-        {# Depósito de producción: donde se registra el stock al liberar OPT (automático) #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-900/50 shadow-sm p-5 mb-6">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white mb-2">Depósito de producción</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Al confirmar la orden de producción (OPT), el stock se registrará en este depósito sin pedir selección. También puede asignar el tipo «Producción» en la tabla de abajo a un depósito.</p>
-            <form method="post" action="" class="flex flex-wrap items-end gap-3">
-                {% csrf_token %}
-                <div class="min-w-[200px]">
-                    <label for="select_dep_prod" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito</label>
-                    <select id="select_dep_prod" name="deposito_produccion" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 focus:ring-2 focus:ring-purple-500">
-                        <option value="">— Ninguno (configurar después) —</option>
-                        {% for dep in depositos %}
-                        <option value="{{ dep.CodDeposito }}" {% if id_deposito_produccion == dep.CodDeposito %}selected{% endif %}>{{ dep.NombreDeposito|default:dep.CodDeposito }}</option>
-                        {% endfor %}
-                    </select>
+        <header class="mb-6 border-b border-gray-200/80 pb-5 dark:border-gray-700/80 sm:mb-7 sm:pb-6">
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <h1 class="min-w-0 flex-1 text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
+                    Configuración depósitos (MPR)
+                </h1>
+                {# Mismas clases que el enlace Tablero en mpr/ventana_pack.html (línea ~55) #}
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-50 dark:border-slate-500 dark:bg-slate-700 dark:hover:bg-slate-600 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                    Tablero
+                </a>
+            </div>
+            <p class="mt-3 max-w-3xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                Indique si cada depósito <strong class="font-semibold text-gray-800 dark:text-gray-200">suma al stock total</strong> y asigne un <strong class="font-semibold text-gray-800 dark:text-gray-200">tipo de uso</strong> único:
+                <strong class="text-purple-700 dark:text-purple-300">Producción</strong> (entrada al confirmar la OPT), Semi Elaborado / Scrap / 2da Selección (OPP), o Terminado (Armado).
+            </p>
+        </header>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex flex-col gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
+                <div class="flex min-w-0 items-start gap-2.5 sm:items-center">
+                    <span class="material-icons shrink-0 text-xl text-amber-600 dark:text-amber-400" aria-hidden="true">warehouse</span>
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Depósitos y tipos MPR</h2>
+                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Cambios sensibles: verifique código, nombre y tipo antes de confirmar.</p>
+                    </div>
                 </div>
-                <button type="submit" class="px-4 py-2 rounded-lg font-medium bg-purple-600 hover:bg-purple-500 text-white transition-colors">Guardar depósito de producción</button>
-            </form>
-        </div>
-
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead>
-                        <tr class="bg-amber-100 dark:bg-amber-900/30">
-                            <th class="px-4 py-3 text-left text-xs font-bold text-amber-900 dark:text-amber-200 uppercase">Código</th>
-                            <th class="px-4 py-3 text-left text-xs font-bold text-amber-900 dark:text-amber-200 uppercase">Nombre</th>
-                            <th class="px-4 py-3 text-center text-xs font-bold text-amber-900 dark:text-amber-200 uppercase">Suma stock</th>
-                            <th class="px-4 py-3 text-left text-xs font-bold text-amber-900 dark:text-amber-200 uppercase">Tipo</th>
+                <p class="text-xs text-gray-500 dark:text-gray-400 sm:shrink-0 md:hidden" aria-hidden="true">Deslizá horizontalmente si hace falta</p>
+            </div>
+            <div class="overflow-x-auto overflow-y-visible [-webkit-overflow-scrolling:touch]" role="region" aria-label="Tabla de depósitos">
+                <table class="w-full min-w-[36rem] divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <caption class="sr-only">Listado de depósitos y configuración MPR</caption>
+                    <thead class="bg-gray-50/95 dark:bg-gray-800/95">
+                        <tr>
+                            <th scope="col" class="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 sm:px-4">Código</th>
+                            <th scope="col" class="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 sm:px-4">Nombre</th>
+                            <th scope="col" class="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 sm:px-4">Suma stock</th>
+                            <th scope="col" class="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 sm:px-4">Tipo MPR</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for dep in depositos %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ dep.CodDeposito }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ dep.NombreDeposito }}</td>
-                            <td class="px-4 py-3 text-center">
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded {% if dep.suma_stock == 'Si' %}bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300{% else %}bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300{% endif %}">{{ dep.suma_stock|default:'Si' }}</span>
-                                <form method="post" action="" class="inline ml-2">
+                        <tr class="transition-colors hover:bg-gray-50/90 dark:hover:bg-gray-700/35">
+                            <td class="whitespace-nowrap px-3 py-2.5 text-sm font-semibold tabular-nums text-gray-900 dark:text-white sm:px-4">{{ dep.CodDeposito }}</td>
+                            <td class="min-w-[8rem] max-w-[12rem] px-2 py-2.5 text-sm text-gray-700 dark:text-gray-300 sm:max-w-none sm:px-4 md:max-w-lg">
+                                <span class="line-clamp-2 break-words sm:line-clamp-none" title="{{ dep.NombreDeposito|default:'' }}">{{ dep.NombreDeposito }}</span>
+                            </td>
+                            <td class="min-w-[6.5rem] px-2 py-2.5 text-center align-middle sm:min-w-[7.5rem] sm:px-4">
+                                <form method="post" action="" class="inline-flex w-full min-w-0 touch-manipulation items-center justify-center">
                                     {% csrf_token %}
                                     <input type="hidden" name="cod_deposito" value="{{ dep.CodDeposito }}"/>
-                                    <input type="hidden" name="valor" value="{% if dep.suma_stock == 'Si' %}No{% else %}Si{% endif %}"/>
-                                    <button type="submit" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline">
-                                        Cambiar a {% if dep.suma_stock == 'Si' %}No{% else %}Sí{% endif %}
-                                    </button>
+                                    <input type="hidden" name="valor" id="valor-suma-{{ forloop.counter0 }}" value="{% if dep.suma_stock == 'Si' %}Si{% else %}No{% endif %}"/>
+                                    <label class="relative inline-flex min-h-[44px] min-w-[44px] cursor-pointer touch-manipulation items-center justify-center gap-1.5 py-1 sm:min-h-0 sm:min-w-0 sm:gap-2">
+                                        <input type="checkbox"
+                                               role="switch"
+                                               class="peer sr-only"
+                                               {% if dep.suma_stock == 'Si' %}checked{% endif %}
+                                               aria-label="Depósito {{ dep.CodDeposito }}: suma al stock {% if dep.suma_stock == 'Si' %}activada{% else %}desactivada{% endif %}. Pulsar para cambiar."
+                                               aria-checked="{% if dep.suma_stock == 'Si' %}true{% else %}false{% endif %}"
+                                               data-row="{{ forloop.counter0 }}"
+                                               onchange="(function(el){var v=document.getElementById('valor-suma-'+el.getAttribute('data-row'));v.value=el.checked?'Si':'No';el.closest('form').submit();})(this);"/>
+                                        <span class="relative inline-block h-7 w-12 shrink-0 rounded-full bg-red-500 transition-colors duration-200 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-purple-500 peer-focus-visible:ring-offset-2 peer-checked:bg-green-500 dark:bg-red-600 dark:peer-checked:bg-green-600 dark:peer-focus-visible:ring-offset-gray-900 after:pointer-events-none after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:rounded-full after:bg-white after:shadow after:ring-1 after:ring-black/10 after:transition-transform after:duration-200 after:ease-out peer-checked:after:translate-x-5"
+                                              title="{% if dep.suma_stock == 'Si' %}Suma al stock: sí. Pulsar para desactivar.{% else %}No suma al stock. Pulsar para activar.{% endif %}"
+                                              aria-hidden="true"></span>
+                                        <span class="hidden w-6 shrink-0 text-center text-[11px] font-semibold tabular-nums text-gray-600 dark:text-gray-300 min-[400px]:inline sm:w-7 sm:text-xs" aria-hidden="true">{% if dep.suma_stock == 'Si' %}Sí{% else %}No{% endif %}</span>
+                                    </label>
                                 </form>
                             </td>
-                            <td class="px-4 py-3">
-                                <form method="post" action="" class="inline" data-tipo-form="{{ dep.CodDeposito }}">
+                            <td class="min-w-0 px-2 py-2.5 sm:min-w-[12rem] sm:px-4">
+                                <form method="post" action="" class="flex w-full min-w-0 justify-end sm:justify-start" data-tipo-form="{{ dep.CodDeposito }}">
                                     {% csrf_token %}
                                     <input type="hidden" name="cod_deposito" value="{{ dep.CodDeposito }}"/>
-                                    <select name="tipo_mpr" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-2 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 min-w-[140px]" onchange="this.form.submit()">
+                                    <label class="sr-only" for="tipo_mpr_{{ dep.CodDeposito }}">Tipo MPR para depósito {{ dep.CodDeposito }}</label>
+                                    <select id="tipo_mpr_{{ dep.CodDeposito }}" name="tipo_mpr" class="h-9 w-full min-w-0 max-w-full rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white sm:min-w-[12rem] sm:max-w-[18rem]" onchange="this.form.submit()">
                                         {% for val, label in dep.opciones_tipo %}
                                         <option value="{{ val }}" {% if dep.tipo_mpr == val %}selected{% endif %}>{{ label }}</option>
                                         {% endfor %}
@@ -74,15 +96,12 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No hay depósitos o no se pudo leer la tabla. Si aparece un mensaje de error arriba, revise que la tabla y columnas existan en la base de datos.</td>
+                            <td colspan="4" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">No hay depósitos o no se pudo leer la tabla. Si aparece un mensaje de error arriba, revise que la tabla y columnas existan en la base de datos.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-        </div>
-        <div class="mt-4">
-            <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Volver al tablero</a>
         </div>
     </div>
 </section>

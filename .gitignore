@@ -108,7 +108,7 @@ logs/
 staticfiles/
 
 # Media files (se suben en runtime)
-
+media/factura_compra/
 
 # Certificados
 certs/

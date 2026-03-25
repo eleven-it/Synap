@@ -8,44 +8,66 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Prefijos relativos a MEDIA_ROOT accesibles sin sesión (login: logos de empresa en PostgreSQL)
+PUBLIC_MEDIA_PREFIXES = ('empresas/logos/',)
+
+
+def _media_path_is_public(relative_to_root: str) -> bool:
+    rel = relative_to_root.replace('\\', '/').lstrip('/')
+    return any(rel.startswith(p) for p in PUBLIC_MEDIA_PREFIXES)
+
+
 def serve_media_file(request, path):
     """
     Sirve un archivo desde MEDIA_ROOT
     Útil cuando el servidor web (nginx/apache) no está configurado para servir /media/
+    Rutas fuera de PUBLIC_MEDIA_PREFIXES requieren sesión administraNET (request.session["user"]).
     """
     # Construir la ruta completa del archivo
     file_path = os.path.join(settings.MEDIA_ROOT, path)
-    
+
     # Normalizar la ruta para prevenir directory traversal
     file_path = os.path.normpath(file_path)
     media_root = os.path.normpath(settings.MEDIA_ROOT)
-    
+
     # Verificar que el archivo esté dentro de MEDIA_ROOT
     if not file_path.startswith(media_root):
         logger.warning(f"Intento de acceso fuera de MEDIA_ROOT: {path}")
         raise Http404("File not found")
-    
+
+    try:
+        relative = os.path.relpath(file_path, media_root)
+    except ValueError:
+        logger.warning("Ruta media inválida respecto a MEDIA_ROOT: %s", path)
+        raise Http404("File not found") from None
+
+    if not _media_path_is_public(relative) and not request.session.get('user'):
+        logger.warning("Intento de acceso a media privado sin sesión administraNET: %s", path)
+        raise Http404("File not found")
+
     # Verificar que el archivo exista
     if not os.path.exists(file_path) or not os.path.isfile(file_path):
         logger.warning(f"Archivo no encontrado: {file_path}")
         raise Http404("File not found")
-    
+
     # Verificar permisos de lectura
     if not os.access(file_path, os.R_OK):
         logger.warning(f"Sin permisos de lectura: {file_path}")
         raise Http404("File not found")
-    
+
     # Determinar el tipo de contenido
     content_type = 'application/octet-stream'
     if file_path.lower().endswith('.png'):
         content_type = 'image/png'
     elif file_path.lower().endswith('.jpg') or file_path.lower().endswith('.jpeg'):
         content_type = 'image/jpeg'
+    elif file_path.lower().endswith('.pdf'):
+        content_type = 'application/pdf'
     elif file_path.lower().endswith('.svg'):
         content_type = 'image/svg+xml'
     elif file_path.lower().endswith('.gif'):
         content_type = 'image/gif'
-    
+
     try:
         # Servir el archivo
         response = FileResponse(open(file_path, 'rb'), content_type=content_type)
@@ -54,4 +76,3 @@ def serve_media_file(request, path):
     except Exception as e:
         logger.error(f"Error al servir archivo {file_path}: {e}")
         raise Http404("File not found")
-

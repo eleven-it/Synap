@@ -8,7 +8,7 @@ codmov y talonarios usan SELECT ... FOR UPDATE.
 """
 import logging
 from decimal import Decimal
-from typing import List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 
 from self_checkout.db import mysql_cursor
 
@@ -35,6 +35,29 @@ class StockService:
             saldo = Decimal(str(row['saldo'] or 0))
             reservado = Decimal(str(row['saldo_pedido_cliente'] or 0))
             return max(Decimal('0'), saldo - reservado)
+
+    def get_disponible_map(self, id_articulos: List[int], id_deposito: int) -> Dict[int, Decimal]:
+        """Una consulta IN: disponible por id_articulo en el depósito (no listados → 0)."""
+        ids = sorted({int(x) for x in id_articulos if x is not None})
+        if not ids:
+            return {}
+        out: Dict[int, Decimal] = {i: Decimal('0') for i in ids}
+        placeholders = ','.join(['%s'] * len(ids))
+        sql = f"""
+            SELECT id_articulo,
+                   COALESCE(saldo, 0) AS saldo,
+                   COALESCE(saldo_pedido_cliente, 0) AS saldo_pedido_cliente
+            FROM stock_deposito
+            WHERE id_deposito = %s AND id_articulo IN ({placeholders})
+        """
+        with mysql_cursor(self.base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(sql, [id_deposito] + ids)
+            for row in cursor.fetchall():
+                ia = int(row['id_articulo'])
+                saldo = Decimal(str(row['saldo'] or 0))
+                reservado = Decimal(str(row['saldo_pedido_cliente'] or 0))
+                out[ia] = max(Decimal('0'), saldo - reservado)
+        return out
 
     def validar_disponible_items(
         self, items: List[dict], id_deposito: int

@@ -31,6 +31,11 @@ urlpatterns = [
         name="expediente-eventos",
     ),
     path(
+        "expedientes/<uuid:pk>/resolver-proveedor/",
+        views.ExpedienteResolverProveedorAPIView.as_view(),
+        name="expediente-resolver-proveedor",
+    ),
+    path(
         "expedientes/<uuid:expediente_pk>/documentos/",
         views.DocumentoFuenteListCreateAPIView.as_view(),
         name="documento-list-create",

@@ -1,5 +1,9 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+
+from core.utils.django_user_fk import usuario_extendido_para_fk
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,6 +16,7 @@ from factura_compra_captura.api.permissions import (
     ExpedienteDetailPatchPermission,
     ExpedienteEventosPermission,
     ExpedienteListCreatePermission,
+    ExpedienteResolverProveedorPermission,
     ExpedienteTransicionPermission,
 )
 from factura_compra_captura.api.serializers import (
@@ -20,6 +25,7 @@ from factura_compra_captura.api.serializers import (
     ExpedienteCreateSerializer,
     ExpedienteFacturaCompraSerializer,
     ExpedientePatchSerializer,
+    ResolverProveedorSerializer,
     TransicionSerializer,
 )
 from factura_compra_captura.models import (
@@ -33,6 +39,18 @@ from factura_compra_captura.services.documento_fuente_service import (
     crear_documento_desde_upload,
     reintentar_ocr,
 )
+from factura_compra_captura.services.fiscal_invoice_validation import (
+    resolve_base_empresa_for_compras,
+)
+from factura_compra_captura.services.proveedor_resolution_service import (
+    resolver_proveedor_desde_legacy_o_padron,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _actor_api(request):
+    return usuario_extendido_para_fk(getattr(request, "user", None))
 
 
 def _qs_expediente_con_nidos():
@@ -76,6 +94,15 @@ class ExpedienteDetailPatchAPIView(APIView):
 
     def get(self, request, pk):
         exp = get_object_or_404(_qs_expediente_con_nidos(), pk=pk)
+        try:
+            exp = ExpedienteService.asegurar_codigo_proveedor_desde_cuit_si_falta(
+                exp, request
+            )
+        except Exception:
+            logger.exception(
+                "asegurar_codigo_proveedor_desde_cuit_si_falta en GET expediente"
+            )
+        exp = _qs_expediente_con_nidos().get(pk=exp.pk)
         return Response(
             ExpedienteFacturaCompraSerializer(
                 exp, context={"request": request}
@@ -106,7 +133,7 @@ class ExpedienteTransicionAPIView(APIView):
         ser.is_valid(raise_exception=True)
         exp = ser.save(
             exp,
-            actor=request.user if request.user.is_authenticated else None,
+            actor=_actor_api(request),
             request=request,
         )
         exp = _qs_expediente_con_nidos().get(pk=exp.pk)
@@ -129,7 +156,7 @@ class ExpedienteAprobarAPIView(APIView):
         try:
             exp = ExpedienteService.aprobar_expediente_con_stub(
                 exp,
-                actor=request.user if request.user.is_authenticated else None,
+                actor=_actor_api(request),
                 request=request,
             )
         except TransicionEstadoInvalida as e:
@@ -156,6 +183,79 @@ class ExpedienteEventosAPIView(APIView):
         return Response(
             EventoAuditoriaSerializer(qs, many=True).data,
         )
+
+
+class ExpedienteResolverProveedorAPIView(APIView):
+    permission_classes = [IsAuthenticated, ExpedienteResolverProveedorPermission]
+
+    def post(self, request, pk):
+        exp = get_object_or_404(ExpedienteFacturaCompra.objects.all(), pk=pk)
+        ser = ResolverProveedorSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        cuit = ser.validated_data["cuit"]
+        razon_social = ser.validated_data.get("razon_social") or ""
+        base_empresa = resolve_base_empresa_for_compras(exp, request)
+        if not base_empresa:
+            return Response(
+                {
+                    "detail": (
+                        "No se pudo determinar la base empresa AdministraNET "
+                        "(sesión o FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID)."
+                    ),
+                    "codigo": "base_empresa_requerida",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            out = resolver_proveedor_desde_legacy_o_padron(
+                base_empresa=base_empresa,
+                cuit=cuit,
+                razon_social_borrador=razon_social,
+            )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e), "codigo": "proveedor_cuit_invalido"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        md = dict(exp.metadata or {})
+        md["proveedor_synap"] = out.proveedor_synap
+        exp.metadata = md
+        if out.codigo_proveedor_legacy:
+            exp.codigo_proveedor_legacy = out.codigo_proveedor_legacy
+        exp.save(update_fields=["metadata", "codigo_proveedor_legacy", "modificado_en"])
+        exp.refresh_from_db()
+        resp_data: dict = {
+            "detail": out.detail,
+            "codigo_proveedor_legacy": out.codigo_proveedor_legacy,
+            "proveedor_synap": out.proveedor_synap,
+        }
+        if out.codigo_proveedor_legacy and exp.estado in (
+            ExpedienteFacturaCompra.Estado.BORRADOR,
+            ExpedienteFacturaCompra.Estado.OCR_COMPLETADO,
+        ):
+            try:
+                exp_tr = (
+                    ExpedienteFacturaCompra.objects.select_related("empresa")
+                    .prefetch_related("lineas")
+                    .get(pk=exp.pk)
+                )
+                exp_tr = ExpedienteService.aplicar_transicion(
+                    exp_tr,
+                    "enviar_revision",
+                    actor=_actor_api(request),
+                    request=request,
+                )
+                resp_data["enviar_revision"] = {
+                    "realizado": True,
+                    "estado": exp_tr.estado,
+                }
+            except TransicionEstadoInvalida as e:
+                resp_data["enviar_revision"] = {
+                    "realizado": False,
+                    "codigo": e.codigo,
+                    "detail": str(e),
+                }
+        return Response(resp_data)
 
 
 class DocumentoFuenteListCreateAPIView(APIView):
@@ -186,7 +286,7 @@ class DocumentoFuenteListCreateAPIView(APIView):
             doc = crear_documento_desde_upload(
                 exp,
                 upload,
-                actor=request.user if request.user.is_authenticated else None,
+                actor=_actor_api(request),
             )
         except DocumentoValidacionError as e:
             return Response(
@@ -224,7 +324,7 @@ class DocumentoFuenteReintentarOcrAPIView(APIView):
         try:
             doc = reintentar_ocr(
                 doc,
-                actor=request.user if request.user.is_authenticated else None,
+                actor=_actor_api(request),
             )
         except TransicionEstadoInvalida as e:
             return Response(

@@ -36,7 +36,7 @@ Si el precheck falla, se muestra mensaje de error en español y no se redirige. 
 - **Vista:** `compras.views.factura_compra`
 - **URL:** `/compras/facturacion/` (`compras:factura_compra`)
 
-Pantalla principal centrada en cargar facturas: **proveedor predictivo** (autocomplete vía `core_api:proveedor_search`), **origen de los datos** (Manual, Desde Remito, Desde OC, Desde Vale — no "tipo de factura", ver [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)), barra con Ver Cuenta Corriente, Agregar Proveedor, Informes, encabezado/cuerpo/pie. Si se accede desde el hub con acción Factura, se redirige aquí con `?codigo_proveedor=X`. El guardado vía legacy_db se implementará en la siguiente iteración.
+Pantalla principal centrada en cargar facturas: **proveedor predictivo** (autocomplete vía `core_api:proveedor_search`), **origen de los datos** (Manual, Desde Remito, Desde OC, Desde Vale — no "tipo de factura", ver [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)), barra con Ver Cuenta Corriente, Agregar Proveedor, Informes, encabezado/cuerpo/pie. Si se accede desde el hub con acción Factura, se redirige aquí con `?codigo_proveedor=X`. El guardado vía legacy_db se implementará en la siguiente iteración.
 
 ### 4. Placeholders (otros formularios en construcción)
 
@@ -64,13 +64,13 @@ Todos muestran la plantilla "En construcción" y enlace de vuelta al hub. La **p
 
 ## Próximos pasos (escritura como VB6)
 
-1. Completar **Factura de Compra** en pantalla única: guardado (botón Generar) vía `legacy_db.services.factura_compra_service`; cabecera + detalle según origen de datos (Manual, Desde Remito, OC, Vale); mismos tipos/orden que VB6 (ver [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)).
+1. Completar **Factura de Compra** en pantalla única: guardado (botón Generar) vía `legacy_db.services.factura_compra_service`; cabecera + detalle según origen de datos (Manual, Desde Remito, OC, Vale); mismos tipos/orden que VB6 (ver [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md)).
 2. **Orden de Pago:** abrir = `open_orden_pago` (lock fact_temporalp); confirmar = `confirmar_orden_pago_a_cuenta` o por imputación; cerrar = `close_orden_pago`.
 3. NC, ND, Imputación/Desimputación: según inventario de cada .frm y checklist en [CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md](CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md).
 
 ## Referencias
 
-- [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](ORIGEN_DATOS_FACTURA_COMPRA_VB6.md) — Origen de los datos para Factura de Compra (Manual, Remito, OC, Vale).
+- [ORIGEN_DATOS_FACTURA_COMPRA_VB6.md](../compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md) — Origen de los datos para Factura de Compra (Manual, Remito, OC, Vale).
 - [INVENTARIO_INGENIERIA_INVERSA_CARGA_COMPROBANTES_P.md](INVENTARIO_INGENIERIA_INVERSA_CARGA_COMPROBANTES_P.md)
 - [CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md](CONVIVENCIA_VB6_DJANGO_LEGACY_DB.md)
 - [TIPOS_DATOS_ADMINISTRANET.md](TIPOS_DATOS_ADMINISTRANET.md)

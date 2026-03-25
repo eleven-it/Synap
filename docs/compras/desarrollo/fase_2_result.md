@@ -2,7 +2,7 @@
 
 **Alcance:** implementación entregada en `factura_compra_captura` (modelo `DocumentoFuente`, servicio de subida, pipeline OCR, API, PWA base móvil, tests).  
 **Plan y DoD:** [docs/compras/master_execution_plan.md](compras/master_execution_plan.md), [docs/compras/definition_of_done_by_phase.md](compras/definition_of_done_by_phase.md) (Fase 2).  
-**Nota:** D-01 (proveedor OCR real) y D-02 (storage definitivo) no bloquean esta fase: mock + `FileSystemStorage` / `MEDIA_ROOT` en dev.
+**Nota:** D-01 (servicio OCR HTTP opcional) y D-02 (storage definitivo): parser local **heuristic** + `FileSystemStorage` / `MEDIA_ROOT` en dev. Ver [OCR_HEURISTICO_PDF.md](../OCR_HEURISTICO_PDF.md).
 
 ---
 
@@ -46,14 +46,14 @@
 
 | Tema | Decisión |
 |------|----------|
-| Proveedor | Interfaz `OcrAdapter` en `factura_compra_captura/ocr/base.py`. Implementación por defecto: **mock** (`MockOcrAdapter`). Valor `http` reservado; sin implementación hasta definir D-01. |
-| Motor en CI / tests | Mock; `FACTURA_COMPRA_OCR_MOCK_FAIL=True` fuerza fallo para TC-OCR. |
+| Proveedor | Interfaz `OcrAdapter` en `factura_compra_captura/ocr/base.py`. Por defecto: **heuristic** (`HeuristicOcrAdapter`, texto PDF + regex). Alternativa: **http** (cliente contra API externa). |
+| Motor en CI / tests | Heuristic real; TC-OCR fuerza fallo con `patch` sobre `get_ocr_adapter` (`test_ocr_pipeline`). |
 | Ejecución async | Sin Celery/RQ en el núcleo: **inline** por defecto o **hilo tras commit** si `OCR_DEFER=True`. Comentarios en `jobs.py` indican reemplazo por `shared_task.delay` si se adopta Celery. |
 | Prioridad de flags | `FACTURA_COMPRA_OCR_SYNC=True` fuerza ejecución inline **antes** de evaluar `OCR_DEFER` (útil en tests y depuración). |
 | Fallos | No bloquean el expediente; eventos y metadata registran el error; reintento explícito vía API. |
 | Respuesta API coherente | Tras ejecutar el pipeline en la misma petición, el servicio hace **`refresh_from_db()`** para que el serializer no devuelva estado obsoleto en memoria. |
 
-**Variables de entorno / settings relevantes:** `FACTURA_COMPRA_OCR_ADAPTER`, `FACTURA_COMPRA_OCR_DEFER`, `FACTURA_COMPRA_OCR_SYNC`, `FACTURA_COMPRA_OCR_MOCK_FAIL`, `FACTURA_COMPRA_DOCUMENTO_MAX_BYTES`, `FACTURA_COMPRA_DOCUMENTO_MIME_PERMITIDOS` (lista fija en settings por defecto).
+**Variables de entorno / settings relevantes:** `FACTURA_COMPRA_OCR_ADAPTER`, `FACTURA_COMPRA_OCR_DEFER`, `FACTURA_COMPRA_OCR_SYNC`, `FACTURA_COMPRA_OCR_HTTP_*` (si `adapter=http`), `FACTURA_COMPRA_DOCUMENTO_MAX_BYTES`, `FACTURA_COMPRA_DOCUMENTO_MIME_PERMITIDOS` (lista fija en settings por defecto).
 
 ---
 
@@ -61,7 +61,7 @@
 
 - **Worker / hilo caído:** con `OCR_DEFER=True`, si el proceso muere antes de ejecutar el hilo, el documento puede quedarse en `pendiente` o `procesando`. Mitigación: **reintento** con `POST …/reintentar-ocr/` (idempotente respecto de documentos ya completados).
 - **Producción recomendada:** `OCR_DEFER=True` para no alargar la respuesta HTTP; monitorizar logs (`Fallo worker OCR` en `jobs.py`) y colas si en el futuro se migra a Celery.
-- **Tests:** `factura_compra_captura.tests.test_documento_upload`, `factura_compra_captura.tests.test_ocr_pipeline` (subida, pipeline éxito/fallo, reintento). En tests se usa `FACTURA_COMPRA_OCR_SYNC=True` para ejecutar OCR en línea sin depender de `on_commit`.
+- **Tests:** `test_documento_upload`, `test_ocr_pipeline`, `test_heuristic_pdf`. En tests se usa `FACTURA_COMPRA_OCR_SYNC=True` para ejecutar OCR en línea sin depender de `on_commit`.
 
 ---
 
@@ -69,7 +69,7 @@
 
 - Subida con MIME/tamaño y storage dev: **sí**.  
 - Job async observable: **sí** (hilo + estado en API; inline opcional).  
-- Adapter + mock + interfaz para proveedor real: **sí**.  
+- Adapter **heuristic** (PDF texto) + **http** opcional: **sí**.  
 - API subida + estado: **sí**.  
 - PWA base móvil: **sí** (`/compras/captura/movil/`).  
 - Tests TC-CAP / TC-OCR mínimos: **sí**.  

@@ -4,137 +4,138 @@
 {% block title %}Órdenes de Producción de Trabajo - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 min-h-screen py-6 transition-colors duration-300">
-    <div class="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
-        {# Breadcrumbs #}
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Órdenes de Producción de Trabajo (OPT)</span>
+<section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+    <div class="mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">
+                        Producción
+                    </a>
+                </li>
+                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                <li>
+                    <span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Órdenes de Producción de Trabajo (OPT)</span>
+                </li>
+            </ol>
         </nav>
 
-        {# Header #}
-        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">
+        <header class="mb-5 flex flex-col gap-4 border-b border-slate-200/80 pb-5 dark:border-slate-700/80 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
                     Órdenes de Producción de Trabajo
                 </h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Solo OPT ya creadas (liberadas) con su estado actual (en proceso, pendiente, cerrada).
+                <p class="mt-1.5 text-sm leading-snug text-slate-600 dark:text-slate-400">
+                    Solo OPT ya creadas (liberadas) con su situación en el flujo (demanda, producción, armado, cierre).
                 </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{% url 'mpr:wizard' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-all">
-                    <span class="material-icons text-lg">auto_awesome</span>
+            <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <a href="{% url 'mpr:wizard' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border-2 border-purple-600 bg-white px-4 py-2.5 text-sm font-semibold text-purple-700 shadow-sm transition-colors hover:bg-purple-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-purple-500 dark:bg-slate-800 dark:text-purple-300 dark:hover:bg-purple-950/30 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-lg" aria-hidden="true">auto_awesome</span>
                     Asistente de producción
                 </a>
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-                    <span class="material-icons text-lg">dashboard</span>
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">dashboard</span>
                     Tablero
                 </a>
             </div>
         </header>
 
-        {# Filtro por estado + búsqueda en la misma línea; tabla debajo. Un solo x-data para que la búsqueda filtre las filas. #}
         <div x-data="{ query: '' }" class="mb-6">
-        <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
-            <form method="get" id="form-estado-opt" class="flex items-end">
-                <div>
-                    <label for="estado" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estado</label>
-                    <select name="estado" id="estado" class="min-w-[12rem] px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500" onchange="this.form.submit()">
-                    <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
-                    <option value="en_proceso" {% if filtro_estado == 'en_proceso' %}selected{% endif %}>En proceso</option>
-                    <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
-                    <option value="atrasadas" {% if filtro_estado == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
-                </select>
+            <div class="mb-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+                <h2 class="sr-only">Filtros y búsqueda</h2>
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-end lg:gap-5">
+                    <form method="get" id="form-estado-opt" class="min-w-0">
+                        <label for="estado" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Filtrar por situación</label>
+                        <select name="estado" id="estado" class="h-11 w-full max-w-xs rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-white" onchange="this.form.submit()">
+                            <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
+                            <option value="en_proceso" {% if filtro_estado == 'en_proceso' %}selected{% endif %}>En proceso</option>
+                            <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                            <option value="atrasadas" {% if filtro_estado == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
+                        </select>
+                    </form>
+                    <div class="min-w-0">
+                        <label for="opt-list-busqueda" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-200">Buscar en la tabla</label>
+                        <input type="text"
+                               id="opt-list-busqueda"
+                               x-model="query"
+                               placeholder="Texto libre…"
+                               class="h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"/>
+                    </div>
                 </div>
-            </form>
-            <div class="flex items-end min-w-[480px] max-w-2xl flex-1 justify-end">
-                <label for="opt-list-busqueda" class="sr-only">Buscar en la tabla</label>
-                <input type="text"
-                       id="opt-list-busqueda"
-                       x-model="query"
-                       placeholder="Buscar en la tabla…"
-                       class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
             </div>
-        </div>
 
-        {# Tabla a ancho completo #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
-                        <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº lista</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Artículo</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fase</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. pedida</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider" title="Pendiente del pedido total para otras OPT">Pend. del pedido</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        {% for opt in ordenes %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                            data-search-text="{{ opt.id_lista_produccion|default:'' }} {{ opt.codigo_articulo|default:'' }} {{ opt.descripcion_articulo|default:''|escape }} En proceso Pendiente Cerrada {{ opt.etiqueta_fase|default:'' }} {{ opt.cantidad_pedida|default:'' }} {{ opt.cantidad_pendiente_mostrar|default:'' }} {{ opt.id_articulo|default:'' }}"
-                            x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase().trim())">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{% if opt.es_opt_creada %}{{ opt.id_lista_produccion|default:"-" }}{% else %}—{% endif %}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ opt.codigo_articulo }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 max-w-xs truncate" title="{{ opt.descripcion_articulo }}">{{ opt.descripcion_articulo|truncatewords:10 }}</td>
-                            <td class="px-4 py-3">
-                                {% if opt.es_opt_creada %}
-                                  {% if opt.fase_clave == 'cerrada' %}
-                                  <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">Cerrada</span>
-                                  {% elif opt.en_proceso_produccion == 'Si' %}
-                                  <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">En proceso</span>
-                                  {% else %}
-                                  <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Pendiente</span>
-                                  {% endif %}
-                                {% else %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Demanda</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3">
-                                {% if opt.fase_clave == 'cerrada' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">Cerrada</span>
-                                {% elif opt.fase_clave == 'demanda' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{{ opt.etiqueta_fase }}</span>
-                                {% elif opt.fase_clave == 'pendiente' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">{{ opt.etiqueta_fase }}</span>
-                                {% elif opt.fase_clave == 'lista_cerrar' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">{{ opt.etiqueta_fase }}</span>
-                                {% elif opt.fase_clave == 'lista_opa' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">{{ opt.etiqueta_fase }}</span>
-                                {% elif opt.fase_clave == 'en_produccion_opp' or opt.fase_clave == 'en_produccion' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">{{ opt.etiqueta_fase }}</span>
-                                {% else %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">{{ opt.etiqueta_fase|default:"—" }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300 tabular-nums">{{ opt.cantidad_pedida }}</td>
-                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300 tabular-nums">{{ opt.cantidad_pendiente_mostrar }}</td>
-                            <td class="px-4 py-3 flex flex-wrap gap-2">
-                                {% if opt.id_lista_produccion %}
-                                <a href="{% url 'mpr:opt_detail' opt.id_lista_produccion %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Ver</a>
-                                {% else %}
-                                <a href="{% url 'mpr:opt_detail' 0 %}?articulo={{ opt.id_articulo }}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Ver</a>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                                No hay OPT creadas. Use el Asistente de producción para crear OPT desde la demanda.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700 sm:px-5">
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Resultados</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
+                </div>
+                <div class="overflow-x-auto" role="region" aria-label="Tabla de órdenes OPT">
+                    <table class="min-w-[48rem] w-full divide-y divide-slate-200 dark:divide-slate-700 sm:min-w-full">
+                        <caption class="sr-only">Listado de órdenes de producción de trabajo</caption>
+                        <thead class="bg-slate-50/90 dark:bg-slate-800/80">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5">N.º lista</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5">Código</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5">Artículo</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5" title="Situación en el flujo MPR (misma lógica que antes en la columna Fase)">Estado</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5">Cant. pedida</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5" title="Pendiente del pedido total para otras OPT">Pend. del pedido</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 sm:px-5">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                            {% for opt in ordenes %}
+                            <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/40"
+                                data-search-text="{{ opt.id_lista_produccion|default:'' }} {{ opt.codigo_articulo|default:'' }} {{ opt.descripcion_articulo|default:''|escape }} {{ opt.etiqueta_fase|default:'' }} {{ opt.fase_clave|default:'' }} Demanda Cerrada Pendiente producción armado OPP OPA cerrar {{ opt.cantidad_pedida|default:'' }} {{ opt.cantidad_pendiente_mostrar|default:'' }} {{ opt.id_articulo|default:'' }}"
+                                x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase().trim())">
+                                <td class="whitespace-nowrap px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-white sm:px-5">{% if opt.es_opt_creada %}{{ opt.id_lista_produccion|default:"-" }}{% else %}—{% endif %}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 sm:px-5">{{ opt.codigo_articulo }}</td>
+                                <td class="max-w-xs px-4 py-2.5 text-sm text-slate-600 dark:text-slate-400 sm:max-w-md sm:px-5">
+                                    <span class="block truncate" title="{{ opt.descripcion_articulo }}">{{ opt.descripcion_articulo|truncatewords:10 }}</span>
+                                </td>
+                                <td class="px-4 py-2.5 sm:px-5">
+                                    {% if opt.fase_clave == 'cerrada' %}
+                                    <span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-200">Cerrada</span>
+                                    {% elif opt.fase_clave == 'demanda' %}
+                                    <span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-600 dark:text-slate-200">{{ opt.etiqueta_fase }}</span>
+                                    {% elif opt.fase_clave == 'pendiente' %}
+                                    <span class="inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{{ opt.etiqueta_fase }}</span>
+                                    {% elif opt.fase_clave == 'lista_cerrar' %}
+                                    <span class="inline-flex rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">{{ opt.etiqueta_fase }}</span>
+                                    {% elif opt.fase_clave == 'lista_opa' %}
+                                    <span class="inline-flex rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{{ opt.etiqueta_fase }}</span>
+                                    {% elif opt.fase_clave == 'en_produccion_opp' or opt.fase_clave == 'en_produccion' %}
+                                    <span class="inline-flex rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{{ opt.etiqueta_fase }}</span>
+                                    {% else %}
+                                    <span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-200">{{ opt.etiqueta_fase|default:"—" }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300 sm:px-5">{{ opt.cantidad_pedida }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300 sm:px-5">{{ opt.cantidad_pendiente_mostrar }}</td>
+                                <td class="px-4 py-2.5 sm:px-5">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        {% if opt.id_lista_produccion %}
+                                        <a href="{% url 'mpr:opt_detail' opt.id_lista_produccion %}" class="inline-flex min-h-9 min-w-[3.25rem] items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800">Ver</a>
+                                        {% else %}
+                                        <a href="{% url 'mpr:opt_detail' 0 %}?articulo={{ opt.id_articulo }}" class="inline-flex min-h-9 min-w-[3.25rem] items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800">Ver</a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="px-4 py-12 text-center sm:px-5">
+                                    <p class="text-sm font-medium text-slate-800 dark:text-slate-200">No hay OPT creadas</p>
+                                    <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500 dark:text-slate-400">Usá el Asistente de producción para crear OPT desde la demanda.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
-        </div>{# fin x-data búsqueda predictiva #}
     </div>
 </section>
 {% endblock %}

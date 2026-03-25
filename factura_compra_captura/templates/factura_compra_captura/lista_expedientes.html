@@ -1,0 +1,115 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Expedientes — factura de compra" %} | Synap{% endblock %}
+{% block content %}
+<div class="w-full max-w-7xl mx-auto">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+        {% trans "Expedientes de captura" %}
+      </h1>
+      <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
+        {% trans "Listado de expedientes creados desde captura móvil u otros orígenes Synap, filtrados por la empresa activa de tu sesión." %}
+      </p>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-500 max-w-2xl">
+        {% trans "Si acabás de crear un borrador y no lo ves, comprobá que la empresa seleccionada en el encabezado sea la misma. La URL de este listado es /compras/captura/expedientes/." %}
+      </p>
+      {% if empresa_sesion_id %}
+      <p class="mt-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+        {% trans "Empresa:" %}
+        {% if empresa_sesion_nombre %}
+          {{ empresa_sesion_nombre }}
+        {% else %}
+          <span class="font-mono text-gray-600 dark:text-gray-400">#{{ empresa_sesion_id }}</span>
+        {% endif %}
+      </p>
+      {% endif %}
+    </div>
+    <a
+      href="{% url 'factura_compra_captura_web:captura-movil' %}"
+      class="inline-flex shrink-0 items-center justify-center gap-2 min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
+    >
+      <span class="material-icons text-lg" aria-hidden="true">add_a_photo</span>
+      {% trans "Nueva captura" %}
+    </a>
+  </div>
+
+  {% if empresa_sesion_id is None %}
+  <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
+    <p class="font-medium">{% trans "No hay empresa activa en sesión" %}</p>
+    <p class="mt-1 text-amber-800 dark:text-amber-200/90">
+      {% trans "Elegí la empresa en el selector superior del encabezado o volvé a iniciar sesión. Sin eso no se puede listar expedientes." %}
+    </p>
+  </div>
+  {% elif not expedientes %}
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm px-6 py-10 text-center">
+    <p class="text-gray-600 dark:text-gray-400 text-sm">
+      {% trans "No hay expedientes para esta empresa todavía." %}
+    </p>
+    <a href="{% url 'factura_compra_captura_web:captura-movil' %}" class="inline-flex mt-4 text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300">
+      {% trans "Ir a captura" %}
+    </a>
+  </div>
+  {% else %}
+  <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <thead class="bg-gray-50 dark:bg-gray-700">
+        <tr>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">{% trans "Creado" %}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">{% trans "Estado" %}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">{% trans "Proveedor" %}</th>
+          <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">{% trans "Identificador" %}</th>
+          <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wide">{% trans "Acciones" %}</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+        {% for exp in expedientes %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+          <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
+            {{ exp.creado_en|date:"d/m/Y H:i" }}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+            {{ exp.get_estado_display }}
+          </td>
+          <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-mono">
+            {% if exp.codigo_proveedor_legacy %}{{ exp.codigo_proveedor_legacy }}{% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-xs font-mono text-gray-600 dark:text-gray-400 max-w-[12rem] truncate" title="{{ exp.id }}">
+            {{ exp.id }}
+          </td>
+          <td class="px-4 py-3 text-right text-sm">
+            {% if puede_revisar %}
+            <a
+              href="{% url 'factura_compra_captura_web:revision-expediente' pk=exp.pk %}"
+              class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition"
+            >
+              {% trans "Revisar" %}
+            </a>
+            {% else %}
+            <span class="text-gray-400 dark:text-gray-500 text-xs">{% trans "Sin permiso de revisión" %}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <nav class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600 dark:text-gray-400" aria-label="{% trans 'Paginación' %}">
+    <span>
+      {% blocktrans with p=page_obj.number t=paginator.num_pages %}Página {{ p }} de {{ t }}{% endblocktrans %}
+    </span>
+    <div class="flex gap-2">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">{% trans "Anterior" %}</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">{% trans "Siguiente" %}</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

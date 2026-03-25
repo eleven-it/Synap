@@ -78,3 +78,12 @@ class DocumentoExpedientePermission(BasePermission):
         if request.method == "GET":
             return _perm(request.user, "ver")
         return _perm(request.user, "editar")
+
+
+class ExpedienteResolverProveedorPermission(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if getattr(request.user, "is_superuser", False):
+            return True
+        return _perm(request.user, "editar")

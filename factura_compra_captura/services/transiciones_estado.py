@@ -45,7 +45,7 @@ def validar_precondiciones(
     if accion == "enviar_revision":
         if expediente.codigo_proveedor_legacy is None:
             raise TransicionEstadoInvalida(
-                "Se requiere codigo_proveedor_legacy para enviar a revisión.",
+                "Se requiere el código de proveedor (AdministraNET) para enviar a revisión.",
                 codigo="proveedor_requerido",
             )
         lineas = list(expediente.lineas.all())

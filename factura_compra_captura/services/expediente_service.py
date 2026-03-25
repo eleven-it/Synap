@@ -18,10 +18,17 @@ from factura_compra_captura.services.fiscal_invoice_validation import (
     FiscalInvoiceValidationService,
     resolve_base_empresa_for_compras,
 )
+from factura_compra_captura.services.proveedor_legacy_service import (
+    buscar_proveedor_por_cuit,
+    crear_proveedor_desde_borrador,
+)
 from factura_compra_captura.services.transiciones_estado import (
     TransicionEstadoInvalida,
     obtener_estado_destino,
     validar_precondiciones,
+)
+from factura_compra_captura.services.proveedor_resolution_service import (
+    resolver_proveedor_desde_legacy_o_padron,
 )
 from factura_compra_posting.legacy_posting_command_v1 import (
     PostingValidationError,
@@ -34,7 +41,96 @@ from factura_compra_posting.structured_log import log_factura_compra_event
 logger = logging.getLogger(__name__)
 
 
+def _solo_digitos_cuit(s: str) -> str:
+    return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+
+def _cuit_11_digitos_para_resolver(expediente: ExpedienteFacturaCompra) -> str | None:
+    """
+    CUIT para búsqueda en AdministraNET: primero metadata.proveedor_synap,
+    si no, último documento con OCR completado (campos_cabecera).
+    """
+    md = expediente.metadata or {}
+    ps = md.get("proveedor_synap") or {}
+    c = _solo_digitos_cuit(str(ps.get("cuit") or ""))
+    if len(c) == 11:
+        return c
+    from factura_compra_captura.models import DocumentoFuente
+
+    doc = (
+        expediente.documentos_fuente.filter(
+            estado_procesamiento=DocumentoFuente.EstadoProcesamiento.COMPLETADO,
+        )
+        .order_by("-creado_en")
+        .first()
+    )
+    if not doc:
+        return None
+    cab = (doc.resultado_ocr or {}).get("campos_cabecera") or {}
+    c = _solo_digitos_cuit(str(cab.get("proveedor_cuit_texto") or ""))
+    if len(c) == 11:
+        return c
+    return None
+
+
 class ExpedienteService:
+    @staticmethod
+    def _merge_proveedor_metadata(
+        expediente: ExpedienteFacturaCompra,
+        *,
+        patch: dict[str, Any],
+    ) -> None:
+        md = dict(expediente.metadata or {})
+        proveedor_synap = dict(md.get("proveedor_synap") or {})
+        proveedor_synap.update(patch)
+        md["proveedor_synap"] = proveedor_synap
+        expediente.metadata = md
+
+    @staticmethod
+    def _asegurar_proveedor_legacy(
+        expediente: ExpedienteFacturaCompra,
+        *,
+        base_empresa: str,
+    ) -> None:
+        if expediente.codigo_proveedor_legacy:
+            return
+        proveedor_md = dict((expediente.metadata or {}).get("proveedor_synap") or {})
+        cuit = str(proveedor_md.get("cuit") or "").strip()
+        if not cuit:
+            raise TransicionEstadoInvalida(
+                "Falta CUIT del proveedor para aprobación.",
+                codigo="proveedor_cuit_requerido",
+            )
+        existente = buscar_proveedor_por_cuit(base_empresa, cuit)
+        if existente:
+            expediente.codigo_proveedor_legacy = existente.codigo
+            ExpedienteService._merge_proveedor_metadata(
+                expediente,
+                patch={
+                    "modo": "legacy_vinculado",
+                    "razon_social": existente.nombre,
+                    "origen": "administranet",
+                },
+            )
+            expediente.save(update_fields=["codigo_proveedor_legacy", "metadata"])
+            return
+        creado = crear_proveedor_desde_borrador(
+            base_empresa=base_empresa,
+            cuit=cuit,
+            razon_social=str(proveedor_md.get("razon_social") or ""),
+            tipo_factura_sugerida=str(proveedor_md.get("tipo_factura_sugerida") or ""),
+        )
+        expediente.codigo_proveedor_legacy = creado.codigo
+        ExpedienteService._merge_proveedor_metadata(
+            expediente,
+            patch={
+                "modo": "legacy_vinculado",
+                "razon_social": creado.nombre,
+                "origen": "alta_legacy_pre_posting",
+            },
+        )
+        expediente.save(update_fields=["codigo_proveedor_legacy", "metadata"])
+
     @staticmethod
     @transaction.atomic
     def crear(
@@ -60,6 +156,52 @@ class ExpedienteService:
 
     @staticmethod
     @transaction.atomic
+    def asegurar_codigo_proveedor_desde_cuit_si_falta(
+        expediente: ExpedienteFacturaCompra,
+        request: HttpRequest | None,
+    ) -> ExpedienteFacturaCompra:
+        """
+        Si aún no hay código legacy y hay CUIT (metadata u OCR), busca en AdministraNET
+        y persiste el mismo resultado que POST /resolver-proveedor/.
+        """
+        if expediente.codigo_proveedor_legacy is not None:
+            return expediente
+        cuit = _cuit_11_digitos_para_resolver(expediente)
+        if not cuit:
+            return expediente
+        base_empresa = resolve_base_empresa_for_compras(expediente, request)
+        if not base_empresa:
+            return expediente
+        md = dict(expediente.metadata or {})
+        ps = md.get("proveedor_synap") or {}
+        razon = str(ps.get("razon_social") or "").strip()
+        try:
+            out = resolver_proveedor_desde_legacy_o_padron(
+                base_empresa=base_empresa,
+                cuit=cuit,
+                razon_social_borrador=razon,
+            )
+        except ValueError:
+            return expediente
+        except Exception as e:
+            logger.warning(
+                "asegurar_codigo_proveedor_desde_cuit_si_falta expediente=%s: %s",
+                expediente.pk,
+                e,
+            )
+            return expediente
+        md = dict(expediente.metadata or {})
+        md["proveedor_synap"] = out.proveedor_synap
+        expediente.metadata = md
+        fields = ["metadata", "modificado_en"]
+        if out.codigo_proveedor_legacy is not None:
+            expediente.codigo_proveedor_legacy = out.codigo_proveedor_legacy
+            fields.append("codigo_proveedor_legacy")
+        expediente.save(update_fields=fields)
+        return expediente
+
+    @staticmethod
+    @transaction.atomic
     def actualizar(
         expediente: ExpedienteFacturaCompra,
         *,
@@ -72,6 +214,7 @@ class ExpedienteService:
         posting_header: dict[str, Any] | None = None,
         posting_context: dict[str, Any] | None = None,
         vales_codigos: list[int] | None = None,
+        analyst_feedback_append: list[dict[str, Any]] | None = None,
     ) -> ExpedienteFacturaCompra:
         if expediente.estado not in (
             ExpedienteFacturaCompra.Estado.BORRADOR,
@@ -88,8 +231,31 @@ class ExpedienteService:
             expediente.origen_datos = origen_datos
         if sucursal_codigo_legacy is not None:
             expediente.sucursal_codigo_legacy = sucursal_codigo_legacy
+        if analyst_feedback_append:
+            from factura_compra_captura.services.supplier_template_engine import (
+                append_analyst_correction,
+            )
+
+            md = dict(expediente.metadata or {})
+            fb = md.get("analyst_feedback")
+            for c in analyst_feedback_append:
+                if not isinstance(c, dict):
+                    continue
+                campo = str(c.get("campo") or "").strip()
+                if not campo:
+                    continue
+                fb = append_analyst_correction(
+                    fb,
+                    campo=campo[:200],
+                    valor_anterior=c.get("valor_anterior"),
+                    valor_nuevo=c.get("valor_nuevo"),
+                )
+            md["analyst_feedback"] = fb
+            expediente.metadata = md
         if metadata is not None:
-            expediente.metadata = metadata
+            md = dict(expediente.metadata or {})
+            md.update(metadata)
+            expediente.metadata = md
         if (
             posting_header is not None
             or posting_context is not None
@@ -170,6 +336,11 @@ class ExpedienteService:
         adapter = get_posting_adapter()
         nuevo = expediente.posting_attempt + 1
         key = f"{expediente.id}:{nuevo}"
+        be = (base_empresa or "").strip() or None
+        if be is None:
+            be = resolve_base_empresa_for_compras(expediente, request)
+        ExpedienteService._asegurar_proveedor_legacy(expediente, base_empresa=be)
+        expediente.refresh_from_db(fields=["codigo_proveedor_legacy", "metadata"])
         cmd = map_expediente_to_command_v1(
             expediente,
             idempotency_key=key,
@@ -193,9 +364,6 @@ class ExpedienteService:
                 codigo="duplicate_factura_synap",
             )
 
-        be = (base_empresa or "").strip() or None
-        if be is None:
-            be = resolve_base_empresa_for_compras(expediente, request)
         fiscal = FiscalInvoiceValidationService.validate_for_approval(
             expediente,
             cmd,

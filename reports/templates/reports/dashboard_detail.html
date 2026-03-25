@@ -144,7 +144,7 @@
             </div>
 
             <div class="px-6 sm:px-10 py-0 border-b border-slate-100 dark:border-slate-800 hidden" data-filters-wrapper>
-                {{ report_config_json|json_script:"report-config-data" }}
+                {{ report_config_for_script|json_script:"report-config-data" }}
                 <form class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 py-8 hidden" id="report-filters" data-filters-container data-report-slug="{{ report.slug }}">
                     {% if is_declarative %}
                         <!-- Filtros de período y fechas solo se muestran si hay filtros de fecha definidos en el builder -->
@@ -801,12 +801,19 @@
 </section>
 
 <script>
-// Inyectar configuración del reporte en el contexto JavaScript
-window.REPORT_CONFIG = {
-    is_declarative: {{ is_declarative|yesno:"true,false" }},
-    report_slug: "{{ report.slug }}",
-    config: {{ report_config_json|safe }}
-};
+// Inyectar configuración del reporte (lee el nodo #report-config-data generado arriba con |json_script)
+(function() {
+    var el = document.getElementById('report-config-data');
+    var cfg = {};
+    if (el && el.textContent) {
+        try { cfg = JSON.parse(el.textContent); } catch (e) { cfg = {}; }
+    }
+    window.REPORT_CONFIG = {
+        is_declarative: {{ is_declarative|yesno:"true,false" }},
+        report_slug: "{{ report.slug }}",
+        config: cfg
+    };
+})();
 </script>
 <script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211" defer></script>
 {% if is_declarative or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}

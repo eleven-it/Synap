@@ -306,6 +306,21 @@ class AdministraNETSucursalesService:
             logger.exception("Error al eliminar tipo envío sucursal: %s", e)
             return False
 
+    def tipo_envio_pertenece_a_sucursal(
+        self, base_empresa: str, id_sucursales_envios: int, id_sucursal: int
+    ) -> bool:
+        """Evita IDOR: el registro sucursales_envios debe corresponder a la sucursal de la URL."""
+        d = self._get_one_tipo_envio(base_empresa, id_sucursales_envios)
+        if not d:
+            return False
+        for key in ('id_sucursal', 'id_sucusal'):
+            if key in d and d.get(key) is not None:
+                try:
+                    return int(d[key]) == int(id_sucursal)
+                except (TypeError, ValueError):
+                    continue
+        return False
+
     def _float_or_zero(self, v) -> float:
         if v is None or (isinstance(v, str) and not v.strip()):
             return 0.0

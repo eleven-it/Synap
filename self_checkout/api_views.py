@@ -25,6 +25,7 @@ from .constants import (
 from .services import CartService, KioskSessionService, ConfirmationService, InvoiceService
 from .services.promotion_service import (
     obtener_promocion_articulo,
+    promocion_desde_fila_articulo,
     aplicar_precio_promocion,
 )
 from .services.voucher_service import (
@@ -519,13 +520,186 @@ def articulo_por_codigo(request):
     return _error_response(E_ARTICLE_NOT_FOUND, 'No encontrado', 404)
 
 
+def _fetch_articulos_list_rows(c, search: str, limit: int, id_lista_int: int):
+    """
+    Consulta con JOIN a articulo_precio cuando el esquema lo permite; si no, igual que antes
+    (solo articulo + iva) y el precio de lista se puede completar con _batch_precios_lista_articulos.
+    Devuelve (filas, promo_en_fila, necesita_precios_lista_batch).
+    """
+    import MySQLdb
+
+    _from_join_precio = """
+FROM articulo a
+LEFT JOIN iva ON iva.id = a.Alicuota
+LEFT JOIN articulo_precio ap ON ap.IDArt = a.IDArt AND ap.id_lista = %s
+"""
+    _from_solo_articulo = """
+FROM articulo a
+LEFT JOIN iva ON iva.id = a.Alicuota
+"""
+    _sel_con_join = """
+SELECT a.IDArt AS id_articulo, a.id_manual AS codigo_articulo, a.NombreArticulo AS descripcion,
+       COALESCE(iva.Alicuota, a.Alicuota, 0) AS alicuota_iva,
+       CASE
+         WHEN ap.PrecioVentaxU IS NOT NULL AND ap.PrecioVentaxU > 0 THEN ap.PrecioVentaxU
+         ELSE COALESCE(a.Precio1V, a.Precio1VI, 0)
+       END AS precio
+"""
+    _sel_sin_join = """
+SELECT a.IDArt AS id_articulo, a.id_manual AS codigo_articulo, a.NombreArticulo AS descripcion,
+       COALESCE(iva.Alicuota, a.Alicuota, 0) AS alicuota_iva,
+       COALESCE(a.Precio1V, a.Precio1VI, 0) AS precio
+"""
+    _sel_promo = """
+,
+       a.promocion AS promocion,
+       COALESCE(a.promocion_vigencia_desde, '1900-01-01') AS vigencia_desde,
+       COALESCE(a.promocion_vigencia_hasta, '2099-12-31') AS vigencia_hasta,
+       COALESCE(a.promocion_tipo, '') AS promocion_tipo,
+       COALESCE(a.promocion_por, 0) AS promocion_por,
+       COALESCE(a.promocion_cant, 0) AS promocion_cant,
+       a.promocion_listaoficial, a.promocion_lista1, a.promocion_lista2,
+       a.promocion_lista3, a.promocion_lista4, a.promocion_lista5
+"""
+    _order = "ORDER BY a.NombreArticulo\nLIMIT %s"
+
+    def _reintentar_por_error(e) -> bool:
+        msg = str(e).lower()
+        code = e.args[0] if getattr(e, 'args', None) else None
+        if code in (1054, 1146):
+            return True
+        if 'unknown column' in msg or "doesn't exist" in msg or 'no existe' in msg:
+            return True
+        return False
+
+    if search:
+        term = '%' + search + '%'
+        attempts = [
+            (
+                _sel_con_join + _sel_promo + _from_join_precio
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n"
+                + "   OR a.NroCodBarra = %s OR a.NroCodBarra LIKE %s\n" + _order,
+                [id_lista_int, term, term, term, search.strip(), term, limit],
+                True,
+                False,
+            ),
+            (
+                _sel_con_join + _sel_promo + _from_join_precio
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n" + _order,
+                [id_lista_int, term, term, term, limit],
+                True,
+                False,
+            ),
+            (
+                _sel_con_join + _from_join_precio
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n"
+                + "   OR a.NroCodBarra = %s OR a.NroCodBarra LIKE %s\n" + _order,
+                [id_lista_int, term, term, term, search.strip(), term, limit],
+                False,
+                False,
+            ),
+            (
+                _sel_con_join + _from_join_precio
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n" + _order,
+                [id_lista_int, term, term, term, limit],
+                False,
+                False,
+            ),
+            (
+                _sel_sin_join + _sel_promo + _from_solo_articulo
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n"
+                + "   OR a.NroCodBarra = %s OR a.NroCodBarra LIKE %s\n" + _order,
+                [term, term, term, search.strip(), term, limit],
+                True,
+                True,
+            ),
+            (
+                _sel_sin_join + _sel_promo + _from_solo_articulo
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n" + _order,
+                [term, term, term, limit],
+                True,
+                True,
+            ),
+            (
+                _sel_sin_join + _from_solo_articulo
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n"
+                + "   OR a.NroCodBarra = %s OR a.NroCodBarra LIKE %s\n" + _order,
+                [term, term, term, search.strip(), term, limit],
+                False,
+                True,
+            ),
+            (
+                _sel_sin_join + _from_solo_articulo
+                + "WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s\n" + _order,
+                [term, term, term, limit],
+                False,
+                True,
+            ),
+        ]
+    else:
+        attempts = [
+            (_sel_con_join + _sel_promo + _from_join_precio + _order, [id_lista_int, limit], True, False),
+            (_sel_con_join + _from_join_precio + _order, [id_lista_int, limit], False, False),
+            (_sel_sin_join + _sel_promo + _from_solo_articulo + _order, [limit], True, True),
+            (_sel_sin_join + _from_solo_articulo + _order, [limit], False, True),
+        ]
+    last_err = None
+    for sql, params, promo_en_fila, need_batch in attempts:
+        try:
+            c.execute(sql, params)
+            return c.fetchall() or [], promo_en_fila, need_batch
+        except MySQLdb.ProgrammingError as e:
+            last_err = e
+            if not _reintentar_por_error(e):
+                raise
+        except MySQLdb.OperationalError as e:
+            last_err = e
+            if not _reintentar_por_error(e):
+                raise
+        except Exception as e:
+            if not _reintentar_por_error(e):
+                raise
+            last_err = e
+    if last_err:
+        logger.warning('articulos_list: variantes de consulta agotadas: %s', last_err)
+    return [], False, True
+
+
+def _batch_precios_lista_articulos(c, ids: list, id_lista_int: int) -> dict:
+    """Un solo SELECT a articulo_precio; si falla, {} (se usa precio de la fila)."""
+    if not ids:
+        return {}
+    uniq = list(dict.fromkeys(int(x) for x in ids if x is not None))
+    if not uniq:
+        return {}
+    placeholders = ','.join(['%s'] * len(uniq))
+    sql = (
+        f'SELECT IDArt, PrecioVentaxU FROM articulo_precio '
+        f'WHERE id_lista = %s AND IDArt IN ({placeholders})'
+    )
+    out = {}
+    try:
+        c.execute(sql, [id_lista_int] + uniq)
+        for row in c.fetchall() or []:
+            pid = row.get('IDArt')
+            pv = row.get('PrecioVentaxU')
+            if pid is not None and pv is not None and float(pv) > 0:
+                out[int(pid)] = float(pv)
+    except Exception:
+        pass
+    return out
+
+
 @require_http_methods(['GET'])
 @require_self_checkout_permission('kiosk')
 def articulos_list(request):
     """
     Lista artículos para grilla de productos (modo TPV). Devuelve id, codigo, descripcion, precio, alicuota, imagen_url.
     Query: limit (default 40), search (opcional, por nombre o código).
+    Precio y promoción se resuelven en la consulta principal (sin N+1); stock por depósito en un IN.
     """
+    from datetime import date as date_cls
+
     base, err = _get_context(request)
     if err:
         return err
@@ -541,96 +715,76 @@ def articulos_list(request):
         id_deposito = None
     from self_checkout.db import mysql_cursor
     from self_checkout.services.stock_service import StockService
-    import MySQLdb
-    with mysql_cursor(base, dict_cursor=True) as c:
+
+    id_lista_int = max(0, min(5, int(id_lista)))
+    rows = []
+    promo_en_fila = False
+    precio_lista_map = {}
+    try:
+        with mysql_cursor(base, dict_cursor=True) as c:
+            rows, promo_en_fila, need_batch_precio_lista = _fetch_articulos_list_rows(
+                c, search, limit, id_lista_int
+            )
+            ids_for_precio = [r.get('id_articulo') for r in rows if r.get('id_articulo') is not None]
+            if need_batch_precio_lista and ids_for_precio:
+                precio_lista_map = _batch_precios_lista_articulos(c, ids_for_precio, id_lista_int)
+    except Exception as e:
+        logger.warning('articulos_list query failed: %s', e)
+        rows = []
+
+    ids = [r.get('id_articulo') for r in rows if r.get('id_articulo') is not None]
+    stock_map = {}
+    if id_deposito is not None and ids:
+        stock_svc = StockService(base)
         try:
-            if search:
-                term = '%' + search + '%'
-                # Búsqueda por nombre, id_manual, IDArt y código de barras (si existe columna)
+            stock_map = stock_svc.get_disponible_map(ids, id_deposito)
+        except Exception:
+            for i in ids:
                 try:
-                    c.execute("""
-                        SELECT a.IDArt AS id_articulo, a.id_manual AS codigo_articulo, a.NombreArticulo AS descripcion,
-                               COALESCE(iva.Alicuota, a.Alicuota, 0) AS alicuota_iva
-                        FROM articulo a
-                        LEFT JOIN iva ON iva.id = a.Alicuota
-                        WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s
-                           OR a.NroCodBarra = %s OR a.NroCodBarra LIKE %s
-                        ORDER BY a.NombreArticulo
-                        LIMIT %s
-                    """, [term, term, term, search.strip(), term, limit])
-                except MySQLdb.ProgrammingError as e:
-                    if e.args and e.args[0] == 1054 or 'Unknown column' in str(e):
-                        c.execute("""
-                            SELECT a.IDArt AS id_articulo, a.id_manual AS codigo_articulo, a.NombreArticulo AS descripcion,
-                                   COALESCE(iva.Alicuota, a.Alicuota, 0) AS alicuota_iva
-                            FROM articulo a
-                            LEFT JOIN iva ON iva.id = a.Alicuota
-                            WHERE a.NombreArticulo LIKE %s OR a.id_manual LIKE %s OR CAST(a.IDArt AS CHAR) LIKE %s
-                            ORDER BY a.NombreArticulo
-                            LIMIT %s
-                        """, [term, term, term, limit])
-                    else:
-                        raise
-            else:
-                c.execute("""
-                    SELECT a.IDArt AS id_articulo, a.id_manual AS codigo_articulo, a.NombreArticulo AS descripcion,
-                           COALESCE(iva.Alicuota, a.Alicuota, 0) AS alicuota_iva
-                    FROM articulo a
-                    LEFT JOIN iva ON iva.id = a.Alicuota
-                    ORDER BY a.NombreArticulo
-                    LIMIT %s
-                """, [limit])
-            rows = c.fetchall()
-        except Exception as e:
-            logger.warning("articulos_list query failed: %s", e)
-            rows = []
-        id_lista_int = max(0, min(5, int(id_lista)))
-        out = []
-        for r in rows:
-            id_art = r.get('id_articulo')
-            precio = 0
+                    stock_map[int(i)] = stock_svc.get_disponible(int(i), id_deposito)
+                except Exception:
+                    stock_map[int(i)] = Decimal('0')
+
+    hoy = date_cls.today()
+    out = []
+    for r in rows:
+        id_art = r.get('id_articulo')
+        precio = float(r.get('precio') or 0)
+        try:
+            pl = precio_lista_map.get(int(id_art)) if id_art is not None else None
+            if pl is not None and pl > 0:
+                precio = pl
+        except (TypeError, ValueError):
+            pass
+        promo = {}
+        if promo_en_fila:
+            promo = promocion_desde_fila_articulo(r, id_lista_int, hoy)
+        else:
             try:
-                c.execute("SELECT PrecioVentaxU FROM articulo_precio WHERE IDArt = %s AND id_lista = %s LIMIT 1", [id_art, id_lista])
-                pr = c.fetchone()
-                if pr and pr.get('PrecioVentaxU') is not None:
-                    precio = float(pr['PrecioVentaxU'])
+                promo = obtener_promocion_articulo(base, int(id_art), id_lista_int, hoy)
             except Exception:
                 pass
-            if precio <= 0:
-                try:
-                    c.execute("SELECT COALESCE(Precio1V, Precio1VI, 0) AS p FROM articulo WHERE IDArt = %s", [id_art])
-                    pr2 = c.fetchone()
-                    if pr2 and pr2.get('p') is not None:
-                        precio = float(pr2['p'])
-                except Exception:
-                    pass
-            promo = {}
+        item = {
+            'id_articulo': id_art,
+            'codigo_articulo': r.get('codigo_articulo') or str(id_art),
+            'descripcion': r.get('descripcion') or '',
+            'precio': precio,
+            'alicuota_iva': float(r.get('alicuota_iva') or 0),
+            'imagen_url': None,
+            'promocion': promo.get('promocion') or 'No',
+            'promocion_tipo': promo.get('promocion_tipo') or '',
+            'promocion_por': float(promo.get('promocion_por') or 0),
+            'promocion_cant': float(promo.get('promocion_cant') or 0),
+        }
+        if id_deposito is not None:
             try:
-                promo = obtener_promocion_articulo(base, int(id_art), id_lista_int)
+                disp = stock_map.get(int(id_art), Decimal('0'))
+                item['stock_disponible'] = int(disp) if disp is not None else 0
             except Exception:
-                pass
-            item = {
-                'id_articulo': id_art,
-                'codigo_articulo': r.get('codigo_articulo') or str(id_art),
-                'descripcion': r.get('descripcion') or '',
-                'precio': precio,
-                'alicuota_iva': float(r.get('alicuota_iva') or 0),
-                'imagen_url': None,
-                'promocion': promo.get('promocion') or 'No',
-                'promocion_tipo': promo.get('promocion_tipo') or '',
-                'promocion_por': float(promo.get('promocion_por') or 0),
-                'promocion_cant': float(promo.get('promocion_cant') or 0),
-            }
-            if id_deposito is not None:
-                try:
-                    stock_svc = StockService(base)
-                    disp = stock_svc.get_disponible(int(id_art), id_deposito)
-                    item['stock_disponible'] = int(disp) if disp is not None else 0
-                except Exception:
-                    item['stock_disponible'] = 0
-            else:
-                item['stock_disponible'] = None
-            out.append(item)
+                item['stock_disponible'] = 0
+        else:
+            item['stock_disponible'] = None
+        out.append(item)
     return JsonResponse({'articulos': out})
 
 

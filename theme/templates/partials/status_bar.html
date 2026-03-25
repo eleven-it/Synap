@@ -17,7 +17,7 @@ Muestra: fecha/hora servidor, empresa, sucursal, puesto, usuario. No expone id_s
         {% if user.nombre_puesto %}
         <span>{{ user.nombre_puesto }}</span>
         {% endif %}
-        <span>{{ user.nombre_completo|default:user.cod_usuario|default:user.get_username|default:"—" }}</span>
+        <span>{% if user.nombre_completo %}{{ user.nombre_completo }}{% elif user.cod_usuario %}{{ user.cod_usuario }}{% else %}{{ user.email|default:user.get_username|default:"—" }}{% endif %}</span>
     </div>
 </footer>
 <script>

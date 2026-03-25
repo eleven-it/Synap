@@ -1,5 +1,6 @@
 {% extends "base_app.html" %}
 {% load i18n %}
+{% load security_extras %}
 
 {% block title %}Dashboard - Synap{% endblock %}
 
@@ -78,7 +79,7 @@
                         <div class="flex items-center mb-4">
                             <div class="w-12 h-12 rounded-xl flex items-center justify-center mr-4" 
                                  style="background: linear-gradient(135deg, {{ app.color }}50 0%, {{ app.color }}20 100%);">
-                                {{ app.icono_svg|safe }}
+                                {{ app.icono_svg|safe_svg_icon }}
                             </div>
                             <div class="flex-1">
                                 <h3 class="text-lg font-semibold text-gray-900 group-hover:text-{{ app.color }}-700 transition-colors">

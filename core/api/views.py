@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import Optional
 
+import jwt
 from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
@@ -9,11 +11,74 @@ from core.models import Contact, Country, FiscalResponsibility, State, Currency
 from core.services.support_conocimiento import build_conocimiento_items_from_docs
 
 
+def _json_session_required(request):
+    """
+    Sesión administraNET (login Synap). Devuelve JsonResponse 401 si no hay usuario en sesión.
+    """
+    if not request.session.get('user'):
+        return JsonResponse({'error': 'No autenticado.'}, status=401)
+    return None
+
+
+def _support_rag_auth_error_response(request) -> Optional[JsonResponse]:
+    """
+    GET conocimiento RAG: en producción exige SUPPORT_SYNAP_JWT_SECRET y Bearer JWT (HS256, con exp).
+    Fuera de producción: si el secret está vacío se permite sin token (desarrollo); si está definido, misma validación que producción.
+    """
+    env = (getattr(settings, 'ENVIRONMENT', '') or '').strip().lower()
+    is_prod = env in ('production', 'produccion')
+    secret = (getattr(settings, 'SUPPORT_SYNAP_JWT_SECRET', None) or '').strip()
+
+    if is_prod and not secret:
+        return JsonResponse(
+            {
+                'error': (
+                    'Servicio no configurado: defina SUPPORT_SYNAP_JWT_SECRET en Synap y en Support '
+                    '(mismo valor) para acceder al conocimiento RAG.'
+                )
+            },
+            status=503,
+        )
+
+    if not is_prod and not secret:
+        if getattr(settings, 'DEBUG', False):
+            return None
+        return JsonResponse(
+            {
+                'error': (
+                    'Conocimiento RAG: defina SUPPORT_SYNAP_JWT_SECRET y use Bearer JWT cuando DEBUG=False '
+                    '(p. ej. staging), o active DEBUG solo en desarrollo local.'
+                )
+            },
+            status=503,
+        )
+
+    auth = (request.headers.get('Authorization') or '').strip()
+    if not auth.lower().startswith('bearer '):
+        return JsonResponse({'error': 'No autorizado.'}, status=401)
+    token = auth[7:].strip()
+    if not token:
+        return JsonResponse({'error': 'No autorizado.'}, status=401)
+    try:
+        jwt.decode(
+            token,
+            secret,
+            algorithms=['HS256'],
+            options={'require': ['exp']},
+        )
+    except jwt.PyJWTError:
+        return JsonResponse({'error': 'Token inválido o expirado.'}, status=401)
+    return None
+
+
 def fecha_servidor_api(request):
     """
     GET /core/api/fecha-servidor/
     Devuelve fecha y hora del servidor (para barra de estado, paridad con Principal VB6 Control_Fecha).
     """
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     now = timezone.now()
     return JsonResponse({
         "fecha": now.strftime("%Y-%m-%d"),
@@ -24,6 +89,9 @@ def fecha_servidor_api(request):
 
 def contact_search_api(request):
     """API para buscar contactos existentes"""
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     query = request.GET.get('q', '')
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
@@ -52,6 +120,9 @@ def contact_search_api(request):
 
 def country_search_api(request):
     """API para buscar países por nombre o código"""
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     query = request.GET.get('q', '').strip()
     if not query:
         countries = Country.objects.filter(is_active=True)[:10]
@@ -80,6 +151,9 @@ def country_search_api(request):
 
 def fiscal_responsibility_search_api(request):
     """API para buscar responsabilidades fiscales por nombre o código y país"""
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     query = request.GET.get('q', '').strip()
     country_name = request.GET.get('country_name', '').strip()
     country_code = request.GET.get('country_code', '').strip()
@@ -111,6 +185,9 @@ def fiscal_responsibility_search_api(request):
 
 def state_search_api(request):
     """API para buscar estados/provincias por nombre/código y país"""
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     query = request.GET.get('q', '').strip()
     country_id = request.GET.get('country_id')
     country_name = request.GET.get('country_name', '').strip()
@@ -143,6 +220,9 @@ def state_search_api(request):
 
 def currency_search_api(request):
     """API para buscar monedas por nombre o código"""
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
     query = request.GET.get('q', '').strip()
     if not query:
         currencies = Currency.objects.filter(is_active=True)[:10]
@@ -256,36 +336,59 @@ def departamentos_api(request):
 def geocode_api(request):
     """
     GET: Geocodificación con Google Maps API (paridad con CargaSucursal.frm).
-    Parámetros: address (obligatorio), key (opcional; si no se envía se usa GOOGLE_GEOCODING_API_KEY de settings).
+    Parámetros: address (obligatorio). La clave API solo se toma de GOOGLE_GEOCODING_API_KEY (settings / .env).
     Devuelve { "lat": str, "lng": str } o { "error": "..." }.
     """
-    import urllib.request
-    import urllib.parse
     import json
+    import logging
+    import urllib.parse
+    import urllib.request
+
+    deny = _json_session_required(request)
+    if deny is not None:
+        return deny
 
     address = request.GET.get('address', '').strip()
     if not address:
         return JsonResponse({'error': 'Falta el parámetro address.'}, status=400)
 
-    api_key = request.GET.get('key', '').strip()
+    api_key = (getattr(settings, 'GOOGLE_GEOCODING_API_KEY', None) or '').strip()
     if not api_key:
-        from django.conf import settings
-        api_key = getattr(settings, 'GOOGLE_GEOCODING_API_KEY', None) or ''
-    url = 'https://maps.googleapis.com/maps/api/geocode/json?address=' + urllib.parse.quote(address)
-    if api_key:
-        url += '&key=' + urllib.parse.quote(api_key)
+        return JsonResponse(
+            {'error': 'Geocodificación no configurada en el servidor (GOOGLE_GEOCODING_API_KEY).'},
+            status=503,
+        )
 
+    url = (
+        'https://maps.googleapis.com/maps/api/geocode/json?address='
+        + urllib.parse.quote(address)
+        + '&key='
+        + urllib.parse.quote(api_key)
+    )
+
+    logger_geo = logging.getLogger(__name__)
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Synap/1.0'})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=502)
+        logger_geo.warning('Geocoding request failed: %s', e, exc_info=True)
+        return JsonResponse(
+            {'error': 'No se pudo contactar el servicio de geocodificación. Intente más tarde.'},
+            status=502,
+        )
 
     if data.get('status') != 'OK' or not data.get('results'):
-        return JsonResponse({
-            'error': data.get('error_message') or data.get('status') or 'Sin resultados para la dirección.'
-        }, status=404)
+        return JsonResponse(
+            {
+                'error': (
+                    data.get('error_message')
+                    or data.get('status')
+                    or 'Sin resultados para la dirección.'
+                )
+            },
+            status=404,
+        )
 
     loc = data['results'][0].get('geometry', {}).get('location', {})
     lat = loc.get('lat')
@@ -296,6 +399,28 @@ def geocode_api(request):
 
 
 # --- Tipos de envío por sucursal (paridad ABM_Sucursal_Envio / CargaSucursal_Envio VB6) ---
+
+def _session_user_can_access_sucursal(request, id_sucursal: int) -> bool:
+    """
+    Admin (usuario supervisor administraNET) puede cualquier sucursal; el resto solo su id_sucursal de sesión.
+    """
+    user = getattr(request, 'user', None)
+    if user and getattr(user, 'is_authenticated', False):
+        if hasattr(user, 'is_admin') and callable(getattr(user, 'is_admin', None)):
+            try:
+                if user.is_admin():
+                    return True
+            except Exception:
+                pass
+    su = request.session.get('user') or {}
+    sid = su.get('id_sucursal')
+    if sid is None:
+        return False
+    try:
+        return int(sid) == int(id_sucursal)
+    except (TypeError, ValueError):
+        return False
+
 
 def _base_empresa_from_request(request):
     """Obtiene base_empresa de la sesión; devuelve (base_empresa, error_response)."""
@@ -321,6 +446,8 @@ def sucursal_tipos_envio_list_or_create_api(request, id_sucursal):
         id_suc = int(id_sucursal)
     except (ValueError, TypeError):
         return JsonResponse({'error': 'id_sucursal inválido.'}, status=400)
+    if not _session_user_can_access_sucursal(request, id_suc):
+        return JsonResponse({'error': 'No tiene permiso para operar sobre esta sucursal.'}, status=403)
     svc = AdministraNETSucursalesService()
     if request.method == 'GET':
         lista = svc.listar_tipos_envio_sucursal(base_empresa, id_suc)
@@ -360,11 +487,19 @@ def sucursal_tipo_envio_update_or_delete_api(request, id_sucursal, id_tipo_envio
     if err:
         return err
     try:
+        id_suc_url = int(id_sucursal)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'id_sucursal inválido.'}, status=400)
+    if not _session_user_can_access_sucursal(request, id_suc_url):
+        return JsonResponse({'error': 'No tiene permiso para operar sobre esta sucursal.'}, status=403)
+    try:
         id_te = int(id_tipo_envio)
     except (ValueError, TypeError):
         return JsonResponse({'error': 'id_tipo_envio inválido.'}, status=400)
     from core.services.administranet_sucursales import AdministraNETSucursalesService
     svc = AdministraNETSucursalesService()
+    if not svc.tipo_envio_pertenece_a_sucursal(base_empresa, id_te, id_suc_url):
+        return JsonResponse({'error': 'Tipo de envío no encontrado.'}, status=404)
     if request.method == 'PUT':
         import json
         try:
@@ -454,10 +589,13 @@ def support_conocimiento_api(request):
     Conocimiento funcional para RAG del módulo Support.
     Lee docs/ desde disco (chunking por ## y tamaño), asigna sistema por carpeta
     (docs/administranet_vb6/ → administranet, resto → synap). Incluye ítems intro fijos.
-    Proteger en producción (VPN, JWT o IP del servicio Support).
+    Autenticación: Bearer JWT firmado con SUPPORT_SYNAP_JWT_SECRET (mismo valor que en Support).
     """
     if request.method != 'GET':
         return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    auth_err = _support_rag_auth_error_response(request)
+    if auth_err is not None:
+        return auth_err
     # Ítems intro fijos (siempre presentes)
     items = [
         {

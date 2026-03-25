@@ -25,6 +25,9 @@ PyYAML
 django-cors-headers
 defusedxml
 bleach
+pypdf>=4.0,<6
+pytesseract>=0.3.10,<0.4
+opencv-python-headless>=4.8,<5
 
 # Dependencias eliminadas (no necesarias para Reportes básico):
 # fastapi - No necesario

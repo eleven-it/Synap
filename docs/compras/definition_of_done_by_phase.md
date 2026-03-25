@@ -41,7 +41,7 @@
 
 - [ ] Subida archivo con validación MIME/tamaño; almacenamiento según decisión D-02 (dev mínimo aceptable).
 - [ ] Job asíncrono encolado; estado observable en API (polling o equivalente).
-- [ ] OCR: adapter con **implementación mock** en CI; proveedor real detrás de interfaz si aplica.
+- [ ] OCR: adapter **heuristic** en CI (PDF con texto embebido); **http** opcional para OCR externo; interfaz `OcrAdapter` estable.
 - [ ] PWA: shell instalable o documentado «deferred» con justificación en PR si no aplica en este incremento.
 - [ ] Tests TC-CAP / TC-OCR según [test_cases.md](test_cases.md) (mínimo acordado).
 - [ ] Runbook: qué pasa si worker cae (reintento idempotente a nivel job).

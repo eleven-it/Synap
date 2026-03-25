@@ -35,7 +35,7 @@ def _mini_jpeg_bytes() -> bytes:
 
 @override_settings(
     FACTURA_COMPRA_OCR_SYNC=True,
-    FACTURA_COMPRA_OCR_MOCK_FAIL=False,
+    FACTURA_COMPRA_OCR_TESSERACT_ENABLED=False,
 )
 class DocumentoUploadAPITests(TestCase):
     @classmethod

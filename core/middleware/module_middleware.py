@@ -35,6 +35,8 @@ class ModuleMiddleware:
             'api/',
             'core/dashboard/',
             'core/modules/',
+            'compras/captura/',
+            'compras/revision/',
         ]
         
         # Verificar si la ruta está en la lista de permitidas

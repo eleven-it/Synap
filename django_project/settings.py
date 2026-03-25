@@ -6,20 +6,30 @@ import os
 
 from decouple import config, Csv
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
-DEBUG = config('DEBUG', default=False, cast=bool)
 ENVIRONMENT = config('ENVIRONMENT', default='production')
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Base Directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Seguridad
-SECRET_KEY = config('SECRET_KEY', default='insecure-placeholder')
-DEBUG = config('DEBUG', default=False, cast=bool)
+_SECRET_KEY_RAW = config('SECRET_KEY', default='')
+SECRET_KEY = _SECRET_KEY_RAW or 'insecure-placeholder'
+if ENVIRONMENT.strip().lower() in ('production', 'produccion') and not str(_SECRET_KEY_RAW).strip():
+    raise ImproperlyConfigured(
+        'SECRET_KEY es obligatorio cuando ENVIRONMENT es production o produccion.'
+    )
 ALLOWED_HOSTS = list(config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar', cast=Csv()))
 # Permitir peticiones desde Support en Docker (host.docker.internal) para RAG /core/api/support/conocimiento/
 if 'host.docker.internal' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('host.docker.internal')
+
+# Clickjacking: el valor por defecto de Django es DENY y bloquea cualquier iframe, incluso same-origin.
+# SAMEORIGIN sigue impidiendo que sitios externos embeban Synap, pero permite el visor PDF en
+# /compras/captura/revision/<uuid>/documento/<id>/ dentro de la propia app.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
@@ -49,6 +59,8 @@ INSTALLED_APPS = [
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
+    'factura_compra_posting',  # Contrato + stub posting factura compra (sin MySQL en Fase 1)
+    'factura_compra_captura',  # Expediente captura/workflow factura compra (PostgreSQL)
     'legacy_db',  # Capa escritura compatible VB6 (tablas MySQL administraNET)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     # Módulos eliminados para instalación mínima de Reportes
@@ -135,13 +147,26 @@ TEMPLATES = [
     },
 ]
 
+# MySQL: en producción DB_PASSWORD es obligatorio (sin default en código).
+_DB_PASSWORD = config('DB_PASSWORD', default='')
+if ENVIRONMENT.strip().lower() in ('production', 'produccion') and not str(_DB_PASSWORD).strip():
+    raise ImproperlyConfigured(
+        'DB_PASSWORD es obligatorio cuando ENVIRONMENT es production o produccion.'
+    )
+
+_POSTGRES_PASSWORD = config('POSTGRES_PASSWORD', default='')
+if ENVIRONMENT.strip().lower() in ('production', 'produccion') and not str(_POSTGRES_PASSWORD).strip():
+    raise ImproperlyConfigured(
+        'POSTGRES_PASSWORD es obligatorio cuando ENVIRONMENT es production o produccion.'
+    )
+
 # Base de datos
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': config('POSTGRES_DB', default='mydatabase'),
         'USER': config('POSTGRES_USER', default='myuser'),
-        'PASSWORD': config('POSTGRES_PASSWORD', default='mypassword'),
+        'PASSWORD': _POSTGRES_PASSWORD.strip() if str(_POSTGRES_PASSWORD).strip() else 'mypassword',
         'HOST': config('POSTGRES_HOST', default='db'),
         'PORT': config('POSTGRES_PORT', default='5432'),
     },
@@ -149,7 +174,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': config('DB_NAME', default='administranet'),
         'USER': config('DB_USER', default='administranet'),
-        'PASSWORD': config('DB_PASSWORD', default='a7v8xx0805'),
+        'PASSWORD': _DB_PASSWORD,
         'HOST': config('DB_HOST', default='mysql'),
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
@@ -158,6 +183,12 @@ DATABASES = {
         },
     }
 }
+
+# makemigrations/migrate comprueban el historial en todas las conexiones; un MySQL 5.7 remoto
+# (AdministraNET) hace fallar init_connection_state en Django 4.2+. Las migraciones Synap
+# viven solo en PostgreSQL. Exportar SYNAP_MIGRATIONS_POSTGRES_ONLY=1 al ejecutar esos comandos.
+if os.environ.get('SYNAP_MIGRATIONS_POSTGRES_ONLY') == '1':
+    DATABASES = {'default': DATABASES['default']}
 
 # Base MySQL por defecto para reportes (BO, ventas, etc.) cuando no viene en sesión/filtros
 DEFAULT_BASE_EMPRESA = config('DB_NAME', default='administranet')
@@ -192,6 +223,15 @@ INTERNAL_IPS = ['127.0.0.1']
 GOOGLE_CLIENT_ID = config('GOOGLE_CLIENT_ID', default='')
 GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
 
+# Geocodificación (CargaSucursal / APIs core); no se acepta clave desde el cliente
+GOOGLE_GEOCODING_API_KEY = config('GOOGLE_GEOCODING_API_KEY', default='')
+
+# JWT del servicio Support → GET /core/api/support/conocimiento/ (mismo secret en Support: SUPPORT_SYNAP_JWT_SECRET)
+SUPPORT_SYNAP_JWT_SECRET = config('SUPPORT_SYNAP_JWT_SECRET', default='')
+
+# AES para validación de password_usuario en MySQL (paridad AdministraNET Gestión); preferir variable en prod
+ADMINISTRANET_MYSQL_AES_KEY = config('ADMINISTRANET_MYSQL_AES_KEY', default='a7v8xx2')
+
 # Configuración adicional para desarrollo
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -218,6 +258,9 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    'DEFAULT_THROTTLE_RATES': {
+        'compras_document_upload': '120/min',
+    },
 }
 
 CSRF_COOKIE_HTTPONLY = False
@@ -225,6 +268,14 @@ CSRF_COOKIE_HTTPONLY = False
 CSRF_TRUSTED_ORIGINS = [
     "https://synap.administranet.com.ar"
 ]
+
+if ENVIRONMENT.strip().lower() in ('production', 'produccion'):
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# CSRF_COOKIE_HTTPONLY=False permite leer csrftoken desde JS (login SPA). Mitigar XSS en el resto de la UI.
+SESSION_COOKIE_HTTPONLY = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # Configuración HTTPS
 SECURE_SSL_REDIRECT = not DEBUG
@@ -238,6 +289,64 @@ SECURE_HSTS_PRELOAD = True
 MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 AUTH_USER_MODEL = 'core.UsuarioExtendido'
 
+# Factura compra — captura / posting (Fase 1: fake | noop; legacy en fases posteriores)
+FACTURA_COMPRA_POSTING_BACKEND = config(
+    'FACTURA_COMPRA_POSTING_BACKEND', default='fake'
+)
+# Fase 4–5: SQL real contra MySQL legacy solo si True (test gate + runbook).
+FACTURA_COMPRA_LEGACY_SQL_ENABLED = config(
+    'FACTURA_COMPRA_LEGACY_SQL_ENABLED', default=False, cast=bool
+)
+# Mapeo opcional empresa Synap (pk) → nombre base MySQL AdministraNET (validación fiscal CAE).
+FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID: dict = {}
+
+# Fase 2 — documentos / OCR (heuristic + Tesseract en imagen; http opcional)
+FACTURA_COMPRA_DOCUMENTO_MAX_BYTES = config(
+    'FACTURA_COMPRA_DOCUMENTO_MAX_BYTES',
+    default=15 * 1024 * 1024,
+    cast=int,
+)
+FACTURA_COMPRA_DOCUMENTO_MIME_PERMITIDOS = (
+    'image/jpeg',
+    'image/png',
+    'application/pdf',
+)
+FACTURA_COMPRA_OCR_ADAPTER = config(
+    'FACTURA_COMPRA_OCR_ADAPTER', default='heuristic'
+)
+# False = ejecutar OCR en el mismo proceso tras guardar (recomendado en tests; válido en dev).
+# True = encolar tras transaction.on_commit en hilo (producción; no bloquea la respuesta HTTP).
+FACTURA_COMPRA_OCR_DEFER = config(
+    'FACTURA_COMPRA_OCR_DEFER', default=False, cast=bool
+)
+FACTURA_COMPRA_OCR_SYNC = config(
+    'FACTURA_COMPRA_OCR_SYNC', default=False, cast=bool
+)
+FACTURA_COMPRA_OCR_HTTP_URL = config('FACTURA_COMPRA_OCR_HTTP_URL', default='')
+FACTURA_COMPRA_OCR_HTTP_BEARER_TOKEN = config(
+    'FACTURA_COMPRA_OCR_HTTP_BEARER_TOKEN', default=''
+)
+FACTURA_COMPRA_OCR_HTTP_TIMEOUT = config(
+    'FACTURA_COMPRA_OCR_HTTP_TIMEOUT', default=30, cast=int
+)
+FACTURA_COMPRA_OCR_HTTP_VERIFY_SSL = config(
+    'FACTURA_COMPRA_OCR_HTTP_VERIFY_SSL', default=True, cast=bool
+)
+# Tesseract: OCR en servidor para fotos (JPEG/PNG) desde PWA / cámara móvil
+FACTURA_COMPRA_OCR_TESSERACT_ENABLED = config(
+    'FACTURA_COMPRA_OCR_TESSERACT_ENABLED', default=True, cast=bool
+)
+FACTURA_COMPRA_OCR_TESSERACT_LANG = config(
+    'FACTURA_COMPRA_OCR_TESSERACT_LANG', default='spa+eng'
+)
+FACTURA_COMPRA_OCR_TESSERACT_CMD = config(
+    'FACTURA_COMPRA_OCR_TESSERACT_CMD', default=''
+)
+# Stage 1 motor documento: legacy | preprocess_only | structured_ocr (solo imágenes)
+FACTURA_COMPRA_OCR_ENGINE_MODE = config(
+    'FACTURA_COMPRA_OCR_ENGINE_MODE', default='legacy'
+)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -248,7 +357,7 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': 'DEBUG' if DEBUG else 'INFO',
     },
 }
 

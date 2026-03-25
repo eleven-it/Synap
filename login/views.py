@@ -8,17 +8,22 @@ from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 from django.conf import settings
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib import messages
 from urllib.parse import urlparse
 from .administranet_auth import AdministraNETAuth
 from core.models import Empresa
 from core.utils.template_selector import get_template_for_device
+from core.utils.rate_limit import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
+# Límite por IP (ventana 60s): abuso de listado empresas / fuerza bruta login
+_RL_EMPRESAS_MAX = 90
+_RL_LOGIN_POST_MAX = 40
 
-@csrf_exempt
+
+@ensure_csrf_cookie
 def login_view(request):
     """
     Vista de login para administraNET Analytics
@@ -31,8 +36,25 @@ def login_view(request):
     auth_service = AdministraNETAuth()
     
     if request.method == "POST":
+        rl = check_rate_limit(
+            request,
+            key_prefix='login_post',
+            limit=_RL_LOGIN_POST_MAX,
+            period_seconds=300,
+            exceeded_body={
+                'error': 'Demasiados intentos de inicio de sesión. Espere unos minutos e intente de nuevo.',
+            },
+        )
+        if rl is not None:
+            return rl
         try:
-            data = json.loads(request.body)
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError:
+                return JsonResponse(
+                    {"error": "Solicitud inválida. Verifique los datos e intente de nuevo."},
+                    status=400,
+                )
             cod_usuario = data.get("cod_usuario", "").strip()
             password = data.get("password", "").strip()
             base_empresa = data.get("base_empresa", "").strip()
@@ -95,8 +117,13 @@ def login_view(request):
             return JsonResponse({"redirect": reverse("core:dashboard")})
 
         except Exception as e:
-            logger.error(f"❌ Error en login: {e}", exc_info=True)
-            return JsonResponse({"error": str(e)}, status=400)
+            logger.error("Error en login: %s", e, exc_info=True)
+            return JsonResponse(
+                {
+                    "error": "No se pudo completar el inicio de sesión. Intente de nuevo o contacte al administrador."
+                },
+                status=400,
+            )
     
     # GET request - mostrar formulario de login
     auth_service = AdministraNETAuth()
@@ -131,6 +158,14 @@ def get_empresas_api(request):
     """
     API para obtener empresas disponibles (AJAX)
     """
+    rl = check_rate_limit(
+        request,
+        key_prefix='login_empresas',
+        limit=_RL_EMPRESAS_MAX,
+        period_seconds=60,
+    )
+    if rl is not None:
+        return rl
     try:
         server = request.GET.get('server', '')
         port = request.GET.get('port', '3306')
@@ -143,11 +178,14 @@ def get_empresas_api(request):
             'empresas': empresas
         })
     except Exception as e:
-        logger.error(f"Error al obtener empresas: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        logger.error("Error al obtener empresas: %s", e, exc_info=True)
+        return JsonResponse(
+            {
+                'success': False,
+                'error': 'No se pudo obtener el listado de empresas. Intente de nuevo más tarde.',
+            },
+            status=500,
+        )
 
 
 def logout_view(request):

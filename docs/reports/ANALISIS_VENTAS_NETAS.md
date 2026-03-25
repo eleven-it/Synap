@@ -99,7 +99,7 @@
    - `workspace_api_url`: URL para workspace
    - `schema_api_url`: URL para schema del reporte
    - `is_declarative`: `False` para ventas_netas (no tiene `version: "declarative-v1"`)
-   - `report_config_json`: Config serializado para JS
+   - `report_config_for_script` + `|json_script` en plantilla: config para JS sin XSS
 
 **Template**: `reports/dashboard_detail.html`
 

@@ -5,67 +5,53 @@
 
 {% block content %}
 <style>.wizard-cloak[x-cloak]{display:none!important}</style>
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Asistente de producción</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Asistente de producción</span></li>
+            </ol>
         </nav>
 
         {# Encabezado oscuro unificado (mismo look que detalle OPT) #}
-        <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 dark:border-slate-800 p-6 mb-6 text-white shadow-lg">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div class="flex-1 min-w-0">
+        <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                        <h1 class="text-2xl md:text-3xl font-bold tracking-tight">Asistente de producción</h1>
+                        <h1 class="text-2xl font-bold tracking-tight md:text-3xl">Asistente de producción</h1>
                         {% if id_lista %}
-                        <span class="text-2xl md:text-3xl font-bold tracking-tight text-white shrink-0">OPT N° {{ id_lista }}</span>
+                        <span class="shrink-0 text-2xl font-bold tracking-tight text-white md:text-3xl">OPT N° {{ id_lista }}</span>
                         {% endif %}
                     </div>
-                    <p class="mt-1 text-slate-300 dark:text-slate-400 flex items-center gap-2">
+                    <p class="mt-1 flex items-center gap-2 text-slate-300 dark:text-slate-400">
                         <span class="material-icons text-lg">precision_manufacturing</span>
                         {% if wizard_paso == 1 %}Crear orden (OPT) — Artículo y cantidad
                         {% elif wizard_paso == 2 %}Confirmar y liberar a producción
-                        {% elif wizard_paso == 3 %}Crear OPP (parte de producción)
+                        {% elif wizard_paso == 3 %}Crear OPP — distribución de componentes
                         {% elif wizard_paso == 4 %}Armado (opcional)
                         {% elif wizard_paso == 5 %}Cierre y siguientes acciones
                         {% else %}Paso {{ wizard_paso }} de 5
                         {% endif %}
                     </p>
-                    <div class="flex flex-wrap items-center gap-2 mt-3">
-                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-300">
                             <span class="material-icons text-sm">schedule</span>
                             Paso {{ wizard_paso }} de 5
                         </span>
                     </div>
                 </div>
+                {# Mismo enlace que ventana-pack: vuelta al tablero #}
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800 sm:mt-0.5">
+                    <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                    Tablero
+                </a>
             </div>
-        </div>
-
-        {# Stepper: 1 Crear OPT, 2 Confirmar, 3 OPP, 4 Armado, 5 Cierre #}
-        <div class="flex flex-wrap items-center gap-2 sm:gap-0 mb-8">
-            {% for i in "12345" %}
-            <div class="flex items-center {% if not forloop.first %}flex-1 min-w-0{% endif %}">
-                {% if not forloop.first %}
-                <div class="hidden sm:block flex-1 h-0.5 mx-1 {% if wizard_paso > forloop.counter %}bg-purple-500{% else %}bg-gray-300 dark:bg-gray-600{% endif %}"></div>
-                {% endif %}
-                <div class="flex flex-col items-center">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium
-                        {% if wizard_paso > forloop.counter %}bg-purple-600 text-white
-                        {% elif wizard_paso == forloop.counter %}bg-purple-600 text-white ring-2 ring-purple-300 dark:ring-purple-800
-                        {% else %}bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400{% endif %}">
-                        {{ forloop.counter }}
-                    </span>
-                    <span class="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">
-                        {% if forloop.counter == 1 %}Crear OPT{% elif forloop.counter == 2 %}Confirmar{% elif forloop.counter == 3 %}OPP{% elif forloop.counter == 4 %}Armado{% else %}Cierre{% endif %}
-                    </span>
-                </div>
-                {% if not forloop.last %}
-                <div class="hidden sm:block flex-1 h-0.5 mx-1 {% if wizard_paso > forloop.counter %}bg-purple-500{% else %}bg-gray-300 dark:bg-gray-600{% endif %}"></div>
-                {% endif %}
+            {# Barra de progreso compacta (sustituye al stepper horizontal para ganar espacio vertical) #}
+            <div class="mt-5 h-1 w-full overflow-hidden rounded-full bg-slate-700/70" role="progressbar" aria-valuenow="{{ wizard_paso }}" aria-valuemin="1" aria-valuemax="5" aria-label="Progreso del asistente: paso {{ wizard_paso }} de 5">
+                <div class="h-full rounded-full bg-purple-500 transition-[width] duration-300 ease-out" style="width: {% widthratio wizard_paso 5 100 %}%"></div>
             </div>
-            {% endfor %}
         </div>
 
         {# Solo el último mensaje, compacto y cerrable #}
@@ -86,9 +72,9 @@
         {% if wizard_paso == 1 %}
         <form method="post" action="" class="space-y-6">
             {% csrf_token %}
-            <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl shadow-purple-500/10 dark:shadow-purple-900/20 p-6 sm:p-8">
-                <div class="flex items-center gap-4 mb-6">
-                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 text-white">
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-8">
+                <div class="mb-6 flex items-center gap-4">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white">
                         <span class="material-icons text-2xl">inventory_2</span>
                     </div>
                     <div>
@@ -141,11 +127,11 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">arrow_forward</span>
                     Continuar
                 </button>
-                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Salir del asistente
                 </a>
             </div>
@@ -154,8 +140,8 @@
 
         {# Paso 2 – Confirmar orden (crear OPT + liberar a producción con depósito config) #}
         {% if wizard_paso == 2 %}
-        <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 dark:border-slate-800 p-6 mb-6 text-white shadow-lg">
-            <h2 class="text-lg font-bold mb-3">Resumen de la orden</h2>
+        <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
+            <h2 class="mb-3 text-lg font-bold">Resumen de la orden</h2>
             <ul class="space-y-2 text-sm text-slate-200 dark:text-slate-300">
                 <li><span class="text-slate-400">Artículo:</span> <strong class="text-white">{{ articulo_nombre }}</strong></li>
                 <li><span class="text-slate-400">Cantidad:</span> <strong class="text-amber-300">{{ cantidad_pedida }}</strong> unidades</li>
@@ -166,11 +152,11 @@
         <form method="post" action="" class="space-y-6">
             {% csrf_token %}
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">rocket_launch</span>
                     Confirmar y liberar a producción
                 </button>
-                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Salir del asistente
                 </a>
             </div>
@@ -181,77 +167,82 @@
         {% if wizard_paso == 3 %}
         <form method="post" action="" id="form-opp-wizard" data-empleados-url="{% url 'mpr:api_empleados' %}" class="space-y-6">
             {% csrf_token %}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="flex items-center gap-4 p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400">
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex items-center gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400">
                         <span class="material-icons text-xl">assignment</span>
                     </div>
                     <div>
                         <h2 class="text-lg font-bold text-gray-900 dark:text-white">Crear OPP (parte de producción)</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Matriz: componentes (filas) x depósitos destino. Indique cantidades en <strong>unidades</strong> por componente. Por componente, la suma no puede superar el disponible.</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Componentes × depósitos destino. Cantidades en <strong class="font-semibold text-gray-700 dark:text-gray-300">unidades enteras</strong>; por fila la suma no puede superar el disponible.</p>
                     </div>
                 </div>
                 {% if not depositos_opp %}
-                <p class="p-4 text-amber-600 dark:text-amber-400 text-sm">No hay depósitos configurados para OPP. Asigne en Config. Depósitos los tipos Semi Elaborado, Scrap o 2da Selección.</p>
+                <p class="p-4 text-sm text-amber-600 dark:text-amber-400">No hay depósitos configurados para OPP. Asigne en Config. Depósitos los tipos Semi Elaborado, Scrap o 2da Selección.</p>
                 {% else %}
-                <div class="overflow-x-auto">
+                <div>
+                    <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
+                    <div class="overflow-x-auto [-webkit-overflow-scrolling:touch]">
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800/50">
                             <tr class="align-bottom">
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cod. Sist</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Componente</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider align-bottom bg-amber-100 dark:bg-amber-900/30">Disponible (unid.)</th>
+                                <th scope="col" class="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 align-bottom sm:px-4 sm:py-3 dark:text-gray-300">Cod. sist.</th>
+                                <th scope="col" class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-bottom sm:px-4 sm:py-3 dark:text-gray-300">Componente</th>
+                                <th scope="col" class="bg-amber-50 px-3 py-2.5 text-right text-xs font-semibold text-amber-900 align-bottom sm:px-4 sm:py-3 dark:bg-amber-900/30 dark:text-amber-200">Disponible (unid.)</th>
                                 {% for dep in depositos_opp %}
-                                <th class="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider align-bottom whitespace-nowrap
+                                <th scope="col" class="px-3 py-2.5 text-right text-xs font-semibold align-bottom whitespace-nowrap sm:px-4 sm:py-3
                                     {% if forloop.counter0 == 0 %}bg-rose-200 dark:bg-rose-800/50 text-rose-800 dark:text-rose-200
                                     {% elif forloop.counter0 == 1 %}bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-200
                                     {% elif forloop.counter0 == 2 %}bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-200
                                     {% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">{{ dep.NombreDeposito|default:dep.CodDeposito }}</th>
                                 {% endfor %}
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[180px] align-bottom">Operario</th>
+                                <th scope="col" class="min-w-[160px] px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-bottom sm:min-w-[180px] sm:px-4 sm:py-3 dark:text-gray-300">Operario</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                        <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                             {% for comp in componentes_opp %}
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors" data-id-art="{{ comp.id_articulo }}" data-pendiente="{{ comp.disponible_unidades|default:0 }}">
-                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ comp.id_articulo }}</td>
-                                <td class="px-4 py-3">
-                                    <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ comp.codigo_articulo|default:"" }}</span>
+                            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50" data-id-art="{{ comp.id_articulo }}" data-pendiente="{{ comp.disponible_unidades|default:0 }}">
+                                <td class="px-3 py-2.5 text-right text-sm tabular-nums text-gray-700 sm:px-4 sm:py-3 dark:text-gray-300">{{ comp.id_articulo }}</td>
+                                <td class="px-3 py-2.5 sm:px-4 sm:py-3">
+                                    <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ comp.codigo_articulo|default:"" }}</span>
                                     <span class="block text-xs text-gray-500 dark:text-gray-400">{{ comp.descripcion_articulo|truncatewords:12|default:"" }}</span>
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums text-sm font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.disponible_unidades|default:0 }}">{{ comp.disponible_unidades|default:0 }}</span></td>
+                                <td class="bg-amber-50 px-3 py-2.5 text-right text-sm font-medium tabular-nums text-amber-600 sm:px-4 sm:py-3 dark:bg-amber-900/20 dark:text-amber-400"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.disponible_unidades|default:0 }}">{{ comp.disponible_unidades|default:0 }}</span></td>
                                 {% for dep in depositos_opp %}
-                                <td class="px-4 py-3 text-right {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
-                                    <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}" value="0" min="0" max="{{ comp.disponible_unidades|default:0 }}" step="1" data-opp-matrix="1" data-id-art="{{ comp.id_articulo }}" class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
+                                <td class="px-3 py-2.5 text-right sm:px-4 sm:py-3 {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
+                                    <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}" value="0" min="0" max="{{ comp.disponible_unidades|default:0 }}" step="1" data-opp-matrix="1" data-id-art="{{ comp.id_articulo }}" aria-label="Unidades del componente {{ comp.codigo_articulo|default:comp.id_articulo }} hacia depósito {{ dep.NombreDeposito|default:dep.CodDeposito }}" class="w-20 max-w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:w-24"/>
                                 </td>
                                 {% endfor %}
-                                <td class="px-4 py-3 min-w-[180px]">
+                                <td class="min-w-[140px] px-3 py-2.5 sm:min-w-[180px] sm:px-4 sm:py-3">
                                     <input type="hidden" name="operario_{{ comp.id_articulo }}" value="" class="operario-hidden" data-id-art="{{ comp.id_articulo }}"/>
                                     <div class="operario-cell relative" data-id-art="{{ comp.id_articulo }}">
-                                        <div class="operario-chip hidden flex items-center gap-2 flex-wrap">
-                                            <span class="operario-chip-label text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]"></span>
-                                            <button type="button" class="operario-chip-clear inline-flex items-center justify-center w-7 h-7 rounded-md text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-700 dark:hover:text-purple-300 transition-colors" title="Quitar o cambiar operario" aria-label="Quitar o cambiar operario"><span class="material-icons text-lg">sync</span></button>
+                                        <label class="sr-only" for="operario-search-{{ comp.id_articulo }}">Operario para componente {{ comp.codigo_articulo|default:comp.id_articulo }}</label>
+                                        <div class="operario-chip hidden flex flex-wrap items-center gap-2">
+                                            <span class="operario-chip-label max-w-[140px] truncate text-xs text-gray-700 dark:text-gray-300"></span>
+                                            <button type="button" class="operario-chip-clear inline-flex h-7 w-7 items-center justify-center rounded-md text-purple-600 transition-colors hover:bg-purple-100 hover:text-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/40 dark:hover:text-purple-300" title="Quitar o cambiar operario" aria-label="Quitar o cambiar operario"><span class="material-icons text-lg">sync</span></button>
                                         </div>
-                                        <input type="text" class="operario-search w-full min-w-[160px] px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500" placeholder="Buscar operario..." autocomplete="off"/>
-                                        <div class="operario-dropdown absolute top-full left-0 right-0 z-[9999] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-xl overflow-y-auto hidden" style="max-height: 14rem;" data-operario-dropdown role="listbox"></div>
+                                        <input type="text" id="operario-search-{{ comp.id_articulo }}" class="operario-search w-full min-w-0 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:min-w-[140px]" placeholder="Buscar operario..." autocomplete="off" aria-describedby="operario-hint-{{ comp.id_articulo }}"/>
+                                        <span id="operario-hint-{{ comp.id_articulo }}" class="sr-only">Escriba para buscar y elija un operario de la lista</span>
+                                        <div class="operario-dropdown absolute left-0 right-0 top-full z-[9999] mt-1 hidden max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800" style="max-height: 14rem;" data-operario-dropdown role="listbox"></div>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="101" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">No hay componentes para distribuir en esta OPT.</td></tr>
+                            <tr><td colspan="{{ depositos_opp|length|add:4 }}" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay componentes para distribuir en esta OPT.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                    </div>
                 </div>
                 {% endif %}
             </div>
             <div id="opp-total-pendiente" data-total="{{ total_pendiente }}" class="hidden"></div>
             <div class="flex flex-wrap gap-3">
-                <button type="button" id="btn-registrar-opp" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                <button type="button" id="btn-registrar-opp" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">assignment</span>
                     Registrar OPP
                 </button>
-                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Salir del asistente
                 </a>
             </div>
@@ -270,7 +261,7 @@
                             <h3 id="modal-opp-title" class="text-lg font-semibold text-gray-900 dark:text-white">No se puede registrar el OPP</h3>
                             <p id="modal-opp-message" class="mt-2 text-sm text-gray-600 dark:text-gray-300"></p>
                             <div class="mt-4">
-                                <button type="button" id="modal-opp-close" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">
+                                <button type="button" id="modal-opp-close" class="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus-visible:ring-offset-gray-800">
                                     Entendido
                                 </button>
                             </div>
@@ -341,15 +332,35 @@
                 return null;
             }
 
+            var lastFocusBeforeModal = null;
             function showModal(message) {
                 if (modalMsg) modalMsg.textContent = message;
-                if (modal) modal.classList.remove('hidden');
+                if (modal) {
+                    lastFocusBeforeModal = document.activeElement;
+                    modal.classList.remove('hidden');
+                    requestAnimationFrame(function() {
+                        if (modalClose && typeof modalClose.focus === 'function') {
+                            modalClose.focus();
+                        }
+                    });
+                }
             }
             function hideModal() {
                 if (modal) modal.classList.add('hidden');
+                if (lastFocusBeforeModal && typeof lastFocusBeforeModal.focus === 'function') {
+                    try {
+                        lastFocusBeforeModal.focus();
+                    } catch (e) { /* elemento fuera del DOM */ }
+                }
+                lastFocusBeforeModal = null;
             }
             if (modalClose) modalClose.addEventListener('click', hideModal);
             if (modalBackdrop) modalBackdrop.addEventListener('click', hideModal);
+            document.addEventListener('keydown', function(ev) {
+                if (ev.key !== 'Escape' || !modal || modal.classList.contains('hidden')) return;
+                ev.preventDefault();
+                hideModal();
+            });
 
             if (btn && form) {
                 btn.addEventListener('click', function() {
@@ -496,9 +507,9 @@
         {% if wizard_paso == 4 and mostrar_armado %}
         <form method="post" action="" id="form-armado-wizard" class="space-y-6">
             {% csrf_token %}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="flex items-center gap-4 p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex items-center gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
                         <span class="material-icons text-xl">build</span>
                     </div>
                     <div>
@@ -511,12 +522,12 @@
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800/50">
                             <tr class="align-bottom">
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cod. Sist</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Artículo (pack)</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Receta</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Máx. armable</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cant. a armar</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Operario</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cod. sist.</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Artículo (pack)</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Receta</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Máx. armable</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cant. a armar</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Operario</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -551,14 +562,14 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-500/30 transition-all">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">build</span>
                     Ejecutar armado
                 </button>
-                <button type="submit" name="omitir_armado" value="1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-amber-500 hover:bg-amber-400 text-white transition-colors">
+                <button type="submit" name="omitir_armado" value="1" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     Omitir y continuar
                 </button>
-                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Salir del asistente
                 </a>
             </div>
@@ -642,9 +653,9 @@
 
         {# Paso 5 – Cierre #}
         {% if wizard_paso == 5 %}
-        <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 dark:border-slate-800 p-6 mb-6 text-white shadow-lg">
+        <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
             <div class="flex items-center gap-4">
-                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/20 text-amber-300">
                     <span class="material-icons text-2xl">check_circle</span>
                 </div>
                 <div>
@@ -653,22 +664,22 @@
                 </div>
             </div>
         </div>
-        <div class="rounded-2xl bg-white dark:bg-gray-800 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl p-6 mb-6">
-            <h3 class="text-base font-bold text-gray-900 dark:text-white mb-4">Siguientes acciones</h3>
-            <div class="flex flex-col sm:flex-row flex-wrap gap-3">
+        <div class="mb-8 rounded-2xl border border-gray-200/90 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h3 class="mb-4 text-base font-bold text-gray-900 dark:text-white">Siguientes acciones</h3>
+            <div class="flex flex-col flex-wrap gap-3 sm:flex-row">
                 {% if total_pendiente > 0 %}
-                <a href="{% url 'mpr:wizard' %}?paso=3" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                <a href="{% url 'mpr:wizard' %}?paso=3" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">assignment</span>
                     Registrar OPP
                 </a>
                 {% endif %}
                 {% if total_pendiente > 0 or hay_restante_armar %}
-                <a href="{% url 'mpr:armado_opt' id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-white bg-emerald-600 hover:bg-emerald-500 transition-colors border border-emerald-500">
+                <a href="{% url 'mpr:armado_opt' id_lista %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">build</span>
                     Armar más
                 </a>
                 {% endif %}
-                <a href="{% url 'mpr:opt_detail' id_lista=id_lista %}" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600">
+                <a href="{% url 'mpr:opt_detail' id_lista=id_lista %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-100 px-5 py-3 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">visibility</span>
                     Ver detalle de la OPT
                 </a>
@@ -676,7 +687,7 @@
                 <form method="post" action="" class="inline">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="cerrar_opt">
-                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-white bg-amber-500 hover:bg-amber-400 transition-colors shadow-md">
+                    <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                         <span class="material-icons text-xl">check_circle</span>
                         Cerrar OPT
                     </button>
@@ -690,7 +701,7 @@
                 <form method="post" action="" class="inline">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="finalizar">
-                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 shadow-lg shadow-purple-500/30 transition-all">
+                    <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                         <span class="material-icons text-xl">done_all</span>
                         Finalizar asistente
                     </button>

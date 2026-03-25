@@ -1,94 +1,422 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
-  <title>Captura factura compra</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; background: #0f172a; color: #e2e8f0; }
-    h1 { font-size: 1.1rem; margin: 0 0 1rem; }
-    label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.85rem; color: #94a3b8; }
-    input, button { width: 100%; box-sizing: border-box; padding: 0.65rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; }
-    button { margin-top: 1rem; background: #2563eb; border: none; font-weight: 600; cursor: pointer; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    #estado { margin-top: 1rem; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
-    .hint { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
-  </style>
-</head>
-<body>
-  <h1>Captura — factura de compra</h1>
-  <p class="hint">PWA base: usar «Añadir a inicio» en el navegador. La cámara depende del dispositivo y permisos.</p>
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Captura — factura de compra" %} | Synap{% endblock %}
+{% block content %}
+<div class="w-full max-w-3xl mx-auto">
+  <header class="mb-6 md:mb-8">
+    <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+      {% trans "Captura — factura de compra" %}
+    </h1>
+    <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400 max-w-2xl">
+      {% trans "En dispositivos móviles podés usar «Añadir a inicio» para acceso rápido. La cámara depende del equipo y de los permisos del navegador." %}
+    </p>
+  </header>
 
-  <label for="empresa_id">ID empresa (Synap)</label>
-  <input id="empresa_id" type="number" inputmode="numeric" value="{{ empresa_id_query|default:'' }}" placeholder="Ej. 1">
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+    <div class="px-4 py-5 sm:p-6">
+      <div class="grid grid-cols-1 gap-6">
+        <div
+          id="mensaje-captura"
+          class="hidden rounded-lg border px-4 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex gap-3">
+            <span
+              class="material-icons flex-shrink-0 text-xl leading-none mt-0.5"
+              id="mensaje-captura-icon"
+              aria-hidden="true"
+            >info</span>
+            <div class="min-w-0 flex-1 space-y-1">
+              <p class="font-medium text-gray-900 dark:text-white text-sm leading-snug" id="mensaje-captura-titulo"></p>
+              <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" id="mensaje-captura-texto"></p>
+              <pre
+                class="hidden mt-2 max-h-40 overflow-auto rounded-md bg-gray-100 dark:bg-gray-900/80 px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 whitespace-pre-wrap break-words"
+                id="mensaje-captura-detalle"
+              ></pre>
+            </div>
+          </div>
+        </div>
 
-  <label for="archivo">Foto o PDF</label>
-  <input id="archivo" type="file" accept="image/*,application/pdf,capture=camera">
+        <div class="space-y-2">
+          <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {% trans "Documento" %}
+          </span>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            {% trans "En el móvil podés abrir la cámara trasera o elegir PDF / galería. El servidor aplica OCR (Tesseract) sobre fotos." %}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              id="btn_elegir_camara"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <span class="material-icons text-lg" aria-hidden="true">photo_camera</span>
+              {% trans "Cámara" %}
+            </button>
+            <button
+              type="button"
+              id="btn_elegir_archivo"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <span class="material-icons text-lg" aria-hidden="true">folder_open</span>
+              {% trans "Archivo o PDF" %}
+            </button>
+          </div>
+          <input
+            id="archivo_camara"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            class="hidden"
+            aria-hidden="true"
+          >
+          <input
+            id="archivo"
+            type="file"
+            accept="image/*,application/pdf"
+            class="hidden"
+            aria-hidden="true"
+          >
+        </div>
 
-  <button type="button" id="btn_crear">1. Crear expediente</button>
-  <button type="button" id="btn_subir" disabled>2. Subir documento</button>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            id="btn_crear"
+            class="btn inline-flex w-full items-center justify-center gap-2 min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+          >
+            <span class="material-icons text-lg" aria-hidden="true">add_circle_outline</span>
+            {% trans "1. Crear borrador" %}
+          </button>
+          <button
+            type="button"
+            id="btn_subir"
+            disabled
+            class="btn inline-flex w-full items-center justify-center gap-2 min-h-11 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-100 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span class="material-icons text-lg" aria-hidden="true">cloud_upload</span>
+            {% trans "2. Subir documento" %}
+          </button>
+        </div>
 
-  <div id="estado"></div>
+        <div id="acciones-post-carga" class="hidden rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3">
+          <p class="text-sm text-emerald-900 dark:text-emerald-100 font-medium">
+            {% trans "Carga completada. Elegí cómo continuar:" %}
+          </p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <a
+              id="link-revision-expediente"
+              href="#"
+              class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              <span class="material-icons text-base" aria-hidden="true">description</span>
+              {% trans "Abrir borrador para revisión" %}
+            </a>
+            <button
+              type="button"
+              id="btn_nueva_carga"
+              class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white/90 dark:bg-emerald-900/30 px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-100 hover:bg-white dark:hover:bg-emerald-900/50"
+            >
+              <span class="material-icons text-base" aria-hidden="true">restart_alt</span>
+              {% trans "Crear nueva carga" %}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
 
-  <script>window._csrf = "{{ csrf_token_value|default:'' }}";</script>
-  <script>
-    (function () {
-      const estado = document.getElementById('estado');
-      const log = (msg) => { estado.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2); };
-      function getCookie(name) {
-        const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
-        return v ? decodeURIComponent(v[2]) : null;
+{% block extra_js %}
+<script>window._csrf = "{{ csrf_token_value|default:''|escapejs }}";</script>
+<script>
+(function () {
+  var box = document.getElementById('mensaje-captura');
+  var iconEl = document.getElementById('mensaje-captura-icon');
+  var tituloEl = document.getElementById('mensaje-captura-titulo');
+  var textoEl = document.getElementById('mensaje-captura-texto');
+  var detalleEl = document.getElementById('mensaje-captura-detalle');
+
+  var T = {
+    tituloExitoExpediente: '{% filter escapejs %}{% trans "Expediente creado" %}{% endfilter %}',
+    textoExitoExpediente: '{% filter escapejs %}{% trans "Ya podés subir la foto o el PDF del comprobante." %}{% endfilter %}',
+    tituloExitoDoc: '{% filter escapejs %}{% trans "Documento recibido" %}{% endfilter %}',
+    tituloError: '{% filter escapejs %}{% trans "No se pudo completar la acción" %}{% endfilter %}',
+    tituloAviso: '{% filter escapejs %}{% trans "Atención" %}{% endfilter %}',
+    errorRed: '{% filter escapejs %}{% trans "Error de red o el servidor no respondió. Probá de nuevo." %}{% endfilter %}',
+    errorRespuesta: '{% filter escapejs %}{% trans "La respuesta del servidor no es válida. Si el problema continúa, contactá a soporte." %}{% endfilter %}',
+    ocrPendiente: '{% filter escapejs %}{% trans "El reconocimiento de texto (OCR) está en espera; en breve se procesará el archivo." %}{% endfilter %}',
+    ocrProcesando: '{% filter escapejs %}{% trans "Estamos procesando el documento… Volvé a consultar el expediente en unos instantes." %}{% endfilter %}',
+    ocrCompletado: '{% filter escapejs %}{% trans "El documento ya fue analizado. Podés abrir la revisión del expediente para ver o ajustar los datos detectados." %}{% endfilter %}',
+    ocrFallido: '{% filter escapejs %}{% trans "No se pudo analizar el documento automáticamente. Podés reintentar desde el expediente o cargar otra imagen más legible." %}{% endfilter %}',
+    ocrOtro: '{% filter escapejs %}{% trans "Estado del procesamiento:" %}{% endfilter %}',
+    msgCrearPrimero: '{% filter escapejs %}{% trans "Creá primero el expediente con el botón anterior." %}{% endfilter %}',
+    msgElegirArchivo: '{% filter escapejs %}{% trans "Elegí un archivo para subir." %}{% endfilter %}',
+    errorGenerico: '{% filter escapejs %}{% trans "Revisá los datos e intentá de nuevo." %}{% endfilter %}',
+    btnCrearPaso1: '{% filter escapejs %}{% trans "1. Crear borrador" %}{% endfilter %}',
+    btnCrearNueva: '{% filter escapejs %}{% trans "1. Crear nueva carga" %}{% endfilter %}',
+    cargaLista: '{% filter escapejs %}{% trans "Documento cargado. Podés continuar desde el borrador o iniciar una nueva captura." %}{% endfilter %}',
+  };
+
+  var urlExpedientes = "{% url 'factura_compra_captura_api:expediente-list-create' %}";
+
+  function setVariant(tipo) {
+    box.className =
+      'rounded-lg border px-4 py-3 ' +
+      (tipo === 'success'
+        ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40'
+        : tipo === 'error'
+          ? 'border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30'
+          : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30');
+    iconEl.className =
+      'material-icons flex-shrink-0 text-xl leading-none mt-0.5 ' +
+      (tipo === 'success'
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : tipo === 'error'
+          ? 'text-red-600 dark:text-red-400'
+          : 'text-amber-600 dark:text-amber-400');
+    iconEl.textContent =
+      tipo === 'success' ? 'check_circle' : tipo === 'error' ? 'error_outline' : 'info';
+    box.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+    box.setAttribute('aria-live', tipo === 'error' ? 'assertive' : 'polite');
+  }
+
+  function mostrarMensaje(tipo, titulo, texto, detalle) {
+    setVariant(tipo);
+    tituloEl.textContent = titulo || '';
+    textoEl.textContent = texto || '';
+    if (detalle) {
+      detalleEl.textContent = detalle;
+      detalleEl.classList.remove('hidden');
+    } else {
+      detalleEl.textContent = '';
+      detalleEl.classList.add('hidden');
+    }
+    box.classList.remove('hidden');
+  }
+
+  function textoOcr(estado) {
+    var e = (estado || '').toLowerCase();
+    if (e === 'pendiente') return T.ocrPendiente;
+    if (e === 'procesando') return T.ocrProcesando;
+    if (e === 'completado') return T.ocrCompletado;
+    if (e === 'fallido') return T.ocrFallido;
+    return T.ocrOtro + ' ' + (estado || '—');
+  }
+
+  function ocrSinSugerenciasUtiles(data) {
+    try {
+      var ocr = (data && data.resultado_ocr) || {};
+      var cab = ocr.campos_cabecera || {};
+      var lineas = ocr.lineas_sugeridas || [];
+      var tieneCab = Object.keys(cab).length > 0;
+      return !tieneCab && (!lineas || !lineas.length);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function detalleApi(data) {
+    if (data == null) return '';
+    if (typeof data === 'string') return data;
+    var parts = [];
+    if (data.detail != null) {
+      if (typeof data.detail === 'string') parts.push(data.detail);
+      else parts.push(JSON.stringify(data.detail, null, 2));
+    }
+    if (data.codigo) parts.push('{% filter escapejs %}{% trans "Código:" %}{% endfilter %} ' + data.codigo);
+    if (parts.length) return parts.join('\n');
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch (e) {
+      return String(data);
+    }
+  }
+
+  function mensajeErrorDesdeData(data) {
+    var det = detalleApi(data);
+    var linea = '';
+    if (data && typeof data === 'object' && data.detail != null) {
+      if (typeof data.detail === 'string') linea = data.detail;
+      else if (Array.isArray(data.detail)) linea = data.detail.join(' ');
+    }
+    var textoUsuario = linea || T.errorGenerico;
+    var mostrarDetalle = det && det !== linea;
+    mostrarMensaje('error', T.tituloError, textoUsuario, mostrarDetalle ? det : '');
+  }
+
+  async function parseJsonSeguro(r) {
+    var raw = await r.text();
+    if (!raw || !raw.trim()) return {};
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      throw new Error('INVALID_JSON');
+    }
+  }
+
+  function getCookie(name) {
+    var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+  var csrftoken = window._csrf || getCookie('csrftoken');
+  var expedienteId = null;
+  var accionesPostCarga = document.getElementById('acciones-post-carga');
+  var linkRevision = document.getElementById('link-revision-expediente');
+  var btnCrear = document.getElementById('btn_crear');
+  var btnSubir = document.getElementById('btn_subir');
+  var inputArchivo = document.getElementById('archivo');
+  var inputCamara = document.getElementById('archivo_camara');
+  var btnElegirCamara = document.getElementById('btn_elegir_camara');
+  var btnElegirArchivo = document.getElementById('btn_elegir_archivo');
+  /** @type {HTMLInputElement|null} */
+  var inputActivo = null;
+  var baseRevisionUrl = "{% url 'factura_compra_captura_web:revision-expediente' pk='00000000-0000-0000-0000-000000000000' %}";
+
+  function setEstadoNuevaCarga() {
+    expedienteId = null;
+    btnSubir.disabled = true;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">add_circle_outline</span> ' + T.btnCrearPaso1;
+    accionesPostCarga.classList.add('hidden');
+    linkRevision.setAttribute('href', '#');
+    inputArchivo.value = '';
+    inputCamara.value = '';
+    inputActivo = null;
+  }
+
+  function registrarInputActivo(inp) {
+    inputActivo = inp;
+  }
+
+  if (btnElegirCamara && inputCamara) {
+    btnElegirCamara.onclick = function () {
+      inputCamara.click();
+    };
+    inputCamara.addEventListener('change', function () {
+      if (inputCamara.files && inputCamara.files[0]) registrarInputActivo(inputCamara);
+    });
+  }
+  if (btnElegirArchivo && inputArchivo) {
+    btnElegirArchivo.onclick = function () {
+      inputArchivo.click();
+    };
+    inputArchivo.addEventListener('change', function () {
+      if (inputArchivo.files && inputArchivo.files[0]) registrarInputActivo(inputArchivo);
+    });
+  }
+
+  function setEstadoExpedienteCreado() {
+    btnSubir.disabled = false;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">autorenew</span> ' + T.btnCrearNueva;
+    accionesPostCarga.classList.add('hidden');
+  }
+
+  function setEstadoPostCarga(idExpediente) {
+    var revisionUrl = baseRevisionUrl.replace('00000000-0000-0000-0000-000000000000', idExpediente);
+    linkRevision.setAttribute('href', revisionUrl);
+    accionesPostCarga.classList.remove('hidden');
+    btnSubir.disabled = true;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">autorenew</span> ' + T.btnCrearNueva;
+  }
+
+  function urlDocumentos(id) {
+    var base = urlExpedientes.replace(/\/?$/, '/');
+    return base + id + '/documentos/';
+  }
+
+  btnCrear.onclick = async function () {
+    try {
+      var r = await fetch(urlExpedientes, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrftoken || '',
+        },
+        body: JSON.stringify({}),
+      });
+      var data;
+      try {
+        data = await parseJsonSeguro(r);
+      } catch (e) {
+        if (e.message === 'INVALID_JSON') {
+          mostrarMensaje('error', T.tituloError, T.errorRespuesta, 'HTTP ' + r.status);
+          return;
+        }
+        throw e;
       }
-      const csrftoken = window._csrf || getCookie('csrftoken');
-      let expedienteId = null;
+      if (!r.ok) {
+        mensajeErrorDesdeData(data);
+        return;
+      }
+      expedienteId = data.id;
+      mostrarMensaje('success', T.tituloExitoExpediente, T.textoExitoExpediente);
+      setEstadoExpedienteCreado();
+    } catch (e) {
+      mostrarMensaje('error', T.tituloError, T.errorRed, String(e));
+    }
+  };
 
-      document.getElementById('btn_crear').onclick = async function () {
-        const empresa = document.getElementById('empresa_id').value;
-        if (!empresa) { log('Indicá el ID de empresa.'); return; }
-        try {
-          const r = await fetch('/api/compras/expedientes/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrftoken || '',
-            },
-            body: JSON.stringify({ empresa: parseInt(empresa, 10) }),
-          });
-          const data = await r.json();
-          if (!r.ok) { log(data); return; }
-          expedienteId = data.id;
-          log('Expediente creado: ' + expedienteId);
-          document.getElementById('btn_subir').disabled = false;
-        } catch (e) {
-          log(String(e));
+  btnSubir.onclick = async function () {
+    var input = inputActivo || inputArchivo;
+    if (!expedienteId) {
+      mostrarMensaje('info', T.tituloAviso, T.msgCrearPrimero);
+      return;
+    }
+    if (!input || !input.files || !input.files[0]) {
+      mostrarMensaje('info', T.tituloAviso, T.msgElegirArchivo);
+      return;
+    }
+    var fd = new FormData();
+    fd.append('archivo', input.files[0]);
+    try {
+      var r = await fetch(urlDocumentos(expedienteId), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrftoken || '' },
+        body: fd,
+      });
+      var data;
+      try {
+        data = await parseJsonSeguro(r);
+      } catch (e) {
+        if (e.message === 'INVALID_JSON') {
+          mostrarMensaje('error', T.tituloError, T.errorRespuesta, 'HTTP ' + r.status);
+          return;
         }
-      };
+        throw e;
+      }
+      if (!r.ok) {
+        mensajeErrorDesdeData(data);
+        return;
+      }
+      var estadoOcr = (data && data.estado_procesamiento) || '';
+      if (String(estadoOcr).toLowerCase() === 'completado' && ocrSinSugerenciasUtiles(data)) {
+        var adv = '';
+        try {
+          adv = (data.resultado_ocr && data.resultado_ocr.raw && data.resultado_ocr.raw.advertencia) || '';
+        } catch (e2) {}
+        mostrarMensaje(
+          'info',
+          T.tituloAviso,
+          'Archivo guardado. No se extrajeron datos para autocompletar (PDF sin texto, imagen o formato no reconocido). Completá los datos en la revisión del borrador.',
+          adv || 'Para escaneos o fotos podés configurar FACTURA_COMPRA_OCR_ADAPTER=http con un servicio OCR.'
+        );
+      } else {
+        mostrarMensaje('success', T.tituloExitoDoc, T.cargaLista + ' ' + textoOcr(data.estado_procesamiento));
+      }
+      setEstadoPostCarga(expedienteId);
+    } catch (e) {
+      mostrarMensaje('error', T.tituloError, T.errorRed, String(e));
+    }
+  };
 
-      document.getElementById('btn_subir').onclick = async function () {
-        const input = document.getElementById('archivo');
-        if (!expedienteId) { log('Creá primero el expediente.'); return; }
-        if (!input.files || !input.files[0]) { log('Elegí un archivo.'); return; }
-        const fd = new FormData();
-        fd.append('archivo', input.files[0]);
-        try {
-          const r = await fetch('/api/compras/expedientes/' + expedienteId + '/documentos/', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'X-CSRFToken': csrftoken || '' },
-            body: fd,
-          });
-          const data = await r.json();
-          log(data);
-          if (r.ok) {
-            log('Subido. estado_procesamiento=' + data.estado_procesamiento + '\nConsultá GET mismo expediente o documento para ver OCR.');
-          }
-        } catch (e) {
-          log(String(e));
-        }
-      };
-    })();
-  </script>
-</body>
-</html>
+  document.getElementById('btn_nueva_carga').onclick = function () {
+    setEstadoNuevaCarga();
+    mostrarMensaje('info', T.tituloAviso, '{% filter escapejs %}{% trans "Listo para iniciar una nueva captura." %}{% endfilter %}');
+  };
+})();
+</script>
+{% endblock %}

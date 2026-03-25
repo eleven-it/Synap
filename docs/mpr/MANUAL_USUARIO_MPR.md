@@ -78,7 +78,7 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Ruta:** Tras marcar artículos y pulsar **Continuar** en Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/agrupar/`).
 
-Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Stock, Cant. Pedida, **Cant. a fabricar** (editable), Urgente, Operario. Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si está configurado el depósito de producción (véase 4.4).
+Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Stock, Cant. Pedida, **Cant. a fabricar** (editable), Urgente, Operario. Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
 
 ### 3.2 Pedidos a fábrica
 
@@ -99,12 +99,12 @@ Listado de pedidos de venta (PED) con estado de producción (Pendiente, Producci
 
 **Ruta:** Producción → Asistente de producción (`/mpr/wizard/`).
 
-Flujo guiado: **1. Crear orden (OPT)** → **2. Confirmar** (crear OPT y liberar a producción en un solo paso, con depósito de producción configurado) → **3. Crear OPP** (cantidades por depósito destino; solo >0 generan movimiento) → **4. Armado** (condicional) → **5. Cierre**. El **depósito de producción** debe estar configurado en Config. Depósitos; al confirmar el stock se registra allí sin pedir selección.
+Flujo guiado: **1. Crear orden (OPT)** → **2. Confirmar** (crear OPT y liberar a producción en un solo paso, si existe un depósito con tipo «Producción») → **3. Crear OPP** (cantidades por depósito destino; solo >0 generan movimiento) → **4. Armado** (condicional) → **5. Cierre**. Debe existir un depósito con tipo **Producción** en Config. Depósitos; al confirmar el stock se registra allí sin pedir selección.
 
 **Pasos del asistente:**
 
 1. **Paso 1 – Crear orden de producción (OPT):** Artículo, cantidad pedida y opcionales (depósito de producción opcional, prioridad, fecha objetivo). Al continuar no se guarda aún en base de datos.
-2. **Paso 2 – Confirmar orden:** Resumen (artículo, cantidad, depósito de producción). Al pulsar **Confirmar y liberar a producción** se crea la OPT en base de datos y se ejecuta la liberación (movimiento OPT) usando el depósito de producción configurado en Config. Depósitos. No se elige depósito en pantalla.
+2. **Paso 2 – Confirmar orden:** Resumen (artículo, cantidad; el depósito de entrada es el marcado como **Producción** en Config. Depósitos). Al pulsar **Confirmar y liberar a producción** se crea la OPT en base de datos y se ejecuta la liberación (movimiento OPT) hacia ese depósito. No se elige depósito en pantalla.
 3. **Paso 3 – Crear OPP:** Tabla por componente x depósito destino (excepto producción). Solo cantidades > 0 generan movimiento (Producción → Semi Elaborado / Scrap / 2da Selección). **Cada componente con cantidad > 0 requiere operario**. La suma por componente no puede superar el disponible.
 4. **Paso 4 – Armado (condicional):** Solo si el artículo tiene lista de materiales. Ejecutar armado por línea/pack (cantidad, depósitos) y **operario por línea**, u omitir y continuar.
 5. **Paso 5 – Cierre:** Resumen, enlaces a **Registrar OPP**, **Ver detalle de la OPT** y **Cerrar OPT** (si pendiente = 0). **Finalizar asistente** limpia el wizard y lleva al detalle o al tablero.
@@ -210,6 +210,12 @@ El sistema aplica **restricciones entre pasos** para mantener la coherencia del 
 
 Orden recomendado: **Crear OPT** → **Liberar OPT (solo en wizard; la OPT ya se crea en producción)** → (opcionalmente Armado) → **Registrar OPP** hasta pendiente 0 → **Cerrar OPT**.
 
+### 4.8 Operarios (ABM)
+
+**Ruta:** Producción → Operarios (`/mpr/operarios/`).
+
+**Listado:** Búsqueda por nombre **predictiva** (sin botón Filtrar; actualiza la URL tras una breve pausa al escribir). Switch **Incluir anulados** que, al cambiar, recarga el listado con o sin operarios anulados. Columna **Estado:** solo el switch por fila (verde = activo, rojo = anulado; anular o reactivar). Columna **Acciones:** icono de lápiz para editar. Al volver del POST se conservan búsqueda y filtro. Enlace inferior **Tablero** (icono tablero), alineado al estilo de otras pantallas MPR.
+
 ---
 
 ## 5. Lista de materiales (recetas)
@@ -292,7 +298,7 @@ Al confirmar se genera movimiento de stock tipo Reclasificación (salida en orig
 
 **Ruta:** Producción → Config. Depósitos (`/mpr/config/depositos/`).
 
-- **Depósito de producción:** Selector único por empresa. Es el depósito donde se registra el stock al **confirmar** la orden en el Asistente de producción (paso 2). Debe estar configurado para que el asistente pueda crear la OPT y liberar a producción; si no, se muestra un mensaje indicando configurarlo aquí.
+- **Producción (OPT):** Asigne el tipo **«Producción»** a **un** depósito en la columna **Tipo** de la tabla. Ese depósito es donde se registra el stock al **confirmar** la orden en el Asistente de producción (paso 2). Sin un depósito con ese tipo, el asistente no puede liberar la OPT automáticamente.
 - **Suma stock:** Por cada depósito se puede cambiar Sí / No. Solo los depósitos con “Suma stock = Sí” entran en el cálculo de **stock terminado**. Depósitos de tránsito, scrap o 2da selección suelen tener “No” según criterio de negocio.
 
 ---
@@ -313,7 +319,7 @@ Pestañas de solo lectura:
 ## 10. Flujo resumido (proceso completo)
 
 1. **Demanda:** Ver en Pedido producción trabajo (OPT) o Pedidos a fábrica qué hay que fabricar.
-2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera con depósito de producción configurado) → Paso 3 Crear OPP (cantidades por depósito) → Armado (opcional) → Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
+2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera si hay depósito tipo Producción) → Paso 3 Crear OPP (cantidades por depósito) → Armado (opcional) → Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
 3. **Liberar (OPT):** En el asistente va incluido en “Confirmar”. Fuera del asistente, desde el detalle de la OPT con “Liberar (OPT)” (cantidad y depósito destino).
 4. **Armado (si aplica):** Ejecutar armado eligiendo conjunto, cantidad y depósitos origen/destino.
 5. **Registrar OPP:** En el detalle de la OPT, “Registrar OPP” (cantidad y depósitos). En el asistente, paso 3 permite cargar cantidades por cada depósito destino (solo >0 generan movimiento).

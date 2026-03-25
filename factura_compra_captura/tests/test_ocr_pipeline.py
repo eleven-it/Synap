@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework import status
@@ -6,15 +8,24 @@ from rest_framework.test import APIClient
 from core.models import Empresa, UsuarioExtendido
 from factura_compra_captura.api import views as compras_api_views
 from factura_compra_captura.models import DocumentoFuente, ExpedienteFacturaCompra
+from factura_compra_captura.ocr.base import OcrAdapterError
 from factura_compra_captura.tests.compras_test_permissions import (
     otorgar_permisos_compras,
 )
 from factura_compra_captura.tests.test_documento_upload import _mini_jpeg_bytes
 
 
+class _BoomOcrAdapter:
+    def extract(self, **kwargs):
+        raise OcrAdapterError(
+            "TEST_FORZADO",
+            "Fallo simulado del motor OCR (prueba).",
+        )
+
+
 @override_settings(
     FACTURA_COMPRA_OCR_SYNC=True,
-    FACTURA_COMPRA_OCR_MOCK_FAIL=True,
+    FACTURA_COMPRA_OCR_TESSERACT_ENABLED=False,
 )
 class OcrFallidoNoBloqueaExpedienteTests(TestCase):
     """TC-OCR-02: fallo OCR; expediente sigue editable en borrador."""
@@ -53,7 +64,11 @@ class OcrFallidoNoBloqueaExpedienteTests(TestCase):
         )
         self.eid = r.data["id"]
 
-    def test_tc_ocr_02_fallo_documento_expediente_borrador(self):
+    @patch(
+        "factura_compra_captura.ocr.pipeline.get_ocr_adapter",
+        return_value=_BoomOcrAdapter(),
+    )
+    def test_tc_ocr_02_fallo_documento_expediente_borrador(self, _mock_get):
         f = SimpleUploadedFile(
             "f.jpg",
             _mini_jpeg_bytes(),
@@ -74,21 +89,24 @@ class OcrFallidoNoBloqueaExpedienteTests(TestCase):
         self.assertIn("ocr_ultimo_error", exp.metadata)
 
     def test_reintento_ocr(self):
-        f = SimpleUploadedFile(
-            "f.jpg",
-            _mini_jpeg_bytes(),
-            content_type="image/jpeg",
-        )
-        r0 = self.client.post(
-            f"/api/compras/expedientes/{self.eid}/documentos/",
-            {"archivo": f},
-            format="multipart",
-        )
-        did = r0.data["id"]
-        with override_settings(FACTURA_COMPRA_OCR_MOCK_FAIL=False):
-            r1 = self.client.post(
-                f"/api/compras/expedientes/{self.eid}/documentos/{did}/reintentar-ocr/",
+        with patch(
+            "factura_compra_captura.ocr.pipeline.get_ocr_adapter",
+            return_value=_BoomOcrAdapter(),
+        ):
+            f = SimpleUploadedFile(
+                "f.jpg",
+                _mini_jpeg_bytes(),
+                content_type="image/jpeg",
             )
+            r0 = self.client.post(
+                f"/api/compras/expedientes/{self.eid}/documentos/",
+                {"archivo": f},
+                format="multipart",
+            )
+        did = r0.data["id"]
+        r1 = self.client.post(
+            f"/api/compras/expedientes/{self.eid}/documentos/{did}/reintentar-ocr/",
+        )
         self.assertEqual(r1.status_code, status.HTTP_200_OK)
         self.assertEqual(
             r1.data["estado_procesamiento"],

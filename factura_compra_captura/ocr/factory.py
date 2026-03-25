@@ -1,22 +1,31 @@
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 
 from factura_compra_captura.ocr.base import OcrAdapter
-from factura_compra_captura.ocr.mock_adapter import MockOcrAdapter
+from factura_compra_captura.ocr.heuristic_adapter import HeuristicOcrAdapter
+from factura_compra_captura.ocr.http_adapter import HttpOcrAdapter
+
+logger = logging.getLogger(__name__)
 
 
 def get_ocr_adapter() -> OcrAdapter:
     """
     FACTURA_COMPRA_OCR_ADAPTER:
-      - mock (default): MockOcrAdapter
-      - http: reservado proveedor HTTP real (Fase posterior; hoy levanta si se usa sin implementar)
+      - heuristic (default): texto PDF local + patrones ES/AR
+      - http: cliente HTTP contra servicio OCR externo
     """
-    nombre = getattr(settings, "FACTURA_COMPRA_OCR_ADAPTER", "mock").lower().strip()
+    nombre = getattr(settings, "FACTURA_COMPRA_OCR_ADAPTER", "heuristic").lower().strip()
     if nombre == "mock":
-        return MockOcrAdapter()
-    if nombre == "http":
-        raise NotImplementedError(
-            "Adapter OCR HTTP no implementado; usar mock o definir integración (D-01)."
+        logger.warning(
+            "FACTURA_COMPRA_OCR_ADAPTER=mock ya no existe; se usa heuristic. "
+            "Actualizá .env a FACTURA_COMPRA_OCR_ADAPTER=heuristic."
         )
+        nombre = "heuristic"
+    if nombre == "heuristic":
+        return HeuristicOcrAdapter()
+    if nombre == "http":
+        return HttpOcrAdapter()
     raise ValueError(f"FACTURA_COMPRA_OCR_ADAPTER desconocido: {nombre!r}")

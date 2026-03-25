@@ -55,7 +55,8 @@ class ExpedienteFacturaCompra(models.Model):
     codigo_proveedor_legacy = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name=_("Código proveedor AdministraNET"),
+        verbose_name=_("Código proveedor"),
+        help_text=_("Código en tabla proveedor de AdministraNET"),
     )
     metadata = models.JSONField(default=dict, blank=True)
     posting_status = models.CharField(
