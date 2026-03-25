@@ -1,0 +1,193 @@
+{
+  "meta": {
+    "titulo": "Especificación técnica — Replicación factura de compra (AdministraNET VB6 → Django/PWA)",
+    "fuente_codigo": "administranet_vb6/Formularios/PFactura.frm, CargaComprobantesP.frm, Modulos/Funciones.bas",
+    "documentacion_humana": [
+      "docs/compras/auditoria_facturas_compras_resumen.md",
+      "docs/compras/auditoria_facturas_compras_flujo_completo.md",
+      "docs/compras/auditoria_facturas_compras_objetos_vb6.md",
+      "docs/compras/auditoria_facturas_compras_tablas_campos.md",
+      "docs/compras/auditoria_facturas_compras_sql.md",
+      "docs/compras/auditoria_facturas_compras_reglas_negocio.md",
+      "docs/compras/auditoria_facturas_compras_integracion_django.md",
+      "docs/compras/auditoria_facturas_compras_pendientes_dudas.md",
+      "docs/compras/README.md",
+      "docs/compras/product_requirements.md",
+      "docs/compras/domain_model.md",
+      "docs/compras/architecture.md",
+      "docs/compras/legacy_integration_spec.md",
+      "docs/compras/posting_contract.md",
+      "docs/compras/posting_sql_spec.md",
+      "docs/compras/posting_tests.md",
+      "docs/compras/test_strategy.md",
+      "docs/compras/test_cases.md",
+      "docs/compras/implementation_plan.md",
+      "docs/compras/ORIGEN_DATOS_FACTURA_COMPRA_VB6.md"
+    ],
+    "convencion_certeza": ["confirmado_codigo", "inferencia_fuerte", "hipotesis_pendiente"]
+  },
+  "vb6_objetos": {
+    "formularios_entrada": [
+      {
+        "archivo": "CargaComprobantesP.frm",
+        "eventos_menu": ["keyFact", "keyFactRem", "keyFactOC", "keyFactVALE"],
+        "certeza": "confirmado_codigo"
+      }
+    ],
+    "formulario_principal": {
+      "archivo": "PFactura.frm",
+      "procedimientos_clave": [
+        {"nombre": "Aceptar_Click", "llama_a": ["Guardar", "Cont_AbmEjercicio.Show"], "certeza": "confirmado_codigo"},
+        {"nombre": "Guardar", "rol": "persistencia_alta_factura_compra", "certeza": "confirmado_codigo"},
+        {"nombre": "modificacion_comp", "rol": "actualizacion_comprobante_existente", "certeza": "confirmado_codigo"},
+        {"nombre": "generar_asiento_cont", "rol": "contabilidad", "certeza": "confirmado_codigo"},
+        {"nombre": "Balancea_asiento", "rol": "ajuste_redondeo_asiento", "certeza": "confirmado_codigo"},
+        {"nombre": "visualiza_asiento_cont", "rol": "ui_centro_costo_o_visualizacion", "certeza": "confirmado_codigo"},
+        {"nombre": "Elimina_Temporal", "rol": "limpia_buffers_usuario", "certeza": "confirmado_codigo"},
+        {"nombre": "Validacion_Comp", "rol": "anti_duplicado_numeracion", "certeza": "confirmado_codigo"},
+        {"nombre": "GuardarSerie", "rol": "serie_entrada_movimiento", "certeza": "confirmado_codigo"},
+        {"nombre": "Inicial", "rol": "carga_formulario_y_temp", "certeza": "confirmado_codigo"}
+      ]
+    },
+    "formularios_auxiliares": [
+      "Cont_AbmEjercicio.frm",
+      "Cont_CargaAsientoM.frm",
+      "form_espera.frm",
+      "Lista_Comp_Gral.frm",
+      "En_Liquidacion_Vales.frm"
+    ],
+    "modulos": [
+      {"archivo": "Modulos/Funciones.bas", "funciones": ["Obtener_Datos_Articulo_Mayorista", "Actualiza_Cotizacion_Dolar_Articulo"], "certeza": "confirmado_codigo"}
+    ],
+    "global_principal": {
+      "descripcion": "Objeto global Principal con flags de permisos y configuración",
+      "ejemplos_flags": ["activ_contabilidad", "selec_ejer_per_cont", "remite_factura_art", "actualiza_lista_compra", "compras_cambia_prov_factura", "modifica_sucursal_comp", "activ_proyecto", "valida_pv_comp_compra", "idUsuario", "codSucursal", "Fecha"],
+      "certeza": "inferencia_fuerte"
+    }
+  },
+  "tablas_afectadas": [
+    {"nombre": "codmov", "rol": "numerador_global", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cuentaproveedor", "rol": "cabecera_comprobante_proveedor", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "proveedor", "rol": "maestro_saldo_cc", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cond_venta", "rol": "condicion_compra", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "en_vale_factura", "rol": "puente_vale_factura", "operaciones": ["INSERT"], "certeza": "confirmado_codigo"},
+    {"nombre": "en_vale_factura_temp", "rol": "buffer_vales", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "en_vale_viaje", "rol": "estado_vale", "operaciones": ["UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "percep_prov_temp", "rol": "buffer_percepciones_ib", "operaciones": ["SELECT", "DELETE"], "certeza": "confirmado_codigo"},
+    {"nombre": "percep_prov", "rol": "percepciones_ib", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "percepcion_prov_convenio", "rol": "percepciones_convenio", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "caja_saldo", "rol": "tesoreria_saldo_caja", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "caja", "rol": "movimiento_caja_contado", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "stock", "rol": "detalle_compra", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "stock_deposito", "rol": "inventario_por_deposito", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "stockp", "rol": "lineas_orden_compra", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "otro_egreso", "rol": "gasto_imputacion_renglon", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "lote", "rol": "trazabilidad_lote", "operaciones": ["SELECT", "INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "lote_stock", "rol": "lote_por_deposito", "operaciones": ["SELECT", "INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "articulo", "rol": "maestro_actualizacion_costos", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "iva", "rol": "alicuota", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "precios_historial", "rol": "historial_precios", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "op_factura", "rol": "documento_pagar_credito", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "op_factura_par", "rol": "cuotas_par_modificacion", "operaciones": ["UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "imputacion_p", "rol": "imputacion_modificacion", "operaciones": ["UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cuerpostockp", "rol": "buffer_grilla", "operaciones": ["SELECT", "DELETE"], "certeza": "confirmado_codigo"},
+    {"nombre": "oc_factp", "rol": "puente_factura_oc", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "remp_factp", "rol": "puente_factura_remito", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "serie_entrada_temp", "rol": "buffer_series", "operaciones": ["SELECT", "DELETE"], "certeza": "confirmado_codigo"},
+    {"nombre": "serie_entrada", "rol": "series_definitivas", "operaciones": ["INSERT"], "certeza": "confirmado_codigo"},
+    {"nombre": "serie_movimiento", "rol": "vinculo_serie_compra", "operaciones": ["INSERT"], "certeza": "confirmado_codigo"},
+    {"nombre": "periodos", "rol": "fiscal_periodo", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "years", "rol": "fiscal_anio", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "configuracion", "rol": "flag_contabilidad", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_paramatriz", "rol": "plan_cuentas_param", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_pc", "rol": "plan_cuentas", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "gastos", "rol": "gasto_centro_costo", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_ejercicio", "rol": "ejercicio_y_numeracion_asiento", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_periodo", "rol": "periodo_contable", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_asiento", "rol": "lineas_asiento", "operaciones": ["INSERT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_ejercicio_saldo_cta", "rol": "saldo_contable_ejercicio", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "cont_periodo_saldo_cta", "rol": "saldo_contable_periodo", "operaciones": ["SELECT", "UPDATE"], "certeza": "confirmado_codigo"},
+    {"nombre": "caja_abm", "rol": "maestro_caja_asiento", "operaciones": ["SELECT"], "certeza": "confirmado_codigo"}
+  ],
+  "orden_persistencia_recomendado": [
+    {"paso": 1, "tabla": "codmov", "notas": "Obtener CodigoMovimiento (contador)"},
+    {"paso": 2, "tabla": "cuentaproveedor", "notas": "Cabecera + efectos vales/percepciones en mismo bloque VB6"},
+    {"paso": 3, "tabla": "proveedor", "notas": "Update saldo"},
+    {"paso": 4, "tabla": "caja_saldo", "notas": "Solo contado"},
+    {"paso": 5, "tabla": "caja", "notas": "Solo contado"},
+    {"paso": 6, "tabla": "stock", "notas": "Por cada renglon + stock_deposito, stockp, lote, otro_egreso"},
+    {"paso": 7, "tabla": "articulo", "notas": "Opcional lista compra / proveedor por articulo"},
+    {"paso": 8, "tabla": "precios_historial", "notas": "Opcional con lista compra"},
+    {"paso": 9, "tabla": "op_factura", "notas": "Credito"},
+    {"paso": 10, "tabla": "cuentaproveedor", "notas": "Update OC estado / REM estado_remito"},
+    {"paso": 11, "tabla": "oc_factp", "notas": "Si aplica OC"},
+    {"paso": 12, "tabla": "remp_factp", "notas": "Si aplica Remito"},
+    {"paso": 13, "tabla": "serie_entrada", "notas": "GuardarSerie"},
+    {"paso": 14, "tabla": "serie_movimiento", "notas": "GuardarSerie"},
+    {"paso": 15, "tablas_contables", "notas": "cont_asiento + saldos + cont_ejercicio numeracion"}
+  ],
+  "validaciones_criticas": [
+    {"id": "grid_no_vacio", "vb6": "PFactura Guardar GridRenglon.EOF", "certeza": "confirmado_codigo"},
+    {"id": "origen_remito_buffer", "vb6": "SELECT cuerpostockp codmov_remito", "certeza": "confirmado_codigo"},
+    {"id": "origen_oc_buffer", "vb6": "SELECT cuerpostockp codmov_oc", "certeza": "confirmado_codigo"},
+    {"id": "origen_vale_buffer", "vb6": "SELECT en_vale_factura_temp", "certeza": "confirmado_codigo"},
+    {"id": "periodo_fiscal_abierto", "vb6": "periodos+years FechaRegistro", "certeza": "confirmado_codigo"},
+    {"id": "anio_en_years", "vb6": "SELECT Years", "certeza": "confirmado_codigo"},
+    {"id": "anti_duplicado_fa_fc_fb", "vb6": "Validacion_Comp sin FM", "certeza": "confirmado_codigo"},
+    {"id": "contabilidad_cerrada", "vb6": "Principal.ContCerrado en generar_asiento_cont", "certeza": "confirmado_codigo"},
+    {"id": "series_cantidad", "vb6": "ValCantSerie", "certeza": "confirmado_codigo"}
+  ],
+  "side_effects": [
+    {"efecto": "actualiza_saldo_proveedor", "tablas": ["proveedor", "cuentaproveedor"], "certeza": "confirmado_codigo"},
+    {"efecto": "egreso_caja_contado", "tablas": ["caja", "caja_saldo"], "certeza": "confirmado_codigo"},
+    {"efecto": "alta_documento_pagar", "tablas": ["op_factura"], "certeza": "confirmado_codigo"},
+    {"efecto": "movimiento_stock_deposito", "tablas": ["stock", "stock_deposito"], "certeza": "confirmado_codigo"},
+    {"efecto": "cierra_o_parcializa_oc", "tablas": ["stockp", "cuentaproveedor", "oc_factp"], "certeza": "confirmado_codigo"},
+    {"efecto": "factura_remito_marca_remito", "tablas": ["cuentaproveedor", "remp_factp"], "certeza": "confirmado_codigo"},
+    {"efecto": "percepciones_ib_detalle", "tablas": ["percep_prov", "percepcion_prov_convenio"], "certeza": "confirmado_codigo"},
+    {"efecto": "vales_en_factura", "tablas": ["en_vale_factura", "en_vale_viaje"], "certeza": "confirmado_codigo"},
+    {"efecto": "series", "tablas": ["serie_entrada", "serie_movimiento"], "certeza": "confirmado_codigo"},
+    {"efecto": "contabilidad_asiento_y_saldos", "tablas": ["cont_asiento", "cont_ejercicio", "cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"], "certeza": "confirmado_codigo"},
+    {"efecto": "redondeo_asiento", "procedimiento": "Balancea_asiento", "certeza": "confirmado_codigo"},
+    {"efecto": "limpia_buffers_post_grabar", "procedimiento": "Elimina_Temporal", "certeza": "confirmado_codigo"}
+  ],
+  "dependencias_previas": [
+    "proveedor existente y CAI vigente en flujo CargaComprobantesP",
+    "cond_venta valida (CV.BoundText)",
+    "articulos y depositos existentes para renglones",
+    "OC o REM pendientes si el origen lo requiere",
+    "periodos/years abiertos para fechas",
+    "configuracion contable y cont_paramatriz si se genera asiento"
+  ],
+  "puntos_inciertos": [
+    {
+      "id": "delete_serie_temp_or",
+      "descripcion": "Precedencia OR en DELETE serie_entrada_temp en Elimina_Temporal",
+      "certeza": "hipotesis_pendiente"
+    },
+    {
+      "id": "fm_duplicados",
+      "descripcion": "FM excluido de Validacion_Comp - bug o feature",
+      "certeza": "hipotesis_debil"
+    },
+    {
+      "id": "limpia_en_vale_factura_temp",
+      "descripcion": "Quien borra en_vale_factura_temp tras guardar exitoso",
+      "certeza": "pendiente_busqueda_global"
+    },
+    {
+      "id": "libro_iva_tabla",
+      "descripcion": "Tabla explicita libro IVA compras fuera de PFactura",
+      "certeza": "inferencia_fuerte_exportaciones"
+    }
+  ],
+  "campos_cabecera_cuentaproveedor_referencia": [
+    "Fecha", "FechaRegistro", "TipoComprobante", "NroComprobante", "NroCompBusq", "Detalle", "Saldo", "OPMov",
+    "ImporteCompra", "ImportePago", "Iva1", "Iva2", "Iva3", "Alicuota1", "alicuota2", "Alicuota3",
+    "PercepIB", "PercepGan", "PercepIVA", "OtrosImp", "NroCAI", "FechaCAI", "idUsuario", "codSucursal",
+    "TipoFactura", "Exento", "anulado", "Codigo", "CodBanco", "CodigoMovimiento", "Subtotal1", "Subtotal2",
+    "Subtotal3", "SubtotalGral", "ImpDesc1_1", "TotalDesc", "SubTotalDesc1", "SubTotalDesc2", "SubTotalDesc3",
+    "SubtotalDesc", "CondCompra", "id_condcompra", "impuesto_interno", "sobretasa_iva", "Estado",
+    "Vencimiento", "Vencido", "ID_Proyecto", "remite_factura_art", "estado_fact_remito", "CotiDolar"
+  ]
+}

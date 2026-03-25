@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1c1917">
+  <title>Revisión — factura de compra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --space-xs: 0.35rem;
+      --space-sm: 0.55rem;
+      --space-md: 1rem;
+      --space-lg: 1.5rem;
+      --space-xl: 2.25rem;
+      --space-2xl: clamp(2.5rem, 5vw, 4rem);
+      --ink: #1c1917;
+      --ink-muted: #57534e;
+      --surface: #fafaf9;
+      --surface-2: #f5f5f4;
+      --border: #e7e5e4;
+      --accent: #b45309;
+      --accent-hover: #92400e;
+      --danger: #b91c1c;
+      --radius: 10px;
+      --font-display: "Fraunces", Georgia, serif;
+      --font-body: "DM Sans", system-ui, sans-serif;
+      --shadow: 0 1px 3px rgba(28, 25, 23, 0.08);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      font-size: 1rem;
+      line-height: 1.55;
+      color: var(--ink);
+      background: var(--surface);
+    }
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: var(--space-md);
+      padding-bottom: var(--space-2xl);
+    }
+    header.page-head {
+      margin-bottom: var(--space-xl);
+      padding-bottom: var(--space-lg);
+      border-bottom: 1px solid var(--border);
+    }
+    .page-head h1 {
+      font-family: var(--font-display);
+      font-size: clamp(1.35rem, 4vw, 1.75rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin: 0 0 var(--space-sm);
+      letter-spacing: -0.02em;
+    }
+    .page-head .sub {
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+      max-width: 65ch;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: var(--space-xs) var(--space-sm);
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--ink-muted);
+      margin-top: var(--space-md);
+    }
+    .layout {
+      display: grid;
+      gap: var(--space-xl);
+    }
+    @media (min-width: 900px) {
+      .layout {
+        grid-template-columns: minmax(280px, 1fr) minmax(0, 1.15fr);
+        align-items: start;
+      }
+    }
+    .panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: var(--space-lg);
+    }
+    .panel h2 {
+      font-family: var(--font-display);
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0 0 var(--space-lg);
+      padding-bottom: var(--space-sm);
+      border-bottom: 1px solid var(--border);
+    }
+    .panel.doc-panel {
+      position: sticky;
+      top: var(--space-md);
+    }
+    .doc-placeholder {
+      min-height: 180px;
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, var(--surface-2) 0%, #e7e5e4 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: var(--space-lg);
+      color: var(--ink-muted);
+      font-size: 0.9rem;
+    }
+    .form-grid {
+      display: grid;
+      gap: var(--space-md);
+    }
+    @media (min-width: 520px) {
+      .form-grid.two { grid-template-columns: 1fr 1fr; }
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--ink-muted);
+      margin-bottom: var(--space-xs);
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: var(--space-sm) var(--space-md);
+      font-family: var(--font-body);
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.2);
+    }
+    textarea { min-height: 4.5rem; resize: vertical; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      margin-top: var(--space-lg);
+    }
+    button {
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.65rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s ease-out, transform 0.1s ease-out;
+    }
+    button:active { transform: scale(0.98); }
+    button.primary { background: var(--accent); color: #fff; }
+    button.primary:hover { background: var(--accent-hover); }
+    button.secondary { background: var(--surface-2); color: var(--ink); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); color: #fff; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .msg {
+      margin-top: var(--space-md);
+      padding: var(--space-md);
+      border-radius: var(--radius);
+      font-size: 0.88rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.err { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .msg.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .historial {
+      margin-top: var(--space-xl);
+    }
+    .historial ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .historial li {
+      padding: var(--space-sm) 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .historial .ev-type { font-weight: 600; color: var(--ink); }
+    .historial time { color: var(--ink-muted); font-size: 0.8rem; }
+    dialog {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-lg);
+      max-width: min(100% - 2rem, 420px);
+      font-family: var(--font-body);
+    }
+    dialog::backdrop { background: rgba(28, 25, 23, 0.45); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-head">
+      <h1>Revisión de factura</h1>
+      <p class="sub">Escaneo rápido del estado, edición de cabecera y líneas, rechazo con motivo y aprobación con posting simulado (sin escritura en AdministraNET).</p>
+      <span class="badge" id="badge_estado">Cargando…</span>
+    </header>
+
+    <div class="layout">
+      <aside class="panel doc-panel">
+        <h2>Documento</h2>
+        <div class="doc-placeholder" id="doc_hint">Vinculá un archivo desde captura móvil o listado de documentos en la API. Aquí solo referencia visual MVP.</div>
+        <p style="font-size:0.8rem;color:var(--ink-muted);margin-top:var(--space-md);max-width:55ch;">En escritorio el panel queda fijo para comparar datos mientras editás.</p>
+      </aside>
+
+      <section class="panel">
+        <h2>Datos del comprobante</h2>
+        <div class="form-grid two">
+          <div>
+            <label for="cod_prov">Código proveedor legacy</label>
+            <input id="cod_prov" type="number" inputmode="numeric" min="1">
+          </div>
+          <div>
+            <label for="origen">Origen datos</label>
+            <select id="origen">
+              <option value="MANUAL">Manual</option>
+              <option value="REMITO">Remito</option>
+              <option value="OC">OC</option>
+              <option value="VALE">Vale</option>
+            </select>
+          </div>
+          <div>
+            <label for="nro_comp">Nº comprobante formateado</label>
+            <input id="nro_comp" type="text" autocomplete="off" placeholder="Ej. FA-0001-00001234">
+          </div>
+          <div>
+            <label for="fecha_comp">Fecha comprobante</label>
+            <input id="fecha_comp" type="date">
+          </div>
+          <div>
+            <label for="importe">Importe total</label>
+            <input id="importe" type="text" inputmode="decimal" placeholder="0.00">
+          </div>
+          <div>
+            <label for="tipo_fiscal">Letra fiscal</label>
+            <select id="tipo_fiscal">
+              <option value="FA">FA</option>
+              <option value="FB">FB</option>
+              <option value="FC">FC</option>
+              <option value="FM">FM</option>
+            </select>
+          </div>
+        </div>
+
+        <h2 style="margin-top:var(--space-xl);">Líneas (JSON)</h2>
+        <p style="font-size:0.85rem;color:var(--ink-muted);margin:0 0 var(--space-sm);max-width:65ch;">Array de objetos con orden, id_art_legacy, cantidad, precio_unitario; opcional codigo_movimiento_oc / codigo_movimiento_remito y metadata (requiere_lote, cod_lote).</p>
+        <textarea id="lineas_json" spellcheck="false"></textarea>
+
+        <div class="actions">
+          <button type="button" class="secondary" id="btn_recargar">Recargar</button>
+          <button type="button" class="primary" id="btn_guardar">Guardar borrador</button>
+          <button type="button" class="secondary" id="btn_revision">Enviar a revisión</button>
+          <button type="button" class="secondary" id="btn_listo">Marcar listo para aprobar</button>
+          <button type="button" class="secondary" id="btn_solicitar_aprob">Solicitar aprobación</button>
+          <button type="button" class="primary" id="btn_aprobar">Aprobar (stub)</button>
+          <button type="button" class="danger" id="btn_rechazar">Rechazar…</button>
+        </div>
+        <div class="msg err" id="msg_err" hidden></div>
+        <div class="msg ok" id="msg_ok" hidden></div>
+
+        <div class="historial panel" style="margin-top:var(--space-xl); box-shadow:none;">
+          <h2>Historial</h2>
+          <ul id="lista_eventos"></ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <dialog id="dlg_rechazo">
+    <p style="margin-top:0;font-weight:600;">Motivo de rechazo (obligatorio)</p>
+    <textarea id="motivo_rechazo" required></textarea>
+    <div class="actions" style="justify-content:flex-end;">
+      <button type="button" class="secondary" id="dlg_rechazo_cancel">Cancelar</button>
+      <button type="button" class="danger" id="dlg_rechazo_ok">Confirmar rechazo</button>
+    </div>
+  </dialog>
+
+  <script>window._csrf = "{{ csrf_token_value|default:'' }}"; window._EXP = "{{ expediente_id }}";</script>
+  <script>
+    (function () {
+      const EID = window._EXP;
+      const csrftoken = window._csrf || (document.cookie.match(/(^|;) ?csrftoken=([^;]*)(;|$)/) || [])[2];
+      const api = (path, opts) => fetch(path, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' } }, opts || {}));
+      const errEl = document.getElementById('msg_err');
+      const okEl = document.getElementById('msg_ok');
+      function showErr(t) { errEl.hidden = !t; errEl.textContent = t || ''; okEl.hidden = true; }
+      function showOk(t) { okEl.hidden = !t; okEl.textContent = t || ''; errEl.hidden = true; }
+
+      async function cargar() {
+        showErr('');
+        const r = await api('/api/compras/expedientes/' + EID + '/');
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        document.getElementById('badge_estado').textContent = d.estado.replace(/_/g, ' ');
+        document.getElementById('cod_prov').value = d.codigo_proveedor_legacy || '';
+        document.getElementById('origen').value = d.origen_datos || 'MANUAL';
+        const h = (d.metadata && d.metadata.posting_v1 && d.metadata.posting_v1.header) || {};
+        document.getElementById('nro_comp').value = h.nro_comprobante_formateado || '';
+        document.getElementById('fecha_comp').value = (h.fecha_comprobante || '').slice(0, 10);
+        document.getElementById('importe').value = h.importe_total != null ? String(h.importe_total) : '';
+        document.getElementById('tipo_fiscal').value = h.tipo_factura || 'FA';
+        document.getElementById('lineas_json').value = JSON.stringify(d.lineas || [], null, 2);
+
+        const re = await api('/api/compras/expedientes/' + EID + '/eventos/');
+        const evs = await re.json();
+        const ul = document.getElementById('lista_eventos');
+        ul.innerHTML = '';
+        if (re.ok && Array.isArray(evs)) {
+          evs.slice().reverse().forEach(function (e) {
+            const li = document.createElement('li');
+            li.innerHTML = '<span class="ev-type">' + e.tipo_evento + '</span> · <time>' + e.creado_en + '</time>' + (e.actor_email ? ' · ' + e.actor_email : '');
+            ul.appendChild(li);
+          });
+        }
+      }
+
+      document.getElementById('btn_recargar').onclick = cargar;
+
+      document.getElementById('btn_guardar').onclick = async function () {
+        showErr('');
+        let lineas;
+        try { lineas = JSON.parse(document.getElementById('lineas_json').value || '[]'); }
+        catch (e) { showErr('JSON de líneas inválido.'); return; }
+        const body = {
+          codigo_proveedor_legacy: parseInt(document.getElementById('cod_prov').value, 10) || null,
+          origen_datos: document.getElementById('origen').value,
+          lineas: lineas,
+          posting_header: {
+            nro_comprobante_formateado: document.getElementById('nro_comp').value.trim(),
+            fecha_comprobante: document.getElementById('fecha_comp').value || null,
+            importe_total: document.getElementById('importe').value || null,
+            tipo_factura: document.getElementById('tipo_fiscal').value,
+          },
+        };
+        const r = await api('/api/compras/expedientes/' + EID + '/', { method: 'PATCH', body: JSON.stringify(body) });
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Guardado.');
+        cargar();
+      };
+
+      function postTransicion(accion, extra) {
+        return api('/api/compras/expedientes/' + EID + '/transiciones/', { method: 'POST', body: JSON.stringify(Object.assign({ accion: accion }, extra || {})) });
+      }
+
+      document.getElementById('btn_revision').onclick = async function () {
+        const r = await postTransicion('enviar_revision');
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Enviado a revisión.'); cargar();
+      };
+      document.getElementById('btn_listo').onclick = async function () {
+        const r = await postTransicion('marcar_listo_para_aprobar');
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Listo para aprobar.'); cargar();
+      };
+      document.getElementById('btn_solicitar_aprob').onclick = async function () {
+        const r = await postTransicion('solicitar_aprobacion');
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Aprobación solicitada.'); cargar();
+      };
+      document.getElementById('btn_aprobar').onclick = async function () {
+        const r = await api('/api/compras/expedientes/' + EID + '/aprobar/', { method: 'POST', body: '{}' });
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Aprobado. Posting simulado: codmov ' + d.legacy_codigo_movimiento + ', nro ' + d.legacy_nro_comprobante);
+        cargar();
+      };
+
+      const dlg = document.getElementById('dlg_rechazo');
+      document.getElementById('btn_rechazar').onclick = function () { dlg.showModal(); };
+      document.getElementById('dlg_rechazo_cancel').onclick = function () { dlg.close(); };
+      document.getElementById('dlg_rechazo_ok').onclick = async function () {
+        const motivo = document.getElementById('motivo_rechazo').value.trim();
+        if (!motivo) return;
+        const r = await postTransicion('rechazar', { motivo: motivo });
+        const d = await r.json();
+        dlg.close();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Rechazado.');
+        document.getElementById('motivo_rechazo').value = '';
+        cargar();
+      };
+
+      cargar();
+    })();
+  </script>
+</body>
+</html>

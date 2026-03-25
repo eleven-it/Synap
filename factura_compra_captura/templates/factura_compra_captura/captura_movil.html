@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Captura factura compra</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1rem; background: #0f172a; color: #e2e8f0; }
+    h1 { font-size: 1.1rem; margin: 0 0 1rem; }
+    label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.85rem; color: #94a3b8; }
+    input, button { width: 100%; box-sizing: border-box; padding: 0.65rem; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; }
+    button { margin-top: 1rem; background: #2563eb; border: none; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #estado { margin-top: 1rem; font-size: 0.85rem; white-space: pre-wrap; word-break: break-word; }
+    .hint { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <h1>Captura — factura de compra</h1>
+  <p class="hint">PWA base: usar «Añadir a inicio» en el navegador. La cámara depende del dispositivo y permisos.</p>
+
+  <label for="empresa_id">ID empresa (Synap)</label>
+  <input id="empresa_id" type="number" inputmode="numeric" value="{{ empresa_id_query|default:'' }}" placeholder="Ej. 1">
+
+  <label for="archivo">Foto o PDF</label>
+  <input id="archivo" type="file" accept="image/*,application/pdf,capture=camera">
+
+  <button type="button" id="btn_crear">1. Crear expediente</button>
+  <button type="button" id="btn_subir" disabled>2. Subir documento</button>
+
+  <div id="estado"></div>
+
+  <script>window._csrf = "{{ csrf_token_value|default:'' }}";</script>
+  <script>
+    (function () {
+      const estado = document.getElementById('estado');
+      const log = (msg) => { estado.textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2); };
+      function getCookie(name) {
+        const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return v ? decodeURIComponent(v[2]) : null;
+      }
+      const csrftoken = window._csrf || getCookie('csrftoken');
+      let expedienteId = null;
+
+      document.getElementById('btn_crear').onclick = async function () {
+        const empresa = document.getElementById('empresa_id').value;
+        if (!empresa) { log('Indicá el ID de empresa.'); return; }
+        try {
+          const r = await fetch('/api/compras/expedientes/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrftoken || '',
+            },
+            body: JSON.stringify({ empresa: parseInt(empresa, 10) }),
+          });
+          const data = await r.json();
+          if (!r.ok) { log(data); return; }
+          expedienteId = data.id;
+          log('Expediente creado: ' + expedienteId);
+          document.getElementById('btn_subir').disabled = false;
+        } catch (e) {
+          log(String(e));
+        }
+      };
+
+      document.getElementById('btn_subir').onclick = async function () {
+        const input = document.getElementById('archivo');
+        if (!expedienteId) { log('Creá primero el expediente.'); return; }
+        if (!input.files || !input.files[0]) { log('Elegí un archivo.'); return; }
+        const fd = new FormData();
+        fd.append('archivo', input.files[0]);
+        try {
+          const r = await fetch('/api/compras/expedientes/' + expedienteId + '/documentos/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrftoken || '' },
+            body: fd,
+          });
+          const data = await r.json();
+          log(data);
+          if (r.ok) {
+            log('Subido. estado_procesamiento=' + data.estado_procesamiento + '\nConsultá GET mismo expediente o documento para ver OCR.');
+          }
+        } catch (e) {
+          log(String(e));
+        }
+      };
+    })();
+  </script>
+</body>
+</html>
