@@ -99,6 +99,23 @@ class HeaderParserTests(SimpleTestCase):
         self.assertEqual(h["total"]["source"], "structured")
         self.assertEqual(h["total"]["evidencia"]["page"], 2)
 
+    def test_parsea_fecha_ocr_ruidosa_formato_ymd(self):
+        texto = """
+        FACTURA
+        eya 2O26/O2/26
+        TOTAL 68'000'00
+        """
+        cab, _, _ = parsear_texto_factura(texto)
+        self.assertEqual(cab.get("fecha_comprobante_texto"), "26/02/2026")
+
+    def test_descarta_proveedor_basura_ocr(self):
+        texto = """
+        F wh an eee os os hed A ae o.
+        OC / 9:28 49 | GANE UD E NN 1 IE oes oe ee
+        """
+        cab, _, _ = parsear_texto_factura(texto)
+        self.assertNotIn("proveedor_texto", cab)
+
 
 class Stage2IntegrationTests(SimpleTestCase):
     def test_analizar_pdf_incluye_classification_y_header_en_document_engine_v1(self):

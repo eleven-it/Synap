@@ -82,19 +82,53 @@ def _tesseract_string_from_pil(
     lang: str = "spa+eng",
     tesseract_cmd: str | None = None,
 ) -> str:
+    # Robustez: algunos pipelines pueden entregar np.ndarray/bytes-like.
+    # pytesseract acepta PIL.Image.Image; normalizamos antes de invocar OCR.
+    from PIL import Image
     import pytesseract
+
+    if not isinstance(img, Image.Image):
+        try:
+            import numpy as np
+
+            if isinstance(img, np.ndarray):
+                img = Image.fromarray(img)
+            else:
+                img = Image.open(img)
+        except Exception as e:
+            raise ValueError(f"OCR_IMAGEN_NO_VALIDA:{type(img).__name__}") from e
 
     prev_cmd = pytesseract.pytesseract.tesseract_cmd
     try:
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         try:
-            return (
-                pytesseract.image_to_string(
-                    img, lang=lang, config=_TESSERACT_OCR_CONFIG
-                )
-                or ""
-            ).strip()
+            # Algunas fotos móviles llegan como MPO/MPF y pytesseract rechaza
+            # directamente el objeto PIL. Normalizamos a PNG temporal.
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            import os
+            import tempfile
+
+            tmp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    suffix=".png", delete=False
+                ) as tmp:
+                    tmp_path = tmp.name
+                img.save(tmp_path, format="PNG")
+                return (
+                    pytesseract.image_to_string(
+                        tmp_path, lang=lang, config=_TESSERACT_OCR_CONFIG
+                    )
+                    or ""
+                ).strip()
+            finally:
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
         except pytesseract.TesseractNotFoundError as e:
             raise TesseractNotAvailableError(
                 "No se encontró el ejecutable Tesseract. En Docker ya está instalado; "
@@ -295,6 +329,7 @@ _RE_FECHA = re.compile(
 )
 
 _RE_FECHA_SUELTA = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b")
+_RE_FECHA_YMD_SUELTA = re.compile(r"\b(\d{4})[/-](\d{1,2})[/-](\d{1,2})\b")
 
 _RE_CUIT = re.compile(r"\b(\d{2})-(\d{8})-(\d{1})\b")
 # CUIT sin guiones junto a etiqueta (p. ej. "CUIT: 30719081076")
@@ -415,6 +450,21 @@ def _descartar_como_razon_social(linea: str) -> bool:
     compact = low.replace(" ", "")
     if _RE_FECHA_SUELTA.fullmatch(compact):
         return True
+    # Basura OCR: demasiada puntuación/símbolos y pocos caracteres alfabéticos.
+    alpha = sum(1 for c in ln if c.isalpha())
+    extra = sum(1 for c in ln if c in "|\\/_=~`^[]{}<>")
+    if alpha < 4:
+        return True
+    if extra >= 3 and extra > (len(ln) * 0.12):
+        return True
+    tokens = [t for t in re.split(r"\s+", ln) if t]
+    if tokens:
+        max_tok = max(len(t) for t in tokens)
+        short = sum(1 for t in tokens if len(t) <= 2)
+        if max_tok < 4:
+            return True
+        if short >= 4 and short >= int(len(tokens) * 0.6):
+            return True
     return False
 
 
@@ -449,7 +499,27 @@ def _normalizar_fecha(d: str, m: str, y: str) -> str:
     yi = int(y)
     if yi < 100:
         yi += 2000
-    return f"{int(d):02d}/{int(m):02d}/{yi}"
+    di = int(d)
+    mi = int(m)
+    if mi < 1 or mi > 12 or di < 1 or di > 31:
+        return ""
+    if yi < 2000 or yi > 2100:
+        return ""
+    return f"{di:02d}/{mi:02d}/{yi}"
+
+
+def _ocr_digits(s: str) -> str:
+    """Normaliza confusiones típicas OCR en campos numéricos."""
+    return (
+        (s or "")
+        .replace("O", "0")
+        .replace("o", "0")
+        .replace("I", "1")
+        .replace("l", "1")
+        .replace("Z", "2")
+        .replace("z", "2")
+        .replace("S", "5")
+    )
 
 
 def _monto_a_texto_plano(s: str) -> str:
@@ -457,6 +527,7 @@ def _monto_a_texto_plano(s: str) -> str:
     s = (s or "").strip().replace(" ", "")
     if not s:
         return ""
+    s = s.replace("'", ".")
     if "," in s and "." in s:
         if s.rfind(",") > s.rfind("."):
             s = s.replace(".", "").replace(",", ".")
@@ -688,10 +759,23 @@ def parsear_texto_factura(texto: str) -> tuple[dict[str, Any], list[dict[str, An
         if not fm:
             fm = _RE_FECHA_SUELTA.search(texto)
         if fm:
-            cab["fecha_comprobante_texto"] = _normalizar_fecha(
+            f_norm = _normalizar_fecha(
                 fm.group(1), fm.group(2), fm.group(3)
             )
-            puntuacion += 0.15
+            if f_norm:
+                cab["fecha_comprobante_texto"] = f_norm
+                puntuacion += 0.15
+        else:
+            # OCR ruidoso: variantes como 9zoz/20/92 (YYYY/MM/DD con letras parecidas).
+            tx_num = _ocr_digits(texto)
+            ym = _RE_FECHA_YMD_SUELTA.search(tx_num)
+            if ym:
+                f_norm = _normalizar_fecha(
+                    ym.group(3), ym.group(2), ym.group(1)
+                )
+                if f_norm:
+                    cab["fecha_comprobante_texto"] = f_norm
+                    puntuacion += 0.12
 
     cuit_str = _cuit_proveedor(texto, lineas_raw)
     if cuit_str:
