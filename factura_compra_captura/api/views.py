@@ -41,7 +41,10 @@ from factura_compra_captura.services.documento_fuente_service import (
 )
 from factura_compra_captura.services.fiscal_invoice_validation import (
     resolve_base_empresa_for_compras,
+    tipo_factura_desde_expediente_metadata,
 )
+from self_checkout.api_views import _fetch_articulos_list_rows
+from self_checkout.db import mysql_cursor
 from factura_compra_captura.services.proveedor_resolution_service import (
     resolver_proveedor_desde_legacy_o_padron,
 )
@@ -124,6 +127,64 @@ class ExpedienteDetailPatchAPIView(APIView):
         )
 
 
+class ExpedienteArticulosBuscarAPIView(APIView):
+    """
+    Búsqueda predictiva de artículos AdministraNET para líneas de compra (revisión).
+    Reutiliza la misma consulta SQL que la grilla del TPV; no exige permiso kiosk.
+    """
+
+    permission_classes = [IsAuthenticated, ExpedienteDetailPatchPermission]
+
+    def get(self, request, pk):
+        exp = get_object_or_404(ExpedienteFacturaCompra.objects.all(), pk=pk)
+        base = resolve_base_empresa_for_compras(exp, request)
+        if not base:
+            return Response(
+                {
+                    "detail": (
+                        "No se pudo determinar la base empresa AdministraNET "
+                        "(sesión o FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID / metadata compras)."
+                    ),
+                    "codigo": "base_empresa_requerida",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        search = (request.query_params.get("search") or "").strip()
+        try:
+            limit = int(request.query_params.get("limit") or 25)
+        except (TypeError, ValueError):
+            limit = 25
+        limit = max(1, min(limit, 50))
+        try:
+            id_lista = int(request.query_params.get("id_lista") or 1)
+        except (TypeError, ValueError):
+            id_lista = 1
+        id_lista_int = max(0, min(5, id_lista))
+        if not search:
+            return Response({"articulos": []})
+        rows = []
+        try:
+            with mysql_cursor(base, dict_cursor=True) as c:
+                rows, _, _ = _fetch_articulos_list_rows(
+                    c, search, limit, id_lista_int
+                )
+        except Exception as e:
+            logger.warning("expediente_articulos_buscar: %s", e)
+            rows = []
+        articulos = []
+        for r in rows:
+            id_art = r.get("id_articulo")
+            articulos.append(
+                {
+                    "id_articulo": id_art,
+                    "codigo_articulo": r.get("codigo_articulo")
+                    or (str(id_art) if id_art is not None else ""),
+                    "descripcion": r.get("descripcion") or "",
+                }
+            )
+        return Response({"articulos": articulos})
+
+
 class ExpedienteTransicionAPIView(APIView):
     permission_classes = [IsAuthenticated, ExpedienteTransicionPermission]
 
@@ -194,6 +255,9 @@ class ExpedienteResolverProveedorAPIView(APIView):
         ser.is_valid(raise_exception=True)
         cuit = ser.validated_data["cuit"]
         razon_social = ser.validated_data.get("razon_social") or ""
+        tipo_tf = (ser.validated_data.get("tipo_factura") or "").strip().upper()
+        if not tipo_tf:
+            tipo_tf = tipo_factura_desde_expediente_metadata(exp.metadata) or ""
         base_empresa = resolve_base_empresa_for_compras(exp, request)
         if not base_empresa:
             return Response(
@@ -211,6 +275,7 @@ class ExpedienteResolverProveedorAPIView(APIView):
                 base_empresa=base_empresa,
                 cuit=cuit,
                 razon_social_borrador=razon_social,
+                tipo_factura_borrador=tipo_tf or None,
             )
         except ValueError as e:
             return Response(

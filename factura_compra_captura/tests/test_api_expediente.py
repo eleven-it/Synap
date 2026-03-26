@@ -316,3 +316,76 @@ class ExpedienteAPITests(TestCase):
         )
         self.assertEqual(rr.status_code, status.HTTP_200_OK)
         self.assertEqual(rr.data["codigo_proveedor_legacy"], 777)
+
+    def test_articulos_buscar_search_vacio_devuelve_lista_vacia(self):
+        r = self.client.post(
+            "/api/compras/expedientes/",
+            {"empresa": self.empresa.pk},
+            format="json",
+        )
+        eid = r.data["id"]
+        with override_settings(
+            FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID={self.empresa.pk: "test_base_fc"},
+        ):
+            rr = self.client.get(
+                f"/api/compras/expedientes/{eid}/articulos-buscar/",
+                {"search": ""},
+            )
+        self.assertEqual(rr.status_code, status.HTTP_200_OK)
+        self.assertEqual(rr.data["articulos"], [])
+
+    def test_articulos_buscar_sin_base_empresa_400(self):
+        r = self.client.post(
+            "/api/compras/expedientes/",
+            {"empresa": self.empresa.pk},
+            format="json",
+        )
+        eid = r.data["id"]
+        with override_settings(FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID={}):
+            rr = self.client.get(
+                f"/api/compras/expedientes/{eid}/articulos-buscar/",
+                {"search": "x"},
+            )
+        self.assertEqual(rr.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(rr.data.get("codigo"), "base_empresa_requerida")
+
+    @patch("factura_compra_captura.api.views._fetch_articulos_list_rows")
+    @patch("factura_compra_captura.api.views.mysql_cursor")
+    def test_articulos_buscar_con_base_devuelve_filas(self, mock_mc, mock_fetch):
+        r = self.client.post(
+            "/api/compras/expedientes/",
+            {"empresa": self.empresa.pk},
+            format="json",
+        )
+        eid = r.data["id"]
+
+        class _Ctx:
+            def __enter__(self_inner):
+                return object()
+
+            def __exit__(self_inner, *args):
+                return False
+
+        mock_mc.return_value = _Ctx()
+        mock_fetch.return_value = (
+            [
+                {
+                    "id_articulo": 10,
+                    "codigo_articulo": "A1",
+                    "descripcion": "Art prueba",
+                },
+            ],
+            False,
+            False,
+        )
+        with override_settings(
+            FACTURA_COMPRA_BASE_EMPRESA_BY_EMPRESA_ID={self.empresa.pk: "test_base_fc"},
+        ):
+            rr = self.client.get(
+                f"/api/compras/expedientes/{eid}/articulos-buscar/",
+                {"search": "pr"},
+            )
+        self.assertEqual(rr.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(rr.data["articulos"]), 1)
+        self.assertEqual(rr.data["articulos"][0]["id_articulo"], 10)
+        self.assertEqual(rr.data["articulos"][0]["codigo_articulo"], "A1")

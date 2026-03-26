@@ -53,6 +53,9 @@ def _id_iva_desde_tipo_factura(tipo_factura_sugerida: str | None) -> int | None:
         return 1
     if t == "FB":
         return 5
+    if t == "FC":
+        # Receptor monotributo / Factura C (coherente con tabla proveedor AdministraNET)
+        return 6
     return None
 
 

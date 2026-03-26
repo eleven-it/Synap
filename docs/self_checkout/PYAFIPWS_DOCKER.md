@@ -1,16 +1,41 @@
-# pyafipws y Docker (padrón AFIP para FA/FB)
+# pyafipws, Docker y padrón AFIP (FA/FB)
 
-## Por qué aparece "Validación AFIP no disponible. Se usará Factura B."
+## Resumen
 
-El paquete **pyafipws** (instalado desde `requirements.txt` con `git+https://github.com/reingart/pyafipws.git`) incluye WSAA, WSFEv1 y otros módulos, pero en la estructura que se instala **no está el submódulo `ws_sr_padron_a5`**. Ese módulo se usa para consultar el padrón AFIP y decidir si emitir Factura A o B según el CUIT.
+- **Synap** usa `self_checkout.services.padron_afip_service.consultar_condicion_fiscal` (Padrón A5 con fallback A4) y WSFE vía **pyafipws**.
+- **`pysimplesoap`** es dependencia obligatoria del cliente SOAP del padrón (`pyafipws.ws_sr_padron`). Sin ella aparece `No module named 'pysimplesoap'` y el padrón no se carga.
+- **`future`** (paquete PyPI `future`): la cadena de imports de pyafipws/pysimplesoap puede requerirla; sin ella aparece `No module named 'future'`. Va en `requirements.txt` junto a `pysimplesoap`.
+- **`pyafipws`** no se sube al repo: la carpeta **`pyafipws/`** en la raíz del proyecto está en `.gitignore`. Se espera un clon local de [reingart/pyafipws](https://github.com/reingart/pyafipws).
 
-Por eso, en el kiosco (y en consultar-cuit) la app muestra el aviso en ámbar **"Validación AFIP no disponible. Se usará Factura B."** y permite seguir: se emite siempre Factura B cuando el padrón no está disponible.
+## Instalación local (sin Docker)
 
-## Comportamiento actual
+En la raíz del repo Synap:
 
-- **Con pyafipws instalado:** CAE/CAEA (facturación electrónica) funciona; solo la **validación de condición fiscal por CUIT** (FA vs FB) no está disponible.
-- **Sin el módulo padrón:** Se usa Factura B para todos los comprobantes que requieran validación por CUIT. No hace falta hacer nada más para que la app funcione.
+```bash
+git clone https://github.com/reingart/pyafipws.git pyafipws
+pip install -r requirements.txt
+pip install -e ./pyafipws
+```
 
-## Si en el futuro hubiera un pyafipws con padrón A5
+`requirements.txt` incluye `pysimplesoap`; el editable `-e ./pyafipws` aporta `wsaa`, `wsfev1`, `ws_sr_padron`, etc.
 
-Si se publicara una versión o fork de pyafipws que instale correctamente `pyafipws.ws_sr_padron_a5`, bastaría con actualizar la dependencia en `requirements.txt` (o el Dockerfile) y reconstruir la imagen. La app ya está preparada para usar el padrón cuando el módulo exista.
+## Docker
+
+El **Dockerfile**, después de `COPY . .`, ejecuta:
+
+- Si existe `pyafipws/setup.py` o `pyafipws/pyproject.toml` → `pip install -e ./pyafipws`.
+- Si no hay carpeta (p. ej. build desde CI sin clonar) → mensaje en build; la app arranca pero **FE y padrón no funcionan** hasta reconstruir con `pyafipws/` presente en el contexto de build.
+
+**Importante:** `pyafipws/` no está en `.dockerignore`, así que si existe en el host al hacer `docker build`, se copia e instala.
+
+## Condiciones para que el padrón responda
+
+1. **`pysimplesoap` instalado** y **`pyafipws` instalado** (editable desde `./pyafipws` o equivalente).
+2. **Certificado, clave y CUIT** del emisor configurados (`fe_afip.AFIPConfig` por `base_empresa` o variables `AFIP_*`). Ver `self_checkout/fe_config.py`.
+3. **CUIT consultado** válido (11 dígitos).
+4. En **ARCA/AFIP**, el certificado debe tener autorizado el web service **Padrón A5** y/o **A4** (WSAA pide ticket para `ws_sr_padron_a5` o `ws_sr_padron_a4`).
+5. **Conectividad** a los endpoints de homologación o producción definidos en `padron_afip_service.py`.
+
+## Kiosco / TPV
+
+Si el padrón no está disponible por dependencias o error de import, `consultar_cuit` puede devolver `padron_no_disponible` y el aviso **"Validación AFIP no disponible. Se usará Factura B."**; el flujo sigue con FB. Misma función usa **captura factura compra** para resolver proveedor contra AFIP cuando no hay registro en AdministraNET.

@@ -17,6 +17,7 @@ from factura_compra_captura.services.duplicate_detection import DuplicateDetecti
 from factura_compra_captura.services.fiscal_invoice_validation import (
     FiscalInvoiceValidationService,
     resolve_base_empresa_for_compras,
+    tipo_factura_desde_expediente_metadata,
 )
 from factura_compra_captura.services.proveedor_legacy_service import (
     buscar_proveedor_por_cuit,
@@ -180,6 +181,9 @@ class ExpedienteService:
                 base_empresa=base_empresa,
                 cuit=cuit,
                 razon_social_borrador=razon,
+                tipo_factura_borrador=tipo_factura_desde_expediente_metadata(
+                    expediente.metadata
+                ),
             )
         except ValueError:
             return expediente

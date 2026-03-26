@@ -42,6 +42,21 @@ def _posting_header_dict(expediente) -> dict[str, Any]:
     return h if isinstance(h, dict) else {}
 
 
+def tipo_factura_desde_expediente_metadata(metadata: dict | None) -> str | None:
+    """Letra fiscal guardada en posting_v1.header o sugerida en proveedor_synap."""
+    md = metadata or {}
+    pv = md.get("posting_v1") or {}
+    if isinstance(pv, dict):
+        h = pv.get("header") or {}
+        if isinstance(h, dict):
+            tf = str(h.get("tipo_factura") or "").strip().upper()
+            if tf:
+                return tf
+    ps = md.get("proveedor_synap") or {}
+    tf = str(ps.get("tipo_factura_sugerida") or "").strip().upper()
+    return tf or None
+
+
 def resolve_base_empresa_for_compras(
     expediente,
     request: HttpRequest | None = None,

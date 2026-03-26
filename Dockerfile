@@ -62,6 +62,15 @@ RUN mkdir -p /app/staticfiles
 # Copiar el resto del código del proyecto
 COPY . .
 
+# pyafipws en ./pyafipws (directorio local, en .gitignore): WSAA/WSFE y padrón A4–A5.
+# pysimplesoap viene en requirements.txt; sin esta carpeta la imagen arranca pero FE/padrón no funcionan.
+RUN if [ -f pyafipws/setup.py ] || [ -f pyafipws/pyproject.toml ]; then \
+      pip install --no-cache-dir -e ./pyafipws; \
+    else \
+      echo "Synap: no hay pyafipws/ en el contexto de build; clonar en la raíz del repo: git clone https://github.com/reingart/pyafipws.git pyafipws"; \
+    fi \
+    && rm -rf ~/.cache/pip
+
 # Copiar y hacer ejecutable el script de entrada
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

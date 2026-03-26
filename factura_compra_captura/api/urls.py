@@ -11,6 +11,11 @@ urlpatterns = [
         name="expediente-list-create",
     ),
     path(
+        "expedientes/<uuid:pk>/articulos-buscar/",
+        views.ExpedienteArticulosBuscarAPIView.as_view(),
+        name="expediente-articulos-buscar",
+    ),
+    path(
         "expedientes/<uuid:pk>/",
         views.ExpedienteDetailPatchAPIView.as_view(),
         name="expediente-detail-patch",

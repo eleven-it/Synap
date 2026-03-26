@@ -3,7 +3,7 @@
 {% block title %}{% trans "Revisión — factura de compra" %} | Synap{% endblock %}
 
 {% block content %}
-<div class="w-full max-w-7xl mx-auto">
+<div class="w-full max-w-none">
   <header class="mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
       <div>
@@ -19,8 +19,8 @@
     <span id="badge_estado" class="mt-3 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:bg-gray-700 dark:text-gray-100">Cargando…</span>
   </header>
 
-  <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(320px,1fr)_minmax(0,1.25fr)]">
-    <aside class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:sticky lg:top-4">
+  <div class="grid w-full grid-cols-1 gap-6 lg:grid-cols-[40%_60%]">
+    <aside class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:sticky lg:top-4 lg:self-start">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Documento" %}</h2>
       <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 min-h-[22rem]">
         {% if documento_url and documento_es_pdf %}
@@ -36,7 +36,7 @@
       <p class="mt-3 text-xs text-gray-600 dark:text-gray-400">{% trans "El visor usa el archivo original subido en captura." %}</p>
     </aside>
 
-    <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <section class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div id="ocr_hint" class="hidden mb-4 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 dark:border-indigo-700/50 dark:bg-indigo-950/30 dark:text-indigo-200"></div>
       <div id="panel_motor_doc" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50/90 p-3 text-sm shadow-sm dark:border-slate-600 dark:bg-slate-900/35">
         <div class="flex flex-wrap items-start justify-between gap-2">
@@ -114,7 +114,9 @@
       <h3 class="mt-6 text-base font-semibold text-gray-900 dark:text-white">{% trans "Líneas del comprobante" %}</h3>
       <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
         {% trans "Revisá cantidades e importes contra el PDF. Podés editar la descripción detectada y los códigos legacy." %}
+        {% trans "Para enviar a revisión, cada línea debe tener un artículo AdministraNET elegido en la columna «Art.» (búsqueda como en el TPV)." %}
       </p>
+      <p id="hint_lineas_sin_art" class="hidden mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100" role="status"></p>
       <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600">
         <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-600">
           <thead class="bg-gray-50 dark:bg-gray-900/50">
@@ -124,8 +126,7 @@
               <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-24">{% trans "Cant." %}</th>
               <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-32">{% trans "Precio u." %}</th>
               <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-32">{% trans "Subtotal" %}</th>
-              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-20">{% trans "Art." %}</th>
-              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-20">{% trans "Gasto" %}</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 min-w-[16rem] w-[40%]">{% trans "Art." %}</th>
               <th scope="col" class="px-2 py-2 w-10"></th>
             </tr>
           </thead>
@@ -134,7 +135,7 @@
             <tr>
               <td colspan="4" class="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-200">{% trans "Total líneas" %}</td>
               <td id="lineas_carrito_total_num" class="px-3 py-2 text-right font-mono text-sm font-semibold text-gray-900 dark:text-white">0,00</td>
-              <td colspan="3"></td>
+              <td colspan="2"></td>
             </tr>
           </tfoot>
         </table>
@@ -285,14 +286,16 @@
           const desc = (tr.querySelector('.linea-desc') && tr.querySelector('.linea-desc').value) || '';
           const cant = (tr.querySelector('.linea-cant') && tr.querySelector('.linea-cant').value) || '0';
           const pu = (tr.querySelector('.linea-pu') && tr.querySelector('.linea-pu').value) || '0';
-          const idArt = (tr.querySelector('.linea-id-art') && tr.querySelector('.linea-id-art').value) || '';
-          const codG = (tr.querySelector('.linea-cod-gasto') && tr.querySelector('.linea-cod-gasto').value) || '';
+          const hid = tr.querySelector('.linea-id-art');
+          const idArt = hid && hid.value != null ? String(hid.value).trim() : '';
           const meta = {};
           if (desc.trim()) meta.descripcion_ocr = desc.trim();
+          if (tr.dataset.codigoArticulo) meta.codigo_articulo = tr.dataset.codigoArticulo;
+          if (tr.dataset.descripcionArticulo) meta.descripcion_articulo = tr.dataset.descripcionArticulo;
+          if (tr.dataset.etiquetaArticulo) meta.etiqueta_articulo = tr.dataset.etiquetaArticulo;
           lineas.push({
             orden: idx + 1,
             id_art_legacy: idArt.trim() ? (parseInt(idArt, 10) || null) : null,
-            codgasto_legacy: codG.trim() ? (parseInt(codG, 10) || null) : null,
             cantidad: cant,
             precio_unitario: pu,
             metadata: meta,
@@ -300,6 +303,84 @@
         });
         const ta = document.getElementById('lineas_json');
         if (ta) ta.value = JSON.stringify(lineas, null, 2);
+      }
+
+      /** Autocompletado de artículos (misma API que lógica TPV, endpoint compras). */
+      function instalarBusquedaArticuloEnFila(tr) {
+        const search = tr.querySelector('.linea-art-search');
+        const sug = tr.querySelector('.linea-art-sug');
+        const hid = tr.querySelector('.linea-id-art');
+        if (!search || !sug || !hid) return;
+        let tmr;
+        function hideSug() {
+          sug.classList.add('hidden');
+          sug.innerHTML = '';
+        }
+        function showRes(items) {
+          sug.innerHTML = '';
+          if (!items.length) {
+            hideSug();
+            return;
+          }
+          items.forEach(function (it) {
+            const li = document.createElement('li');
+            li.className = 'cursor-pointer px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700';
+            li.setAttribute('role', 'option');
+            const cod = String(it.codigo_articulo != null ? it.codigo_articulo : '');
+            const des = String(it.descripcion != null ? it.descripcion : '');
+            li.textContent = (cod ? cod + ' · ' : '') + des;
+            li.addEventListener('mousedown', function (e) {
+              e.preventDefault();
+              hid.value = String(it.id_articulo);
+              tr.dataset.codigoArticulo = cod;
+              tr.dataset.descripcionArticulo = des;
+              tr.dataset.etiquetaArticulo = li.textContent;
+              search.value = li.textContent;
+              hideSug();
+              syncLineasJsonFromCarrito();
+              if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+              const descInp = tr.querySelector('.linea-desc');
+              if (descInp && !String(descInp.value || '').trim()) {
+                descInp.value = des;
+              }
+            });
+            sug.appendChild(li);
+          });
+          sug.classList.remove('hidden');
+        }
+        search.addEventListener('input', function () {
+          clearTimeout(tmr);
+          hid.value = '';
+          tr.dataset.codigoArticulo = '';
+          tr.dataset.descripcionArticulo = '';
+          tr.dataset.etiquetaArticulo = '';
+          const q = String(search.value || '').trim();
+          if (!q) {
+            hideSug();
+            syncLineasJsonFromCarrito();
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+            return;
+          }
+          syncLineasJsonFromCarrito();
+          if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          tmr = setTimeout(async function () {
+            try {
+              const u = '/api/compras/expedientes/' + encodeURIComponent(EID) + '/articulos-buscar/?search=' + encodeURIComponent(q) + '&limit=25';
+              const r = await api(u);
+              const data = await r.json();
+              if (!r.ok) {
+                hideSug();
+                return;
+              }
+              showRes(Array.isArray(data.articulos) ? data.articulos : []);
+            } catch (e) {
+              hideSug();
+            }
+          }, 280);
+        });
+        search.addEventListener('blur', function () {
+          setTimeout(hideSug, 200);
+        });
       }
 
       function actualizarSubtotalFila(tr) {
@@ -331,7 +412,7 @@
         tbody.innerHTML = '';
         const arr = Array.isArray(lineas) ? lineas : [];
         if (!arr.length) {
-          arr.push({ orden: 1, id_art_legacy: null, codgasto_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
+          arr.push({ orden: 1, id_art_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
         }
         arr.forEach(function (ln, idx) {
           const meta = ln.metadata || {};
@@ -339,7 +420,14 @@
           const cant = ln.cantidad != null ? String(ln.cantidad) : '1';
           const pu = ln.precio_unitario != null ? String(ln.precio_unitario) : '0';
           const idArt = ln.id_art_legacy != null && ln.id_art_legacy !== '' ? String(ln.id_art_legacy) : '';
-          const codG = ln.codgasto_legacy != null && ln.codgasto_legacy !== '' ? String(ln.codgasto_legacy) : '';
+          let artSearch = '';
+          if (meta.etiqueta_articulo) {
+            artSearch = String(meta.etiqueta_articulo);
+          } else if (meta.codigo_articulo && meta.descripcion_articulo) {
+            artSearch = String(meta.codigo_articulo) + ' · ' + String(meta.descripcion_articulo);
+          } else if (idArt) {
+            artSearch = idArt;
+          }
           const tr = document.createElement('tr');
           tr.innerHTML =
             '<td class="px-3 py-2 align-middle text-gray-500 dark:text-gray-400">' + (idx + 1) + '</td>' +
@@ -347,19 +435,57 @@
             '<td class="px-2 py-1"><input type="text" inputmode="decimal" class="linea-cant w-full text-right rounded border border-gray-200 px-2 py-1.5 text-sm font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(cant) + '" /></td>' +
             '<td class="px-2 py-1"><input type="text" inputmode="decimal" class="linea-pu w-full text-right rounded border border-gray-200 px-2 py-1.5 text-sm font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(pu) + '" /></td>' +
             '<td class="linea-sub px-3 py-2 text-right font-mono text-sm text-gray-800 dark:text-gray-100">—</td>' +
-            '<td class="px-2 py-1"><input type="number" inputmode="numeric" class="linea-id-art w-full rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(idArt) + '" /></td>' +
-            '<td class="px-2 py-1"><input type="number" inputmode="numeric" class="linea-cod-gasto w-full rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(codG) + '" /></td>' +
+            '<td class="px-2 py-1 align-top min-w-[16rem]">' +
+            '<input type="hidden" class="linea-id-art" value="' + escapeHtmlAttr(idArt) + '" />' +
+            '<div class="relative linea-art-wrap">' +
+            '<input type="text" class="linea-art-search w-full rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(artSearch) + '" placeholder="Buscar código o nombre…" autocomplete="off" />' +
+            '<ul class="linea-art-sug hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 overflow-auto rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100" role="listbox"></ul>' +
+            '</div></td>' +
             '<td class="px-1 py-1 align-middle"><button type="button" class="linea-eliminar rounded p-1 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40" title="Quitar línea"><span class="material-icons text-lg">close</span></button></td>';
           tbody.appendChild(tr);
+          if (meta.codigo_articulo) tr.dataset.codigoArticulo = String(meta.codigo_articulo);
+          if (meta.descripcion_articulo) tr.dataset.descripcionArticulo = String(meta.descripcion_articulo);
+          if (meta.etiqueta_articulo) tr.dataset.etiquetaArticulo = String(meta.etiqueta_articulo);
+          instalarBusquedaArticuloEnFila(tr);
           actualizarSubtotalFila(tr);
         });
         actualizarTotalCarrito();
         syncLineasJsonFromCarrito();
       }
 
+      /** True si alguna fila no tiene código de artículo AdministraNET (entero ≥ 1). */
+      function hayLineaSinArticuloEnDom() {
+        const tbody = document.getElementById('lineas_carrito_body');
+        if (!tbody) return true;
+        let sin = false;
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+          const inp = tr.querySelector('.linea-id-art');
+          const raw = inp && inp.value != null ? String(inp.value).trim() : '';
+          const n = parseInt(raw, 10);
+          const ok = raw !== '' && !isNaN(n) && n >= 1;
+          tr.classList.toggle('bg-amber-50', !ok);
+          tr.classList.toggle('dark:bg-amber-950/25', !ok);
+          if (!ok) sin = true;
+        });
+        return sin;
+      }
+
+      function actualizarHintLineasSinArt(mostrar, texto) {
+        const el = document.getElementById('hint_lineas_sin_art');
+        if (!el) return;
+        if (mostrar && texto) {
+          el.textContent = texto;
+          el.classList.remove('hidden');
+        } else {
+          el.textContent = '';
+          el.classList.add('hidden');
+        }
+      }
+
       /**
        * Alineado al backend: POST /aprobar/ solo con estado aprobacion_solicitada.
        * Las transiciones usan d.acciones_permitidas (listar_acciones_permitidas).
+       * «Enviar a revisión» exige además id_art_legacy en cada línea (validación servidor).
        */
       function aplicarBotonesWorkflow(d) {
         const estado = String(d.estado || '');
@@ -376,7 +502,26 @@
         }
         const term = estado === 'aprobado' || estado === 'rechazado' || estado === 'error_posting';
         armar('btn_guardar', !term, term ? 'Expediente finalizado; no se edita el borrador desde aquí.' : '');
-        armar('btn_revision', permitir('enviar_revision'), !permitir('enviar_revision') ? 'Requiere borrador u OCR completado, código de proveedor (AdministraNET) y líneas con artículo.' : '');
+        const puedePorEstado = permitir('enviar_revision');
+        const faltaArt = hayLineaSinArticuloEnDom();
+        const puedeRevision = puedePorEstado && !faltaArt;
+        armar(
+          'btn_revision',
+          puedeRevision,
+          !puedePorEstado
+            ? 'Requiere borrador u OCR completado y código de proveedor (AdministraNET).'
+            : (faltaArt
+              ? 'Elegí un artículo (columna Art., búsqueda) en todas las líneas y guardá el borrador.'
+              : '')
+        );
+        if (puedePorEstado && faltaArt) {
+          actualizarHintLineasSinArt(
+            true,
+            'Falta elegir un artículo AdministraNET en una o más líneas (columna «Art.»). Sin eso no se puede enviar a revisión. Buscá, elegí de la lista, guardá borrador y reintentá.'
+          );
+        } else {
+          actualizarHintLineasSinArt(false, '');
+        }
         armar('btn_listo', permitir('marcar_listo_para_aprobar'), !permitir('marcar_listo_para_aprobar') ? 'Solo con el expediente en revisión.' : '');
         armar('btn_solicitar_aprob', permitir('solicitar_aprobacion'), !permitir('solicitar_aprobacion') ? 'Solo desde revisión o listo para aprobar.' : '');
         const puedeAprobar = estado === 'aprobacion_solicitada';
@@ -443,7 +588,6 @@
           if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
         }
         document.getElementById('badge_estado').textContent = d.estado.replace(/_/g, ' ');
-        aplicarBotonesWorkflow(d);
         document.getElementById('cod_prov').value = d.codigo_proveedor_legacy || '';
         document.getElementById('origen').value = d.origen_datos || 'MANUAL';
         const h = (d.metadata && d.metadata.posting_v1 && d.metadata.posting_v1.header) || {};
@@ -501,7 +645,6 @@
             return {
               orden: idx + 1,
               id_art_legacy: null,
-              codgasto_legacy: null,
               cantidad: ln.cantidad || '1',
               precio_unitario: ln.precio_unitario || '0',
               metadata: { descripcion_ocr: ln.descripcion || '' },
@@ -527,6 +670,8 @@
 
         renderMotorPanel(d);
         syncLineasJsonFromCarrito();
+        window._revision_last_expediente = d;
+        aplicarBotonesWorkflow(d);
         window._revision_snapshot = {
           nro_comp: document.getElementById('nro_comp').value,
           fecha_comp: document.getElementById('fecha_comp').value,
@@ -572,8 +717,9 @@
               const tr = t.closest('tr');
               if (tr) { actualizarSubtotalFila(tr); actualizarTotalCarrito(); syncLineasJsonFromCarrito(); }
             }
-            if (t.classList.contains('linea-desc') || t.classList.contains('linea-id-art') || t.classList.contains('linea-cod-gasto')) {
+            if (t.classList.contains('linea-desc')) {
               syncLineasJsonFromCarrito();
+              if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
             }
           });
           tbody.addEventListener('click', function (ev) {
@@ -589,6 +735,7 @@
             });
             actualizarTotalCarrito();
             syncLineasJsonFromCarrito();
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
           });
         }
         const btnAdd = document.getElementById('btn_linea_agregar');
@@ -600,10 +747,11 @@
                 let cur = [];
                 try { cur = JSON.parse(document.getElementById('lineas_json').value || '[]'); } catch (e) { cur = []; }
                 if (!Array.isArray(cur)) cur = [];
-                cur.push({ orden: cur.length + 1, id_art_legacy: null, codgasto_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
+                cur.push({ orden: cur.length + 1, id_art_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
                 return cur;
               })()
             );
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
           };
         }
         const btnJson = document.getElementById('btn_lineas_json_toggle');
@@ -621,12 +769,12 @@
         }
       })();
 
-      document.getElementById('btn_guardar').onclick = async function () {
-        showErr('');
+      /** Cuerpo PATCH alineado a «Guardar borrador» (cabecera + líneas + feedback opcional). */
+      function construirBodyPatchBorradorRevision() {
         syncLineasJsonFromCarrito();
         let lineas;
         try { lineas = JSON.parse(document.getElementById('lineas_json').value || '[]'); }
-        catch (e) { showErr('JSON de líneas inválido.'); return; }
+        catch (e) { throw new Error('JSON de líneas inválido.'); }
         const body = {
           codigo_proveedor_legacy: parseInt(document.getElementById('cod_prov').value, 10) || null,
           origen_datos: document.getElementById('origen').value,
@@ -676,9 +824,26 @@
           }
         }
         if (append.length) body.analyst_feedback_append = append;
+        return body;
+      }
+
+      async function patchExpedienteBorradorDesdeFormulario() {
+        let body;
+        try { body = construirBodyPatchBorradorRevision(); }
+        catch (e) { return { ok: false, errMsg: e.message || String(e) }; }
         const r = await api('/api/compras/expedientes/' + EID + '/', { method: 'PATCH', body: JSON.stringify(body) });
         const d = await r.json();
-        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        if (!r.ok) return { ok: false, d };
+        return { ok: true, d };
+      }
+
+      document.getElementById('btn_guardar').onclick = async function () {
+        showErr('');
+        const res = await patchExpedienteBorradorDesdeFormulario();
+        if (!res.ok) {
+          if (res.errMsg) { showErr(res.errMsg); return; }
+          showErr(JSON.stringify(res.d, null, 2)); return;
+        }
         showOk('Guardado.');
         cargar(false);
       };
@@ -688,7 +853,11 @@
         if (!cuit) { showErr('Indicá CUIT para resolver proveedor.'); return; }
         const r = await api('/api/compras/expedientes/' + EID + '/resolver-proveedor/', {
           method: 'POST',
-          body: JSON.stringify({ cuit: cuit, razon_social: (document.getElementById('razon_social_prov').value || '').trim() }),
+          body: JSON.stringify({
+            cuit: cuit,
+            razon_social: (document.getElementById('razon_social_prov').value || '').trim(),
+            tipo_factura: (document.getElementById('tipo_fiscal').value || '').trim(),
+          }),
         });
         const d = await r.json();
         if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
@@ -719,22 +888,55 @@
         return api('/api/compras/expedientes/' + EID + '/transiciones/', { method: 'POST', body: JSON.stringify(Object.assign({ accion: accion }, extra || {})) });
       }
 
+      function primerCampoApi(v) {
+        if (v == null) return '';
+        if (Array.isArray(v)) return primerCampoApi(v[0]);
+        return String(v);
+      }
+
+      function mensajeErrorApiCompras(d) {
+        if (!d || typeof d !== 'object') return JSON.stringify(d);
+        var cod = primerCampoApi(d.codigo);
+        var det = primerCampoApi(d.detail);
+        if (cod === 'linea_sin_articulo') {
+          return (det || 'Cada línea debe tener id_art_legacy (artículo elegido en AdministraNET).') + ' En «Art.» buscá y elegí un ítem de la lista; el texto suelto sin elegir no guarda el código interno.';
+        }
+        if (cod === 'proveedor_requerido') return det || 'Falta código de proveedor.';
+        if (cod === 'lineas_requeridas') return det || 'Se requiere al menos una línea.';
+        if (cod === 'linea_cantidad_invalida') return det || 'Revisá cantidades en las líneas.';
+        if (det) return det;
+        return JSON.stringify(d, null, 2);
+      }
+
       document.getElementById('btn_revision').onclick = async function () {
+        showErr('');
+        syncLineasJsonFromCarrito();
+        if (hayLineaSinArticuloEnDom()) {
+          showErr('Cada línea debe tener un artículo elegido en «Art.» (resultado de la búsqueda, no solo texto). Si ves la fila resaltada, elegí de la lista desplegable.');
+          if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          return;
+        }
+        /* La transición valida líneas en BD: persistimos el mismo PATCH que «Guardar borrador» antes de POST. */
+        const patchRes = await patchExpedienteBorradorDesdeFormulario();
+        if (!patchRes.ok) {
+          if (patchRes.errMsg) { showErr(patchRes.errMsg); return; }
+          showErr(JSON.stringify(patchRes.d, null, 2)); return;
+        }
         const r = await postTransicion('enviar_revision');
         const d = await r.json();
-        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); cargar(false); return; }
         showOk('Enviado a revisión.'); cargar(false);
       };
       document.getElementById('btn_listo').onclick = async function () {
         const r = await postTransicion('marcar_listo_para_aprobar');
         const d = await r.json();
-        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); return; }
         showOk('Listo para aprobar.'); cargar(false);
       };
       document.getElementById('btn_solicitar_aprob').onclick = async function () {
         const r = await postTransicion('solicitar_aprobacion');
         const d = await r.json();
-        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); return; }
         showOk('Aprobación solicitada.'); cargar(false);
       };
       document.getElementById('btn_aprobar').onclick = async function () {

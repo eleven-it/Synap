@@ -95,6 +95,24 @@ class TransicionesExpedienteTests(TestCase):
             ExpedienteService.aplicar_transicion(exp, "enviar_revision")
         self.assertEqual(ctx.exception.codigo, "linea_cantidad_invalida")
 
+    def test_enviar_revision_falla_sin_id_art_legacy(self):
+        exp = ExpedienteService.crear(empresa_id=self.empresa.pk)
+        ExpedienteService.actualizar(
+            exp,
+            codigo_proveedor_legacy=1,
+            lineas=[
+                {
+                    "orden": 1,
+                    "cantidad": "1",
+                    "precio_unitario": "100.00",
+                }
+            ],
+        )
+        exp.refresh_from_db()
+        with self.assertRaises(TransicionEstadoInvalida) as ctx:
+            ExpedienteService.aplicar_transicion(exp, "enviar_revision")
+        self.assertEqual(ctx.exception.codigo, "linea_sin_articulo")
+
     @override_settings(FACTURA_COMPRA_POSTING_BACKEND="fake")
     def test_aprobar_stub_requiere_nro_comprobante_en_metadata(self):
         exp = ExpedienteService.crear(empresa_id=self.empresa.pk)

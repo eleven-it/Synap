@@ -315,3 +315,9 @@ class ResolverProveedorSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
     )
+    tipo_factura = serializers.CharField(
+        max_length=8,
+        required=False,
+        allow_blank=True,
+        help_text="Letra fiscal del comprobante (FA/FB/FC) para IDIva en alta legacy.",
+    )

@@ -8,6 +8,7 @@ from core.services.administranet_compras import buscar_proveedores
 from factura_compra_captura.services.proveedor_legacy_service import (
     crear_proveedor_desde_borrador,
 )
+from self_checkout.fe_config import get_fe_config
 from self_checkout.services.padron_afip_service import consultar_condicion_fiscal
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 def _normalizar_cuit(cuit: str) -> str:
     return "".join(ch for ch in str(cuit or "") if ch.isdigit())
+
+
+def _padron_indica_persona_inexistente(err: dict | None) -> bool:
+    """AFIP homologación: CUITs reales suelen no existir en el padrón de prueba."""
+    if not err:
+        return False
+    msg = (err.get("msg") or "").lower()
+    return "no existe persona" in msg
 
 
 @dataclass(frozen=True)
@@ -30,6 +39,7 @@ def resolver_proveedor_desde_legacy_o_padron(
     base_empresa: str,
     cuit: str,
     razon_social_borrador: str = "",
+    tipo_factura_borrador: str | None = None,
 ) -> ProveedorResolucion:
     """
     Regla negocio: siempre intentar primero AdministraNET.
@@ -68,6 +78,67 @@ def resolver_proveedor_desde_legacy_o_padron(
         "actualizado_en": datetime.now(timezone.utc).isoformat(),
     }
     if err:
+        cfg_fe = get_fe_config(base_empresa)
+        if cfg_fe.get("homo") and _padron_indica_persona_inexistente(err):
+            razon_alta = (razon_social_borrador or "").strip()
+            tipo_tf = (tipo_factura_borrador or "").strip().upper() or None
+            proveedor_synap_homo = {
+                "modo": "borrador_nuevo",
+                "cuit": cuit_norm,
+                "razon_social": razon_alta,
+                "tipo_factura_sugerida": tipo_tf,
+                "padron_detalle": err,
+                "origen": "homologacion_sin_padron",
+                "actualizado_en": datetime.now(timezone.utc).isoformat(),
+            }
+            if not razon_alta:
+                return ProveedorResolucion(
+                    encontrado_legacy=False,
+                    codigo_proveedor_legacy=None,
+                    proveedor_synap=proveedor_synap_homo,
+                    detail=(
+                        "Homologación AFIP: el CUIT no está en el padrón de prueba. "
+                        "Completá la razón social del proveedor y volvé a resolver."
+                    ),
+                )
+            try:
+                dto = crear_proveedor_desde_borrador(
+                    base_empresa=base_empresa,
+                    cuit=cuit_norm,
+                    razon_social=razon_alta,
+                    tipo_factura_sugerida=tipo_tf,
+                )
+                return ProveedorResolucion(
+                    encontrado_legacy=True,
+                    codigo_proveedor_legacy=dto.codigo,
+                    proveedor_synap={
+                        "modo": "legacy_vinculado",
+                        "cuit": cuit_norm,
+                        "razon_social": dto.nombre,
+                        "tipo_factura_sugerida": tipo_tf,
+                        "responsabilidad_iva": "",
+                        "origen": "alta_administranet_homologacion_sin_padron",
+                        "padron_detalle": err,
+                        "actualizado_en": datetime.now(timezone.utc).isoformat(),
+                    },
+                    detail=(
+                        "Homologación AFIP: el CUIT no figura en el padrón de prueba; "
+                        "proveedor creado en AdministraNET con los datos del borrador."
+                    ),
+                )
+            except Exception as e:
+                logger.exception(
+                    "crear_proveedor_desde_borrador homologación sin padrón"
+                )
+                return ProveedorResolucion(
+                    encontrado_legacy=False,
+                    codigo_proveedor_legacy=None,
+                    proveedor_synap=proveedor_synap_homo,
+                    detail=(
+                        "Homologación: sin persona en padrón de prueba y no se pudo crear "
+                        f"el proveedor en AdministraNET: {e}"
+                    ),
+                )
         return ProveedorResolucion(
             encontrado_legacy=False,
             codigo_proveedor_legacy=None,
