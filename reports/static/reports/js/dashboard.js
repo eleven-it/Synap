@@ -68,6 +68,51 @@ function isPedidosPendientesSlug(slug) {
   return slug === "pedidos-pendientes";
 }
 
+/**
+ * Construye objeto filters de período igual que setPeriodDatesFromForm (bloque dashboardRoot),
+ * para workspace y POST sin depender del scope interno de dashboard.js.
+ */
+function workspaceBuildPeriodFiltersPayload(periodoTipo, fechaInicio, fechaFin) {
+  const filters = {};
+  const today = new Date();
+  const fallbackMes = () => {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return [first.toISOString().split("T")[0], last.toISOString().split("T")[0]];
+  };
+  const pt = periodoTipo || "personalizado";
+  if (fechaInicio && fechaFin) {
+    filters.fecha_inicio = fechaInicio;
+    filters.fecha_fin = fechaFin;
+    if (pt === "dia_actual") filters.dia_actual = true;
+    else if (pt === "mes_actual") filters.mes_actual = true;
+    else if (pt === "año_actual") filters.año_actual = true;
+    return filters;
+  }
+  if (pt === "dia_actual") {
+    const s = today.toISOString().split("T")[0];
+    filters.fecha_inicio = s;
+    filters.fecha_fin = s;
+    filters.dia_actual = true;
+  } else if (pt === "mes_actual") {
+    const [a, b] = fallbackMes();
+    filters.fecha_inicio = a;
+    filters.fecha_fin = b;
+    filters.mes_actual = true;
+  } else if (pt === "año_actual") {
+    const first = new Date(today.getFullYear(), 0, 1);
+    const last = new Date(today.getFullYear(), 11, 31);
+    filters.fecha_inicio = first.toISOString().split("T")[0];
+    filters.fecha_fin = last.toISOString().split("T")[0];
+    filters.año_actual = true;
+  } else {
+    const [a, b] = fallbackMes();
+    filters.fecha_inicio = a;
+    filters.fecha_fin = b;
+  }
+  return filters;
+}
+
 // ============================================
 // SISTEMA COMÚN: Valores de Intervalo Unificados
 // ============================================
@@ -164,7 +209,6 @@ const workspaceControls = {
   prev: null,
   next: null,
   indicator: null,
-  fullscreen: null,
   prevDate: null,
   nextDate: null,
 };
@@ -626,12 +670,12 @@ const toggleFullScreen = () => {
 };
 
 const setFullscreenButtonState = (isActive) => {
-  if (!workspaceControls.fullscreen) {
-    return;
-  }
-  workspaceControls.fullscreen.innerHTML = isActive
+  const html = isActive
     ? `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 9H5V5M5 19l4-4m6 0h4v4m0-14l-4 4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Salir de pantalla completa`
     : `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Pantalla completa`;
+  document.querySelectorAll("[data-fullscreen-toggle]").forEach((btn) => {
+    btn.innerHTML = html;
+  });
 };
 
 const syncFullscreenState = () => {
@@ -2149,13 +2193,13 @@ const renderCards = (container, data, config) => {
     const wrapper = d3.select(container).html("");
     // Detectar si estamos en workspace (contenedor más pequeño)
     const isInWorkspace = container.closest("[data-workspace-mode]") || container.closest("[data-widget-wrapper]");
-    // En workspace: gap más pequeño para que quepan los 4 KPIs
-    const gridClass = isInWorkspace ? "grid grid-cols-1 gap-2" : "grid grid-cols-1 gap-3 sm:gap-4 h-full";
+    const gridClass = isInWorkspace
+      ? "grid grid-cols-1 gap-2"
+      : "grid grid-cols-1 gap-3 sm:gap-4 h-full";
     const grid = wrapper.append("div").attr("class", gridClass);
     const borderColors = ["#ea580c", "#2563eb", "#16a34a", "#7c3aed"];
     data.forEach((item, index) => {
       const isTotal = (item.label || "").toUpperCase().includes("TOTAL CONSOLIDADO");
-      // En workspace: padding y tamaños reducidos
       const cardClasses = isInWorkspace
         ? "flex flex-col justify-center rounded-lg px-2.5 py-2.5 bg-white dark:bg-slate-800 shadow-md border border-slate-200 dark:border-slate-700"
         : "flex flex-col justify-center rounded-xl sm:rounded-2xl px-3 sm:px-4 py-4 sm:py-6 bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700";
@@ -4634,8 +4678,10 @@ const buildWorkspaceDOM = (slots) => {
 
     const displayTitle = slot.display_name || slot.name;
     const allowDuplicateSlugs = ["total-consolidado-operativo"];
+    const showConsolidadoWorkspaceFilters = slot.slug === "total-consolidado-operativo";
+    const showPedidosWorkspaceFilters = isPedidosPendientesSlug(slot.slug);
     const showDuplicate = allowDuplicateSlugs.includes(slot.slug);
-    const showFilters = allowDuplicateSlugs.includes(slot.slug);
+    const showFiltersButton = showConsolidadoWorkspaceFilters || showPedidosWorkspaceFilters;
     // Crear un ID seguro para los elementos (sin caracteres especiales)
     const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
     
@@ -4656,7 +4702,7 @@ const buildWorkspaceDOM = (slots) => {
           </div>
         </div>
         <div class="flex items-center gap-2 text-[11px] flex-shrink-0">
-          ${showFilters ? `<button type="button" data-toggle-filters data-item-key="${itemKey}"
+          ${showFiltersButton ? `<button type="button" data-toggle-filters data-item-key="${itemKey}"
                   class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition border border-slate-200 dark:border-slate-700" title="Mostrar/ocultar filtros">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4684,8 +4730,8 @@ const buildWorkspaceDOM = (slots) => {
           </button>
         </div>
       </header>
-      ${showFilters ? `
-      <div class="workspace-filters-panel hidden border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50" data-filters-panel data-item-key="${itemKey}">
+      ${showConsolidadoWorkspaceFilters ? `
+      <div class="workspace-filters-panel hidden border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50" data-filters-panel data-workspace-filter-kind="consolidado" data-item-key="${itemKey}">
         <div class="px-6 py-4 space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
@@ -4764,12 +4810,72 @@ const buildWorkspaceDOM = (slots) => {
             </div>
           </label>
           <div class="flex justify-end">
-            <button type="button" data-apply-workspace-filters data-item-key="${itemKey}" data-report-slug="${slot.slug}"
+            <button type="button" data-apply-workspace-filters data-workspace-filter-kind="consolidado" data-item-key="${itemKey}" data-report-slug="${slot.slug}"
                     class="inline-flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg transition">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M5 13l4 4L19 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
               Aplicar Filtros
+            </button>
+          </div>
+        </div>
+      </div>
+      ` : ""}
+      ${showPedidosWorkspaceFilters ? `
+      <div class="workspace-filters-panel workspace-pedidos-period-panel hidden border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50" data-filters-panel data-workspace-filter-kind="pedidos-period" data-item-key="${itemKey}" data-safe-item-key="${safeItemKey}">
+        <div class="px-6 py-4 space-y-4">
+          <div class="flex flex-row flex-wrap items-end gap-4">
+            <div class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+              <span>Período</span>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" data-periodo="dia_actual" class="ws-pedidos-periodo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">Día</button>
+                <button type="button" data-periodo="mes_actual" class="ws-pedidos-periodo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">Mes</button>
+                <button type="button" data-periodo="año_actual" class="ws-pedidos-periodo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">Año</button>
+                <button type="button" data-periodo="personalizado" class="ws-pedidos-periodo-btn px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md">Personalizado</button>
+              </div>
+              <select id="periodo_tipo_${safeItemKey}" class="hidden">
+                <option value="dia_actual">Día en curso</option>
+                <option value="mes_actual">Mes en curso</option>
+                <option value="año_actual">Año en curso</option>
+                <option value="personalizado" selected>Personalizado</option>
+              </select>
+            </div>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+              Fecha desde
+              <input type="date" id="fecha_inicio_${safeItemKey}" name="fecha_inicio" class="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+              Fecha hasta
+              <input type="date" id="fecha_fin_${safeItemKey}" name="fecha_fin" class="px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+            </label>
+          </div>
+          <div class="flex flex-col gap-2">
+            <label class="text-xs font-semibold text-slate-500 dark:text-slate-400">Intervalo de actualización</label>
+            <div class="flex flex-wrap gap-2" role="group" aria-label="Intervalo de actualización">
+              <button type="button" data-interval="interval_30s" class="ws-pedidos-refresh-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">30 seg</button>
+              <button type="button" data-interval="interval_5m" class="ws-pedidos-refresh-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">5 min</button>
+              <button type="button" data-interval="interval_10m" class="ws-pedidos-refresh-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md">10 min</button>
+              <button type="button" data-interval="interval_1h" class="ws-pedidos-refresh-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">1 h</button>
+              <button type="button" data-interval="interval_2h" class="ws-pedidos-refresh-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">2 h</button>
+            </div>
+            <select id="refresh_interval_${safeItemKey}" class="hidden">
+              <option value="interval_30s">30 seg</option>
+              <option value="interval_5m">5 min</option>
+              <option value="interval_10m" selected>10 min</option>
+              <option value="interval_1h">1 h</option>
+              <option value="interval_2h">2 h</option>
+            </select>
+            <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Frecuencia de actualización automática en tiempo real</span>
+          </div>
+          <div id="workspace_pedidos_grouping_${safeItemKey}" class="workspace-pedidos-grouping-mount" data-workspace-pedidos-grouping-mount></div>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400">No hay filtros marcados para mostrar. Los filtros constantes se aplican automáticamente.</p>
+          <div class="flex justify-end">
+            <button type="button" data-apply-workspace-filters data-workspace-filter-kind="pedidos-period" data-item-key="${itemKey}" data-report-slug="${slot.slug}"
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium rounded-lg transition">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M5 13l4 4L19 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Aplicar filtros
             </button>
           </div>
         </div>
@@ -4873,11 +4979,147 @@ const attachWorkspaceRemovalHandlers = () => {
   workspaceRemovalDelegationAttached = true;
 };
 
-// Función para inicializar los filtros tags en el workspace
+const wsPedidosPeriodBtnActive = ["border-sky-500", "bg-sky-50", "dark:bg-sky-900/20", "text-sky-700", "dark:text-sky-300", "shadow-md"];
+const wsPedidosPeriodBtnIdle = ["border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800", "text-slate-700", "dark:text-slate-300"];
+
+const highlightWorkspacePedidosPeriodButtons = (panel, periodo) => {
+  panel.querySelectorAll(".ws-pedidos-periodo-btn").forEach((btn) => {
+    const on = btn.getAttribute("data-periodo") === periodo;
+    wsPedidosPeriodBtnActive.forEach((c) => btn.classList.toggle(c, on));
+    wsPedidosPeriodBtnIdle.forEach((c) => btn.classList.toggle(c, !on));
+  });
+};
+
+const highlightWorkspacePedidosRefreshButtons = (panel, intervalVal) => {
+  const iv = migrateLegacyInterval(intervalVal);
+  panel.querySelectorAll(".ws-pedidos-refresh-btn").forEach((btn) => {
+    const on = btn.getAttribute("data-interval") === iv;
+    wsPedidosPeriodBtnActive.forEach((c) => btn.classList.toggle(c, on));
+    wsPedidosPeriodBtnIdle.forEach((c) => btn.classList.toggle(c, !on));
+  });
+};
+
+/**
+ * Filtros de período + intervalo en workspace para pedidos-pendientes (misma semántica que el informe en dashboard_detail).
+ */
+const initializeWorkspacePedidosPeriodFilters = (itemKey) => {
+  const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, "_");
+  const panel = dashboardRoot.querySelector(
+    `[data-workspace-filter-kind="pedidos-period"][data-item-key="${itemKey}"]`
+  );
+  if (!panel) {
+    return;
+  }
+  const periodoSel = document.getElementById(`periodo_tipo_${safeItemKey}`);
+  const fechaInicioInput = document.getElementById(`fecha_inicio_${safeItemKey}`);
+  const fechaFinInput = document.getElementById(`fecha_fin_${safeItemKey}`);
+  const refreshSel = document.getElementById(`refresh_interval_${safeItemKey}`);
+
+  let filters = {};
+  try {
+    const raw = localStorage.getItem(`report_filters_${itemKey}`);
+    if (raw) {
+      filters = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn("No se pudieron leer filtros guardados (pedidos workspace):", e);
+  }
+
+  let periodo = filters.periodo_tipo || "personalizado";
+  if (filters.dia_actual) {
+    periodo = "dia_actual";
+  } else if (filters.mes_actual) {
+    periodo = "mes_actual";
+  } else if (filters.año_actual) {
+    periodo = "año_actual";
+  }
+  if (periodoSel) {
+    periodoSel.value = periodo;
+  }
+  if (filters.fecha_inicio && fechaInicioInput) {
+    fechaInicioInput.value = filters.fecha_inicio;
+  }
+  if (filters.fecha_fin && fechaFinInput) {
+    fechaFinInput.value = filters.fecha_fin;
+  }
+  if ((!fechaInicioInput?.value || !fechaFinInput?.value) && fechaInicioInput && fechaFinInput) {
+    const built = workspaceBuildPeriodFiltersPayload(periodoSel?.value || periodo, "", "");
+    fechaInicioInput.value = built.fecha_inicio;
+    fechaFinInput.value = built.fecha_fin;
+  }
+  if (refreshSel) {
+    refreshSel.value = migrateLegacyInterval(filters.refresh_interval);
+  }
+  highlightWorkspacePedidosPeriodButtons(panel, periodoSel?.value || periodo);
+  highlightWorkspacePedidosRefreshButtons(panel, refreshSel?.value);
+
+  if (panel.dataset.wsPedidosUiBound === "1") {
+    updateWorkspaceWidgetTitle(itemKey, filters);
+    return;
+  }
+  panel.dataset.wsPedidosUiBound = "1";
+
+  panel.addEventListener("click", (ev) => {
+    const pBtn = ev.target.closest(".ws-pedidos-periodo-btn");
+    if (pBtn && periodoSel) {
+      const p = pBtn.getAttribute("data-periodo") || "personalizado";
+      periodoSel.value = p;
+      highlightWorkspacePedidosPeriodButtons(panel, p);
+      const today = new Date();
+      const fi = document.getElementById(`fecha_inicio_${safeItemKey}`);
+      const ff = document.getElementById(`fecha_fin_${safeItemKey}`);
+      if (p === "dia_actual") {
+        const s = today.toISOString().split("T")[0];
+        if (fi) fi.value = s;
+        if (ff) ff.value = s;
+      } else if (p === "mes_actual") {
+        const a = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+        const b = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split("T")[0];
+        if (fi) fi.value = a;
+        if (ff) ff.value = b;
+      } else if (p === "año_actual") {
+        const a = new Date(today.getFullYear(), 0, 1).toISOString().split("T")[0];
+        const b = new Date(today.getFullYear(), 11, 31).toISOString().split("T")[0];
+        if (fi) fi.value = a;
+        if (ff) ff.value = b;
+      } else if (fi && ff && (!fi.value || !ff.value)) {
+        const built = workspaceBuildPeriodFiltersPayload("personalizado", "", "");
+        fi.value = built.fecha_inicio;
+        ff.value = built.fecha_fin;
+      }
+    }
+    const rBtn = ev.target.closest(".ws-pedidos-refresh-btn");
+    if (rBtn && refreshSel) {
+      const interval = rBtn.getAttribute("data-interval");
+      if (interval) {
+        refreshSel.value = interval;
+        highlightWorkspacePedidosRefreshButtons(panel, interval);
+      }
+    }
+  });
+
+  const onDateChange = () => {
+    if (periodoSel) {
+      periodoSel.value = "personalizado";
+    }
+    highlightWorkspacePedidosPeriodButtons(panel, "personalizado");
+  };
+  fechaInicioInput?.addEventListener("change", onDateChange);
+  fechaFinInput?.addEventListener("change", onDateChange);
+
+  updateWorkspaceWidgetTitle(itemKey, filters);
+};
+
+// Función para inicializar los filtros tags en el workspace (total consolidado operativo)
 const initializeWorkspaceFilters = async (itemKey, slug) => {
   console.log(`[initializeWorkspaceFilters] Inicializando filtros para ${itemKey}`);
   const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
   console.log(`[initializeWorkspaceFilters] safeItemKey: ${safeItemKey}`);
+
+  if (slug === "pedidos-pendientes") {
+    initializeWorkspacePedidosPeriodFilters(itemKey);
+    return;
+  }
   
   // Establecer fechas por defecto (mes anterior completo hasta hoy)
   const today = new Date();
@@ -5031,9 +5273,11 @@ const updateWorkspaceWidgetTitle = (itemKey, filters) => {
   const titleElement = widget.querySelector("[data-widget-title]");
   const subtitleElement = widget.querySelector("[data-widget-subtitle]");
   if (!titleElement) return;
+
+  const reportSlug = widget.dataset.reportSlug || "";
   
   // Construir el título con sucursales
-  let titleText = "Total Consolidado";
+  let titleText = reportSlug === "pedidos-pendientes" ? "Pedidos pendientes" : "Total Consolidado";
   const sucursalesNames = [];
   
   // Sucursales - agregar al título
@@ -5057,7 +5301,7 @@ const updateWorkspaceWidgetTitle = (itemKey, filters) => {
   
   // Si hay sucursales, agregarlas al título separadas por |
   if (sucursalesNames.length > 0) {
-    titleElement.innerHTML = `Total Consolidado <span class="font-bold text-sky-600 dark:text-sky-400">${sucursalesNames.join(' | ')}</span>`;
+    titleElement.innerHTML = `${titleText} <span class="font-bold text-sky-600 dark:text-sky-400">${sucursalesNames.join(" | ")}</span>`;
   } else {
     titleElement.textContent = titleText;
   }
@@ -5150,13 +5394,15 @@ const attachWorkspaceFilterToggleHandlers = () => {
       panel.classList.remove("hidden");
       button.classList.add("bg-sky-100", "dark:bg-sky-900/30", "text-sky-600", "dark:text-sky-400");
       
-      // Inicializar filtros si es la primera vez que se abre
-      if (!panel.dataset.initialized) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const section = button.closest("section[data-report-slug]");
+      const slug = section?.dataset.reportSlug || "";
+      // Pedidos: mismo patrón de período/intervalo que el informe completo; sincronizar al abrir siempre.
+      if (slug === "pedidos-pendientes") {
+        initializeWorkspacePedidosPeriodFilters(itemKey);
+      } else if (!panel.dataset.initialized) {
         console.log(`[toggleFilters] Primera apertura, inicializando filtros para ${itemKey}`);
-        // Pequeño delay para asegurar que el DOM se haya actualizado
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const slug = button.closest('[data-report-slug]')?.dataset.reportSlug || 'total-consolidado-operativo';
-        await initializeWorkspaceFilters(itemKey, slug);
+        await initializeWorkspaceFilters(itemKey, slug || "total-consolidado-operativo");
         panel.dataset.initialized = "true";
       }
     } else {
@@ -5197,8 +5443,44 @@ const attachWorkspaceApplyFiltersHandlers = () => {
     
     try {
       const safeItemKey = itemKey.replace(/[^a-zA-Z0-9]/g, '_');
-      
-      // Recolectar filtros del panel específico
+      const filterKind = button.dataset.workspaceFilterKind || "consolidado";
+
+      if (filterKind === "pedidos-period") {
+        const periodoTipo = document.getElementById(`periodo_tipo_${safeItemKey}`)?.value || "personalizado";
+        const fechaInicio = document.getElementById(`fecha_inicio_${safeItemKey}`)?.value;
+        const fechaFin = document.getElementById(`fecha_fin_${safeItemKey}`)?.value;
+        const filters = workspaceBuildPeriodFiltersPayload(periodoTipo, fechaInicio, fechaFin);
+        filters.periodo_tipo = periodoTipo;
+        const refreshIntervalSelect = document.getElementById(`refresh_interval_${safeItemKey}`);
+        if (refreshIntervalSelect?.value) {
+          filters.refresh_interval = migrateLegacyInterval(refreshIntervalSelect.value);
+        }
+        try {
+          localStorage.setItem(`report_filters_${itemKey}`, JSON.stringify(filters));
+        } catch (err) {
+          console.warn("No se pudieron guardar filtros:", err);
+        }
+        updateWorkspaceWidgetTitle(itemKey, filters);
+        const widgetPedidos = dashboardRoot.querySelector(`[data-widget-id][data-item-key="${itemKey}"]`);
+        if (widgetPedidos) {
+          const widgetId = widgetPedidos.dataset.widgetId;
+          const index = parseInt(widgetId.replace("workspace-", ""), 10);
+          const response = await fetch(workspaceApiUrl, {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+          });
+          if (response.ok) {
+            const payload = await response.json();
+            const slot = (payload.slots || []).find((s) => (s.item_key || s.slug) === itemKey);
+            if (slot) {
+              await loadWorkspaceSlot(slot, index, false);
+            }
+          }
+        }
+        toast("Filtros aplicados correctamente");
+        return;
+      }
+
+      // Recolectar filtros del panel total consolidado operativo
       const filters = {};
       
       // Fechas
@@ -5416,6 +5698,14 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     console.warn(`[loadWorkspaceSlot] Widget no encontrado: ${widgetId}`);
     return;
   }
+  if (isPedidosPendientesSlug(slot.slug)) {
+    const ik = slot.item_key != null ? slot.item_key : slot.slug;
+    const sk = ik.replace(/[^a-zA-Z0-9]/g, "_");
+    const gMount = document.getElementById(`workspace_pedidos_grouping_${sk}`);
+    if (gMount) {
+      gMount.innerHTML = "";
+    }
+  }
   const config = getWidgetConfig(widget);
   console.log(`[loadWorkspaceSlot] Config para ${slot.slug}:`, config);
   
@@ -5453,12 +5743,25 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     if (savedFilters && Object.keys(savedFilters).length > 0) {
       actualFilters = {};
       Object.keys(savedFilters).forEach(key => {
-        // Incluir todos los campos excepto refresh_interval y otros metadatos
-        if (key !== 'refresh_interval' && key !== 'realtime_active') {
+        // Incluir todos los campos excepto metadatos de UI y claves auxiliares (_sucursales_names, etc.)
+        if (
+          key !== "refresh_interval" &&
+          key !== "realtime_active" &&
+          !key.startsWith("_")
+        ) {
           actualFilters[key] = savedFilters[key];
         }
       });
       // Solo usar si hay filtros reales (no solo metadatos)
+      if (Object.keys(actualFilters).length === 0) {
+        actualFilters = null;
+      }
+    }
+
+    if (actualFilters && isPedidosPendientesSlug(slot.slug)) {
+      ["sucursales", "punto_venta", "clientes_excluidos", "periodo_tipo"].forEach((k) => {
+        delete actualFilters[k];
+      });
       if (Object.keys(actualFilters).length === 0) {
         actualFilters = null;
       }
@@ -5472,7 +5775,12 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
       } 
       // Prioridad 2: Filtros guardados en la configuración del widget
       else if (reportConfig.filters && Object.keys(reportConfig.filters).length > 0) {
-        requestBody.filters = reportConfig.filters;
+        requestBody.filters = { ...reportConfig.filters };
+        if (isPedidosPendientesSlug(slot.slug)) {
+          ["sucursales", "punto_venta", "clientes_excluidos", "periodo_tipo"].forEach((k) => {
+            delete requestBody.filters[k];
+          });
+        }
         console.log(`[loadWorkspaceSlot] Usando filtros guardados de configuración del widget para ${slot.slug}:`, requestBody.filters);
       }
     } else {
@@ -5542,30 +5850,39 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
       // Preservar el header del workspace (título, botones, última actualización)
       const header = widget.querySelector("header");
       
-      // Limpiar solo el contenido (mantener header)
-      const contentWrapper = widget.querySelector(".relative");
-      if (contentWrapper) {
-        contentWrapper.innerHTML = '';
+      // Cuerpo del slot: solo el div.relative hijo directo de section. No usar querySelector(".relative")
+      // sin :scope porque el panel de filtros (pedidos-pendientes, total-consolidado) incluye varios .relative internos.
+      let workspaceSlotBody = widget.querySelector(":scope > .relative");
+      if (!workspaceSlotBody) {
+        workspaceSlotBody = document.createElement("div");
+        workspaceSlotBody.className = "relative";
+        workspaceSlotBody.style.minHeight = "350px";
+        widget.appendChild(workspaceSlotBody);
       } else {
-        // Si no existe el wrapper, crear uno
-        const newWrapper = document.createElement("div");
-        newWrapper.className = "relative";
-        newWrapper.style.minHeight = "350px";
-        widget.appendChild(newWrapper);
+        workspaceSlotBody.innerHTML = "";
       }
-      
-      // Crear contenedor limpio para WidgetEngine dentro del wrapper
+
+      // Misma estructura que buildWorkspaceDOM (legacy): [data-widget-content] + [data-widget-table-wrapper]
+      // para que pedidos-pendientes / total-consolidado y reportes declarativo compartan DOM y estilos fullscreen.
+      const contentShell = document.createElement("div");
+      // aspect-[16/7] igual que buildWorkspaceDOM en vista normal; en fullscreen workspace.html anula aspect-ratio.
+      contentShell.className =
+        "aspect-[16/7] w-full min-h-0 flex-1 flex flex-col bg-white dark:bg-slate-950 p-6";
+      contentShell.setAttribute("data-widget-content", "");
+      const tableWrapper = document.createElement("div");
+      tableWrapper.className = "px-6 py-3 hidden";
+      tableWrapper.setAttribute("data-widget-table-wrapper", "");
+      tableWrapper.style.minHeight = "288px";
+
       const engineContainer = document.createElement("div");
-      // En modo TV, usar flexbox para que las tablas se expandan correctamente
+      engineContainer.className = "w-full flex-1 min-h-0 flex flex-col";
       if (isWorkspaceTv) {
-        engineContainer.className = "w-full h-full flex flex-col";
         engineContainer.setAttribute("data-workspace-tv", "true");
-      } else {
-        engineContainer.className = "w-full h-full";
       }
-      engineContainer.setAttribute("data-workspace-mode", "true"); // Marcar para que WidgetEngine oculte headers
-      const wrapper = widget.querySelector(".relative") || widget;
-      wrapper.appendChild(engineContainer);
+      engineContainer.setAttribute("data-workspace-mode", "true");
+      contentShell.appendChild(engineContainer);
+      workspaceSlotBody.appendChild(contentShell);
+      workspaceSlotBody.appendChild(tableWrapper);
       
       if (window.WidgetEngine) {
         // Inicializar y renderizar con WidgetEngine
@@ -5865,7 +6182,6 @@ if (dashboardRoot) {
   workspaceControls.prev = document.querySelector("[data-workspace-prev]");
   workspaceControls.next = document.querySelector("[data-workspace-next]");
   workspaceControls.indicator = document.querySelector("[data-workspace-indicator]");
-  workspaceControls.fullscreen = document.querySelector("[data-fullscreen-toggle]");
   workspaceControls.prevDate = document.querySelector("[data-workspace-prev-date]");
   workspaceControls.nextDate = document.querySelector("[data-workspace-next-date]");
 
@@ -5881,8 +6197,9 @@ if (dashboardRoot) {
       showWorkspace(workspaceState.current + 1);
     });
   }
-  if (workspaceControls.fullscreen) {
-    workspaceControls.fullscreen.addEventListener("click", toggleFullScreen);
+  const fullscreenToggles = document.querySelectorAll("[data-fullscreen-toggle]");
+  fullscreenToggles.forEach((btn) => btn.addEventListener("click", toggleFullScreen));
+  if (fullscreenToggles.length) {
     setFullscreenButtonState(false);
   }
   document.addEventListener("fullscreenchange", syncFullscreenState);

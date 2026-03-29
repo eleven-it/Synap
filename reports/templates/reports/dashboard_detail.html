@@ -817,7 +817,7 @@
 </script>
 <script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211" defer></script>
 {% if is_declarative or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
-<script src="{% static 'reports/js/widget_engine.js' %}?v=20260332"></script>
+<script src="{% static 'reports/js/widget_engine.js' %}?v=20260329b"></script>
 {% endif %}
 {% if is_declarative %}
 <script>
@@ -4983,7 +4983,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260330"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260329c"></script>
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
 {% endif %}

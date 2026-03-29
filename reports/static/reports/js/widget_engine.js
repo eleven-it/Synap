@@ -64,6 +64,19 @@ const WidgetEngine = {
   },
 
   /**
+   * Contenedor del bloque "Agrupar por" en el panel de filtros del workspace (pedidos-pendientes).
+   */
+  _getWorkspacePedidosGroupingMountEl() {
+    const section = this.rootElement?.closest?.("section[data-item-key]");
+    if (!section || this.reportSlug !== "pedidos-pendientes") {
+      return null;
+    }
+    const itemKey = section.dataset.itemKey || "";
+    const safeItemKey = String(itemKey).replace(/[^a-zA-Z0-9]/g, "_");
+    return document.getElementById(`workspace_pedidos_grouping_${safeItemKey}`);
+  },
+
+  /**
    * Renderiza el dashboard completo con todos los widgets por defecto
    * @param {HTMLElement} rootElement - Elemento contenedor (opcional, usa this.rootElement si no se proporciona)
    */
@@ -167,9 +180,8 @@ const WidgetEngine = {
     // En workspace, NO agregar bordes, sombras ni fondos adicionales (el widget del workspace ya los tiene)
     // Solo agregar clases necesarias para el layout interno
     if (isWorkspace) {
-      // En workspace, el contenedor debe ser transparente y sin bordes/sombras
-      // El widget del workspace ya tiene su propio contenedor con estilos
-      container.className = "w-full h-full overflow-hidden";
+      // En workspace: columna flex para que KPI + tabla repartan alto (p. ej. pantalla completa 2×2)
+      container.className = "w-full h-full min-h-0 overflow-hidden flex flex-col";
     } else {
       // Fuera de workspace, usar estilos completos con bordes y sombras
       if (isVentasNetas) {
@@ -280,7 +292,11 @@ const WidgetEngine = {
     container.appendChild(header);
 
     const content = document.createElement("div");
-    content.className = "relative";
+    content.className = isWorkspace
+      ? widgetSchema.kind === "table"
+        ? "relative flex-1 min-h-0 flex flex-col overflow-hidden"
+        : "relative flex-shrink-0"
+      : "relative";
     content.setAttribute("data-widget-content", "");
     container.appendChild(content);
 
@@ -969,13 +985,19 @@ const WidgetEngine = {
     const total = this.queryResult.totals?.[metricName] || 0;
     const formattedValue = this.formatMetric(total, metric);
 
-    container.className = "p-6 sm:p-8";
+    const isWorkspace = this.rootElement?.closest("[data-workspace-mode]");
+    container.className = isWorkspace
+      ? "p-4 sm:p-6 flex-shrink-0"
+      : "p-6 sm:p-8";
+    const valueSize =
+      "text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-2";
+    const labelSize = "text-sm sm:text-base text-slate-600 dark:text-slate-400";
     container.innerHTML = `
       <div class="flex flex-col items-center justify-center text-center">
-        <div class="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-2">
+        <div class="${valueSize}">
           ${formattedValue}
         </div>
-        <div class="text-sm sm:text-base text-slate-600 dark:text-slate-400">
+        <div class="${labelSize}">
           ${metric ? metric.label : metricName}
         </div>
       </div>
@@ -2545,6 +2567,8 @@ const WidgetEngine = {
     // Detectar si estamos en workspace
     const isWorkspace = this.rootElement?.closest("[data-workspace-mode]") || 
                         this.rootElement?.closest("[data-widget-id]")?.closest("[data-workspace-mode]");
+    // En workspace solo pedidos-pendientes replica el informe declarativo completo (control "Agrupar por" + filas agrupadas).
+    const showTableGroupingChrome = !isWorkspace || this.reportSlug === "pedidos-pendientes";
     
     // Detectar si estamos en modo TV (workspace TV)
     const isWorkspaceTV = this.rootElement?.closest("[data-workspace-tv]") || 
@@ -2556,7 +2580,7 @@ const WidgetEngine = {
       // En modo TV, usar flexbox para que la tabla ocupe todo el espacio
       container.className = "flex flex-col h-full";
     } else if (isWorkspace) {
-      container.className = "p-3 sm:p-4";
+      container.className = "p-2 sm:p-3 min-h-0 flex flex-col flex-1 overflow-hidden";
     } else {
       container.className = "p-4 sm:p-6";
     }
@@ -2584,9 +2608,9 @@ const WidgetEngine = {
     const domSafeWidgetId = persistenceWidgetId.replace(/[^a-zA-Z0-9_-]/g, "_");
     const groupByFieldId = `table-group-by-${domSafeWidgetId}`;
     
-    // Controles de agrupación dinámica - SOLO mostrar si NO estamos en workspace
+    // Controles de agrupación dinámica (workspace: solo pedidos-pendientes, igual que vista detalle)
     let groupingControlsHTML = '';
-    if (!isWorkspace) {
+    if (showTableGroupingChrome) {
       groupingControlsHTML += `
         <div class="mb-4 space-y-3 border-b border-slate-200 dark:border-slate-700 pb-4">
           <div class="flex flex-col gap-2">
@@ -2625,9 +2649,11 @@ const WidgetEngine = {
       `;
     }
     
-    // En modo TV, el wrapper de la tabla debe usar flex para ocupar todo el espacio
-    const tableWrapperClass = isWorkspaceTV ? "flex-1 overflow-auto" : "overflow-x-auto";
-    
+    // En modo TV el wrapper de la tabla crece y hace scroll interno; en workspace normal, igual que ventana no-TV
+    const tableWrapperClass = isWorkspaceTV
+      ? "flex-1 overflow-auto min-h-0"
+      : "overflow-x-auto";
+
     let tableHTML = `
       <div class="${tableWrapperClass}">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -2723,30 +2749,51 @@ const WidgetEngine = {
       </div>
     `;
 
-    // Combinar controles de agrupación y tabla
-    container.innerHTML = groupingControlsHTML + tableHTML;
+    const mountPedidosGroupingInFilters =
+      isWorkspace && this.reportSlug === "pedidos-pendientes";
+    const pedidosGroupingMount = mountPedidosGroupingInFilters
+      ? this._getWorkspacePedidosGroupingMountEl()
+      : null;
+
+    if (showTableGroupingChrome && mountPedidosGroupingInFilters && pedidosGroupingMount) {
+      pedidosGroupingMount.innerHTML = groupingControlsHTML;
+      container.innerHTML = tableHTML;
+    } else if (showTableGroupingChrome) {
+      container.innerHTML = groupingControlsHTML + tableHTML;
+    } else {
+      container.innerHTML = tableHTML;
+    }
     
     // Aplicar altura para tablas en workspace
     if (isWorkspace) {
-      const tableWrapper = container.querySelector('.overflow-x-auto, .overflow-auto');
+      const tableWrapper = container.querySelector(".overflow-x-auto, .overflow-auto");
       if (tableWrapper) {
         if (isWorkspaceTV) {
           // En modo TV, la tabla debe usar todo el espacio disponible (flex-1 ya aplicado)
           // No establecer altura fija, dejar que flex maneje el espacio
           tableWrapper.style.minHeight = "0"; // Importante para que flex funcione correctamente
         } else {
-          // Para reportes de tabla en workspace normal, aplicar altura fija de 288px (5 filas visibles)
-          tableWrapper.style.height = "288px";
-          tableWrapper.style.minHeight = "288px";
-          tableWrapper.style.maxHeight = "288px";
-          tableWrapper.style.overflowY = "auto";
-          tableWrapper.style.overflowX = "auto";
+          const pedidosWs = this.reportSlug === "pedidos-pendientes";
+          if (pedidosWs) {
+            const h = "min(58vh, 560px)";
+            tableWrapper.style.height = "auto";
+            tableWrapper.style.minHeight = "260px";
+            tableWrapper.style.maxHeight = h;
+            tableWrapper.style.overflowY = "auto";
+            tableWrapper.style.overflowX = "auto";
+          } else {
+            tableWrapper.style.height = "288px";
+            tableWrapper.style.minHeight = "288px";
+            tableWrapper.style.maxHeight = "288px";
+            tableWrapper.style.overflowY = "auto";
+            tableWrapper.style.overflowX = "auto";
+          }
         }
       }
     }
     
-    // Inicializar controles de agrupación dinámica SOLO si NO estamos en workspace
-    if (!isWorkspace) {
+    // Inicializar controles de agrupación (workspace solo pedidos-pendientes)
+    if (showTableGroupingChrome) {
       setTimeout(() => {
         this.initializeTableGroupingControls(
           groupByFieldId,
@@ -2762,9 +2809,8 @@ const WidgetEngine = {
       }, 100);
     }
     
-    // Si hay agrupación, agregar event listeners para expandir/colapsar
-    // PERO NO en workspace (agrupación deshabilitada en workspace)
-    if (isGrouped && !isWorkspace) {
+    // Si hay agrupación, listeners de expandir/colapsar (workspace solo pedidos-pendientes)
+    if (isGrouped && showTableGroupingChrome) {
       this.attachGroupToggleListeners(container);
     }
   },

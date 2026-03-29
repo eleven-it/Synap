@@ -2409,6 +2409,21 @@ class QueryRunnerService:
                     totals={},
                     notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
                 )
+
+            puntos_venta = filters.get("punto_venta", [])
+            if isinstance(puntos_venta, str):
+                puntos_venta = [puntos_venta] if puntos_venta else []
+            elif not isinstance(puntos_venta, list):
+                puntos_venta = []
+
+            sucursales = filters.get("sucursales", [])
+            if isinstance(sucursales, str):
+                sucursales = [sucursales] if sucursales else []
+            elif not isinstance(sucursales, list):
+                sucursales = []
+
+            clientes_excluidos = self._parse_clientes_excluidos(filters)
+
             mysql_config = settings.DATABASES['mysql']
             import MySQLdb
             try:
@@ -2434,6 +2449,44 @@ class QueryRunnerService:
                 "cp.Estado IN ('En preparación', 'Preparado')",
             ]
             params = [fecha_inicio, fecha_fin]
+
+            if puntos_venta:
+                puntos_venta_ints = []
+                for pv in puntos_venta:
+                    try:
+                        puntos_venta_ints.append(int(pv))
+                    except (ValueError, TypeError):
+                        continue
+                if puntos_venta_ints:
+                    placeholders = ",".join(["%s"] * len(puntos_venta_ints))
+                    where_conditions.append(f"cp.id_pv IN ({placeholders})")
+                    params.extend(puntos_venta_ints)
+
+            if sucursales:
+                sucursales_ints = []
+                for s in sucursales:
+                    try:
+                        sucursales_ints.append(int(s))
+                    except (ValueError, TypeError):
+                        continue
+                if sucursales_ints:
+                    placeholders = ",".join(["%s"] * len(sucursales_ints))
+                    where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
+                    params.extend(sucursales_ints)
+
+            if clientes_excluidos:
+                clientes_vals = []
+                for c in clientes_excluidos:
+                    try:
+                        c_str = str(c).strip()
+                        if c_str:
+                            clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                    except (ValueError, TypeError):
+                        continue
+                if clientes_vals:
+                    placeholders = ",".join(["%s"] * len(clientes_vals))
+                    where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
+                    params.extend(clientes_vals)
             
             where_clause = " AND ".join(where_conditions)
             
