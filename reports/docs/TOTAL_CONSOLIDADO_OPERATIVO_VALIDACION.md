@@ -30,7 +30,7 @@
 - Cuatro KPIs en una sola columna (orden):
   1. VENTAS NETAS  
   2. REMITOS NO FACTURADOS  
-  3. PEDIDOS PENDIENTES DE ENTREGA  
+  3. PEDIDOS EN ARMADO  
   4. TOTAL CONSOLIDADO  
 - Formato moneda ARS (mismo que el resto del sistema).
 
@@ -42,7 +42,7 @@
 ## 4) Frontend
 
 - **dashboard.js:** Si `reportSlug === "total-consolidado-operativo"`:
-  - Resumen: grid 1 columna, orden de claves fijo (ventas_netas, remitos_no_facturados, pedidos_pendientes, total_consolidado), etiqueta "PEDIDOS PENDIENTES DE ENTREGA".
+  - Resumen: grid 1 columna, orden de claves fijo (ventas_netas, remitos_no_facturados, pedidos_pendientes, total_consolidado), etiqueta "PEDIDOS EN ARMADO".
   - Widget (workspace): si `data` es lista de `{ label, value }`, se renderizan 4 cards verticales desde `data`.
 
 ## 5) Workspace — múltiples instancias

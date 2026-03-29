@@ -1,6 +1,8 @@
 # Validación Pedidos pendientes – Datos y consultas
 
-Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios VB6 (Pedido_prep, Pedido_prep_consulta, Pedido, Visualiza_Pedido, Remito, FacturaA/B, etc.).
+Revisión del reporte **Pedidos pendientes** (`pedidos-pendientes`) frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios VB6 (Pedido_prep, Pedido_prep_consulta, Pedido, Visualiza_Pedido, Remito, FacturaA/B, etc.).
+
+Para el flujo técnico completo (API, plantilla, `dashboard.js`, riesgos de `declarative-v1`, slugs), ver **[ARQUITECTURA_REPORTE_PEDIDOS_PENDIENTES.md](./ARQUITECTURA_REPORTE_PEDIDOS_PENDIENTES.md)**.
 
 ---
 
@@ -8,7 +10,7 @@ Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEX
 
 | Aspecto | Valor |
 |--------|--------|
-| **Slug** | `pending_orders` |
+| **Slug** | `pedidos-pendientes` (único; la URL `/reports/dashboard/pending_orders/` redirige 301 al canónico) |
 | **Nombre** | Pedidos pendientes |
 | **Descripción** | Listado de pedidos pendientes de preparación. PED en estado **En preparación** o **Preparado**, no anulados. |
 | **Tabla principal** | `comp_ped` (solo cabecera; no se usan renglones en `stockp`) |
@@ -22,10 +24,8 @@ Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEX
 ```sql
 SELECT
     DATE_FORMAT(cp.Fecha, '%d/%m/%Y') AS fecha,
-    cp.TipoComprobante AS tipo_comprobante,
     cp.NroComprobante AS nro_comprobante,
-    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc,
-    cp.Estado AS estado
+    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc
 FROM comp_ped cp
 WHERE cp.Fecha >= %s
   AND cp.Fecha <= %s
@@ -91,10 +91,8 @@ Se filtra por `cp.Fecha` (fecha del pedido) en el rango `[fecha_inicio, fecha_fi
 | Campo reporte | Origen | VB6 / comp_ped | Conclusión |
 |---------------|--------|-----------------|------------|
 | **fecha** | `cp.Fecha` formateada | `comp_ped.Fecha` | Correcto. |
-| **tipo_comprobante** | `cp.TipoComprobante` | PED | Correcto. |
 | **nro_comprobante** | `cp.NroComprobante` | Sí | Correcto. |
 | **subtotal_desc** | `COALESCE(cp.SubtotalDesc, 0)` | SubtotalDesc / ImporteVenta | Correcto; validar llenado de SubtotalDesc en DB. |
-| **estado** | `cp.Estado` | En preparación, Preparado | Correcto. |
 
 ---
 
@@ -133,7 +131,7 @@ Si se requiere el mismo criterio (p. ej. por PV o sucursal), habría que añadir
 
 ### 6.3 Detalle adicional (cliente, vendedor, sucursal, PV)
 
-El reporte solo muestra: fecha, tipo, nro, subtotal, estado. No hay JOINs a `cliente`, `viajantes`, `sucursales`, `punto_venta`.
+El listado devuelve columnas: fecha, nro de comprobante, subtotal (`subtotal_desc`); tipo y estado no se exponen en el SELECT (siguen filtrándose en WHERE). No hay JOINs a `cliente`, `viajantes`, `sucursales`, `punto_venta`.
 
 Para alinearse con remitos (que sí muestran sucursal y PV), se podría extender la query con:
 

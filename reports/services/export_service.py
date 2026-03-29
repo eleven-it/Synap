@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Set
 import logging
 
 from django.conf import settings
@@ -77,7 +77,141 @@ class ExportService:
             expires_at=None,
             filename=filename,
         )
-    
+
+    def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
+        """
+        Orden de columnas alineado con WidgetEngine.renderTable: table_dimensions, table_metrics,
+        y el mismo criterio cuando faltan esas claves (dimensiones del schema; sin métricas si kind=table
+        y no hay table_metrics en options).
+        """
+        from .schema_service import ReportSchemaService
+
+        try:
+            schema = ReportSchemaService().build_schema(report)
+        except Exception as exc:
+            logger.warning("Export Excel: build_schema falló para %s: %s", report.slug, exc)
+            return None
+
+        table_widgets = [w for w in schema.default_widgets if w.kind == "table"]
+        if not table_widgets:
+            return None
+
+        def _widget_sort_key(w):
+            opts = w.options or {}
+            o = opts.get("order")
+            if o is None:
+                o = 10**6
+            return (o, str(w.id))
+
+        table_widgets.sort(key=_widget_sort_key)
+        w = table_widgets[0]
+        opts = w.options or {}
+        available = set(sample_row.keys())
+        insertion_order = list(sample_row.keys())
+        metric_names_schema: Set[str] = {m.name for m in schema.metrics}
+
+        headers: List[str] = []
+
+        if "table_dimensions" in opts and isinstance(opts["table_dimensions"], list):
+            for name in opts["table_dimensions"]:
+                if name in available:
+                    headers.append(name)
+        else:
+            for d in schema.dimensions:
+                if d.name in available:
+                    headers.append(d.name)
+
+        opts_tm = opts.get("table_metrics")
+        explicit_tm = opts_tm is not None and isinstance(opts_tm, list)
+        if explicit_tm:
+            for name in opts_tm:
+                if name in available:
+                    headers.append(name)
+
+        seen = set(headers)
+        skip_metrics_tail: Set[str] = set()
+        if w.kind == "table" and (not explicit_tm or (isinstance(opts_tm, list) and len(opts_tm) == 0)):
+            skip_metrics_tail = set(metric_names_schema)
+
+        for k in insertion_order:
+            if k in seen:
+                continue
+            if k in skip_metrics_tail:
+                continue
+            headers.append(k)
+            seen.add(k)
+
+        return headers
+
+    def _resolve_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> List[str]:
+        """
+        Define orden y columnas exportables (misma lógica que la tabla en pantalla cuando aplica).
+        """
+        if not sample_row:
+            return []
+
+        slug = report.slug
+        cfg = report.config or {}
+        insertion_order = list(sample_row.keys())
+        available = set(sample_row.keys())
+
+        if slug in ("ventas_netas", "ventas-netas"):
+            preferred = [
+                "mes_formato",
+                "nombre_sucursal",
+                "nro_punto_venta",
+                "ventas_netas",
+                "notas_credito",
+                "ventas_brutas",
+            ]
+            return [h for h in preferred if h in available]
+
+        if slug == "uninvoiced_remitos":
+            preferred = [
+                "fecha",
+                "nro_comprobante",
+                "sucursal",
+                "punto_venta",
+                "subtotal_desc",
+            ]
+            headers = [h for h in preferred if h in available]
+            seen = set(headers)
+            for k in insertion_order:
+                if k in seen or k in ("id_sucursal", "id_punto_venta"):
+                    continue
+                headers.append(k)
+                seen.add(k)
+            return headers
+
+        if slug == "pedidos-pendientes":
+            preferred = [
+                "fecha",
+                "nro_comprobante",
+                "cliente",
+                "nombre_cliente",
+                "subtotal_desc",
+            ]
+            headers = [h for h in preferred if h in available]
+            seen = set(headers)
+            for k in insertion_order:
+                if k in seen or k in ("tipo_comprobante", "estado"):
+                    continue
+                headers.append(k)
+                seen.add(k)
+            return headers
+
+        if cfg.get("version") == "declarative-v1":
+            decl = self._declarative_export_headers(report, sample_row)
+            if decl:
+                return decl
+
+        headers = list(insertion_order)
+        if slug == "uninvoiced_remitos":
+            headers = [h for h in headers if h not in ("id_sucursal", "id_punto_venta")]
+        elif slug == "pedidos-pendientes":
+            headers = [h for h in headers if h not in ("tipo_comprobante", "estado")]
+        return headers
+
     def _generate_excel(self, file_path: Path, report: ReportDefinition, query_result, payload: Dict):
         """
         Genera un archivo Excel con los datos del reporte.
@@ -176,16 +310,8 @@ class ExportService:
                 ws.append(["Sin datos disponibles"])
                 row += 1
             else:
-                # Orden y columnas según tipo de reporte (alineado con la tabla del dashboard)
-                if report.slug in ("ventas_netas", "ventas-netas"):
-                    # Ventas Netas: MES, SUCURSAL, PUNTO DE VENTA, VENTAS NETAS, NOTAS CRÉDITO, VENTAS BRUTAS
-                    # Excluir id_sucursal e id_punto_venta; usar mes_formato como Mes
-                    headers = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"]
-                else:
-                    headers = list(query_result.data[0].keys())
-                    # Para "uninvoiced_remitos", excluir id_sucursal e id_punto_venta
-                    if report.slug == "uninvoiced_remitos":
-                        headers = [h for h in headers if h not in ["id_sucursal", "id_punto_venta"]]
+                # Orden y columnas alineados con la tabla del dashboard / schema declarativo
+                headers = self._resolve_export_headers(report, query_result.data[0])
                 
                 # Traducir headers al español si es necesario
                 header_translations = {
@@ -205,6 +331,8 @@ class ExportService:
                     "estado": "Estado",
                     "sucursal": "Sucursal",
                     "punto_venta": "Punto de Venta",
+                    "cliente": "Cliente",
+                    "nombre_cliente": "Cliente",
                 }
                 # Ventas Netas: etiqueta "Mes" para la primera columna (mes_formato)
                 if report.slug in ("ventas_netas", "ventas-netas"):

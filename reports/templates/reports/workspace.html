@@ -219,7 +219,7 @@
 </section>
 
 <script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211"></script>
-<script src="{% static 'reports/js/widget_engine.js' %}?v=20260211"></script>
+<script src="{% static 'reports/js/widget_engine.js' %}?v=20260332"></script>
 <script>
   // Asegurar que WidgetEngine esté disponible antes de cargar dashboard.js
   // Esto es necesario porque dashboard.js se carga como módulo ES6 y puede ejecutarse
@@ -240,5 +240,5 @@
     }
   })();
 </script>
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260211"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260330"></script>
 {% endblock %}

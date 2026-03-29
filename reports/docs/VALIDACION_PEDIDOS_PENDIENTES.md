@@ -1,6 +1,6 @@
 # Validación Pedidos pendientes – Datos y consultas
 
-Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios VB6 (Pedido_prep, Pedido_prep_consulta, Pedido, Visualiza_Pedido, Remito, FacturaA/B, etc.).
+Revisión del reporte **Pedidos pendientes** (`pedidos-pendientes`) frente a `CONTEXTO_TABLAS_VB6_INFORMES.md` y formularios VB6 (Pedido_prep, Pedido_prep_consulta, Pedido, Visualiza_Pedido, Remito, FacturaA/B, etc.).
 
 ---
 
@@ -8,7 +8,7 @@ Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEX
 
 | Aspecto | Valor |
 |--------|--------|
-| **Slug** | `pending_orders` |
+| **Slug** | `pedidos-pendientes` |
 | **Nombre** | Pedidos pendientes |
 | **Descripción** | Listado de pedidos pendientes de preparación. PED en estado **En preparación** o **Preparado**, no anulados. |
 | **Tabla principal** | `comp_ped` (solo cabecera; no se usan renglones en `stockp`) |
@@ -22,10 +22,8 @@ Revisión del reporte **Pedidos pendientes** (`pending_orders`) frente a `CONTEX
 ```sql
 SELECT
     DATE_FORMAT(cp.Fecha, '%d/%m/%Y') AS fecha,
-    cp.TipoComprobante AS tipo_comprobante,
     cp.NroComprobante AS nro_comprobante,
-    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc,
-    cp.Estado AS estado
+    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc
 FROM comp_ped cp
 WHERE cp.Fecha >= %s
   AND cp.Fecha <= %s

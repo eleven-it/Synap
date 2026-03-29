@@ -206,7 +206,7 @@ class QueryRunnerService:
             return 1800  # 30 minutos
         
         # Reportes de estado (frecuencia media)
-        status_reports = ['uninvoiced_remitos', 'pending_orders', 'bo-stock-facturacion']
+        status_reports = ['uninvoiced_remitos', 'pedidos-pendientes', 'bo-stock-facturacion']
         if report_slug in status_reports:
             return 300  # 5 minutos
         
@@ -285,7 +285,7 @@ class QueryRunnerService:
             result = self._run_cash_flow_by_account(report, payload)
         elif report.slug in ("uninvoiced_remitos", "remitos-no-facturados"):
             result = self._run_uninvoiced_remitos(report, payload)
-        elif report.slug in ("pending_orders", "pedidos-pendientes"):
+        elif report.slug == "pedidos-pendientes":
             result = self._run_pending_orders(report, payload)
         elif report.slug == "sales_summary":
             result = self._run_sales_summary(report, payload)
@@ -2431,7 +2431,7 @@ class QueryRunnerService:
                 "cp.Fecha <= %s",
                 "cp.TipoComprobante = 'PED'",
                 "cp.Anulado = 'No'",
-                "cp.Estado IN ('En preparación', 'Preparado')"
+                "cp.Estado IN ('En preparación', 'Preparado')",
             ]
             params = [fecha_inicio, fecha_fin]
             
@@ -2441,10 +2441,8 @@ class QueryRunnerService:
             sql = f"""
                 SELECT 
                     DATE_FORMAT(cp.Fecha, '%%d/%%m/%%Y') AS fecha,
-                    cp.TipoComprobante AS tipo_comprobante,
                     cp.NroComprobante AS nro_comprobante,
-                    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc,
-                    cp.Estado AS estado
+                    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc
                 FROM comp_ped cp
                 WHERE {where_clause}
                 ORDER BY 
@@ -2824,7 +2822,7 @@ class QueryRunnerService:
     def _run_total_consolidado_operativo(self, report: ReportDefinition, payload: Dict) -> QueryResult:
         """
         Reporte legacy Total Consolidado Operativo: 4 KPIs en una columna vertical.
-        Ventas Netas, Remitos no facturados, Pedidos pendientes de entrega, Total consolidado.
+        Ventas Netas, Remitos no facturados, Pedidos en armado, Total consolidado.
         Reutiliza _get_ventas_netas_total, _get_remitos_no_facturados_total, _get_pedidos_pendientes_total.
         """
         started_at = timezone.now()
@@ -2878,7 +2876,7 @@ class QueryRunnerService:
             data = [
                 {"label": "VENTAS NETAS", "value": ventas_netas},
                 {"label": "REMITOS NO FACTURADOS", "value": remitos_no_facturados},
-                {"label": "PEDIDOS PENDIENTES DE ENTREGA", "value": pedidos_pendientes},
+                {"label": "PEDIDOS EN ARMADO", "value": pedidos_pendientes},
                 {"label": "TOTAL CONSOLIDADO", "value": total_consolidado},
             ]
             totals = {
@@ -2889,7 +2887,7 @@ class QueryRunnerService:
             }
             notes = [
                 f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
-                "Pedidos pendientes de entrega: sin filtro por período (saldo total).",
+                "Pedidos en armado: sin filtro por período (saldo total).",
             ]
             if sucursales_ints or puntos_venta_ints:
                 notes.append("Filtros: sucursales y/o punto de venta aplicados.")

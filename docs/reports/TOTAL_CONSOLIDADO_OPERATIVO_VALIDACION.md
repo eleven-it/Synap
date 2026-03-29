@@ -30,20 +30,20 @@
 - Cuatro KPIs en una sola columna (orden):
   1. VENTAS NETAS (filtrado por período).
   2. REMITOS NO FACTURADOS (filtrado por período).
-  3. PEDIDOS PENDIENTES DE ENTREGA (sin filtro por período: saldo total de PED en estado En preparación/Preparado).
+  3. PEDIDOS EN ARMADO (sin filtro por período: saldo total de PED en estado En preparación/Preparado).
   4. TOTAL CONSOLIDADO (VN + Remitos + Pedidos pendientes; este último sin fecha).
 - Formato moneda ARS (mismo que el resto del sistema).
 
 ## 3) Backend
 
 - **Routing:** `report.slug == "total-consolidado-operativo"` → `_run_total_consolidado_operativo(report, payload)`.
-- **Pedidos pendientes de entrega:** se obtiene con `_get_pedidos_pendientes_total(..., filtrar_por_fecha=False)`; no se aplica el rango de fechas del reporte (saldo total de PED En preparación/Preparado).
+- **Pedidos en armado (KPI):** se obtiene con `_get_pedidos_pendientes_total(..., filtrar_por_fecha=False)`; no se aplica el rango de fechas del reporte (saldo total de PED En preparación/Preparado).
 - **Respuesta:** `QueryResult` con `data` = lista de 4 objetos `{ label, value }`, `totals` con las 4 claves, `notes` (período, nota de pedidos sin filtro fecha, y filtros aplicados).
 
 ## 4) Frontend
 
 - **dashboard.js:** Si `reportSlug === "total-consolidado-operativo"`:
-  - Resumen: grid 1 columna, orden de claves fijo (ventas_netas, remitos_no_facturados, pedidos_pendientes, total_consolidado), etiqueta "PEDIDOS PENDIENTES DE ENTREGA".
+  - Resumen: grid 1 columna, orden de claves fijo (ventas_netas, remitos_no_facturados, pedidos_pendientes, total_consolidado), etiqueta "PEDIDOS EN ARMADO".
   - Widget (workspace): si `data` es lista de `{ label, value }`, se renderizan 4 cards verticales desde `data`.
 
 ## 5) Workspace — múltiples instancias
@@ -62,7 +62,7 @@
 ## 6) Validación final sugerida
 
 1. **Consistencia con reportes individuales:**  
-   Ventas netas y Remitos no facturados en total-consolidado-operativo usan el mismo período (y sucursales/PV) que los reportes ventas-netas y remitos-no-facturados. El indicador **Pedidos pendientes de entrega** en total-consolidado-operativo no usa el rango de fechas (es saldo total), por lo que no coincidirá con un reporte de pedidos-pendientes filtrado por período. TOTAL CONSOLIDADO = VN(período) + Remitos(período) + Pedidos pendientes (saldo total).
+   Ventas netas y Remitos no facturados en total-consolidado-operativo usan el mismo período (y sucursales/PV) que los reportes ventas-netas y remitos-no-facturados. El indicador **Pedidos en armado** en total-consolidado-operativo no usa el rango de fechas (es saldo total), por lo que no coincidirá con un reporte de pedidos-pendientes filtrado por período. TOTAL CONSOLIDADO = VN(período) + Remitos(período) + Pedidos en armado (saldo total).
 
 2. **Workspace:**  
    - Añadir dos instancias de Total Consolidado Operativo con filtros distintos (p. ej. períodos o sucursales diferentes).  

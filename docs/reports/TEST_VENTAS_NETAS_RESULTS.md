@@ -345,7 +345,7 @@ if report.slug in ("ventas_netas", "ventas-netas"):
 
 También actualizado para:
 - `uninvoiced_remitos` / `remitos-no-facturados`
-- `pending_orders` / `pedidos-pendientes`
+- `pedidos-pendientes` (slug único; ver migración `0031_rename_pending_orders_slug_to_pedidos_pendientes`)
 
 ✅ Ahora funciona con ambos formatos de slug.
 

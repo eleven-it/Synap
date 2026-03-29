@@ -32,7 +32,7 @@ function detectReportType() {
     "cash_flow_waterfall", 
     "cash_flow_by_account",
     "uninvoiced_remitos",
-    "pending_orders",
+    "pedidos-pendientes",
     "sales_summary",
     "total-consolidado-operativo",
     "bo-stock-facturacion"
@@ -61,6 +61,11 @@ function detectReportType() {
  */
 function isVentasNetasSlug(slug) {
   return slug === "ventas_netas" || slug === "ventas-netas";
+}
+
+/** Slug canónico del informe Pedidos pendientes (único en backend y catálogo). */
+function isPedidosPendientesSlug(slug) {
+  return slug === "pedidos-pendientes";
 }
 
 // ============================================
@@ -2167,7 +2172,7 @@ const renderCards = (container, data, config) => {
       grid.append("div").attr("class", cardClasses).style("border-left", `3px solid ${borderColors[index] || "#64748b"}`).html(`
         <span class="${labelClass}">${(item.label || "").replace(/_/g, " ")}</span>
         <span class="${valueClass}">${formatCurrency(Number(item.value) || 0)}</span>
-        ${isTotal ? `<p class="${subtitleClass}">VENTAS NETAS + REMITOS NO FACTURADOS + PEDIDOS PENDIENTES</p>` : ""}
+        ${isTotal ? `<p class="${subtitleClass}">VENTAS NETAS + REMITOS NO FACTURADOS + PEDIDOS EN ARMADO</p>` : ""}
       `);
     });
     return;
@@ -2846,7 +2851,11 @@ const renderTable = (widgetElement, data, options = {}) => {
   const headerRow = document.createElement("tr");
 
   // Columnas a excluir
-  const excludedColumns = ["id_sucursal", "id_punto_venta", "mes"];
+  let excludedColumns = ["id_sucursal", "id_punto_venta", "mes"];
+  const tableReportSlug = widgetElement.dataset?.reportSlug || dashboardRoot?.dataset?.reportSlug;
+  if (isPedidosPendientesSlug(tableReportSlug)) {
+    excludedColumns = excludedColumns.concat(["tipo_comprobante", "estado"]);
+  }
   const allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
 
   // Ventas Netas: orden de columnas y agrupación visual (MES, SUCURSAL, PUNTO DE VENTA, métricas)
@@ -4205,7 +4214,7 @@ const renderSummary = (meta, totals) => {
     } else if (isRemitosNoFacturados) {
       displayLabel = "REMITOS NO FACTURADOS";
     } else if (isPedidosPendientes) {
-      displayLabel = isTotalConsolidadoOperativo ? "PEDIDOS PENDIENTES DE ENTREGA" : "PEDIDOS PENDIENTES";
+      displayLabel = isTotalConsolidadoOperativo ? "PEDIDOS EN ARMADO" : "PEDIDOS PENDIENTES";
     } else if (isTotalConsolidado) {
       displayLabel = "TOTAL CONSOLIDADO";
     }
@@ -5415,7 +5424,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
   
   try {
     // Aumentar el límite para reportes que muestran tablas con detalles
-    const isTableReport = slot.slug === "uninvoiced_remitos" || slot.slug === "pending_orders";
+    const isTableReport = slot.slug === "uninvoiced_remitos" || isPedidosPendientesSlug(slot.slug);
     const limit = isTableReport ? 1000 : 200;
     const requestBody = { slug: slot.slug, limit: limit };
     
@@ -5478,7 +5487,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
           "cash_flow_waterfall",
           "cash_flow_by_account",
           "uninvoiced_remitos",
-          "pending_orders",
+          "pedidos-pendientes",
           "sales_summary",
           "total-consolidado-operativo"
         ];
@@ -5610,7 +5619,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
     
     // Actualizar el título con el conteo para reportes específicos
     const reportSlug = slot.slug;
-    if (reportSlug === "pending_orders" || reportSlug === "uninvoiced_remitos") {
+    if (isPedidosPendientesSlug(reportSlug) || reportSlug === "uninvoiced_remitos") {
       const titleElement = widget.querySelector("header h2");
       if (titleElement) {
         const baseName = slot.name;
@@ -5663,7 +5672,7 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
         tableWrapper.classList.remove("hidden");
         // Para pedidos pendientes y remitos no facturados: altura para encabezado + 5 filas visibles
         // Encabezado: ~48px, cada fila: ~48px, total: ~288px
-        if (reportSlug === "pending_orders" || reportSlug === "uninvoiced_remitos") {
+        if (isPedidosPendientesSlug(reportSlug) || reportSlug === "uninvoiced_remitos") {
           tableWrapper.style.height = "288px";
           tableWrapper.style.minHeight = "288px";
           tableWrapper.style.maxHeight = "288px";
@@ -6721,9 +6730,9 @@ if (dashboardRoot) {
     const fechaInicioInput = document.getElementById("fecha_inicio");
     const fechaFinInput = document.getElementById("fecha_fin");
     
-    // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pending_orders, sales_summary, bo-stock-facturacion)
+    // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pedidos-pendientes, sales_summary, bo-stock-facturacion)
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "pending_orders" && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
       return;
     }
     if (!buttons.length || !periodoTipoSelect || !fechaInicioInput || !fechaFinInput) {
@@ -6814,7 +6823,7 @@ if (dashboardRoot) {
         if (savedViewType === "por_caja") {
           fetchByAccountData();
         }
-      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
         // Para estos reportes, recargar datos al cambiar período
         fetchDashboardData();
       }
@@ -6897,7 +6906,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -6912,7 +6921,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "pending_orders") {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -7307,7 +7316,7 @@ if (dashboardRoot) {
       reportSlug === "cash_flow_waterfall" ||
       reportSlug === "cash_flow_by_account" ||
       reportSlug === "uninvoiced_remitos" ||
-      reportSlug === "pending_orders" ||
+      isPedidosPendientesSlug(reportSlug) ||
       reportSlug === "sales_summary" ||
       reportSlug === "total-consolidado-operativo" ||
       reportSlug === "bo-stock-facturacion";
@@ -7578,7 +7587,7 @@ if (dashboardRoot) {
         const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
         filters.clientes_excluidos = selectedClientes;
       }
-    } else if (currentReportSlug === "pending_orders") {
+    } else if (isPedidosPendientesSlug(currentReportSlug)) {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;

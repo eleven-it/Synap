@@ -27,6 +27,42 @@ const WidgetEngine = {
     return this;
   },
 
+  /** Clave localStorage para campos de agrupación de tabla (por reporte y widget). */
+  _tableGroupingStorageKey(slug, widgetId) {
+    if (!slug || widgetId == null || widgetId === "") return null;
+    return `report_table_grouping_v1_${slug}_${String(widgetId)}`;
+  },
+
+  /**
+   * Lee estado guardado. `used: true` si existía clave (incluso fields vacío = usuario eligió sin agrupar).
+   */
+  _loadTableGroupingStorageState(slug, widgetId) {
+    const key = this._tableGroupingStorageKey(slug, widgetId);
+    if (!key || typeof localStorage === "undefined") {
+      return { used: false, fields: [] };
+    }
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return { used: false, fields: [] };
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.fields)) return { used: true, fields: [] };
+      return { used: true, fields: parsed.fields };
+    } catch (e) {
+      return { used: false, fields: [] };
+    }
+  },
+
+  _savePersistedTableGrouping(slug, widgetId, fields) {
+    const key = this._tableGroupingStorageKey(slug, widgetId);
+    if (!key || typeof localStorage === "undefined") return;
+    try {
+      const list = Array.isArray(fields) ? fields : [];
+      localStorage.setItem(key, JSON.stringify({ fields: list }));
+    } catch (e) {
+      /* cuota o modo privado */
+    }
+  },
+
   /**
    * Renderiza el dashboard completo con todos los widgets por defecto
    * @param {HTMLElement} rootElement - Elemento contenedor (opcional, usa this.rootElement si no se proporciona)
@@ -2436,11 +2472,20 @@ const WidgetEngine = {
       }
     } else {
       // Si no está definido, usar comportamiento por defecto (filtrar algunas dimensiones)
-    const excludedDimensions = ["mes", "id_sucursal", "id_punto_venta"];
-      filteredDimensions = dimensions.filter(dim => {
-      const dimName = dim.name.toLowerCase();
-      return !excludedDimensions.includes(dimName);
-    });
+      const excludedDimensions = ["mes", "id_sucursal", "id_punto_venta"];
+      if (this.reportSlug === "pedidos-pendientes") {
+        excludedDimensions.push("tipo_comprobante", "estado");
+      }
+      filteredDimensions = dimensions.filter((dim) => {
+        const dimName = dim.name.toLowerCase();
+        return !excludedDimensions.includes(dimName);
+      });
+    }
+
+    // Pedidos pendientes: nunca mostrar tipo/estado (aunque table_dimensions del Builder aún los liste).
+    if (this.reportSlug === "pedidos-pendientes") {
+      const ocultarPedidos = new Set(["tipo_comprobante", "estado"]);
+      filteredDimensions = filteredDimensions.filter((d) => !ocultarPedidos.has(d.name));
     }
     
     // Para métricas: si table_metrics está definido (incluso si está vacío), usar solo las seleccionadas
@@ -2480,6 +2525,23 @@ const WidgetEngine = {
       return mappedDim;
     });
 
+    // Dimensiones permitidas en "Agrupar por": si el Builder guardó grouping.fields no vacío,
+    // solo esas (intersectadas con columnas de la tabla); si no queda ninguna, se muestran todas.
+    let dimensionsForGroupBySelect = mappedDimensions.filter((d) => {
+      if (this.reportSlug === "pedidos-pendientes") {
+        if (d.name === "tipo_comprobante" || d.name === "estado") return false;
+      }
+      return true;
+    });
+    const groupingFieldsAllow = widgetSchema.options?.grouping?.fields;
+    if (Array.isArray(groupingFieldsAllow) && groupingFieldsAllow.length > 0) {
+      const allow = new Set(groupingFieldsAllow);
+      const narrowed = dimensionsForGroupBySelect.filter((d) => allow.has(d.name));
+      if (narrowed.length > 0) {
+        dimensionsForGroupBySelect = narrowed;
+      }
+    }
+
     // Detectar si estamos en workspace
     const isWorkspace = this.rootElement?.closest("[data-workspace-mode]") || 
                         this.rootElement?.closest("[data-widget-id]")?.closest("[data-workspace-mode]");
@@ -2501,10 +2563,26 @@ const WidgetEngine = {
     
     // Verificar si hay agrupación configurada (definir antes de usarla)
     const groupingConfig = widgetSchema.options?.grouping;
-    
-    // Generar ID único para este widget
-    const widgetId = widgetSchema.id || `widget-${Math.random().toString(36).substr(2, 9)}`;
-    const groupByFieldId = `table-group-by-${widgetId}`;
+
+    const pickableGroupNames = new Set(dimensionsForGroupBySelect.map((d) => d.name));
+    const persistenceWidgetId = String(
+      widgetSchema.id != null && widgetSchema.id !== "" ? widgetSchema.id : "default"
+    );
+    const storageState = this._loadTableGroupingStorageState(this.reportSlug, persistenceWidgetId);
+    let initialGroupFields = [];
+    if (storageState.used) {
+      initialGroupFields = storageState.fields.filter((f) => pickableGroupNames.has(f));
+    } else if (
+      groupingConfig?.enabled &&
+      Array.isArray(groupingConfig.fields) &&
+      groupingConfig.fields.length > 0
+    ) {
+      initialGroupFields = groupingConfig.fields.filter((f) => pickableGroupNames.has(f));
+    }
+
+    // ID estable para DOM y localStorage (sin caracteres inválidos en id HTML)
+    const domSafeWidgetId = persistenceWidgetId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const groupByFieldId = `table-group-by-${domSafeWidgetId}`;
     
     // Controles de agrupación dinámica - SOLO mostrar si NO estamos en workspace
     let groupingControlsHTML = '';
@@ -2523,11 +2601,8 @@ const WidgetEngine = {
                       data-tags-field="group_by">
       `;
       
-      // Agregar todas las dimensiones como opciones
-      dimensions.forEach(dim => {
-        const isSelected = groupingConfig?.enabled && 
-                          Array.isArray(groupingConfig.fields) && 
-                          groupingConfig.fields.includes(dim.name);
+      dimensionsForGroupBySelect.forEach((dim) => {
+        const isSelected = initialGroupFields.includes(dim.name);
         groupingControlsHTML += `<option value="${dim.name}" ${isSelected ? 'selected' : ''}>${dim.label}</option>`;
       });
       
@@ -2579,10 +2654,7 @@ const WidgetEngine = {
           <tbody class="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
     `;
 
-    // Verificar si hay agrupación configurada (ya definida arriba)
-    const isGrouped = groupingConfig?.enabled && 
-                     Array.isArray(groupingConfig.fields) && 
-                     groupingConfig.fields.length > 0;
+    const isGrouped = initialGroupFields.length > 0;
     
     let rowsHTML = '';
     
@@ -2605,7 +2677,7 @@ const WidgetEngine = {
         });
       }
       
-      const groupedData = this.groupTableData(data, groupingConfig.fields, this.schema, totalColumns);
+      const groupedData = this.groupTableData(data, initialGroupFields, this.schema, totalColumns);
       
       // Renderizar con grupos
       rowsHTML = this.renderGroupedTableRows(
@@ -2676,7 +2748,17 @@ const WidgetEngine = {
     // Inicializar controles de agrupación dinámica SOLO si NO estamos en workspace
     if (!isWorkspace) {
       setTimeout(() => {
-        this.initializeTableGroupingControls(groupByFieldId, widgetSchema, data, mappedDimensions, filteredMetrics, container);
+        this.initializeTableGroupingControls(
+          groupByFieldId,
+          widgetSchema,
+          data,
+          mappedDimensions,
+          filteredMetrics,
+          container,
+          dimensionsForGroupBySelect,
+          initialGroupFields,
+          persistenceWidgetId
+        );
       }, 100);
     }
     
@@ -2692,11 +2774,24 @@ const WidgetEngine = {
    * @param {string} fieldId - ID del campo de agrupación
    * @param {Object} widgetSchema - Schema del widget
    * @param {Array} data - Datos de la tabla
-   * @param {Array} dimensions - Dimensiones disponibles
+   * @param {Array} dimensions - Dimensiones de la tabla (mapeadas)
    * @param {Array} metrics - Métricas disponibles
    * @param {HTMLElement} container - Contenedor del widget
+   * @param {Array} [dimensionsForGroupBySelect] - Subconjunto permitido en "Agrupar por" (Builder grouping.fields)
+   * @param {string[]} [initialGroupFields] - Campos iniciales (schema + localStorage ya resueltos en renderTable)
+   * @param {string} persistenceWidgetId - Id estable del widget para localStorage
    */
-  initializeTableGroupingControls(fieldId, widgetSchema, data, dimensions, metrics, container) {
+  initializeTableGroupingControls(
+    fieldId,
+    widgetSchema,
+    data,
+    dimensions,
+    metrics,
+    container,
+    dimensionsForGroupBySelect = null,
+    initialGroupFields = null,
+    persistenceWidgetId = "default"
+  ) {
     const select = document.getElementById(fieldId);
     const tagsContainer = document.getElementById(`${fieldId}_tags_container`);
     const chipsContainer = tagsContainer?.querySelector(".tags-chips");
@@ -2717,22 +2812,27 @@ const WidgetEngine = {
     let selectedValues = new Set();
     let selectedIndex = -1;
     
-    // Cargar opciones desde las dimensiones del schema
-    dimensions.forEach(dim => {
+    const dimsForPicker =
+      Array.isArray(dimensionsForGroupBySelect) && dimensionsForGroupBySelect.length > 0
+        ? dimensionsForGroupBySelect
+        : dimensions;
+    dimsForPicker.forEach((dim) => {
       allOptions.push({ value: dim.name, label: dim.label });
     });
     
-    // Inicializar valores seleccionados desde la configuración del widget
     const groupingConfig = widgetSchema.options?.grouping;
-    if (groupingConfig?.enabled && Array.isArray(groupingConfig.fields)) {
-      groupingConfig.fields.forEach(field => {
-        selectedValues.add(field);
-        const option = select.querySelector(`option[value="${field}"]`);
-        if (option) {
-          option.selected = true;
-        }
-      });
-    }
+    // Si initialGroupFields es array (puede ser [] por localStorage), no volver al schema.
+    const seedFields = Array.isArray(initialGroupFields)
+      ? initialGroupFields
+      : groupingConfig?.enabled && Array.isArray(groupingConfig.fields)
+        ? groupingConfig.fields
+        : [];
+    seedFields.forEach((field) => {
+      if (!dimsForPicker.some((d) => d.name === field)) return;
+      selectedValues.add(field);
+      const option = select.querySelector(`option[value="${field}"]`);
+      if (option) option.selected = true;
+    });
     
     // Renderizar chips seleccionados
     const renderChips = () => {
@@ -2792,8 +2892,7 @@ const WidgetEngine = {
     // Actualizar agrupación y re-renderizar tabla
     const updateGrouping = () => {
       const groupByFields = Array.from(selectedValues);
-      
-      // Re-renderizar la tabla con la nueva agrupación
+      this._savePersistedTableGrouping(this.reportSlug, persistenceWidgetId, groupByFields);
       this.renderTableWithGrouping(container, widgetSchema, data, dimensions, metrics, groupByFields);
     };
     

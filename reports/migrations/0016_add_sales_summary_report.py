@@ -62,7 +62,7 @@ def create_sales_summary_report(apps, schema_editor):
                 "created_by": "system",
                 "seeded_at": now.isoformat(),
                 "tags": ["ventas", "resumen", "consolidado", "operational"],
-                "related_reports": ["ventas_netas", "uninvoiced_remitos", "pending_orders"],
+                "related_reports": ["ventas_netas", "uninvoiced_remitos", "pedidos-pendientes"],
             },
             "refresh_interval": "daily",
             "is_active": True,
