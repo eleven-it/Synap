@@ -34,8 +34,10 @@ def get_current_module(context):
     app_name = request.resolver_match.app_name
     if app_name == 'core':
         return 'settings'
+    elif app_name == 'factura_compra_captura_web':
+        return 'compras'
     elif app_name == 'compras':
-        return 'stock'
+        return 'compras'
     elif app_name == 'stock':
         return app_name
     elif app_name == 'mpr':

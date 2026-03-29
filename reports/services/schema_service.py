@@ -6,8 +6,8 @@ en un formato que el frontend puede usar para construir widgets automáticamente
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Literal, Any
+from dataclasses import dataclass, field, replace
+from typing import Dict, List, Optional, Literal, Any, Tuple
 import logging
 import re
 
@@ -66,11 +66,77 @@ class ReportSchema:
     options: Dict[str, Any] = field(default_factory=dict)
 
 
+_PEDIDOS_PENDIENTES_OCULTAR_DIMENSIONES = frozenset({"tipo_comprobante", "estado"})
+
+
 class ReportSchemaService:
     """Servicio que construye schemas de reportes para el frontend."""
     
     def __init__(self):
         pass
+
+    def _pedidos_pendientes_sin_columnas_tipo_y_estado(
+        self,
+        slug: str,
+        dimensions: List[DimensionSchema],
+        widgets: List[DefaultWidgetSchema],
+    ) -> Tuple[List[DimensionSchema], List[DefaultWidgetSchema]]:
+        """
+        Pedidos pendientes: no mostrar TipoComprobante ni Estado (redundantes; el listado ya filtra PED y estados de preparación).
+        """
+        if slug != "pedidos-pendientes":
+            return dimensions, widgets
+        new_dims = [d for d in dimensions if d.name not in _PEDIDOS_PENDIENTES_OCULTAR_DIMENSIONES]
+        new_widgets: List[DefaultWidgetSchema] = []
+        for w in widgets:
+            if w.kind != "table":
+                new_widgets.append(w)
+                continue
+            opts = dict(w.options) if w.options else {}
+            lc = dict(opts.get("legacy_config") or {})
+            rows = lc.get("rows")
+            if isinstance(rows, list):
+                lc["rows"] = [r for r in rows if r not in _PEDIDOS_PENDIENTES_OCULTAR_DIMENSIONES]
+                opts["legacy_config"] = lc
+            # El Builder puede guardar table_dimensions explícitas: el motor de tabla las respeta
+            # y no aplica exclusiones por slug; hay que alinearlas aquí.
+            td = opts.get("table_dimensions")
+            if isinstance(td, list):
+                opts["table_dimensions"] = [
+                    x for x in td if x not in _PEDIDOS_PENDIENTES_OCULTAR_DIMENSIONES
+                ]
+            new_widgets.append(replace(w, options=opts))
+        return new_dims, new_widgets
+
+    def _pedidos_pendientes_sin_agrupacion_inicial(
+        self, slug: str, widgets: List[DefaultWidgetSchema]
+    ) -> List[DefaultWidgetSchema]:
+        """
+        Pedidos pendientes: no activar agrupación al cargar (evita chips precargados al actualizar).
+        Se conserva grouping.fields tal como lo guardó el Builder: define qué dimensiones puede
+        elegir el usuario en "Agrupar por" en el dashboard (lista blanca).
+        """
+        if slug != "pedidos-pendientes":
+            return widgets
+        out: List[DefaultWidgetSchema] = []
+        for w in widgets:
+            if w.kind != "table":
+                out.append(w)
+                continue
+            opts = dict(w.options) if w.options else {}
+            prev = opts.get("grouping")
+            if isinstance(prev, dict):
+                opts["grouping"] = {**prev, "enabled": False}
+            else:
+                opts["grouping"] = {
+                    "enabled": False,
+                    "fields": [],
+                    "collapsed_by_default": True,
+                    "show_totals": True,
+                    "total_columns": [],
+                }
+            out.append(replace(w, options=opts))
+        return out
     
     def _infer_metric_type(self, metric_name: str, expression: str) -> Literal["number", "currency", "percentage", "integer"]:
         """Infiere el tipo de dato de una métrica basándose en su nombre y expresión."""
@@ -678,7 +744,12 @@ class ReportSchemaService:
             else:
                 # Solo generar widgets por defecto si NO hay widgets manuales
                 default_widgets = self._generate_default_widgets(report_config, metrics, dimensions)
-            
+
+            dimensions, default_widgets = self._pedidos_pendientes_sin_columnas_tipo_y_estado(
+                report.slug, dimensions, default_widgets
+            )
+            default_widgets = self._pedidos_pendientes_sin_agrupacion_inicial(report.slug, default_widgets)
+
             return ReportSchema(
                 slug=report.slug,
                 name=report.name,
@@ -863,7 +934,12 @@ class ReportSchemaService:
                 # Los widgets solo se generan cuando el usuario explícitamente hace clic en "Usar widgets generados automáticamente"
                 logger.info(f"Preview para {report.slug}: no hay widgets guardados, default_widgets = []")
                 default_widgets = []
-            
+
+            dimensions, default_widgets = self._pedidos_pendientes_sin_columnas_tipo_y_estado(
+                report.slug, dimensions, default_widgets
+            )
+            default_widgets = self._pedidos_pendientes_sin_agrupacion_inicial(report.slug, default_widgets)
+
             return ReportSchema(
                 slug=report.slug,
                 name=report.name,

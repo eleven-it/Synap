@@ -4,101 +4,148 @@
 {% block title %}Lista de órdenes de producción - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {# Breadcrumbs #}
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Órdenes de producción</span>
+{# Patrón UX referencia MPR: ver docs/mpr/AUDITORIA_UX_UI_TEMPLATES_MPR.md #}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full max-w-7xl min-w-0 px-4 sm:px-6 lg:px-8">
+        {# —— Navegación contextual —— #}
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">
+                        Producción
+                    </a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li>
+                    <span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Órdenes de producción</span>
+                </li>
+            </ol>
         </nav>
 
-        {# Header #}
-        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">
-                    Lista de órdenes de producción
+        {# —— Cabecera de página: una sola acción secundaria destacada —— #}
+        <header class="mb-10 flex flex-col gap-6 border-b border-gray-200/80 pb-8 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">
+                    Órdenes de producción
                 </h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Producción agrupada por artículo (lista_produccion_agrupada)
+                <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">
+                    Listado agrupado por artículo con cantidad pendiente de fabricación.
+                </p>
+                <p class="mt-1.5 font-mono text-xs text-gray-400 dark:text-gray-500">
+                    Fuente: <span class="select-all">lista_produccion_agrupada</span>
                 </p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-                    <span class="material-icons text-lg">dashboard</span>
-                    Tablero
+            <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <a href="{% url 'mpr:tablero' %}"
+                   class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/80 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-xl text-gray-500 dark:text-gray-400" aria-hidden="true">dashboard</span>
+                    Volver al tablero
                 </a>
             </div>
         </header>
 
-        {# Filtros #}
-        <form method="get" class="flex flex-wrap items-center gap-3 mb-6">
-            <div>
-                <label for="estado" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Estado</label>
-                <select name="estado" id="estado" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500">
-                    <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
-                    <option value="en_proceso" {% if filtro_estado == 'en_proceso' %}selected{% endif %}>En proceso</option>
-                    <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
-                    <option value="atrasadas" {% if filtro_estado == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
-                </select>
-            </div>
-            <div>
-                <label for="articulo" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">ID artículo</label>
-                <input type="text" name="articulo" id="articulo" value="{{ filtro_articulo }}"
-                       placeholder="Opcional"
-                       class="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
-            </div>
-            <div class="flex items-end gap-2">
-                <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">Filtrar</button>
-                {% if filtro_articulo or filtro_estado != 'todos' %}
-                <a href="{% url 'mpr:op_list' %}" class="text-sm text-gray-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400">Quitar filtros</a>
-                {% endif %}
+        {# —— Filtros: tarjeta única, grid responsive, CTAs alineados —— #}
+        <form method="get" class="mb-8" aria-label="Filtros del listado">
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+                <h2 class="sr-only">Filtros</h2>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,14rem)_minmax(0,12rem)_auto] lg:items-end">
+                    <div class="min-w-0">
+                        <label for="estado" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Estado</label>
+                        <select name="estado" id="estado"
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm transition-colors focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                            <option value="todos" {% if filtro_estado == 'todos' %}selected{% endif %}>Todos</option>
+                            <option value="en_proceso" {% if filtro_estado == 'en_proceso' %}selected{% endif %}>En proceso</option>
+                            <option value="pendiente" {% if filtro_estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                            <option value="atrasadas" {% if filtro_estado == 'atrasadas' %}selected{% endif %}>Atrasadas</option>
+                        </select>
+                    </div>
+                    <div class="min-w-0">
+                        <label for="articulo" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">ID artículo</label>
+                        <input type="text" name="articulo" id="articulo" value="{{ filtro_articulo }}" placeholder="Opcional" inputmode="numeric" autocomplete="off"
+                               class="h-11 w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 sm:max-w-xs"/>
+                    </div>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-start">
+                        <button type="submit"
+                                class="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 sm:flex-none">
+                            Aplicar filtros
+                        </button>
+                        {% if filtro_articulo or filtro_estado != 'todos' %}
+                        <a href="{% url 'mpr:op_list' %}"
+                           class="inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-sm font-medium text-gray-600 underline-offset-4 transition-colors hover:text-purple-700 hover:underline dark:text-gray-400 dark:hover:text-purple-300">
+                            Restablecer
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </form>
 
-        {# Tabla #}
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+        {# —— Tabla: región con ayuda mobile —— #}
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Resultados</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
+            </div>
+            <div class="overflow-x-auto" role="region" aria-label="Tabla de órdenes de producción">
+                <table class="min-w-[44rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <caption class="sr-only">Órdenes con cantidad pendiente de producción</caption>
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº lista</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Código</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Artículo</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. pedida</th>
-                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cant. pendiente</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">N.º lista</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Código</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Artículo</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Estado</th>
+                            <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cant. pedida</th>
+                            <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cant. pendiente</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for op in ordenes %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ op.id_lista_produccion|default:"-" }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ op.codigo_articulo }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ op.descripcion_articulo|truncatewords:8 }}</td>
-                            <td class="px-4 py-3">
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ op.id_lista_produccion|default:"—" }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ op.codigo_articulo }}</td>
+                            <td class="max-w-[12rem] px-4 py-3.5 text-sm text-gray-600 dark:text-gray-400 sm:max-w-md sm:px-5">
+                                <span class="line-clamp-2 sm:line-clamp-none" title="{{ op.descripcion_articulo }}">{{ op.descripcion_articulo|truncatewords:12 }}</span>
+                            </td>
+                            <td class="px-4 py-3.5 sm:px-5">
                                 {% if op.en_proceso_produccion == 'Si' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">En proceso</span>
+                                <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/50 dark:text-blue-200">En proceso</span>
                                 {% else %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Pendiente</span>
+                                <span class="inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">Pendiente</span>
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">{{ op.cantidad_pedida }}</td>
-                            <td class="px-4 py-3 text-sm text-right font-medium text-amber-600 dark:text-amber-400">{{ op.cantidad_pendiente_prod }}</td>
-                            <td class="px-4 py-3 flex flex-wrap gap-2">
-                                {% if op.id_lista_produccion %}
-                                <a href="{% url 'mpr:op_detail' op.id_lista_produccion %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Ver</a>
-                                {% else %}
-                                <a href="{% url 'mpr:op_detail' 0 %}?articulo={{ op.id_articulo }}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Ver</a>
-                                {% endif %}
-                                <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors">Liberar</a>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300 sm:px-5">{{ op.cantidad_pedida }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-right text-sm font-semibold tabular-nums text-amber-700 dark:text-amber-300 sm:px-5">{{ op.cantidad_pendiente_prod }}</td>
+                            <td class="px-4 py-3.5 sm:px-5">
+                                <div class="flex flex-wrap items-center justify-end gap-2 sm:justify-start">
+                                    {% if op.id_lista_produccion %}
+                                    <a href="{% url 'mpr:opt_detail' op.id_lista_produccion %}"
+                                       class="inline-flex min-h-9 min-w-[4.5rem] items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">
+                                        Ver
+                                    </a>
+                                    {% else %}
+                                    <a href="{% url 'mpr:opt_detail' 0 %}?articulo={{ op.id_articulo }}"
+                                       class="inline-flex min-h-9 min-w-[4.5rem] items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">
+                                        Ver
+                                    </a>
+                                    {% endif %}
+                                    <a href="{% url 'mpr:tablero' %}"
+                                       class="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-800"
+                                       title="Abre el tablero MPR para gestionar liberación y demanda">
+                                        Tablero
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                                No hay órdenes con cantidad pendiente de producción. La tabla <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">lista_produccion_agrupada</code> puede estar vacía o no existir en esta base.
+                            <td colspan="7" class="px-4 py-16 text-center sm:px-5">
+                                <span class="material-icons mx-auto mb-3 block text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">inventory_2</span>
+                                <p class="text-sm font-medium text-gray-800 dark:text-gray-200">No hay órdenes con pendiente de producción</p>
+                                <p class="mx-auto mt-2 max-w-md text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                                    La vista usa la tabla <code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-gray-700">lista_produccion_agrupada</code>. Si está vacía o no existe en esta base, el listado quedará sin filas.
+                                </p>
                             </td>
                         </tr>
                         {% endfor %}

@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django.views.decorators.csrf import csrf_protect
 from core.decorators import tiene_permiso, administranet_login_required
 from core.models import UsuarioExtendido, Permiso, Rol
 from django.contrib import messages

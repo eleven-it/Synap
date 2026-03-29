@@ -19,10 +19,10 @@ def create_pending_orders_report(apps, schema_editor):
         table_exists = cursor.fetchone()[0]
         
         if not table_exists:
-            print("⚠️  Tabla reports_reportdefinition no existe, saltando creación de reporte pending_orders")
+            print("⚠️  Tabla reports_reportdefinition no existe, saltando creación de reporte pedidos-pendientes")
             return
     except Exception as e:
-        print(f"⚠️  Error verificando tabla: {e}, saltando creación de reporte pending_orders")
+        print(f"⚠️  Error verificando tabla: {e}, saltando creación de reporte pedidos-pendientes")
         return
     finally:
         cursor.close()
@@ -33,7 +33,7 @@ def create_pending_orders_report(apps, schema_editor):
     now = timezone.now()
 
     report_def, _ = ReportDefinition.objects.update_or_create(
-        slug="pending_orders",
+        slug="pedidos-pendientes",
         empresa=None,
         defaults={
             "name": "Pedidos pendientes",
@@ -41,7 +41,7 @@ def create_pending_orders_report(apps, schema_editor):
             "category": "operational",
             "config": {
                 "metrics": ["subtotal_desc"],
-                "dimensions": ["fecha", "nro_comprobante", "estado", "tipo_comprobante"],
+                "dimensions": ["fecha", "nro_comprobante"],
                 "tags": ["pedidos", "preparacion", "pendientes", "operational"],
                 "notes": [
                     "Fuente: tabla comp_ped",
@@ -81,7 +81,7 @@ def create_pending_orders_report(apps, schema_editor):
         order=1,
         layout={"w": 12, "h": 10},
         configuration={
-            "rows": ["fecha", "nro_comprobante", "estado", "tipo_comprobante"],
+            "rows": ["fecha", "nro_comprobante"],
             "columns": [],
             "values": ["subtotal_desc"],
             "aggregation": "sum",
@@ -110,19 +110,19 @@ def delete_pending_orders_report(apps, schema_editor):
         table_exists = cursor.fetchone()[0]
         
         if not table_exists:
-            print("⚠️  Tabla reports_reportdefinition no existe, saltando eliminación de reporte pending_orders")
+            print("⚠️  Tabla reports_reportdefinition no existe, saltando eliminación de reporte pedidos-pendientes")
             return
     except Exception as e:
-        print(f"⚠️  Error verificando tabla: {e}, saltando eliminación de reporte pending_orders")
+        print(f"⚠️  Error verificando tabla: {e}, saltando eliminación de reporte pedidos-pendientes")
         return
     finally:
         cursor.close()
     
     ReportDefinition = apps.get_model("reports", "ReportDefinition")
     try:
-        ReportDefinition.objects.filter(slug="pending_orders", empresa__isnull=True).delete()
+        ReportDefinition.objects.filter(slug="pedidos-pendientes", empresa__isnull=True).delete()
     except Exception as e:
-        print(f"⚠️  Error eliminando reporte pending_orders: {e}")
+        print(f"⚠️  Error eliminando reporte pedidos-pendientes: {e}")
 
 
 class Migration(migrations.Migration):

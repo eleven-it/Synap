@@ -50,11 +50,12 @@
       </div>
       <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
     </button>
-    <button type="button" x-show="tpvCliente.id_cliente != 1" x-cloak
-            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group"
+    <button type="button"
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-slate-200 dark:disabled:hover:border-slate-600"
+            x-bind:disabled="!tpvCliente || Number(tpvCliente.id_cliente) === 1 || estado === 'paying' || estado === 'confirming'"
+            x-bind:title="(!tpvCliente || Number(tpvCliente.id_cliente) === 1) ? 'Seleccioná un cliente con cuenta corriente' : 'Ver cuenta corriente del cliente'"
             x-on:click="abrirCuentaCorriente()"
-            aria-label="Ver cuenta corriente"
-            title="Ver cuenta corriente del cliente">
+            aria-label="Ver cuenta corriente">
       <span class="material-symbols-outlined text-slate-400 group-hover:text-sky-500 shrink-0 text-lg">account_balance</span>
       <div class="flex flex-col min-w-0 flex-1 text-left">
         <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Cta. corriente</span>

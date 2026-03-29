@@ -25,6 +25,13 @@ PyYAML
 django-cors-headers
 defusedxml
 bleach
+pypdf>=4.0,<6
+pytesseract>=0.3.10,<0.4
+opencv-python-headless>=4.8,<5
+
+# FE AFIP / padrón (WSSrPadron A4–A5): SOAP; pyafipws se instala desde ./pyafipws local (Dockerfile) o pip -e ./pyafipws
+pysimplesoap>=1.16.2,<2
+future>=0.18.0,<1  # import chain pyafipws / pysimplesoap (No module named 'future')
 
 # Dependencias eliminadas (no necesarias para Reportes básico):
 # fastapi - No necesario

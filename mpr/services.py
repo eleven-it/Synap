@@ -2927,18 +2927,8 @@ def _get_deposito_por_tipo_mpr(base_empresa: str, tipo: str) -> Optional[int]:
 
 
 def get_deposito_produccion_mpr(base_empresa: str) -> Optional[int]:
-    """Devuelve el depósito de producción (tipo_mpr=Produccion o MprConfig.id_deposito_produccion)."""
-    cod = _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_PRODUCCION)
-    if cod is not None:
-        return cod
-    try:
-        from mpr.models import MprConfig
-
-        c = MprConfig.objects.filter(base_empresa=base_empresa).first()
-        return to_int_or_none(c.id_deposito_produccion) if c else None
-    except Exception as e:
-        logger.warning("Error al obtener depósito producción MPR para %s: %s", base_empresa, e)
-        return None
+    """Depósito donde se registra el stock al liberar OPT: el que tiene tipo_mpr=Producción en AdministraNET."""
+    return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_PRODUCCION)
 
 
 def get_deposito_terminado_mpr(base_empresa: str) -> Optional[int]:
@@ -2986,23 +2976,6 @@ def get_depositos_opp(base_empresa: str) -> List[Dict[str, Any]]:
         {"CodDeposito": r.get("CodDeposito"), "NombreDeposito": str_or_default(r.get("NombreDeposito"), "-")}
         for r in rows
     ]
-
-
-def set_deposito_produccion_mpr(base_empresa: str, id_deposito: Optional[int]) -> bool:
-    """Guarda el depósito de producción para esta base. id_deposito puede ser None para borrar."""
-    if not (base_empresa or "").strip():
-        return False
-    try:
-        from mpr.models import MprConfig
-
-        MprConfig.objects.update_or_create(
-            base_empresa=base_empresa,
-            defaults={"id_deposito_produccion": id_deposito},
-        )
-        return True
-    except Exception as e:
-        logger.warning("Error al guardar depósito producción MPR para %s: %s", base_empresa, e)
-        return False
 
 
 def listar_pedidos_fabrica(

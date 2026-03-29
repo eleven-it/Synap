@@ -2,14 +2,15 @@
   Lista carrito: HTML exacto Stitch kiosk_active_cart_1 / kiosk_empty_state.
   Contrato: x-ref="descuentoInput" en input de % desc. (modo TPV).
 {% endcomment %}
-<div class="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-  <h2 class="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-    <span class="material-symbols-outlined text-primary">shopping_cart</span>
-    Tus productos
+<div class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4 dark:border-slate-700 dark:bg-slate-800/40 sm:px-6">
+  <h2 class="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl">
+    <span class="material-symbols-outlined shrink-0 text-primary text-[22px] sm:text-2xl" aria-hidden="true">shopping_cart</span>
+    <span>Tus productos</span>
   </h2>
-  <span class="text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider" :class="items && items.length > 0 ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'" x-text="items && items.length > 0 ? (items.length + ' Artículo' + (items.length !== 1 ? 's' : '')) : '0 items'"></span>
+  <span class="shrink-0 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide" :class="items && items.length > 0 ? 'bg-primary text-white shadow-sm shadow-primary/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-700/80 dark:text-slate-400'" x-text="items && items.length > 0 ? (items.length + ' Artículo' + (items.length !== 1 ? 's' : '')) : '0 items'"></span>
 </div>
-<div class="flex-1 overflow-y-auto">
+{# Scroll interno: min-height 0 en cadena flex + base ~28rem (≈10 filas TPV). Inline de respaldo si Tailwind no compila utilidades del include. #}
+<div class="min-h-0 flex-[1_1_28rem] overflow-y-auto overscroll-y-contain" style="flex:1 1 28rem;min-height:0;overflow-y:auto;">
   <!-- Empty state: HTML exacto Stitch kiosk_empty_state + responsive -->
   <template x-if="!items || items.length === 0">
     <div class="flex-1 flex flex-col items-center justify-center min-h-[12rem] sm:min-h-[16rem] p-4 sm:p-6 md:p-10 text-center">
@@ -74,7 +75,12 @@
       </thead>
       <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
         <template x-for="(item, idx) in items" :key="item.id">
-          <tr :class="idx === items.length - 1 ? 'bg-primary/5 dark:bg-primary/10' : ''" class="align-baseline">
+          <tr :class="idx === items.length - 1 ? 'bg-primary/5 dark:bg-primary/10' : ''"
+              class="align-baseline outline-none focus:bg-primary/10 dark:focus:bg-primary/20"
+              :data-cart-item-id="item.id"
+              tabindex="0"
+              x-on:focusin="tpvFocusedItemId = item.id"
+              x-on:mousedown="tpvFocusedItemId = item.id">
             <td class="px-2 py-1.5 font-mono text-slate-600 dark:text-slate-400" x-text="item.codigo_articulo || item.codigo_barras || '—'"></td>
             <td class="px-2 py-1.5 text-slate-900 dark:text-white" x-text="item.descripcion || item.codigo_articulo || 'Artículo'"></td>
             <td class="px-2 py-1.5 text-center font-medium tabular-nums" x-text="(parseFloat(item.cantidad) || 0).toFixed(2)"></td>

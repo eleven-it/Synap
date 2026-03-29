@@ -206,7 +206,7 @@ class QueryRunnerService:
             return 1800  # 30 minutos
         
         # Reportes de estado (frecuencia media)
-        status_reports = ['uninvoiced_remitos', 'pending_orders', 'bo-stock-facturacion']
+        status_reports = ['uninvoiced_remitos', 'pedidos-pendientes', 'bo-stock-facturacion']
         if report_slug in status_reports:
             return 300  # 5 minutos
         
@@ -285,7 +285,7 @@ class QueryRunnerService:
             result = self._run_cash_flow_by_account(report, payload)
         elif report.slug in ("uninvoiced_remitos", "remitos-no-facturados"):
             result = self._run_uninvoiced_remitos(report, payload)
-        elif report.slug in ("pending_orders", "pedidos-pendientes"):
+        elif report.slug == "pedidos-pendientes":
             result = self._run_pending_orders(report, payload)
         elif report.slug == "sales_summary":
             result = self._run_sales_summary(report, payload)
@@ -2409,6 +2409,21 @@ class QueryRunnerService:
                     totals={},
                     notes=["No se pudo determinar la base de datos de la empresa. Asegúrese de estar logueado correctamente."],
                 )
+
+            puntos_venta = filters.get("punto_venta", [])
+            if isinstance(puntos_venta, str):
+                puntos_venta = [puntos_venta] if puntos_venta else []
+            elif not isinstance(puntos_venta, list):
+                puntos_venta = []
+
+            sucursales = filters.get("sucursales", [])
+            if isinstance(sucursales, str):
+                sucursales = [sucursales] if sucursales else []
+            elif not isinstance(sucursales, list):
+                sucursales = []
+
+            clientes_excluidos = self._parse_clientes_excluidos(filters)
+
             mysql_config = settings.DATABASES['mysql']
             import MySQLdb
             try:
@@ -2431,9 +2446,47 @@ class QueryRunnerService:
                 "cp.Fecha <= %s",
                 "cp.TipoComprobante = 'PED'",
                 "cp.Anulado = 'No'",
-                "cp.Estado IN ('En preparación', 'Preparado')"
+                "cp.Estado IN ('En preparación', 'Preparado')",
             ]
             params = [fecha_inicio, fecha_fin]
+
+            if puntos_venta:
+                puntos_venta_ints = []
+                for pv in puntos_venta:
+                    try:
+                        puntos_venta_ints.append(int(pv))
+                    except (ValueError, TypeError):
+                        continue
+                if puntos_venta_ints:
+                    placeholders = ",".join(["%s"] * len(puntos_venta_ints))
+                    where_conditions.append(f"cp.id_pv IN ({placeholders})")
+                    params.extend(puntos_venta_ints)
+
+            if sucursales:
+                sucursales_ints = []
+                for s in sucursales:
+                    try:
+                        sucursales_ints.append(int(s))
+                    except (ValueError, TypeError):
+                        continue
+                if sucursales_ints:
+                    placeholders = ",".join(["%s"] * len(sucursales_ints))
+                    where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
+                    params.extend(sucursales_ints)
+
+            if clientes_excluidos:
+                clientes_vals = []
+                for c in clientes_excluidos:
+                    try:
+                        c_str = str(c).strip()
+                        if c_str:
+                            clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
+                    except (ValueError, TypeError):
+                        continue
+                if clientes_vals:
+                    placeholders = ",".join(["%s"] * len(clientes_vals))
+                    where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
+                    params.extend(clientes_vals)
             
             where_clause = " AND ".join(where_conditions)
             
@@ -2441,10 +2494,8 @@ class QueryRunnerService:
             sql = f"""
                 SELECT 
                     DATE_FORMAT(cp.Fecha, '%%d/%%m/%%Y') AS fecha,
-                    cp.TipoComprobante AS tipo_comprobante,
                     cp.NroComprobante AS nro_comprobante,
-                    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc,
-                    cp.Estado AS estado
+                    COALESCE(cp.SubtotalDesc, 0) AS subtotal_desc
                 FROM comp_ped cp
                 WHERE {where_clause}
                 ORDER BY 
@@ -2824,7 +2875,7 @@ class QueryRunnerService:
     def _run_total_consolidado_operativo(self, report: ReportDefinition, payload: Dict) -> QueryResult:
         """
         Reporte legacy Total Consolidado Operativo: 4 KPIs en una columna vertical.
-        Ventas Netas, Remitos no facturados, Pedidos pendientes de entrega, Total consolidado.
+        Ventas Netas, Remitos no facturados, Pedidos en armado, Total consolidado.
         Reutiliza _get_ventas_netas_total, _get_remitos_no_facturados_total, _get_pedidos_pendientes_total.
         """
         started_at = timezone.now()
@@ -2878,7 +2929,7 @@ class QueryRunnerService:
             data = [
                 {"label": "VENTAS NETAS", "value": ventas_netas},
                 {"label": "REMITOS NO FACTURADOS", "value": remitos_no_facturados},
-                {"label": "PEDIDOS PENDIENTES DE ENTREGA", "value": pedidos_pendientes},
+                {"label": "PEDIDOS EN ARMADO", "value": pedidos_pendientes},
                 {"label": "TOTAL CONSOLIDADO", "value": total_consolidado},
             ]
             totals = {
@@ -2889,7 +2940,7 @@ class QueryRunnerService:
             }
             notes = [
                 f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
-                "Pedidos pendientes de entrega: sin filtro por período (saldo total).",
+                "Pedidos en armado: sin filtro por período (saldo total).",
             ]
             if sucursales_ints or puntos_venta_ints:
                 notes.append("Filtros: sucursales y/o punto de venta aplicados.")
@@ -2946,6 +2997,13 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
+            # Facturación y remitos: rango propio (fallback = backorder si no se envía)
+            fi_fac_raw = filters.get("fecha_inicio_facturacion")
+            ff_fac_raw = filters.get("fecha_fin_facturacion")
+            fi_fac = str(fi_fac_raw).strip() if fi_fac_raw else ""
+            ff_fac = str(ff_fac_raw).strip() if ff_fac_raw else ""
+            if not fi_fac or not ff_fac:
+                fi_fac, ff_fac = fecha_inicio, fecha_fin
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
@@ -3027,7 +3085,10 @@ class QueryRunnerService:
                 logger.error(f"❌ Error conectando a MySQL ({base_empresa}): {conn_error}")
                 raise
             
-            logger.info(f"🔍 Ejecutando reporte BO vs Stock vs Facturación: {fecha_inicio} a {fecha_fin}, base={base_empresa}")
+            logger.info(
+                "🔍 Ejecutando reporte BO vs Stock vs Facturación: backorder %s a %s | facturación/remitos %s a %s | base=%s",
+                fecha_inicio, fecha_fin, fi_fac, ff_fac, base_empresa,
+            )
             try:
                 cursor.execute("SET SESSION max_execution_time = 90000")
             except Exception:
@@ -3043,7 +3104,7 @@ class QueryRunnerService:
             #   CREATE INDEX idx_cc_fecha_tipo_anul ON cuentacliente (Fecha, TipoComprobante, Anulado);
             # Ver plan: EXPLAIN <query>; evitar type=ALL, asegurar key usado.
             # MAX_EXECUTION_TIME (ms): evita colgarse con bases grandes. MySQL 5.7.8+.
-            params_facturacion = [fecha_inicio, fecha_fin]
+            params_facturacion = [fi_fac, ff_fac]
             where_fact = [
                 "Fecha >= %s", "Fecha <= %s",
                 "Anulado = 'No'",
@@ -3090,7 +3151,7 @@ class QueryRunnerService:
                 "cc.Anulado = 'No'",
                 "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
             ]
-            params_fac_cli = [fecha_inicio, fecha_fin]
+            params_fac_cli = [fi_fac, ff_fac]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
@@ -3147,7 +3208,7 @@ class QueryRunnerService:
             # 2. REMITOS NO FACTURADOS (comp_ped)
             # =========================================================
             where_remitos = ["cp.Fecha >= %s", "cp.Fecha <= %s", "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'"]
-            params_remitos = [fecha_inicio, fecha_fin]
+            params_remitos = [fi_fac, ff_fac]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 placeholders = ','.join(['%s'] * len(clientes_excluidos))
@@ -3765,7 +3826,8 @@ class QueryRunnerService:
             
             # Notes
             notes = [
-                f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+                f"Período facturación y remitos: {self._format_date(fi_fac)} a {self._format_date(ff_fac)}",
+                f"Período backorder: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
                 f"Facturación neta: ${facturacion_neta:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
@@ -3789,6 +3851,10 @@ class QueryRunnerService:
                 "lista_precio_label": lista_precio_labels[lista_precio],
                 "depositos_incluidos": depositos_incluidos,
                 "clientes_excluidos": clientes_excluidos,
+                "fecha_inicio": fecha_inicio,
+                "fecha_fin": fecha_fin,
+                "fecha_inicio_facturacion": fi_fac,
+                "fecha_fin_facturacion": ff_fac,
             }
             if num_depositos > 1:
                 notes.append(

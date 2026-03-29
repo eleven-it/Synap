@@ -80,7 +80,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pending_orders' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -144,7 +144,7 @@
             </div>
 
             <div class="px-6 sm:px-10 py-0 border-b border-slate-100 dark:border-slate-800 hidden" data-filters-wrapper>
-                {{ report_config_json|json_script:"report-config-data" }}
+                {{ report_config_for_script|json_script:"report-config-data" }}
                 <form class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 py-8 hidden" id="report-filters" data-filters-container data-report-slug="{{ report.slug }}">
                     {% if is_declarative %}
                         <!-- Filtros de período y fechas solo se muestran si hay filtros de fecha definidos en el builder -->
@@ -322,7 +322,11 @@
                         {% endif %}
                     {% else %}
                         <!-- Reportes Legacy: Usar templates unificados -->
+                        {% if report.slug == 'bo-stock-facturacion' %}
+                        {% include "reports/includes/filters_period_bo_dual.html" %}
+                        {% else %}
                         {% include "reports/includes/filters_period.html" %}
+                        {% endif %}
                         {% if report.slug == 'bo-stock-facturacion' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
                         {% elif report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
@@ -801,16 +805,23 @@
 </section>
 
 <script>
-// Inyectar configuración del reporte en el contexto JavaScript
-window.REPORT_CONFIG = {
-    is_declarative: {{ is_declarative|yesno:"true,false" }},
-    report_slug: "{{ report.slug }}",
-    config: {{ report_config_json|safe }}
-};
+// Inyectar configuración del reporte (lee el nodo #report-config-data generado arriba con |json_script)
+(function() {
+    var el = document.getElementById('report-config-data');
+    var cfg = {};
+    if (el && el.textContent) {
+        try { cfg = JSON.parse(el.textContent); } catch (e) { cfg = {}; }
+    }
+    window.REPORT_CONFIG = {
+        is_declarative: {{ is_declarative|yesno:"true,false" }},
+        report_slug: "{{ report.slug }}",
+        config: cfg
+    };
+})();
 </script>
 <script src="{% static 'reports/vendor/d3.min.js' %}?v=20260211" defer></script>
 {% if is_declarative or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
-<script src="{% static 'reports/js/widget_engine.js' %}?v=20260211"></script>
+<script src="{% static 'reports/js/widget_engine.js' %}?v=20260329b"></script>
 {% endif %}
 {% if is_declarative %}
 <script>
@@ -3585,7 +3596,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 dashboardRoot.style.opacity = "0.7";
             }
             
-            // 1. Obtener schema (solo si no está en caché)
+            // 1. Obtener schema: en carga explícita (Actualizar, loading) siempre refetch para no quedar
+            //    con dimensiones/columnas obsoletas mientras los datos sí se actualizan.
+            if (showLoading) {
+                try { delete window.declarativeSchemaCache; } catch (e) { /* noop */ }
+            }
             let schema = window.declarativeSchemaCache;
             if (!schema) {
                 const schemaResponse = await fetch(schemaApiUrl, {
@@ -4605,9 +4620,9 @@ document.addEventListener('DOMContentLoaded', function() {
         loadOptions();
     }
     
-    // Cargar dashboard inicial
-    loadDeclarativeDashboard();
-    
+    // La carga inicial del dashboard la hace initializeFilters() (filtros guardados o valores por defecto).
+    // Evita un primer fetch sin filtros persistidos y un segundo fetch duplicado.
+
     // Inicializar botones de período
     initializePeriodoButtons();
     
@@ -4972,7 +4987,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260211"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260329e"></script>
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
 {% endif %}

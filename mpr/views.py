@@ -8,13 +8,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from urllib.parse import urlencode
 from django.views import View
 from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
 
-from core.services.administranet_stock import get_depositos
-from core.utils.administranet_types import to_int_or_none
+from core.services.administranet_stock import get_depositos, obtener_renglones_movimiento
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 
 from .exceptions import MprSchemaError
 from .services import (
@@ -81,7 +82,6 @@ from .services import (
     get_deposito_terminado_mpr,
     get_depositos_opp,
     reactivar_operario,
-    set_deposito_produccion_mpr,
     reporte_mpr_pendiente,
     reporte_mpr_wip,
     reporte_mpr_stock,
@@ -167,6 +167,53 @@ def _mpr_schema_error_redirect(request, e):
     _log_mpr_schema_error(e)
     request.session["mpr_schema_error_modal"] = str(e)
     return redirect("mpr:tablero")
+
+
+def _redirect_operarios_list_preserve_filters(request):
+    """Tras POST (anular/reactivar), vuelve al listado conservando q y anulados si vinieron en el formulario."""
+    params = {}
+    q = (request.POST.get("ret_q") or "").strip()
+    if q:
+        params["q"] = q
+    if request.POST.get("ret_anulados") == "1":
+        params["anulados"] = "1"
+    url = reverse("mpr:operarios_list")
+    if params:
+        url += "?" + urlencode(params)
+    return redirect(url)
+
+
+def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
+    """
+    Mapa codigo_movimiento (str) -> renglones para el modal de comprobante en detalle OPT.
+    Misma fuente que stock (tabla stock por CodigoMovimiento).
+    """
+    codigos = set()
+    for row in opp_list or []:
+        cm = to_int_or_none(row.get("codigo_movimiento"))
+        if cm is not None:
+            codigos.add(cm)
+    for row in opa_list or []:
+        cm = to_int_or_none(row.get("codigo_movimiento"))
+        if cm is not None:
+            codigos.add(cm)
+    out = {}
+    for cm in codigos:
+        renglones = obtener_renglones_movimiento(base_empresa, cm)
+        rows = []
+        for r in renglones:
+            entrada = r.get("Entrada")
+            salida = r.get("Salida")
+            saldo = r.get("saldo")
+            rows.append({
+                "codigo_articulo": str_or_default(r.get("CodigoArticulo"), "—"),
+                "descripcion": str_or_default(r.get("Descripcion"), "—"),
+                "entrada": float(to_decimal_or_none(entrada) or 0),
+                "salida": float(to_decimal_or_none(salida) or 0),
+                "saldo": float(to_decimal_or_none(saldo) if saldo is not None else 0),
+            })
+        out[str(cm)] = rows
+    return out
 
 
 class TableroView(MprLoginRequiredMixin, TemplateView):
@@ -477,7 +524,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if not deposito_produccion:
             messages.error(
                 request,
-                "Configure el depósito de producción en Config. Depósitos (Producción → Config. Depósitos) para poder confirmar la orden.",
+                "Asigne el tipo «Producción» a un depósito en Producción → Config. Depósitos para poder confirmar la orden.",
             )
             return redirect("mpr:wizard")
         id_dep = wizard.get("id_deposito_produccion_opcional")
@@ -516,7 +563,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if not ok_opt:
             msg = error_opt or "Error al liberar a producción."
             if msg and ("bytes" in msg.lower() or "formatting" in msg.lower() or "convert" in msg.lower()):
-                msg = "Error al confirmar. Verifique la OPT y el depósito de producción en Config. Depósitos."
+                msg = "Error al confirmar. Verifique la OPT y que exista un depósito con tipo «Producción» en Config. Depósitos."
             messages.error(request, msg)
             return redirect("mpr:wizard")
         wizard["paso"] = 3
@@ -546,7 +593,10 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             return redirect("mpr:wizard")
         deposito_origen = get_deposito_produccion_mpr(base_empresa)
         if not deposito_origen:
-            messages.error(request, "Depósito de producción no configurado. Configure en Config. Depósitos.")
+            messages.error(
+                request,
+                "Asigne el tipo «Producción» a un depósito en Producción → Config. Depósitos.",
+            )
             return redirect("mpr:wizard")
         try:
             depositos_opp = get_depositos_opp(base_empresa)
@@ -855,8 +905,57 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
+class OpListView(MprLoginRequiredMixin, TemplateView):
+    """
+    Demanda de producción agrupada por artículo (lista_produccion_agrupada), solo líneas con pendiente > 0.
+    Distinto del listado de OPT (OptListView / opt_list.html), que incluye fases del asistente y demanda sin liberar.
+    """
+
+    template_name = "mpr/op_list.html"
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            from django.contrib import messages
+
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("core:dashboard")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        estado_filter = (self.request.GET.get("estado", "") or "todos").strip().lower()
+        filtro_articulo_raw = (self.request.GET.get("articulo", "") or "").strip()
+        id_articulo = None
+        if filtro_articulo_raw.isdigit():
+            id_articulo = to_int_or_none(filtro_articulo_raw)
+
+        estado_en_proceso = None
+        solo_atrasadas = False
+        if estado_filter == "en_proceso":
+            estado_en_proceso = "Si"
+        elif estado_filter == "pendiente":
+            estado_en_proceso = "No"
+        elif estado_filter == "atrasadas":
+            solo_atrasadas = True
+
+        ordenes = listar_lista_produccion_agrupada(
+            base_empresa,
+            limit=500,
+            id_articulo=id_articulo,
+            estado_en_proceso=estado_en_proceso,
+            solo_atrasadas=solo_atrasadas,
+        )
+        context["base_empresa"] = base_empresa
+        context["ordenes"] = ordenes
+        context["filtro_estado"] = estado_filter
+        context["filtro_articulo"] = filtro_articulo_raw
+        return context
+
+
 class OptListView(MprLoginRequiredMixin, TemplateView):
-    """Órdenes de Producción de Trabajo (OPT). Listado con estado y fase según flujo del asistente."""
+    """Órdenes de Producción de Trabajo (OPT). Listado con columna Estado (fase operativa / etiqueta_fase) según flujo del asistente."""
 
     template_name = "mpr/opt_list.html"
 
@@ -1060,14 +1159,19 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
             for item in lineas_with_armado:
                 item["armado_url"] = armado_opt_url
         if not paso_cerrado:
-            # Paso armado completo cuando todo lo disponible en Semi elaborado ya se armó (no se exige lo que fue a otros depósitos)
-            paso_armado = (
-                not lineas_with_armado
-                or all(
+            # Armado no puede figurar cumplido antes que OPP pendiente = 0 (evita marcar True si no hay
+            # líneas en ABM/conjunto: antes `not lineas_with_armado` activaba el paso con OPP aún pendiente).
+            if not paso_pendiente_cero:
+                paso_armado = False
+            elif not lineas_with_armado:
+                # Pendiente OPP 0 y sin artículos armables (sin BOM/conjunto en ABM): paso N/A → cumplido
+                paso_armado = True
+            else:
+                # Todo lo disponible en Semi elaborado ya armado (no se exige lo enviado a otros depósitos)
+                paso_armado = all(
                     item["cantidad_ya_armada"] >= item.get("cantidad_disponible_armar", 0)
                     for item in lineas_with_armado
                 )
-            )
         # si paso_cerrado, paso_armado ya quedó True arriba
 
         # Porcentaje según 6 pasos: Pedida, En producción, Producida (OPP), Pendiente 0, Armado, Cerrado
@@ -1140,6 +1244,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 _log_mpr_schema_error(e)
                 opas_registradas = []
         context["opas_registradas"] = opas_registradas
+        context["renglones_por_movimiento"] = _build_renglones_modal_map(
+            base_empresa, opp_registradas, opas_registradas
+        )
         return context
 
 
@@ -1217,7 +1324,10 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
             return redirect("mpr:registrar_opp", id_lista=id_lista)
         deposito_origen = get_deposito_produccion_mpr(base_empresa)
         if not deposito_origen:
-            messages.error(request, "Depósito de producción no configurado. Configure en Config. Depósitos.")
+            messages.error(
+                request,
+                "Asigne el tipo «Producción» a un depósito en Producción → Config. Depósitos.",
+            )
             return redirect("mpr:registrar_opp", id_lista=id_lista)
         try:
             depositos_opp = get_depositos_opp(base_empresa)
@@ -2033,7 +2143,6 @@ class ConfigDepositosView(MprLoginRequiredMixin, TemplateView):
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = str(e)
             context["depositos"] = []
-            context["id_deposito_produccion"] = get_deposito_produccion_mpr(base)
             return context
         # Tipos ya asignados a otros depósitos (para dropdown exclusivo)
         tipos_usados = {d.get("tipo_mpr") for d in depositos if d.get("tipo_mpr")}
@@ -2046,7 +2155,6 @@ class ConfigDepositosView(MprLoginRequiredMixin, TemplateView):
                     opciones.append((val, label))
             d["opciones_tipo"] = opciones
         context["depositos"] = depositos
-        context["id_deposito_produccion"] = get_deposito_produccion_mpr(base)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -2054,23 +2162,6 @@ class ConfigDepositosView(MprLoginRequiredMixin, TemplateView):
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:config_depositos")
-        # Depósito de producción (formulario con select deposito_produccion)
-        if "deposito_produccion" in request.POST:
-            dep_prod = request.POST.get("deposito_produccion", "").strip()
-            id_dep = None
-            if dep_prod:
-                try:
-                    id_dep = int(dep_prod)
-                except ValueError:
-                    id_dep = None
-            if set_deposito_produccion_mpr(base_empresa, id_dep):
-                if id_dep:
-                    messages.success(request, "Depósito de producción actualizado. Al confirmar la OPT el stock se registrará en este depósito.")
-                else:
-                    messages.success(request, "Depósito de producción quitado. Configure uno para que el asistente confirme la OPT automáticamente.")
-            else:
-                messages.error(request, "No se pudo guardar el depósito de producción.")
             return redirect("mpr:config_depositos")
         # Toggle suma_stock (form envía cod_deposito + valor Si/No)
         valor = request.POST.get("valor", "").strip()
@@ -2243,7 +2334,7 @@ class OperarioAnularView(MprLoginRequiredMixin, View):
             messages.success(request, "Operario anulado.")
         else:
             messages.error(request, err or "Error al anular.")
-        return redirect("mpr:operarios_list")
+        return _redirect_operarios_list_preserve_filters(request)
 
 
 class OperarioReactivarView(MprLoginRequiredMixin, View):
@@ -2261,7 +2352,7 @@ class OperarioReactivarView(MprLoginRequiredMixin, View):
             messages.success(request, "Operario reactivado.")
         else:
             messages.error(request, err or "Error al reactivar.")
-        return redirect("mpr:operarios_list")
+        return _redirect_operarios_list_preserve_filters(request)
 
 
 class ArmadoView(MprLoginRequiredMixin, TemplateView):
@@ -2665,7 +2756,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
             if ok and id_lista_principal:
                 if "ventana_pack_seleccion" in request.session:
                     del request.session["ventana_pack_seleccion"]
-                # Inmediatamente después de Crear OPT: ejecutar Liberar OPT (depósito de producción configurado)
+                # Inmediatamente después de Crear OPT: ejecutar Liberar OPT (depósito con tipo Producción)
                 liberada = False
                 nro_comp_liberada = None
                 lineas_detalle = []
@@ -2692,7 +2783,10 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
                         messages.error(request, "No se pudieron cargar las líneas de la OPT.")
                         return redirect("mpr:ventana_pack_agrupar")
                 elif request.session.get(WIZARD_SESSION_KEY, {}).get("paso") == 1:
-                    messages.error(request, "Configure el depósito de producción en Config. Depósitos para continuar en el asistente.")
+                    messages.error(
+                        request,
+                        "Asigne el tipo «Producción» a un depósito en Config. Depósitos para continuar en el asistente.",
+                    )
                     return redirect("mpr:ventana_pack_agrupar")
                 wizard = request.session.get(WIZARD_SESSION_KEY) or {}
                 if wizard.get("paso") == 1 and liberada:

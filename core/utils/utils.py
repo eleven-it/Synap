@@ -5,6 +5,7 @@ import fnmatch
 import logging
 from django.core.cache import cache
 from django.conf import settings
+from django.utils import timezone
 from typing import Dict, List, Set, Optional, Any
 import json
 from django.utils.translation import gettext_lazy as _
@@ -80,6 +81,8 @@ APPS_MENU = [
             {
                 "seccion": _("Comprobantes de compra"),
                 "items": [
+                    {"label": _("Expedientes captura"), "url": "factura_compra_captura_web:lista-expedientes", "icon": "folder_open", "permission": "compras.ver", "menu_item_id": "stock_cc_expedientes_captura"},
+                    {"label": _("Captura móvil"), "url": "factura_compra_captura_web:captura-movil", "icon": "add_a_photo", "permission": "compras.ver", "menu_item_id": "stock_cc_captura_movil"},
                     {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "stock.ver", "menu_item_id": "stock_cc_facturacion"},
                     {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "stock.ver", "menu_item_id": "stock_cc_proveedores"},
                 ]
@@ -98,6 +101,8 @@ APPS_MENU = [
             {
                 "seccion": _("Comprobantes"),
                 "items": [
+                    {"label": _("Expedientes captura"), "url": "factura_compra_captura_web:lista-expedientes", "icon": "folder_open", "permission": "compras.ver", "menu_item_id": "compras_cb_lista_expedientes"},
+                    {"label": _("Captura y expedientes"), "url": "factura_compra_captura_web:captura-movil", "icon": "add_a_photo", "permission": "compras.ver", "menu_item_id": "compras_cb_captura_expedientes"},
                     {"label": _("Facturación"), "url": "compras:factura_compra", "icon": "receipt", "permission": "compras.ver", "menu_item_id": "compras_cb_facturacion"},
                     {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "compras.ver", "menu_item_id": "compras_cb_listado"},
                     {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "compras.crear", "menu_item_id": "compras_cb_remito"},

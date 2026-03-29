@@ -1,23 +1,23 @@
 {% comment %}
   CTA pago: HTML exacto Stitch kiosk_active_cart_1. Contrato: irAPago().
 {% endcomment %}
-<div class="flex flex-col gap-3">
-  <button type="button" class="w-full bg-primary hover:bg-blue-700 text-white font-black text-2xl py-6 rounded-xl shadow-lg shadow-primary/30 flex items-center justify-center gap-4 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:active:scale-100" x-on:click="irAPago()" x-bind:disabled="estado === 'paying' || !items || items.length === 0 || !!stockBlocked">
-    <span class="material-symbols-outlined text-3xl">payments</span>
+<div class="flex flex-col gap-4">
+  <button type="button" class="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary py-5 text-lg font-extrabold text-white shadow-lg shadow-primary/25 transition-all hover:brightness-105 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary/35 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 disabled:active:scale-100 sm:gap-4 sm:py-6 sm:text-xl" x-on:click="irAPago()" x-bind:disabled="estado === 'paying' || !items || items.length === 0 || !!stockBlocked">
+    <span class="material-symbols-outlined text-3xl sm:text-4xl" aria-hidden="true">payments</span>
     Pagar ahora
   </button>
-  <div class="grid grid-cols-3 gap-2">
-    <button type="button" class="flex flex-col items-center justify-center gap-1 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors" x-on:click="toastMsg='Función en desarrollo'; toastOk=false; setTimeout(()=>{toastMsg=''}, 2500)">
-      <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">featured_seasonal_and_gifts</span>
-      <span class="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-300 text-center">Tarjeta Regalo</span>
+  <div class="grid grid-cols-3 gap-2 sm:gap-3">
+    <button type="button" class="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-slate-200/90 bg-white p-2.5 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700" x-on:click="toastMsg='Función en desarrollo'; toastOk=false; setTimeout(()=>{toastMsg=''}, 2500)">
+      <span class="material-symbols-outlined text-slate-600 dark:text-slate-400" aria-hidden="true">featured_seasonal_and_gifts</span>
+      <span class="text-center text-[10px] font-bold uppercase leading-tight text-slate-600 dark:text-slate-300">Tarjeta regalo</span>
     </button>
-    <button type="button" class="flex flex-col items-center justify-center gap-1 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors" x-on:click="toastMsg='Llamando a un asistente…'; toastOk=true; setTimeout(()=>{toastMsg=''}, 2500)">
-      <span class="material-symbols-outlined text-primary">support_agent</span>
-      <span class="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-300 text-center">Asistencia</span>
+    <button type="button" class="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-slate-200/90 bg-white p-2.5 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700" x-on:click="toastMsg='Llamando a un asistente…'; toastOk=true; setTimeout(()=>{toastMsg=''}, 2500)">
+      <span class="material-symbols-outlined text-primary" aria-hidden="true">support_agent</span>
+      <span class="text-center text-[10px] font-bold uppercase leading-tight text-slate-600 dark:text-slate-300">Asistencia</span>
     </button>
-    <button type="button" class="flex flex-col items-center justify-center gap-1 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-lg hover:bg-red-100 transition-colors" x-on:click="cartId=null; items=[]; total=0; crearObtenerCarrito()">
-      <span class="material-symbols-outlined text-red-500">cancel</span>
-      <span class="text-[10px] font-bold uppercase text-red-600 text-center">Cancelar</span>
+    <button type="button" class="flex min-h-[3.25rem] flex-col items-center justify-center gap-1 rounded-xl border border-red-200/80 bg-red-50/90 p-2.5 transition-colors hover:bg-red-100 dark:border-red-900/40 dark:bg-red-950/30 dark:hover:bg-red-900/25" x-on:click="cartId=null; items=[]; total=0; crearObtenerCarrito()">
+      <span class="material-symbols-outlined text-red-500 dark:text-red-400" aria-hidden="true">cancel</span>
+      <span class="text-center text-[10px] font-bold uppercase leading-tight text-red-700 dark:text-red-300">Cancelar</span>
     </button>
   </div>
 </div>

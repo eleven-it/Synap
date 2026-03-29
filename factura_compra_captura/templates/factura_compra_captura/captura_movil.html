@@ -1,0 +1,1020 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Captura — factura de compra" %} | Synap{% endblock %}
+{% block content %}
+<div class="w-full max-w-3xl mx-auto">
+  <header class="mb-6 md:mb-8">
+    <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+      {% trans "Captura — factura de compra" %}
+    </h1>
+    <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400 max-w-2xl">
+      {% trans "En dispositivos móviles podés usar «Añadir a inicio» para acceso rápido. La cámara depende del equipo y de los permisos del navegador." %}
+    </p>
+  </header>
+
+  <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+    <div class="px-4 py-5 sm:p-6">
+      <div class="grid grid-cols-1 gap-6">
+        <div
+          id="mensaje-captura"
+          class="hidden rounded-lg border px-4 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex gap-3">
+            <span
+              class="material-icons flex-shrink-0 text-xl leading-none mt-0.5"
+              id="mensaje-captura-icon"
+              aria-hidden="true"
+            >info</span>
+            <div class="min-w-0 flex-1 space-y-1">
+              <p class="font-medium text-gray-900 dark:text-white text-sm leading-snug" id="mensaje-captura-titulo"></p>
+              <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed" id="mensaje-captura-texto"></p>
+              <pre
+                class="hidden mt-2 max-h-40 overflow-auto rounded-md bg-gray-100 dark:bg-gray-900/80 px-3 py-2 text-xs font-mono text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 whitespace-pre-wrap break-words"
+                id="mensaje-captura-detalle"
+              ></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {% trans "Documento" %}
+          </span>
+          <p class="text-xs text-gray-500 dark:text-gray-400">
+            {% trans "En el móvil podés abrir la cámara trasera o elegir PDF / galería. El servidor aplica OCR (Tesseract) sobre fotos." %}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              id="btn_elegir_camara"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <span class="material-icons text-lg" aria-hidden="true">photo_camera</span>
+              {% trans "Cámara" %}
+            </button>
+            <button
+              type="button"
+              id="btn_elegir_archivo"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <span class="material-icons text-lg" aria-hidden="true">folder_open</span>
+              {% trans "Archivo o PDF" %}
+            </button>
+          </div>
+          <input
+            id="archivo_camara"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            class="hidden"
+            aria-hidden="true"
+          >
+          <input
+            id="archivo"
+            type="file"
+            accept="image/*,application/pdf"
+            class="hidden"
+            aria-hidden="true"
+          >
+          <div class="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              id="btn_ajustar_recorte"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              disabled
+            >
+              <span class="material-icons text-lg" aria-hidden="true">crop</span>
+              {% trans "Ajustar recorte" %}
+            </button>
+            <button
+              type="button"
+              id="btn_previsualizar_camara"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <span class="material-icons text-lg" aria-hidden="true">videocam</span>
+              {% trans "Previsualizar cámara" %}
+            </button>
+            <button
+              type="button"
+              id="btn_linterna"
+              class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+              disabled
+            >
+              <span class="material-icons text-lg" aria-hidden="true">flashlight_on</span>
+              {% trans "Linterna" %}
+            </button>
+          </div>
+          <div id="panel_camara" class="hidden mt-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2">
+            <video id="camara_preview" class="w-full rounded bg-black" autoplay playsinline muted></video>
+            <p id="hint_luz" class="mt-2 text-xs text-amber-700 dark:text-amber-300 hidden"></p>
+            <div class="mt-2 flex gap-2">
+              <button type="button" id="btn_capturar_preview" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">
+                <span class="material-icons text-base" aria-hidden="true">camera</span>{% trans "Capturar desde preview" %}
+              </button>
+              <button type="button" id="btn_cerrar_preview" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm">
+                <span class="material-icons text-base" aria-hidden="true">close</span>{% trans "Cerrar cámara" %}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <button
+            type="button"
+            id="btn_crear"
+            class="btn inline-flex w-full items-center justify-center gap-2 min-h-11 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+          >
+            <span class="material-icons text-lg" aria-hidden="true">add_circle_outline</span>
+            {% trans "1. Crear borrador" %}
+          </button>
+          <button
+            type="button"
+            id="btn_subir"
+            disabled
+            class="btn inline-flex w-full items-center justify-center gap-2 min-h-11 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-100 shadow-sm transition hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span class="material-icons text-lg" aria-hidden="true">cloud_upload</span>
+            {% trans "2. Subir documento" %}
+          </button>
+        </div>
+
+        <div id="acciones-post-carga" class="hidden rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-3">
+          <p class="text-sm text-emerald-900 dark:text-emerald-100 font-medium">
+            {% trans "Carga completada. Elegí cómo continuar:" %}
+          </p>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <a
+              id="link-revision-expediente"
+              href="#"
+              class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              <span class="material-icons text-base" aria-hidden="true">description</span>
+              {% trans "Abrir borrador para revisión" %}
+            </a>
+            <button
+              type="button"
+              id="btn_nueva_carga"
+              class="inline-flex items-center gap-2 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white/90 dark:bg-emerald-900/30 px-3 py-2 text-sm font-medium text-emerald-900 dark:text-emerald-100 hover:bg-white dark:hover:bg-emerald-900/50"
+            >
+              <span class="material-icons text-base" aria-hidden="true">restart_alt</span>
+              {% trans "Crear nueva carga" %}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<dialog id="dlg_recorte_ticket" class="rounded-lg border border-gray-300 p-4 dark:border-gray-600 dark:bg-gray-900 max-w-2xl w-[95vw]">
+  <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Ajustar recorte del ticket" %}</h3>
+  <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{% trans "Arrastrá las esquinas del recuadro para ajustar el recorte." %}</p>
+  <canvas id="canvas_recorte_preview" class="mt-3 w-full rounded border border-gray-200 dark:border-gray-700 bg-black/80"></canvas>
+  <div class="mt-3 flex justify-end gap-2">
+    <button type="button" id="btn_recorte_cancelar" class="rounded-md border border-gray-300 px-3 py-2 text-sm">{% trans "Cancelar" %}</button>
+    <button type="button" id="btn_recorte_guardar" class="rounded-md bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">{% trans "Usar recorte" %}</button>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+<script>window._csrf = "{{ csrf_token_value|default:''|escapejs }}";</script>
+<script>
+(function () {
+  var box = document.getElementById('mensaje-captura');
+  var iconEl = document.getElementById('mensaje-captura-icon');
+  var tituloEl = document.getElementById('mensaje-captura-titulo');
+  var textoEl = document.getElementById('mensaje-captura-texto');
+  var detalleEl = document.getElementById('mensaje-captura-detalle');
+
+  var T = {
+    tituloExitoExpediente: '{% filter escapejs %}{% trans "Expediente creado" %}{% endfilter %}',
+    textoExitoExpediente: '{% filter escapejs %}{% trans "Ya podés subir la foto o el PDF del comprobante." %}{% endfilter %}',
+    tituloExitoDoc: '{% filter escapejs %}{% trans "Documento recibido" %}{% endfilter %}',
+    tituloError: '{% filter escapejs %}{% trans "No se pudo completar la acción" %}{% endfilter %}',
+    tituloAviso: '{% filter escapejs %}{% trans "Atención" %}{% endfilter %}',
+    errorRed: '{% filter escapejs %}{% trans "Error de red o el servidor no respondió. Probá de nuevo." %}{% endfilter %}',
+    errorRespuesta: '{% filter escapejs %}{% trans "La respuesta del servidor no es válida. Si el problema continúa, contactá a soporte." %}{% endfilter %}',
+    ocrPendiente: '{% filter escapejs %}{% trans "El reconocimiento de texto (OCR) está en espera; en breve se procesará el archivo." %}{% endfilter %}',
+    ocrProcesando: '{% filter escapejs %}{% trans "Estamos procesando el documento… Volvé a consultar el expediente en unos instantes." %}{% endfilter %}',
+    ocrCompletado: '{% filter escapejs %}{% trans "El documento ya fue analizado. Podés abrir la revisión del expediente para ver o ajustar los datos detectados." %}{% endfilter %}',
+    ocrFallido: '{% filter escapejs %}{% trans "No se pudo analizar el documento automáticamente. Podés reintentar desde el expediente o cargar otra imagen más legible." %}{% endfilter %}',
+    ocrOtro: '{% filter escapejs %}{% trans "Estado del procesamiento:" %}{% endfilter %}',
+    msgCrearPrimero: '{% filter escapejs %}{% trans "Creá primero el expediente con el botón anterior." %}{% endfilter %}',
+    msgElegirArchivo: '{% filter escapejs %}{% trans "Elegí un archivo para subir." %}{% endfilter %}',
+    errorGenerico: '{% filter escapejs %}{% trans "Revisá los datos e intentá de nuevo." %}{% endfilter %}',
+    btnCrearPaso1: '{% filter escapejs %}{% trans "1. Crear borrador" %}{% endfilter %}',
+    btnCrearNueva: '{% filter escapejs %}{% trans "1. Crear nueva carga" %}{% endfilter %}',
+    cargaLista: '{% filter escapejs %}{% trans "Documento cargado. Podés continuar desde el borrador o iniciar una nueva captura." %}{% endfilter %}',
+  };
+
+  var urlExpedientes = "{% url 'factura_compra_captura_api:expediente-list-create' %}";
+
+  function setVariant(tipo) {
+    box.className =
+      'rounded-lg border px-4 py-3 ' +
+      (tipo === 'success'
+        ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40'
+        : tipo === 'error'
+          ? 'border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30'
+          : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30');
+    iconEl.className =
+      'material-icons flex-shrink-0 text-xl leading-none mt-0.5 ' +
+      (tipo === 'success'
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : tipo === 'error'
+          ? 'text-red-600 dark:text-red-400'
+          : 'text-amber-600 dark:text-amber-400');
+    iconEl.textContent =
+      tipo === 'success' ? 'check_circle' : tipo === 'error' ? 'error_outline' : 'info';
+    box.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+    box.setAttribute('aria-live', tipo === 'error' ? 'assertive' : 'polite');
+  }
+
+  function mostrarMensaje(tipo, titulo, texto, detalle) {
+    setVariant(tipo);
+    tituloEl.textContent = titulo || '';
+    textoEl.textContent = texto || '';
+    if (detalle) {
+      detalleEl.textContent = detalle;
+      detalleEl.classList.remove('hidden');
+    } else {
+      detalleEl.textContent = '';
+      detalleEl.classList.add('hidden');
+    }
+    box.classList.remove('hidden');
+  }
+
+  function textoOcr(estado) {
+    var e = (estado || '').toLowerCase();
+    if (e === 'pendiente') return T.ocrPendiente;
+    if (e === 'procesando') return T.ocrProcesando;
+    if (e === 'completado') return T.ocrCompletado;
+    if (e === 'fallido') return T.ocrFallido;
+    return T.ocrOtro + ' ' + (estado || '—');
+  }
+
+  function ocrSinSugerenciasUtiles(data) {
+    try {
+      var ocr = (data && data.resultado_ocr) || {};
+      var cab = ocr.campos_cabecera || {};
+      var lineas = ocr.lineas_sugeridas || [];
+      var tieneCab = Object.keys(cab).length > 0;
+      return !tieneCab && (!lineas || !lineas.length);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function detalleApi(data) {
+    if (data == null) return '';
+    if (typeof data === 'string') return data;
+    var parts = [];
+    if (data.detail != null) {
+      if (typeof data.detail === 'string') parts.push(data.detail);
+      else parts.push(JSON.stringify(data.detail, null, 2));
+    }
+    if (data.codigo) parts.push('{% filter escapejs %}{% trans "Código:" %}{% endfilter %} ' + data.codigo);
+    if (parts.length) return parts.join('\n');
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch (e) {
+      return String(data);
+    }
+  }
+
+  function mensajeErrorDesdeData(data) {
+    var det = detalleApi(data);
+    var linea = '';
+    if (data && typeof data === 'object' && data.detail != null) {
+      if (typeof data.detail === 'string') linea = data.detail;
+      else if (Array.isArray(data.detail)) linea = data.detail.join(' ');
+    }
+    var textoUsuario = linea || T.errorGenerico;
+    var mostrarDetalle = det && det !== linea;
+    mostrarMensaje('error', T.tituloError, textoUsuario, mostrarDetalle ? det : '');
+  }
+
+  async function parseJsonSeguro(r) {
+    var raw = await r.text();
+    if (!raw || !raw.trim()) return {};
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      throw new Error('INVALID_JSON');
+    }
+  }
+
+  function getCookie(name) {
+    var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+  var csrftoken = window._csrf || getCookie('csrftoken');
+  var expedienteId = null;
+  var accionesPostCarga = document.getElementById('acciones-post-carga');
+  var linkRevision = document.getElementById('link-revision-expediente');
+  var btnCrear = document.getElementById('btn_crear');
+  var btnSubir = document.getElementById('btn_subir');
+  var inputArchivo = document.getElementById('archivo');
+  var inputCamara = document.getElementById('archivo_camara');
+  var btnElegirCamara = document.getElementById('btn_elegir_camara');
+  var btnElegirArchivo = document.getElementById('btn_elegir_archivo');
+  var btnAjustarRecorte = document.getElementById('btn_ajustar_recorte');
+  var btnPreviewCam = document.getElementById('btn_previsualizar_camara');
+  var btnLinterna = document.getElementById('btn_linterna');
+  var panelCamara = document.getElementById('panel_camara');
+  var videoPreview = document.getElementById('camara_preview');
+  var btnCapturarPreview = document.getElementById('btn_capturar_preview');
+  var btnCerrarPreview = document.getElementById('btn_cerrar_preview');
+  var hintLuz = document.getElementById('hint_luz');
+  var dlgRecorte = document.getElementById('dlg_recorte_ticket');
+  var canvasRecorte = document.getElementById('canvas_recorte_preview');
+  var btnRecorteCancelar = document.getElementById('btn_recorte_cancelar');
+  var btnRecorteGuardar = document.getElementById('btn_recorte_guardar');
+  /** @type {HTMLInputElement|null} */
+  var inputActivo = null;
+  var archivoListoParaSubir = null;
+  var recorteBase = null;
+  var streamCamara = null;
+  var trackVideo = null;
+  var linternaActiva = false;
+  var monitorLuzTimer = null;
+  var dragHandle = null;
+  var dragOffsetX = 0;
+  var dragOffsetY = 0;
+  var baseRevisionUrl = "{% url 'factura_compra_captura_web:revision-expediente' pk='00000000-0000-0000-0000-000000000000' %}";
+
+  function setEstadoNuevaCarga() {
+    expedienteId = null;
+    btnSubir.disabled = true;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">add_circle_outline</span> ' + T.btnCrearPaso1;
+    accionesPostCarga.classList.add('hidden');
+    linkRevision.setAttribute('href', '#');
+    inputArchivo.value = '';
+    inputCamara.value = '';
+    inputActivo = null;
+    archivoListoParaSubir = null;
+    detenerPreviewCamara();
+    if (btnAjustarRecorte) btnAjustarRecorte.disabled = true;
+  }
+
+  function registrarInputActivo(inp) {
+    inputActivo = inp;
+    archivoListoParaSubir = null;
+    if (btnAjustarRecorte) {
+      var f = inp && inp.files && inp.files[0];
+      btnAjustarRecorte.disabled = !(f && String(f.type || '').toLowerCase().startsWith('image/'));
+    }
+  }
+
+  function detenerPreviewCamara() {
+    if (monitorLuzTimer) {
+      clearInterval(monitorLuzTimer);
+      monitorLuzTimer = null;
+    }
+    if (streamCamara) {
+      streamCamara.getTracks().forEach(function (t) { t.stop(); });
+    }
+    streamCamara = null;
+    trackVideo = null;
+    linternaActiva = false;
+    if (btnLinterna) btnLinterna.disabled = true;
+    if (panelCamara) panelCamara.classList.add('hidden');
+    if (hintLuz) {
+      hintLuz.classList.add('hidden');
+      hintLuz.textContent = '';
+    }
+  }
+
+  async function encenderPreviewCamara() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      mostrarMensaje('info', T.tituloAviso, 'Tu navegador no soporta previsualización de cámara.');
+      return;
+    }
+    try {
+      streamCamara = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+      if (videoPreview) {
+        videoPreview.srcObject = streamCamara;
+      }
+      trackVideo = streamCamara.getVideoTracks()[0] || null;
+      if (btnLinterna && trackVideo) {
+        var caps = trackVideo.getCapabilities ? trackVideo.getCapabilities() : {};
+        btnLinterna.disabled = !caps || !caps.torch;
+      }
+      if (panelCamara) panelCamara.classList.remove('hidden');
+      iniciarMonitorLuz();
+    } catch (e) {
+      mostrarMensaje('error', T.tituloError, 'No se pudo abrir la cámara.', String(e));
+    }
+  }
+
+  function iniciarMonitorLuz() {
+    if (!videoPreview || !hintLuz) return;
+    if (monitorLuzTimer) clearInterval(monitorLuzTimer);
+    var c = document.createElement('canvas');
+    var x = c.getContext('2d', { willReadFrequently: true });
+    if (!x) return;
+    monitorLuzTimer = setInterval(function () {
+      if (!videoPreview.videoWidth || !videoPreview.videoHeight) return;
+      c.width = 120; c.height = 90;
+      x.drawImage(videoPreview, 0, 0, c.width, c.height);
+      var d = x.getImageData(0, 0, c.width, c.height).data;
+      var sum = 0;
+      for (var i = 0; i < d.length; i += 4) {
+        sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      }
+      var mean = sum / (d.length / 4);
+      if (mean < 70) {
+        hintLuz.textContent = 'Se detecta poca luz/sombra. Activá linterna o mejorá iluminación para mejorar OCR.';
+        hintLuz.classList.remove('hidden');
+      } else {
+        hintLuz.classList.add('hidden');
+        hintLuz.textContent = '';
+      }
+    }, 1200);
+  }
+
+  if (btnElegirCamara && inputCamara) {
+    btnElegirCamara.onclick = function () {
+      inputCamara.click();
+    };
+    inputCamara.addEventListener('change', function () {
+      if (inputCamara.files && inputCamara.files[0]) registrarInputActivo(inputCamara);
+    });
+  }
+  if (btnElegirArchivo && inputArchivo) {
+    btnElegirArchivo.onclick = function () {
+      inputArchivo.click();
+    };
+    inputArchivo.addEventListener('change', function () {
+      if (inputArchivo.files && inputArchivo.files[0]) registrarInputActivo(inputArchivo);
+    });
+  }
+  if (btnPreviewCam) {
+    btnPreviewCam.onclick = function () { encenderPreviewCamara(); };
+  }
+  if (btnCerrarPreview) {
+    btnCerrarPreview.onclick = function () { detenerPreviewCamara(); };
+  }
+  if (btnLinterna) {
+    btnLinterna.onclick = async function () {
+      if (!trackVideo) return;
+      try {
+        linternaActiva = !linternaActiva;
+        await trackVideo.applyConstraints({ advanced: [{ torch: linternaActiva }] });
+      } catch (e) {
+        mostrarMensaje('info', T.tituloAviso, 'No se pudo activar la linterna en este dispositivo.');
+      }
+    };
+  }
+  if (btnCapturarPreview) {
+    btnCapturarPreview.onclick = async function () {
+      if (!videoPreview || !videoPreview.videoWidth || !videoPreview.videoHeight) return;
+      var c = document.createElement('canvas');
+      c.width = videoPreview.videoWidth;
+      c.height = videoPreview.videoHeight;
+      var ctx = c.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(videoPreview, 0, 0);
+      var blob = await new Promise(function (resolve) { c.toBlob(resolve, 'image/jpeg', 0.95); });
+      if (!blob) return;
+      archivoListoParaSubir = new File([blob], 'captura_preview.jpg', { type: 'image/jpeg' });
+      if (btnAjustarRecorte) btnAjustarRecorte.disabled = false;
+      mostrarMensaje('success', T.tituloAviso, 'Captura tomada. Podés ajustar recorte y subir.');
+      detenerPreviewCamara();
+    };
+  }
+
+  function setEstadoExpedienteCreado() {
+    btnSubir.disabled = false;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">autorenew</span> ' + T.btnCrearNueva;
+    accionesPostCarga.classList.add('hidden');
+  }
+
+  function setEstadoPostCarga(idExpediente) {
+    var revisionUrl = baseRevisionUrl.replace('00000000-0000-0000-0000-000000000000', idExpediente);
+    linkRevision.setAttribute('href', revisionUrl);
+    accionesPostCarga.classList.remove('hidden');
+    btnSubir.disabled = true;
+    btnCrear.innerHTML = '<span class="material-icons text-lg" aria-hidden="true">autorenew</span> ' + T.btnCrearNueva;
+  }
+
+  function urlDocumentos(id) {
+    var base = urlExpedientes.replace(/\/?$/, '/');
+    return base + id + '/documentos/';
+  }
+
+  function _leerImagenDesdeFile(file) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () {
+        var img = new Image();
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('NO_SE_PUDO_CARGAR_IMAGEN')); };
+        img.src = fr.result;
+      };
+      fr.onerror = function () { reject(new Error('NO_SE_PUDO_LEER_ARCHIVO')); };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function _bboxTicketEnCanvas(canvas) {
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    var w = canvas.width;
+    var h = canvas.height;
+    var img = ctx.getImageData(0, 0, w, h).data;
+    var maxSide = 320;
+    var ratio = Math.max(1, Math.max(w, h) / maxSide);
+    var sw = Math.max(1, Math.round(w / ratio));
+    var sh = Math.max(1, Math.round(h / ratio));
+    var small = document.createElement('canvas');
+    small.width = sw;
+    small.height = sh;
+    var sctx = small.getContext('2d', { willReadFrequently: true });
+    if (!sctx) return null;
+    sctx.drawImage(canvas, 0, 0, sw, sh);
+    var d = sctx.getImageData(0, 0, sw, sh).data;
+
+    var mask = new Uint8Array(sw * sh);
+    var i;
+    for (i = 0; i < sw * sh; i++) {
+      var p = i * 4;
+      var r = d[p];
+      var g = d[p + 1];
+      var b = d[p + 2];
+      var mx = Math.max(r, g, b);
+      var mn = Math.min(r, g, b);
+      var sat = mx === 0 ? 0 : (mx - mn) / mx;
+      var gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (gray >= 140 && sat <= 0.55) mask[i] = 1;
+    }
+
+    var visited = new Uint8Array(sw * sh);
+    var best = null;
+    var qx = new Int32Array(sw * sh);
+    var qy = new Int32Array(sw * sh);
+    var dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+
+    for (var y = 0; y < sh; y++) {
+      for (var x = 0; x < sw; x++) {
+        var idx = y * sw + x;
+        if (!mask[idx] || visited[idx]) continue;
+        var qh = 0, qt = 0;
+        qx[qt] = x; qy[qt] = y; qt++;
+        visited[idx] = 1;
+        var minX = x, maxX = x, minY = y, maxY = y, area = 0;
+        while (qh < qt) {
+          var cx = qx[qh], cy = qy[qh]; qh++;
+          area++;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
+          for (var k = 0; k < dirs.length; k++) {
+            var nx = cx + dirs[k][0];
+            var ny = cy + dirs[k][1];
+            if (nx < 0 || ny < 0 || nx >= sw || ny >= sh) continue;
+            var nidx = ny * sw + nx;
+            if (!mask[nidx] || visited[nidx]) continue;
+            visited[nidx] = 1;
+            qx[qt] = nx; qy[qt] = ny; qt++;
+          }
+        }
+        var bw = maxX - minX + 1;
+        var bh = maxY - minY + 1;
+        var bboxArea = bw * bh;
+        var fill = bboxArea > 0 ? area / bboxArea : 0;
+        var compRatio = bw / bh;
+        if (area < (sw * sh * 0.06)) continue;
+        if (fill < 0.35) continue;
+        if (compRatio < 0.18 || compRatio > 1.4) continue;
+        if (!best || area > best.area) {
+          best = { minX: minX, minY: minY, maxX: maxX, maxY: maxY, area: area };
+        }
+      }
+    }
+    if (!best) return null;
+    var mX = Math.round((best.maxX - best.minX + 1) * 0.05);
+    var mY = Math.round((best.maxY - best.minY + 1) * 0.05);
+    var bx = Math.max(0, best.minX - mX);
+    var by = Math.max(0, best.minY - mY);
+    var bxe = Math.min(sw - 1, best.maxX + mX);
+    var bye = Math.min(sh - 1, best.maxY + mY);
+    var areaRatio = ((bxe - bx + 1) * (bye - by + 1)) / (sw * sh);
+    if (areaRatio < 0.12 || areaRatio > 0.95) return null;
+    return {
+      x: Math.round(bx * ratio),
+      y: Math.round(by * ratio),
+      w: Math.max(1, Math.round((bxe - bx + 1) * ratio)),
+      h: Math.max(1, Math.round((bye - by + 1) * ratio)),
+    };
+  }
+
+  async function prepararArchivoParaSubida(file) {
+    var tipo = String((file && file.type) || '').toLowerCase();
+    if (!tipo.startsWith('image/')) {
+      return { file: file, recortado: false };
+    }
+    var img = await _leerImagenDesdeFile(file);
+    var base = document.createElement('canvas');
+    base.width = img.naturalWidth || img.width;
+    base.height = img.naturalHeight || img.height;
+    var bctx = base.getContext('2d');
+    if (!bctx) return { file: file, recortado: false };
+    bctx.drawImage(img, 0, 0);
+    var bb = _bboxTicketEnCanvas(base);
+    if (!bb) return { file: file, recortado: false };
+    var rec = document.createElement('canvas');
+    rec.width = bb.w;
+    rec.height = bb.h;
+    var rctx = rec.getContext('2d');
+    if (!rctx) return { file: file, recortado: false };
+    rctx.drawImage(base, bb.x, bb.y, bb.w, bb.h, 0, 0, bb.w, bb.h);
+    var blob = await new Promise(function (resolve) {
+      rec.toBlob(function (b) { resolve(b); }, 'image/jpeg', 0.95);
+    });
+    if (!blob) return { file: file, recortado: false };
+    var name = (file.name || 'captura').replace(/\.[^.]+$/, '') + '_ticket.jpg';
+    return { file: new File([blob], name, { type: 'image/jpeg' }), recortado: true };
+  }
+
+  function dibujarPreviewRecorte() {
+    if (!recorteBase || !canvasRecorte) return;
+    var ctx = canvasRecorte.getContext('2d');
+    if (!ctx) return;
+    canvasRecorte.width = recorteBase.w;
+    canvasRecorte.height = recorteBase.h;
+    ctx.drawImage(recorteBase.img, 0, 0, recorteBase.w, recorteBase.h);
+    var pts = recorteBase.quad;
+    var i;
+    for (i = 0; i < pts.length; i++) {
+      pts[i].x = Math.max(0, Math.min(recorteBase.w, pts[i].x));
+      pts[i].y = Math.max(0, Math.min(recorteBase.h, pts[i].y));
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, recorteBase.w, recorteBase.h);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[1].x, pts[1].y);
+    ctx.lineTo(pts[2].x, pts[2].y);
+    ctx.lineTo(pts[3].x, pts[3].y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(recorteBase.img, 0, 0, recorteBase.w, recorteBase.h);
+    ctx.restore();
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = Math.max(2, recorteBase.w / 260);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[1].x, pts[1].y);
+    ctx.lineTo(pts[2].x, pts[2].y);
+    ctx.lineTo(pts[3].x, pts[3].y);
+    ctx.closePath();
+    ctx.stroke();
+    var hs = Math.max(10, recorteBase.w / 60);
+    ctx.fillStyle = '#16a34a';
+    pts.forEach(function (p) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, hs / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+  }
+
+  async function abrirDialogoRecorte(file) {
+    var img = await _leerImagenDesdeFile(file);
+    var maxW = 960;
+    var scale = Math.min(1, maxW / (img.naturalWidth || img.width || maxW));
+    recorteBase = {
+      img: img,
+      w: Math.max(1, Math.round((img.naturalWidth || img.width) * scale)),
+      h: Math.max(1, Math.round((img.naturalHeight || img.height) * scale)),
+      quad: null,
+    };
+    recorteBase.quad = [
+      { x: Math.round(recorteBase.w * 0.04), y: Math.round(recorteBase.h * 0.04) },
+      { x: Math.round(recorteBase.w * 0.96), y: Math.round(recorteBase.h * 0.04) },
+      { x: Math.round(recorteBase.w * 0.96), y: Math.round(recorteBase.h * 0.96) },
+      { x: Math.round(recorteBase.w * 0.04), y: Math.round(recorteBase.h * 0.96) },
+    ];
+    dibujarPreviewRecorte();
+    dlgRecorte.showModal();
+  }
+
+  function posCanvasDesdeEvento(ev) {
+    if (!canvasRecorte) return null;
+    var rect = canvasRecorte.getBoundingClientRect();
+    var cx = ev.clientX;
+    var cy = ev.clientY;
+    if (ev.touches && ev.touches[0]) {
+      cx = ev.touches[0].clientX;
+      cy = ev.touches[0].clientY;
+    }
+    var sx = canvasRecorte.width / rect.width;
+    var sy = canvasRecorte.height / rect.height;
+    return { x: (cx - rect.left) * sx, y: (cy - rect.top) * sy };
+  }
+
+  function detectarHandle(x, y) {
+    if (!recorteBase || !recorteBase.quad) return null;
+    var hs = Math.max(14, recorteBase.w / 40);
+    var handles = recorteBase.quad.map(function (p, idx) { return { k: idx, x: p.x, y: p.y }; });
+    for (var i = 0; i < handles.length; i++) {
+      var h = handles[i];
+      var dx = x - h.x;
+      var dy = y - h.y;
+      if ((dx * dx + dy * dy) <= (hs * hs)) return h.k;
+    }
+    return null;
+  }
+
+  function moverHandle(k, x, y) {
+    if (!recorteBase || !recorteBase.quad) return;
+    recorteBase.quad[k].x = Math.max(0, Math.min(recorteBase.w, x));
+    recorteBase.quad[k].y = Math.max(0, Math.min(recorteBase.h, y));
+    dibujarPreviewRecorte();
+  }
+
+  function _dist(a, b) {
+    var dx = a.x - b.x; var dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function _resolverSistemaLineal8(A, b) {
+    var n = 8;
+    var M = [];
+    for (var i = 0; i < n; i++) M.push(A[i].slice().concat([b[i]]));
+    for (var col = 0; col < n; col++) {
+      var piv = col;
+      for (var r = col + 1; r < n; r++) {
+        if (Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+      }
+      if (Math.abs(M[piv][col]) < 1e-10) return null;
+      if (piv !== col) {
+        var tmp = M[col]; M[col] = M[piv]; M[piv] = tmp;
+      }
+      var div = M[col][col];
+      for (var c = col; c <= n; c++) M[col][c] /= div;
+      for (var rr = 0; rr < n; rr++) {
+        if (rr === col) continue;
+        var fac = M[rr][col];
+        for (var cc = col; cc <= n; cc++) M[rr][cc] -= fac * M[col][cc];
+      }
+    }
+    return M.map(function (row) { return row[n]; });
+  }
+
+  function _homografiaDestinoASource(dstW, dstH, srcPts) {
+    var dstPts = [
+      { x: 0, y: 0 },
+      { x: dstW - 1, y: 0 },
+      { x: dstW - 1, y: dstH - 1 },
+      { x: 0, y: dstH - 1 },
+    ];
+    var A = [];
+    var b = [];
+    for (var i = 0; i < 4; i++) {
+      var X = dstPts[i].x, Y = dstPts[i].y;
+      var x = srcPts[i].x, y = srcPts[i].y;
+      A.push([X, Y, 1, 0, 0, 0, -x * X, -x * Y]); b.push(x);
+      A.push([0, 0, 0, X, Y, 1, -y * X, -y * Y]); b.push(y);
+    }
+    var h = _resolverSistemaLineal8(A, b);
+    if (!h) return null;
+    return [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1];
+  }
+
+  function _warpQuadToRect(sourceCanvas, srcPts, outW, outH) {
+    var sctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+    if (!sctx) return null;
+    var sw = sourceCanvas.width, sh = sourceCanvas.height;
+    var srcData = sctx.getImageData(0, 0, sw, sh);
+    var out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    var octx = out.getContext('2d', { willReadFrequently: true });
+    if (!octx) return null;
+    var outImg = octx.createImageData(outW, outH);
+    var H = _homografiaDestinoASource(outW, outH, srcPts);
+    if (!H) return null;
+    var h11 = H[0], h12 = H[1], h13 = H[2];
+    var h21 = H[3], h22 = H[4], h23 = H[5];
+    var h31 = H[6], h32 = H[7], h33 = H[8];
+    for (var y = 0; y < outH; y++) {
+      for (var x = 0; x < outW; x++) {
+        var den = (h31 * x + h32 * y + h33);
+        if (Math.abs(den) < 1e-8) continue;
+        var sx = (h11 * x + h12 * y + h13) / den;
+        var sy = (h21 * x + h22 * y + h23) / den;
+        if (sx < 0 || sy < 0 || sx >= sw - 1 || sy >= sh - 1) continue;
+        var x0 = Math.floor(sx), y0 = Math.floor(sy);
+        var x1 = x0 + 1, y1 = y0 + 1;
+        var dx = sx - x0, dy = sy - y0;
+        var idx00 = (y0 * sw + x0) * 4;
+        var idx10 = (y0 * sw + x1) * 4;
+        var idx01 = (y1 * sw + x0) * 4;
+        var idx11 = (y1 * sw + x1) * 4;
+        var oidx = (y * outW + x) * 4;
+        for (var c = 0; c < 3; c++) {
+          var v00 = srcData.data[idx00 + c];
+          var v10 = srcData.data[idx10 + c];
+          var v01 = srcData.data[idx01 + c];
+          var v11 = srcData.data[idx11 + c];
+          var v0 = v00 * (1 - dx) + v10 * dx;
+          var v1 = v01 * (1 - dx) + v11 * dx;
+          outImg.data[oidx + c] = Math.round(v0 * (1 - dy) + v1 * dy);
+        }
+        outImg.data[oidx + 3] = 255;
+      }
+    }
+    octx.putImageData(outImg, 0, 0);
+    return out;
+  }
+
+  if (btnAjustarRecorte) {
+    btnAjustarRecorte.onclick = async function () {
+      var input = inputActivo || inputArchivo;
+      var f = archivoListoParaSubir || (input && input.files && input.files[0]);
+      if (!f || !String(f.type || '').toLowerCase().startsWith('image/')) {
+        mostrarMensaje('info', T.tituloAviso, 'Elegí primero una imagen.');
+        return;
+      }
+      try {
+        await abrirDialogoRecorte(f);
+      } catch (e) {
+        mostrarMensaje('error', T.tituloError, 'No se pudo abrir el ajuste de recorte.', String(e));
+      }
+    };
+  }
+  if (canvasRecorte) {
+    canvasRecorte.addEventListener('pointerdown', function (ev) {
+      if (!recorteBase) return;
+      var p = posCanvasDesdeEvento(ev);
+      if (!p) return;
+      var h = detectarHandle(p.x, p.y);
+      if (!h) return;
+      dragHandle = h;
+      dragOffsetX = p.x;
+      dragOffsetY = p.y;
+      canvasRecorte.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    });
+    canvasRecorte.addEventListener('pointermove', function (ev) {
+      if (!dragHandle) return;
+      var p = posCanvasDesdeEvento(ev);
+      if (!p) return;
+      moverHandle(dragHandle, p.x, p.y);
+      dragOffsetX = p.x;
+      dragOffsetY = p.y;
+      ev.preventDefault();
+    });
+    canvasRecorte.addEventListener('pointerup', function (ev) {
+      dragHandle = null;
+      try { canvasRecorte.releasePointerCapture(ev.pointerId); } catch (e) {}
+    });
+    canvasRecorte.addEventListener('pointercancel', function (ev) {
+      dragHandle = null;
+      try { canvasRecorte.releasePointerCapture(ev.pointerId); } catch (e) {}
+    });
+  }
+  if (btnRecorteCancelar) {
+    btnRecorteCancelar.onclick = function () { dlgRecorte.close(); };
+  }
+  if (btnRecorteGuardar) {
+    btnRecorteGuardar.onclick = async function () {
+      if (!recorteBase || !recorteBase.quad) { dlgRecorte.close(); return; }
+      var sxScale = (recorteBase.img.naturalWidth || recorteBase.img.width) / recorteBase.w;
+      var syScale = (recorteBase.img.naturalHeight || recorteBase.img.height) / recorteBase.h;
+      var srcPts = recorteBase.quad.map(function (p) {
+        return { x: p.x * sxScale, y: p.y * syScale };
+      });
+      var topW = _dist(srcPts[0], srcPts[1]);
+      var botW = _dist(srcPts[3], srcPts[2]);
+      var leftH = _dist(srcPts[0], srcPts[3]);
+      var rightH = _dist(srcPts[1], srcPts[2]);
+      var outW = Math.max(120, Math.round(Math.max(topW, botW)));
+      var outH = Math.max(160, Math.round(Math.max(leftH, rightH)));
+      var srcCanvas = document.createElement('canvas');
+      srcCanvas.width = recorteBase.img.naturalWidth || recorteBase.img.width;
+      srcCanvas.height = recorteBase.img.naturalHeight || recorteBase.img.height;
+      var sc = srcCanvas.getContext('2d');
+      if (!sc) { dlgRecorte.close(); return; }
+      sc.drawImage(recorteBase.img, 0, 0);
+      var out = _warpQuadToRect(srcCanvas, srcPts, outW, outH);
+      if (!out) { dlgRecorte.close(); return; }
+      var blob = await new Promise(function (resolve) { out.toBlob(resolve, 'image/jpeg', 0.95); });
+      if (blob) {
+        archivoListoParaSubir = new File([blob], 'captura_recortada.jpg', { type: 'image/jpeg' });
+        mostrarMensaje('success', T.tituloAviso, 'Recorte manual aplicado con corrección de perspectiva. Ya podés subir.');
+      }
+      dlgRecorte.close();
+    };
+  }
+
+  btnCrear.onclick = async function () {
+    try {
+      var r = await fetch(urlExpedientes, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrftoken || '',
+        },
+        body: JSON.stringify({}),
+      });
+      var data;
+      try {
+        data = await parseJsonSeguro(r);
+      } catch (e) {
+        if (e.message === 'INVALID_JSON') {
+          mostrarMensaje('error', T.tituloError, T.errorRespuesta, 'HTTP ' + r.status);
+          return;
+        }
+        throw e;
+      }
+      if (!r.ok) {
+        mensajeErrorDesdeData(data);
+        return;
+      }
+      expedienteId = data.id;
+      mostrarMensaje('success', T.tituloExitoExpediente, T.textoExitoExpediente);
+      setEstadoExpedienteCreado();
+    } catch (e) {
+      mostrarMensaje('error', T.tituloError, T.errorRed, String(e));
+    }
+  };
+
+  btnSubir.onclick = async function () {
+    var input = inputActivo || inputArchivo;
+    if (!expedienteId) {
+      mostrarMensaje('info', T.tituloAviso, T.msgCrearPrimero);
+      return;
+    }
+    if (!input || !input.files || !input.files[0]) {
+      mostrarMensaje('info', T.tituloAviso, T.msgElegirArchivo);
+      return;
+    }
+    try {
+      var original = archivoListoParaSubir || input.files[0];
+      var prep = await prepararArchivoParaSubida(original);
+      var fd = new FormData();
+      fd.append('archivo', prep.file);
+      var r = await fetch(urlDocumentos(expedienteId), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrftoken || '' },
+        body: fd,
+      });
+      var data;
+      try {
+        data = await parseJsonSeguro(r);
+      } catch (e) {
+        if (e.message === 'INVALID_JSON') {
+          mostrarMensaje('error', T.tituloError, T.errorRespuesta, 'HTTP ' + r.status);
+          return;
+        }
+        throw e;
+      }
+      if (!r.ok) {
+        mensajeErrorDesdeData(data);
+        return;
+      }
+      var estadoOcr = (data && data.estado_procesamiento) || '';
+      if (String(estadoOcr).toLowerCase() === 'completado' && ocrSinSugerenciasUtiles(data)) {
+        var adv = '';
+        try {
+          adv = (data.resultado_ocr && data.resultado_ocr.raw && data.resultado_ocr.raw.advertencia) || '';
+        } catch (e2) {}
+        mostrarMensaje(
+          'info',
+          T.tituloAviso,
+          'Archivo guardado. No se extrajeron datos para autocompletar (PDF sin texto, imagen o formato no reconocido). Completá los datos en la revisión del borrador.',
+          adv || 'Para escaneos o fotos podés configurar FACTURA_COMPRA_OCR_ADAPTER=http con un servicio OCR.'
+        );
+      } else {
+        var txtOk = T.cargaLista + ' ' + textoOcr(data.estado_procesamiento);
+        if (prep.recortado) {
+          txtOk += ' {% filter escapejs %}{% trans "Se recortó automáticamente al borde del ticket antes de subir." %}{% endfilter %}';
+        }
+        mostrarMensaje('success', T.tituloExitoDoc, txtOk);
+      }
+      setEstadoPostCarga(expedienteId);
+    } catch (e) {
+      mostrarMensaje('error', T.tituloError, T.errorRed, String(e));
+    }
+  };
+
+  document.getElementById('btn_nueva_carga').onclick = function () {
+    setEstadoNuevaCarga();
+    mostrarMensaje('info', T.tituloAviso, '{% filter escapejs %}{% trans "Listo para iniciar una nueva captura." %}{% endfilter %}');
+  };
+})();
+</script>
+{% endblock %}

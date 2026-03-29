@@ -22,6 +22,7 @@ Requiere que el contexto Alpine.js tenga:
 Ejemplo de uso:
 {% include 'core/partials/crud_subheader.html' with title='Clientes' search_placeholder='Buscar clientes...' action_url='/sales/clients/wizard/' action_label='Nuevo Cliente' show_toggle=True show_counter=True counter_text='clientes' %}
 {% endcomment %}
+{% load security_extras %}
 
 <div class="bg-white dark:bg-gray-800 fixed top-16 left-0 w-full z-30">
     <div class="max-w-7xl mx-auto">
@@ -64,13 +65,13 @@ Ejemplo de uso:
                 {% if show_counter %}
                 <span class="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap" x-text="`${filteredItems.length} / ${allItems.length} {{ counter_text }}`"></span>
                 {% endif %}
-                {% if slot_filtros %}{{ slot_filtros|safe }}{% endif %}
+                {% if slot_filtros %}{{ slot_filtros|safe_ui_slot }}{% endif %}
             </div>
             <!-- Acción principal -->
             <div class="flex items-center flex-shrink-0" style="min-width: 0;">
                 <a href="{{ action_url }}"
                    class="flex items-center space-x-2 text-sm px-4 py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow hover:from-orange-500 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 transition">
-                    {% if action_icon %}{{ action_icon|safe }}{% else %}
+                    {% if action_icon %}{{ action_icon|safe_svg_icon }}{% else %}
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                     </svg>
@@ -79,6 +80,6 @@ Ejemplo de uso:
                 </a>
             </div>
         </div>
-        {% if slot_chips %}{{ slot_chips|safe }}{% endif %}
+        {% if slot_chips %}{{ slot_chips|safe_ui_slot }}{% endif %}
     </div>
 </div> 

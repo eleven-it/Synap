@@ -1,9 +1,10 @@
 {% load i18n %}
+{% load security_extras %}
 <div x-show="openMenu" @click.outside="openMenu = false" class="absolute mt-2 ml-2 bg-white rounded-lg shadow-lg p-4 w-64 z-50">
     <div class="grid grid-cols-3 gap-4">
         {% for modulo in modulos_menu %}
         <a href="{{ modulo.url }}" class="flex flex-col items-center text-sm text-gray-700 hover:bg-gray-100 rounded p-2">
-            {{ modulo.icono_svg|safe }}
+            {{ modulo.icono_svg|safe_svg_icon }}
             <span>{{ modulo.nombre }}</span>
         </a>
         {% endfor %}

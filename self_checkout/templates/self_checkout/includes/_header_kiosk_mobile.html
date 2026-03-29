@@ -32,26 +32,28 @@
     <div class="flex flex-wrap gap-2">
       <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="tpvClienteBusqueda = ''; tpvClienteResultados = []; tpvClienteError = ''; modalTpvCliente = true">
         <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">person</span>
-        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvCliente.nombre_cliente || 'Consumidor Final'"></span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="(tpvCliente.nombre_cliente || 'Consumidor Final') + ' (F1)'"></span>
       </button>
       <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="abrirModalListaPrecio()">
         <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">sell</span>
-        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvListaPrecio.nombre || 'General'"></span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="(tpvListaPrecio.nombre || 'General') + ' (F2)'"></span>
       </button>
       <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-left flex-1 min-w-0 max-w-[50%]" x-on:click="abrirModalVendedor()">
         <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">badge</span>
-        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="tpvVendedor.nombre || 'Asignar'"></span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate min-w-0" x-text="(tpvVendedor.nombre || 'Asignar') + ' (F3)'"></span>
       </button>
       <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-left flex-1 min-w-0 max-w-[50%]" :class="cartVoucherPct ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-amber-200' : 'bg-slate-50 dark:bg-slate-800/50'" x-on:click="abrirModalVouchers()">
         <span class="material-symbols-outlined text-lg shrink-0" :class="cartVoucherPct ? 'text-amber-600' : 'text-slate-500'">local_offer</span>
-        <span class="text-sm font-semibold truncate" x-text="cartVoucherPct ? (cartVoucherPct + '% desc.') : 'Descuento'"></span>
+        <span class="text-sm font-semibold truncate" x-text="(cartVoucherPct ? (cartVoucherPct + '% desc.') : 'Descuento') + ' (F4)'"></span>
       </button>
-      <template x-if="tpvCliente.id_cliente != 1">
-        <button type="button" class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50" x-on:click="abrirCuentaCorriente()">
-          <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">account_balance</span>
-          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">Cta. cte.</span>
-        </button>
-      </template>
+      <button type="button"
+              class="tpv-mobile-chip flex items-center gap-1.5 min-h-[2.75rem] px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              x-bind:disabled="!tpvCliente || Number(tpvCliente.id_cliente) === 1 || estado === 'paying' || estado === 'confirming'"
+              x-bind:title="(!tpvCliente || Number(tpvCliente.id_cliente) === 1) ? 'Seleccioná un cliente con cuenta corriente' : 'Cuenta corriente (F5)'"
+              x-on:click="abrirCuentaCorriente()">
+        <span class="material-symbols-outlined text-lg text-slate-500 shrink-0">account_balance</span>
+        <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">Cta. cte. (F5)</span>
+      </button>
     </div>
   </div>
 </header>

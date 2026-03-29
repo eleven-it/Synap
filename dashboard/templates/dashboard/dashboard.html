@@ -255,6 +255,7 @@
 {% endblock dashboard_content %}
 
 {% block dashboard_extra_js %}
+{{ chart_js_bundle|json_script:"dashboard-chart-js-bundle" }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Animaciones de entrada escalonadas
@@ -290,11 +291,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Generar datos del gráfico dinámicamente
-    const chartData = {
-        sales: {{ chart_data.sales|safe }},
-        labels: {{ chart_data.labels|safe }}
-    };
+    // Datos del gráfico (JSON escapado vía json_script)
+    const chartData = JSON.parse(document.getElementById('dashboard-chart-js-bundle').textContent);
 
     // Función para generar puntos del gráfico
     function generateChartPoints() {

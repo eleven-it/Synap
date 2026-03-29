@@ -27,6 +27,55 @@ const WidgetEngine = {
     return this;
   },
 
+  /** Clave localStorage para campos de agrupación de tabla (por reporte y widget). */
+  _tableGroupingStorageKey(slug, widgetId) {
+    if (!slug || widgetId == null || widgetId === "") return null;
+    return `report_table_grouping_v1_${slug}_${String(widgetId)}`;
+  },
+
+  /**
+   * Lee estado guardado. `used: true` si existía clave (incluso fields vacío = usuario eligió sin agrupar).
+   */
+  _loadTableGroupingStorageState(slug, widgetId) {
+    const key = this._tableGroupingStorageKey(slug, widgetId);
+    if (!key || typeof localStorage === "undefined") {
+      return { used: false, fields: [] };
+    }
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return { used: false, fields: [] };
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.fields)) return { used: true, fields: [] };
+      return { used: true, fields: parsed.fields };
+    } catch (e) {
+      return { used: false, fields: [] };
+    }
+  },
+
+  _savePersistedTableGrouping(slug, widgetId, fields) {
+    const key = this._tableGroupingStorageKey(slug, widgetId);
+    if (!key || typeof localStorage === "undefined") return;
+    try {
+      const list = Array.isArray(fields) ? fields : [];
+      localStorage.setItem(key, JSON.stringify({ fields: list }));
+    } catch (e) {
+      /* cuota o modo privado */
+    }
+  },
+
+  /**
+   * Contenedor del bloque "Agrupar por" en el panel de filtros del workspace (pedidos-pendientes).
+   */
+  _getWorkspacePedidosGroupingMountEl() {
+    const section = this.rootElement?.closest?.("section[data-item-key]");
+    if (!section || this.reportSlug !== "pedidos-pendientes") {
+      return null;
+    }
+    const itemKey = section.dataset.itemKey || "";
+    const safeItemKey = String(itemKey).replace(/[^a-zA-Z0-9]/g, "_");
+    return document.getElementById(`workspace_pedidos_grouping_${safeItemKey}`);
+  },
+
   /**
    * Renderiza el dashboard completo con todos los widgets por defecto
    * @param {HTMLElement} rootElement - Elemento contenedor (opcional, usa this.rootElement si no se proporciona)
@@ -131,9 +180,8 @@ const WidgetEngine = {
     // En workspace, NO agregar bordes, sombras ni fondos adicionales (el widget del workspace ya los tiene)
     // Solo agregar clases necesarias para el layout interno
     if (isWorkspace) {
-      // En workspace, el contenedor debe ser transparente y sin bordes/sombras
-      // El widget del workspace ya tiene su propio contenedor con estilos
-      container.className = "w-full h-full overflow-hidden";
+      // En workspace: columna flex para que KPI + tabla repartan alto (p. ej. pantalla completa 2×2)
+      container.className = "w-full h-full min-h-0 overflow-hidden flex flex-col";
     } else {
       // Fuera de workspace, usar estilos completos con bordes y sombras
       if (isVentasNetas) {
@@ -244,7 +292,11 @@ const WidgetEngine = {
     container.appendChild(header);
 
     const content = document.createElement("div");
-    content.className = "relative";
+    content.className = isWorkspace
+      ? widgetSchema.kind === "table"
+        ? "relative flex-1 min-h-0 flex flex-col overflow-hidden"
+        : "relative flex-shrink-0"
+      : "relative";
     content.setAttribute("data-widget-content", "");
     container.appendChild(content);
 
@@ -933,13 +985,19 @@ const WidgetEngine = {
     const total = this.queryResult.totals?.[metricName] || 0;
     const formattedValue = this.formatMetric(total, metric);
 
-    container.className = "p-6 sm:p-8";
+    const isWorkspace = this.rootElement?.closest("[data-workspace-mode]");
+    container.className = isWorkspace
+      ? "p-4 sm:p-6 flex-shrink-0"
+      : "p-6 sm:p-8";
+    const valueSize =
+      "text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-2";
+    const labelSize = "text-sm sm:text-base text-slate-600 dark:text-slate-400";
     container.innerHTML = `
       <div class="flex flex-col items-center justify-center text-center">
-        <div class="text-4xl sm:text-5xl font-bold text-slate-900 dark:text-white mb-2">
+        <div class="${valueSize}">
           ${formattedValue}
         </div>
-        <div class="text-sm sm:text-base text-slate-600 dark:text-slate-400">
+        <div class="${labelSize}">
           ${metric ? metric.label : metricName}
         </div>
       </div>
@@ -2436,11 +2494,20 @@ const WidgetEngine = {
       }
     } else {
       // Si no está definido, usar comportamiento por defecto (filtrar algunas dimensiones)
-    const excludedDimensions = ["mes", "id_sucursal", "id_punto_venta"];
-      filteredDimensions = dimensions.filter(dim => {
-      const dimName = dim.name.toLowerCase();
-      return !excludedDimensions.includes(dimName);
-    });
+      const excludedDimensions = ["mes", "id_sucursal", "id_punto_venta"];
+      if (this.reportSlug === "pedidos-pendientes") {
+        excludedDimensions.push("tipo_comprobante", "estado");
+      }
+      filteredDimensions = dimensions.filter((dim) => {
+        const dimName = dim.name.toLowerCase();
+        return !excludedDimensions.includes(dimName);
+      });
+    }
+
+    // Pedidos pendientes: nunca mostrar tipo/estado (aunque table_dimensions del Builder aún los liste).
+    if (this.reportSlug === "pedidos-pendientes") {
+      const ocultarPedidos = new Set(["tipo_comprobante", "estado"]);
+      filteredDimensions = filteredDimensions.filter((d) => !ocultarPedidos.has(d.name));
     }
     
     // Para métricas: si table_metrics está definido (incluso si está vacío), usar solo las seleccionadas
@@ -2480,9 +2547,28 @@ const WidgetEngine = {
       return mappedDim;
     });
 
+    // Dimensiones permitidas en "Agrupar por": si el Builder guardó grouping.fields no vacío,
+    // solo esas (intersectadas con columnas de la tabla); si no queda ninguna, se muestran todas.
+    let dimensionsForGroupBySelect = mappedDimensions.filter((d) => {
+      if (this.reportSlug === "pedidos-pendientes") {
+        if (d.name === "tipo_comprobante" || d.name === "estado") return false;
+      }
+      return true;
+    });
+    const groupingFieldsAllow = widgetSchema.options?.grouping?.fields;
+    if (Array.isArray(groupingFieldsAllow) && groupingFieldsAllow.length > 0) {
+      const allow = new Set(groupingFieldsAllow);
+      const narrowed = dimensionsForGroupBySelect.filter((d) => allow.has(d.name));
+      if (narrowed.length > 0) {
+        dimensionsForGroupBySelect = narrowed;
+      }
+    }
+
     // Detectar si estamos en workspace
     const isWorkspace = this.rootElement?.closest("[data-workspace-mode]") || 
                         this.rootElement?.closest("[data-widget-id]")?.closest("[data-workspace-mode]");
+    // En workspace solo pedidos-pendientes replica el informe declarativo completo (control "Agrupar por" + filas agrupadas).
+    const showTableGroupingChrome = !isWorkspace || this.reportSlug === "pedidos-pendientes";
     
     // Detectar si estamos en modo TV (workspace TV)
     const isWorkspaceTV = this.rootElement?.closest("[data-workspace-tv]") || 
@@ -2494,21 +2580,37 @@ const WidgetEngine = {
       // En modo TV, usar flexbox para que la tabla ocupe todo el espacio
       container.className = "flex flex-col h-full";
     } else if (isWorkspace) {
-      container.className = "p-3 sm:p-4";
+      container.className = "p-2 sm:p-3 min-h-0 flex flex-col flex-1 overflow-hidden";
     } else {
       container.className = "p-4 sm:p-6";
     }
     
     // Verificar si hay agrupación configurada (definir antes de usarla)
     const groupingConfig = widgetSchema.options?.grouping;
+
+    const pickableGroupNames = new Set(dimensionsForGroupBySelect.map((d) => d.name));
+    const persistenceWidgetId = String(
+      widgetSchema.id != null && widgetSchema.id !== "" ? widgetSchema.id : "default"
+    );
+    const storageState = this._loadTableGroupingStorageState(this.reportSlug, persistenceWidgetId);
+    let initialGroupFields = [];
+    if (storageState.used) {
+      initialGroupFields = storageState.fields.filter((f) => pickableGroupNames.has(f));
+    } else if (
+      groupingConfig?.enabled &&
+      Array.isArray(groupingConfig.fields) &&
+      groupingConfig.fields.length > 0
+    ) {
+      initialGroupFields = groupingConfig.fields.filter((f) => pickableGroupNames.has(f));
+    }
+
+    // ID estable para DOM y localStorage (sin caracteres inválidos en id HTML)
+    const domSafeWidgetId = persistenceWidgetId.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const groupByFieldId = `table-group-by-${domSafeWidgetId}`;
     
-    // Generar ID único para este widget
-    const widgetId = widgetSchema.id || `widget-${Math.random().toString(36).substr(2, 9)}`;
-    const groupByFieldId = `table-group-by-${widgetId}`;
-    
-    // Controles de agrupación dinámica - SOLO mostrar si NO estamos en workspace
+    // Controles de agrupación dinámica (workspace: solo pedidos-pendientes, igual que vista detalle)
     let groupingControlsHTML = '';
-    if (!isWorkspace) {
+    if (showTableGroupingChrome) {
       groupingControlsHTML += `
         <div class="mb-4 space-y-3 border-b border-slate-200 dark:border-slate-700 pb-4">
           <div class="flex flex-col gap-2">
@@ -2523,11 +2625,8 @@ const WidgetEngine = {
                       data-tags-field="group_by">
       `;
       
-      // Agregar todas las dimensiones como opciones
-      dimensions.forEach(dim => {
-        const isSelected = groupingConfig?.enabled && 
-                          Array.isArray(groupingConfig.fields) && 
-                          groupingConfig.fields.includes(dim.name);
+      dimensionsForGroupBySelect.forEach((dim) => {
+        const isSelected = initialGroupFields.includes(dim.name);
         groupingControlsHTML += `<option value="${dim.name}" ${isSelected ? 'selected' : ''}>${dim.label}</option>`;
       });
       
@@ -2550,9 +2649,11 @@ const WidgetEngine = {
       `;
     }
     
-    // En modo TV, el wrapper de la tabla debe usar flex para ocupar todo el espacio
-    const tableWrapperClass = isWorkspaceTV ? "flex-1 overflow-auto" : "overflow-x-auto";
-    
+    // En modo TV el wrapper de la tabla crece y hace scroll interno; en workspace normal, igual que ventana no-TV
+    const tableWrapperClass = isWorkspaceTV
+      ? "flex-1 overflow-auto min-h-0"
+      : "overflow-x-auto";
+
     let tableHTML = `
       <div class="${tableWrapperClass}">
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -2579,10 +2680,7 @@ const WidgetEngine = {
           <tbody class="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-700">
     `;
 
-    // Verificar si hay agrupación configurada (ya definida arriba)
-    const isGrouped = groupingConfig?.enabled && 
-                     Array.isArray(groupingConfig.fields) && 
-                     groupingConfig.fields.length > 0;
+    const isGrouped = initialGroupFields.length > 0;
     
     let rowsHTML = '';
     
@@ -2605,7 +2703,7 @@ const WidgetEngine = {
         });
       }
       
-      const groupedData = this.groupTableData(data, groupingConfig.fields, this.schema, totalColumns);
+      const groupedData = this.groupTableData(data, initialGroupFields, this.schema, totalColumns);
       
       // Renderizar con grupos
       rowsHTML = this.renderGroupedTableRows(
@@ -2651,38 +2749,68 @@ const WidgetEngine = {
       </div>
     `;
 
-    // Combinar controles de agrupación y tabla
-    container.innerHTML = groupingControlsHTML + tableHTML;
+    const mountPedidosGroupingInFilters =
+      isWorkspace && this.reportSlug === "pedidos-pendientes";
+    const pedidosGroupingMount = mountPedidosGroupingInFilters
+      ? this._getWorkspacePedidosGroupingMountEl()
+      : null;
+
+    if (showTableGroupingChrome && mountPedidosGroupingInFilters && pedidosGroupingMount) {
+      pedidosGroupingMount.innerHTML = groupingControlsHTML;
+      container.innerHTML = tableHTML;
+    } else if (showTableGroupingChrome) {
+      container.innerHTML = groupingControlsHTML + tableHTML;
+    } else {
+      container.innerHTML = tableHTML;
+    }
     
     // Aplicar altura para tablas en workspace
     if (isWorkspace) {
-      const tableWrapper = container.querySelector('.overflow-x-auto, .overflow-auto');
+      const tableWrapper = container.querySelector(".overflow-x-auto, .overflow-auto");
       if (tableWrapper) {
         if (isWorkspaceTV) {
           // En modo TV, la tabla debe usar todo el espacio disponible (flex-1 ya aplicado)
           // No establecer altura fija, dejar que flex maneje el espacio
           tableWrapper.style.minHeight = "0"; // Importante para que flex funcione correctamente
         } else {
-          // Para reportes de tabla en workspace normal, aplicar altura fija de 288px (5 filas visibles)
-          tableWrapper.style.height = "288px";
-          tableWrapper.style.minHeight = "288px";
-          tableWrapper.style.maxHeight = "288px";
-          tableWrapper.style.overflowY = "auto";
-          tableWrapper.style.overflowX = "auto";
+          const pedidosWs = this.reportSlug === "pedidos-pendientes";
+          if (pedidosWs) {
+            const h = "min(58vh, 560px)";
+            tableWrapper.style.height = "auto";
+            tableWrapper.style.minHeight = "260px";
+            tableWrapper.style.maxHeight = h;
+            tableWrapper.style.overflowY = "auto";
+            tableWrapper.style.overflowX = "auto";
+          } else {
+            tableWrapper.style.height = "288px";
+            tableWrapper.style.minHeight = "288px";
+            tableWrapper.style.maxHeight = "288px";
+            tableWrapper.style.overflowY = "auto";
+            tableWrapper.style.overflowX = "auto";
+          }
         }
       }
     }
     
-    // Inicializar controles de agrupación dinámica SOLO si NO estamos en workspace
-    if (!isWorkspace) {
+    // Inicializar controles de agrupación (workspace solo pedidos-pendientes)
+    if (showTableGroupingChrome) {
       setTimeout(() => {
-        this.initializeTableGroupingControls(groupByFieldId, widgetSchema, data, mappedDimensions, filteredMetrics, container);
+        this.initializeTableGroupingControls(
+          groupByFieldId,
+          widgetSchema,
+          data,
+          mappedDimensions,
+          filteredMetrics,
+          container,
+          dimensionsForGroupBySelect,
+          initialGroupFields,
+          persistenceWidgetId
+        );
       }, 100);
     }
     
-    // Si hay agrupación, agregar event listeners para expandir/colapsar
-    // PERO NO en workspace (agrupación deshabilitada en workspace)
-    if (isGrouped && !isWorkspace) {
+    // Si hay agrupación, listeners de expandir/colapsar (workspace solo pedidos-pendientes)
+    if (isGrouped && showTableGroupingChrome) {
       this.attachGroupToggleListeners(container);
     }
   },
@@ -2692,11 +2820,24 @@ const WidgetEngine = {
    * @param {string} fieldId - ID del campo de agrupación
    * @param {Object} widgetSchema - Schema del widget
    * @param {Array} data - Datos de la tabla
-   * @param {Array} dimensions - Dimensiones disponibles
+   * @param {Array} dimensions - Dimensiones de la tabla (mapeadas)
    * @param {Array} metrics - Métricas disponibles
    * @param {HTMLElement} container - Contenedor del widget
+   * @param {Array} [dimensionsForGroupBySelect] - Subconjunto permitido en "Agrupar por" (Builder grouping.fields)
+   * @param {string[]} [initialGroupFields] - Campos iniciales (schema + localStorage ya resueltos en renderTable)
+   * @param {string} persistenceWidgetId - Id estable del widget para localStorage
    */
-  initializeTableGroupingControls(fieldId, widgetSchema, data, dimensions, metrics, container) {
+  initializeTableGroupingControls(
+    fieldId,
+    widgetSchema,
+    data,
+    dimensions,
+    metrics,
+    container,
+    dimensionsForGroupBySelect = null,
+    initialGroupFields = null,
+    persistenceWidgetId = "default"
+  ) {
     const select = document.getElementById(fieldId);
     const tagsContainer = document.getElementById(`${fieldId}_tags_container`);
     const chipsContainer = tagsContainer?.querySelector(".tags-chips");
@@ -2717,22 +2858,27 @@ const WidgetEngine = {
     let selectedValues = new Set();
     let selectedIndex = -1;
     
-    // Cargar opciones desde las dimensiones del schema
-    dimensions.forEach(dim => {
+    const dimsForPicker =
+      Array.isArray(dimensionsForGroupBySelect) && dimensionsForGroupBySelect.length > 0
+        ? dimensionsForGroupBySelect
+        : dimensions;
+    dimsForPicker.forEach((dim) => {
       allOptions.push({ value: dim.name, label: dim.label });
     });
     
-    // Inicializar valores seleccionados desde la configuración del widget
     const groupingConfig = widgetSchema.options?.grouping;
-    if (groupingConfig?.enabled && Array.isArray(groupingConfig.fields)) {
-      groupingConfig.fields.forEach(field => {
-        selectedValues.add(field);
-        const option = select.querySelector(`option[value="${field}"]`);
-        if (option) {
-          option.selected = true;
-        }
-      });
-    }
+    // Si initialGroupFields es array (puede ser [] por localStorage), no volver al schema.
+    const seedFields = Array.isArray(initialGroupFields)
+      ? initialGroupFields
+      : groupingConfig?.enabled && Array.isArray(groupingConfig.fields)
+        ? groupingConfig.fields
+        : [];
+    seedFields.forEach((field) => {
+      if (!dimsForPicker.some((d) => d.name === field)) return;
+      selectedValues.add(field);
+      const option = select.querySelector(`option[value="${field}"]`);
+      if (option) option.selected = true;
+    });
     
     // Renderizar chips seleccionados
     const renderChips = () => {
@@ -2792,8 +2938,7 @@ const WidgetEngine = {
     // Actualizar agrupación y re-renderizar tabla
     const updateGrouping = () => {
       const groupByFields = Array.from(selectedValues);
-      
-      // Re-renderizar la tabla con la nueva agrupación
+      this._savePersistedTableGrouping(this.reportSlug, persistenceWidgetId, groupByFields);
       this.renderTableWithGrouping(container, widgetSchema, data, dimensions, metrics, groupByFields);
     };
     

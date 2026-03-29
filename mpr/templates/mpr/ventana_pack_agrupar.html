@@ -4,38 +4,45 @@
 {% block title %}Confirmar OPT - Orden de Producción de Trabajo (OPT) - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <a href="{% url 'mpr:ventana_pack' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Orden de Producción de Trabajo (OPT)</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Confirmar OPT</span>
+<section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+    <div class="mx-auto w-full min-w-0 max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div class="flex-shrink-0">
+        <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
+                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                <li><a href="{% url 'mpr:ventana_pack' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Orden de Producción de Trabajo (OPT)</a></li>
+                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Confirmar OPT</span></li>
+            </ol>
         </nav>
 
-        {% if en_wizard %}
-        <div class="mb-4 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 px-4 py-2 flex flex-wrap items-center justify-between gap-2">
-            <span class="text-xs font-medium text-purple-800 dark:text-purple-200">Asistente de producción — Paso {{ wizard_paso }} de 5: Confirmar (crear y liberar)</span>
-            <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">Salir del asistente</a>
-        </div>
-        {% endif %}
+        {# Mismo bloque oscuro que ventana_pack (demanda OPT) #}
+        <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-4 sm:p-4">
+            {% if en_wizard %}
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-purple-200/80 bg-purple-50/90 px-3 py-1.5 dark:border-purple-700 dark:bg-purple-900/25 sm:mb-3 sm:px-4 sm:py-2">
+                <span class="text-[11px] font-medium text-purple-900 dark:text-purple-100 sm:text-xs">Asistente de producción — Paso {{ wizard_paso }} de 5: Confirmar (crear y liberar)</span>
+                <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:text-xs">Salir del asistente</a>
+            </div>
+            {% endif %}
 
-        <header class="mb-6">
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Confirmar orden de producción</h1>
-            <div class="flex flex-wrap items-center justify-between gap-3 mt-1">
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                    Revise las cantidades y pulse «Generar OPT» para crear la orden.
-                </p>
+            <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+                <div class="min-w-0 flex-1">
+                    <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Confirmar orden de producción</h1>
+                    <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-300">
+                        Revise las cantidades y pulse «Generar OPT» para crear la orden.
+                    </p>
+                </div>
                 {% if opcional_op.has_fecha_objetivo %}
-                <div class="flex items-center gap-2 shrink-0">
-                    <label for="fecha_objetivo" class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Fecha objetivo</label>
-                    <input type="date" id="fecha_objetivo" name="fecha_objetivo" min="{{ fecha_hoy|date:'Y-m-d' }}"
-                           class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                <div class="w-full shrink-0 rounded-lg border border-slate-500/60 bg-slate-700/35 p-4 shadow-sm dark:border-slate-500/50 dark:bg-slate-800/50 sm:w-auto sm:min-w-[12.5rem]">
+                    <label for="fecha_objetivo" class="mb-2 block text-xs font-semibold leading-tight text-purple-200 dark:text-purple-300">Fecha objetivo</label>
+                    <input type="date" id="fecha_objetivo" name="fecha_objetivo" form="form-generar-opt" min="{{ fecha_hoy|date:'Y-m-d' }}"
+                           class="min-h-10 w-full min-w-[11rem] rounded-md border border-slate-500 bg-slate-800/90 px-3 py-2 text-sm text-white [color-scheme:dark] focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/45"/>
                 </div>
                 {% endif %}
-            </div>
-        </header>
+            </header>
+        </div>
+        </div>
 
         {# En Confirmar OPT solo mostramos errores/advertencias de esta pantalla (Generar OPT). No mostramos mensajes del paso 1 (Actualizar). #}
         {% if messages %}
@@ -55,57 +62,59 @@
         <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-generar-opt" data-empleados-url="{% url 'mpr:api_empleados' %}">
             {% csrf_token %}
             <input type="hidden" name="accion" value="generar_opt"/>
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente</p>
+                <div class="overflow-x-auto" role="region" aria-label="Confirmación de cantidades">
+                    <table class="min-w-[56rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                        <caption class="sr-only">Componentes y cantidades a fabricar</caption>
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                             <tr class="align-bottom">
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cod. Sist</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Artículo</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom" title="Indicador de stock mínimo a garantizar (no es saldo).">Reserva</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cant. Pedida</th>
-                                <th colspan="2" class="px-4 py-2 text-center text-xs font-medium text-slate-600 dark:text-slate-300 uppercase tracking-wider align-bottom bg-slate-300 dark:bg-slate-600">Cantidad a Fabricar</th>
-                                <th colspan="2" class="px-4 py-2 text-center text-xs font-medium text-zinc-700 dark:text-zinc-300 uppercase tracking-wider align-bottom bg-zinc-300 dark:bg-zinc-600">Urgente</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider min-w-[180px] align-bottom">Operario</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Cod. sist.</th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Artículo</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="Indicador de stock mínimo a garantizar (no es saldo).">Reserva</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Cant. pedida</th>
+                                <th scope="colgroup" colspan="2" class="border-l border-gray-200 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-gray-800 align-bottom dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-100">Cantidad a fabricar</th>
+                                <th scope="colgroup" colspan="2" class="border-l-2 border-l-rose-400/70 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-rose-800 align-bottom dark:border-l-rose-500/60 dark:bg-gray-800/90 dark:text-rose-200">Urgente</th>
+                                <th scope="col" class="min-w-[180px] px-3 py-2 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Operario</th>
                             </tr>
                             <tr class="align-bottom">
-                                <th class="px-4 py-2 align-bottom"></th>
-                                <th class="px-4 py-2 align-bottom"></th>
-                                <th class="px-4 py-2 align-bottom"></th>
-                                <th class="px-4 py-2 align-bottom"></th>
-                                <th class="px-4 py-2 align-bottom"></th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider align-bottom bg-slate-200 dark:bg-slate-700">Unidades</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider align-bottom bg-slate-200 dark:bg-slate-700">Docenas</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-zinc-700 dark:text-zinc-400 uppercase tracking-wider align-bottom bg-zinc-200 dark:bg-zinc-700">Unidades</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-zinc-700 dark:text-zinc-400 uppercase tracking-wider align-bottom bg-zinc-200 dark:bg-zinc-700">Docenas</th>
-                                <th class="px-4 py-2 align-bottom"></th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="border-l border-gray-200 bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:border-gray-600 dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Unidades</th>
+                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Docenas</th>
+                                <th class="border-l-2 border-l-rose-400/50 bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:border-l-rose-500/40 dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Unidades</th>
+                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Docenas</th>
+                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             {% for f in filas_unidades %}
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ f.id_articulo }}</td>
-                                <td class="px-4 py-3">
+                            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{{ f.id_articulo }}</td>
+                                <td class="px-4 py-2.5">
                                     <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ f.codigo_manual }}</span>
                                     <span class="block text-sm text-gray-600 dark:text-gray-300">{{ f.descripcion_articulo|truncatewords:12 }}</span>
                                 </td>
-                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">
-                                    <span class="stock-terminado-tooltip-trigger cursor-help inline-block" data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}">{{ f.stock_terminado|floatformat:0 }}</span>
+                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
+                                    <span class="stock-terminado-tooltip-trigger inline-block cursor-help" data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}">{{ f.stock_terminado|floatformat:0 }}</span>
                                 </td>
-                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm" title="Indicador de stock mínimo a garantizar (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
-                                <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ f.cantidad_pedida|floatformat:0 }}</td>
-                                <td class="px-4 py-3 text-right bg-slate-100 dark:bg-slate-700/50">
+                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300" title="Indicador de stock mínimo a garantizar (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
+                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{{ f.cantidad_pedida|floatformat:0 }}</td>
+                                <td class="border-l border-gray-100 bg-gray-50/90 px-4 py-2.5 text-right dark:border-gray-700 dark:bg-gray-800/35">
                                     <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar }}" min="1" step="1" data-id-art="{{ f.id_articulo }}" data-docenas-id="doc_{{ f.id_articulo }}"
-                                           class="cant-unidades w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
+                                           class="cant-unidades w-24 rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"/>
                                 </td>
-                                <td class="px-4 py-3 text-right bg-slate-100 dark:bg-slate-700/50">
+                                <td class="bg-gray-50/90 px-4 py-2.5 text-right dark:bg-gray-800/35">
                                     <input type="number" id="doc_{{ f.id_articulo }}" data-id-art="{{ f.id_articulo }}" data-unidades-id="cant_{{ f.id_articulo }}" value="{{ f.cantidad_docenas|floatformat:2 }}" min="0" step="0.01"
-                                           class="cant-docenas w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
+                                           class="cant-docenas w-24 rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"/>
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums text-sm bg-zinc-100 dark:bg-zinc-700/50 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_abs|floatformat:0 }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-sm bg-zinc-100 dark:bg-zinc-700/50 {% if f.cantidad_urgente_docenas > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_docenas|floatformat:2 }}</td>
-                                <td class="px-4 py-3 min-w-[180px]">
+                                <td class="border-l-2 border-l-rose-200/80 bg-gray-50/90 px-4 py-2.5 text-right text-sm tabular-nums dark:border-l-rose-900/50 dark:bg-gray-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_abs|floatformat:0 }}</td>
+                                <td class="bg-gray-50/90 px-4 py-2.5 text-right text-sm tabular-nums dark:bg-gray-800/35 {% if f.cantidad_urgente_docenas > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_docenas|floatformat:2 }}</td>
+                                <td class="min-w-[180px] px-4 py-2.5">
                                     <input type="hidden" name="operario_{{ f.id_articulo }}" value="{{ f.id_operario_opt|default:'' }}" class="operario-hidden" data-id-art="{{ f.id_articulo }}"/>
                                     <div class="operario-cell relative" data-id-art="{{ f.id_articulo }}">
                                         <div class="operario-chip hidden flex items-center gap-2 flex-wrap">
@@ -128,15 +137,17 @@
                     </table>
                 </div>
             </div>
-            <div class="mt-6 flex flex-wrap items-center gap-3">
-                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
+            <div class="mt-5 flex flex-col gap-2 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+                <a href="{% url 'mpr:ventana_pack' %}" class="order-2 inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900 sm:order-1 sm:min-h-11">
                     Volver a Orden de Producción de Trabajo (OPT)
                 </a>
                 {% if filas_unidades %}
-                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-all">
-                    <span class="material-icons text-lg">add_circle</span>
-                    Generar OPT
-                </button>
+                <div class="order-1 flex justify-stretch sm:order-2 sm:shrink-0 sm:justify-end">
+                    <button type="submit" class="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 sm:min-h-11 sm:w-auto">
+                        <span class="material-icons text-lg" aria-hidden="true">add_circle</span>
+                        Generar OPT
+                    </button>
+                </div>
                 {% endif %}
             </div>
         </form>

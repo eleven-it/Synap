@@ -4,36 +4,37 @@
 {% block title %}Nueva orden de producción - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-        {# Breadcrumbs #}
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <a href="{% url 'mpr:op_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Órdenes</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Nueva OPT</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-4xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{% url 'mpr:op_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Órdenes</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Nueva OPT</span></li>
+            </ol>
         </nav>
 
-        <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">
-            Nueva orden de producción
-        </h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">
-            Cree una orden agrupada por artículo. La OPT aparecerá en la lista y podrá liberarla a producción (OPT) desde el detalle.
-        </p>
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Nueva orden de producción</h1>
+            <p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600 dark:text-gray-300">
+                Cree una orden agrupada por artículo. La OPT aparecerá en la lista y podrá liberarla a producción (OPT) desde el detalle.
+            </p>
+        </header>
 
-        <form method="post" action="" class="space-y-6">
+        <form method="post" action="" class="mx-auto max-w-2xl space-y-8">
             {% csrf_token %}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span class="material-icons text-purple-500 dark:text-purple-400">inventory_2</span>
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+                <h2 class="mb-6 flex items-center gap-2 text-base font-bold text-gray-900 dark:text-white">
+                    <span class="material-icons text-purple-500 dark:text-purple-400" aria-hidden="true">inventory_2</span>
                     Artículo y cantidad
                 </h2>
-                <div class="space-y-4">
+                <div class="space-y-5">
                     <div>
-                        <label for="id_articulo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Artículo</label>
+                        <label for="id_articulo" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Artículo</label>
                         <select id="id_articulo" name="id_articulo" required
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">Seleccione artículo</option>
                             {% for art in articulos %}
                             <option value="{{ art.id_articulo }}" {% if articulo_preselected and art.id_articulo == articulo_preselected %}selected{% endif %}>{{ art.codigo_articulo }} · {{ art.descripcion_articulo|truncatewords:8 }}</option>
@@ -41,15 +42,15 @@
                         </select>
                     </div>
                     <div>
-                        <label for="cantidad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cantidad pedida</label>
+                        <label for="cantidad" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Cantidad pedida</label>
                         <input type="number" id="cantidad" name="cantidad" min="1" value="1"
-                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 text-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                               class="h-12 w-full max-w-xs rounded-xl border border-gray-300 bg-white px-3 text-lg tabular-nums text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
                     </div>
                     {% if opcional_op.has_deposito_produccion and depositos %}
                     <div>
-                        <label for="id_deposito_produccion" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Depósito de producción</label>
+                        <label for="id_deposito_produccion" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Depósito de producción</label>
                         <select id="id_deposito_produccion" name="id_deposito_produccion"
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500">
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">— Opcional —</option>
                             {% for d in depositos %}
                             <option value="{{ d.CodDeposito }}">{{ d.NombreDeposito|default:d.CodDeposito }}</option>
@@ -59,28 +60,28 @@
                     {% endif %}
                     {% if opcional_op.has_prioridad %}
                     <div>
-                        <label for="prioridad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Prioridad</label>
+                        <label for="prioridad" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Prioridad</label>
                         <input type="number" id="prioridad" name="prioridad" min="0" step="1" placeholder="Opcional"
-                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500"/>
+                               class="h-11 w-full max-w-xs rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
                     </div>
                     {% endif %}
                     {% if opcional_op.has_fecha_objetivo %}
                     <div>
-                        <label for="fecha_objetivo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha objetivo</label>
+                        <label for="fecha_objetivo" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Fecha objetivo</label>
                         <input type="date" id="fecha_objetivo" name="fecha_objetivo"
-                               class="w-full max-w-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500"/>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">En MPR las fechas se visualizan en formato dd-MM-yyyy.</p>
+                               class="h-11 w-full max-w-xs rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
+                        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">En MPR las fechas se visualizan en formato dd-MM-yyyy.</p>
                     </div>
                     {% endif %}
                 </div>
             </div>
 
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
-                    <span class="material-icons text-lg">add_circle</span>
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg" aria-hidden="true">add_circle</span>
                     Crear orden de producción
                 </button>
-                <a href="{% url 'mpr:op_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                <a href="{% url 'mpr:op_list' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Cancelar
                 </a>
             </div>

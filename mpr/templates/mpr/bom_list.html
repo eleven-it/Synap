@@ -4,54 +4,51 @@
 {% block title %}Productos para armado / desarmado - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {# Breadcrumbs #}
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Lista de materiales</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Lista de materiales</span></li>
+            </ol>
         </nav>
 
-        {# Header #}
-        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">
-                    Productos para armado / desarmado
-                </h1>
+        <header class="mb-8 flex flex-col gap-6 border-b border-gray-200/80 pb-8 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 max-w-2xl">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Productos para armado / desarmado</h1>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{% url 'mpr:bom_create' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">
-                    <span class="material-icons text-lg">add</span>
+            <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <a href="{% url 'mpr:bom_create' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg" aria-hidden="true">add</span>
                     Nuevo
                 </a>
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">
-                    <span class="material-icons text-lg">dashboard</span>
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700/80 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg text-gray-500 dark:text-gray-400" aria-hidden="true">dashboard</span>
                     Tablero
                 </a>
             </div>
         </header>
 
-        {# Filtros: activos y en producción #}
-        <div class="flex flex-wrap items-center gap-3 mb-6">
-            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1">Estado:</span>
-            <a href="{% url 'mpr:bom_list' %}?activos=1&en_produccion={% if solo_en_produccion %}1{% else %}0{% endif %}" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if solo_activos %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
-                Solo activos
-            </a>
-            <a href="{% url 'mpr:bom_list' %}?activos=0&en_produccion={% if solo_en_produccion %}1{% else %}0{% endif %}" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if not solo_activos %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
-                Todos
-            </a>
-            <span class="border-l border-gray-300 dark:border-gray-600 h-5 mx-1" aria-hidden="true"></span>
-            <span class="text-sm text-gray-500 dark:text-gray-400 mr-1">Productos:</span>
-            <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=1" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if solo_en_produccion %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
-                En producción
-            </a>
-            <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=0" class="inline-flex px-3 py-1.5 rounded-lg text-sm font-medium {% if not solo_en_produccion %}bg-purple-600 text-white{% else %}bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600{% endif %} transition-colors">
-                Todos
-            </a>
+        <div class="mb-6 rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+            <h2 class="sr-only">Filtros de listado</h2>
+            <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Estado</span>
+                    <a href="{% url 'mpr:bom_list' %}?activos=1&en_produccion={% if solo_en_produccion %}1{% else %}0{% endif %}" class="inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 {% if solo_activos %}bg-purple-600 text-white hover:bg-purple-700{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600{% endif %}">Solo activos</a>
+                    <a href="{% url 'mpr:bom_list' %}?activos=0&en_produccion={% if solo_en_produccion %}1{% else %}0{% endif %}" class="inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 {% if not solo_activos %}bg-purple-600 text-white hover:bg-purple-700{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600{% endif %}">Todos</a>
+                </div>
+                <span class="hidden h-6 w-px bg-gray-200 dark:bg-gray-600 sm:block" aria-hidden="true"></span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Productos</span>
+                    <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=1" class="inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 {% if solo_en_produccion %}bg-purple-600 text-white hover:bg-purple-700{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600{% endif %}">En producción</a>
+                    <a href="{% url 'mpr:bom_list' %}?activos={% if solo_activos %}1{% else %}0{% endif %}&en_produccion=0" class="inline-flex min-h-9 items-center justify-center rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 {% if not solo_en_produccion %}bg-purple-600 text-white hover:bg-purple-700{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600{% endif %}">Todos</a>
+                </div>
+            </div>
         </div>
 
-        {# Búsqueda predictiva + Tabla (mismo scope Alpine) #}
         <div x-data="{
             query: '',
             visibleCount: 0,
@@ -96,79 +93,86 @@
                 this.$nextTick(() => this.reorderRows());
             }
         }">
-            <div class="mb-4">
-                <label for="bom-search-input" class="sr-only">Buscar productos</label>
+            <div class="mb-6 rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
+                <label for="bom-search-input" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Buscar productos</label>
                 <input type="text"
                        id="bom-search-input"
                        x-model="query"
-                       placeholder="Buscar por nombre, ID o detalle…"
-                       class="w-full max-w-md rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2.5 text-sm placeholder-gray-400 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"/>
-                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400" x-show="query.length >= 1" x-transition>
+                       placeholder="Nombre, ID o detalle…"
+                       class="h-11 w-full max-w-xl rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"/>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400" x-show="query.length >= 1" x-transition>
                     <span x-text="visibleCount"></span> producto(s) coinciden
                 </p>
             </div>
 
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Listado</h2>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
+                </div>
+                <div class="overflow-x-auto" role="region" aria-label="Tabla de productos BOM">
+                    <table class="min-w-[52rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                        <caption class="sr-only">Conjuntos para armado y desarmado</caption>
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                             <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors rounded-tl"
+                                <th scope="col" class="cursor-pointer select-none rounded-tl px-4 py-3.5 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/70"
                                     @click="setSort('cod_sistema')"
                                     :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'cod_sistema' }"
                                     title="Ordenar por Cod. sistema">Cod. sistema <span x-show="sortBy === 'cod_sistema'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                                <th scope="col" class="cursor-pointer select-none px-4 py-3.5 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/70"
                                     @click="setSort('cod_manual')"
                                     :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'cod_manual' }"
                                     title="Ordenar por Cod. Manual">Cod. Manual <span x-show="sortBy === 'cod_manual'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-700/70 transition-colors"
+                                <th scope="col" class="cursor-pointer select-none px-4 py-3.5 text-left text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/70"
                                     @click="setSort('nombre')"
                                     :class="{ 'text-purple-600 dark:text-purple-400': sortBy === 'nombre' }"
                                     title="Ordenar por nombre">Nombre <span x-show="sortBy === 'nombre'" x-text="sortDir === 1 ? '↑' : '↓'"></span></th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Detalle</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº componentes</th>
-                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
+                                <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Detalle</th>
+                                <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">N.º componentes</th>
+                                <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">Estado</th>
+                                <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                             {% for c in conjuntos %}
-                            <tr class="bom-search-row hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                            <tr class="bom-search-row transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40"
                                 data-search-text="{{ c.id_articulo|default:'' }} {{ c.codigo_manual|default:''|escape }} {{ c.nombre_en_abm|default:''|escape }} {{ c.detalle|default:''|escape }}"
                                 data-cod-sistema="{{ c.id_articulo|default:'' }}"
                                 data-cod-manual="{{ c.codigo_manual|default:''|escape }}"
                                 data-nombre="{{ c.nombre_en_abm|default:''|escape }}"
                                 x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
-                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white tabular-nums">{{ c.id_articulo|default:"—" }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ c.codigo_manual|default:"—" }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ c.nombre_en_abm }}</td>
-                                <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{{ c.detalle|default:"—" }}</td>
-                                <td class="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">{{ c.n_componentes }}</td>
-                                <td class="px-4 py-3 text-center">
+                                <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold tabular-nums text-gray-900 dark:text-white sm:px-5">{{ c.id_articulo|default:"—" }}</td>
+                                <td class="whitespace-nowrap px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ c.codigo_manual|default:"—" }}</td>
+                                <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ c.nombre_en_abm }}</td>
+                                <td class="max-w-xs truncate px-4 py-3.5 text-sm text-gray-500 dark:text-gray-400 sm:px-5">{{ c.detalle|default:"—" }}</td>
+                                <td class="whitespace-nowrap px-4 py-3.5 text-center text-sm tabular-nums text-gray-600 dark:text-gray-300 sm:px-5">{{ c.n_componentes }}</td>
+                                <td class="px-4 py-3.5 text-center sm:px-5">
                                     {% if c.anulado == 'Si' %}
-                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">Anulado</span>
+                                    <span class="inline-flex rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/40 dark:text-red-200">Anulado</span>
                                     {% else %}
-                                    <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Activo</span>
+                                    <span class="inline-flex rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">Activo</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-4 py-3 flex flex-wrap gap-1">
-                                    <a href="{% url 'mpr:bom_detail' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors">Ver</a>
-                                    <a href="{% url 'mpr:bom_edit' c.id_en_abm %}" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Editar</a>
+                                <td class="px-4 py-3.5 sm:px-5">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <a href="{% url 'mpr:bom_detail' c.id_en_abm %}" class="inline-flex min-h-9 items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">Ver</a>
+                                        <a href="{% url 'mpr:bom_edit' c.id_en_abm %}" class="inline-flex min-h-9 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-xs font-medium text-gray-800 transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-800">Editar</a>
+                                    </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                    No hay conjuntos de armado. La tabla <code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">en_abm</code> puede estar vacía o no existir en esta base.
+                                <td colspan="7" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">
+                                    No hay conjuntos de armado. La tabla <code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-gray-700">en_abm</code> puede estar vacía o no existir en esta base.
                                 </td>
                             </tr>
                             {% endfor %}
                             {% if conjuntos %}
-                            <tr class="bom-no-results border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50"
+                            <tr class="bom-no-results border-t border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-800/50"
                                 x-show="query.length >= 1 && visibleCount === 0"
                                 x-cloak
                                 x-transition>
-                                <td colspan="7" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">Ningún producto coincide con la búsqueda.</td>
+                                <td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">Ningún producto coincide con la búsqueda.</td>
                             </tr>
                             {% endif %}
                         </tbody>

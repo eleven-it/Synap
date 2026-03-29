@@ -10,9 +10,6 @@ from core.mysql_pool import get_connection as pool_get_connection
 
 logger = logging.getLogger(__name__)
 
-# Clave de encriptación AES (debe coincidir con administraNET Gestión)
-AES_KEY = b'a7v8xx2'  # Clave usada en administraNET para AES_DECRYPT
-
 
 class AdministraNETAuth:
     """Servicio para autenticación con administraNET Gestión"""
@@ -96,9 +93,13 @@ class AdministraNETAuth:
 
                 # CONVERT + TRIM evita fallos por padding binario de AES (comparación string a string)
                 # LOWER(cod_usuario) para que coincida aunque en la base esté 'Supervisor' y se ingrese 'supervisor'
-                pass_cond = "TRIM(CONVERT(AES_DECRYPT(password_usuario, 'a7v8xx2'), CHAR)) = %s"
+                # Clave AES vía parámetro (settings.ADMINISTRANET_MYSQL_AES_KEY), paridad AdministraNET Gestión
+                aes_key = (getattr(settings, 'ADMINISTRANET_MYSQL_AES_KEY', None) or 'a7v8xx2').strip() or 'a7v8xx2'
+                pass_cond = "TRIM(CONVERT(AES_DECRYPT(password_usuario, %s), CHAR)) = %s"
                 cod = cod_usuario.strip()
                 cod_lower = cod.lower()
+                pwd = password.strip()
+                q_params = [cod_lower, aes_key, pwd]
                 if tiene_idioma:
                     cursor.execute(f"""
                         SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
@@ -107,7 +108,7 @@ class AdministraNETAuth:
                         FROM usuarios
                         WHERE (baja_usuario IS NULL OR baja_usuario = 'No') AND LOWER(cod_usuario) = %s
                           AND {pass_cond}
-                    """, [cod_lower, password.strip()])
+                    """, q_params)
                 else:
                     cursor.execute(f"""
                         SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
@@ -116,7 +117,7 @@ class AdministraNETAuth:
                         FROM usuarios
                         WHERE (baja_usuario IS NULL OR baja_usuario = 'No') AND LOWER(cod_usuario) = %s
                           AND {pass_cond}
-                    """, [cod_lower, password.strip()])
+                    """, q_params)
 
                 row = cursor.fetchone()
                 if not row:

@@ -1,0 +1,968 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{% trans "Revisión — factura de compra" %} | Synap{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-none">
+  <header class="mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">{% trans "Revisión de factura" %}</h1>
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-3xl">
+          {% trans "Edición de cabecera y líneas, rechazo con motivo y aprobación según flujo de compras." %}
+        </p>
+      </div>
+      <a href="{% url 'factura_compra_captura_web:lista-expedientes' %}" class="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
+        <span class="material-icons text-base" aria-hidden="true">arrow_back</span>{% trans "Volver al listado" %}
+      </a>
+    </div>
+    <span id="badge_estado" class="mt-3 inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700 dark:bg-gray-700 dark:text-gray-100">Cargando…</span>
+  </header>
+
+  <div class="grid w-full grid-cols-1 gap-6 lg:grid-cols-[40%_60%]">
+    <aside class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:sticky lg:top-4 lg:self-start">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Documento" %}</h2>
+      <div class="mt-4 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 min-h-[22rem]">
+        {% if documento_url and documento_es_pdf %}
+        <iframe id="visor_documento" title="{% trans 'Documento capturado' %}" src="{{ documento_url }}" class="h-[70vh] w-full border-0"></iframe>
+        {% elif documento_url %}
+        <img id="visor_documento" src="{{ documento_url }}" alt="{% trans 'Documento capturado' %}" class="h-[70vh] w-full object-contain" />
+        {% else %}
+        <div id="doc_hint" class="h-full min-h-[22rem] flex items-center justify-center px-4 text-center text-sm text-gray-600 dark:text-gray-300">
+          {% trans "No hay archivo capturado aún para este expediente." %}
+        </div>
+        {% endif %}
+      </div>
+      <p class="mt-3 text-xs text-gray-600 dark:text-gray-400">{% trans "El visor usa el archivo original subido en captura." %}</p>
+    </aside>
+
+    <section class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div id="ocr_hint" class="hidden mb-4 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 dark:border-indigo-700/50 dark:bg-indigo-950/30 dark:text-indigo-200"></div>
+      <div id="panel_motor_doc" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50/90 p-3 text-sm shadow-sm dark:border-slate-600 dark:bg-slate-900/35">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Motor de documento" %}</h3>
+          <span id="motor_badge_revision" class="hidden rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">{% trans "Revisión sugerida" %}</span>
+        </div>
+        <p id="motor_headline" class="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400"></p>
+        <dl class="mt-2 grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+          <div class="flex justify-between gap-2 border-b border-slate-200/80 pb-1 dark:border-slate-600/80"><dt class="text-gray-500 dark:text-gray-400">{% trans "Puntuación" %}</dt><dd id="motor_score" class="font-mono text-gray-900 dark:text-gray-100">—</dd></div>
+          <div class="flex justify-between gap-2 border-b border-slate-200/80 pb-1 dark:border-slate-600/80"><dt class="text-gray-500 dark:text-gray-400">{% trans "Validación (salud)" %}</dt><dd id="motor_validacion" class="font-mono text-gray-900 dark:text-gray-100">—</dd></div>
+          <div class="flex justify-between gap-2 border-b border-slate-200/80 pb-1 dark:border-slate-600/80 sm:col-span-2"><dt class="text-gray-500 dark:text-gray-400">{% trans "Plantilla / proveedor" %}</dt><dd id="motor_plantilla" class="text-right text-gray-800 dark:text-gray-200">—</dd></div>
+        </dl>
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer font-medium text-indigo-700 dark:text-indigo-300">{% trans "Evidencia cabecera (motor)" %}</summary>
+          <ul id="motor_lista_cabecera" class="mt-1 list-inside list-disc space-y-1 text-gray-600 dark:text-gray-400"></ul>
+        </details>
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer font-medium text-indigo-700 dark:text-indigo-300">{% trans "Evidencia por línea (motor)" %}</summary>
+          <div id="motor_lista_lineas" class="mt-1 space-y-2 text-gray-600 dark:text-gray-400"></div>
+        </details>
+        <p id="motor_correcciones" class="mt-2 hidden text-xs text-gray-500 dark:text-gray-400"></p>
+      </div>
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Datos del comprobante" %}</h2>
+      <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <label for="cuit_prov" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">CUIT proveedor</label>
+          <div class="flex gap-2">
+            <input id="cuit_prov" type="text" inputmode="numeric" placeholder="30XXXXXXXXX" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            <button type="button" id="btn_resolver_proveedor" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">{% trans "Resolver proveedor" %}</button>
+          </div>
+          <p id="proveedor_estado" class="mt-1 text-xs text-gray-600 dark:text-gray-400"></p>
+        </div>
+        <div>
+          <label for="cod_prov" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Código proveedor" %}</label>
+          <input id="cod_prov" type="number" inputmode="numeric" min="1" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+        </div>
+        <div>
+          <label for="razon_social_prov" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Razón social (borrador)" %}</label>
+          <input id="razon_social_prov" type="text" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+        </div>
+        <div>
+          <label for="origen" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Origen datos" %}</label>
+          <select id="origen" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            <option value="MANUAL">Manual</option>
+            <option value="REMITO">Remito</option>
+            <option value="OC">OC</option>
+            <option value="VALE">Vale</option>
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <label for="tipo_fiscal" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Letra fiscal" %}</label>
+          <select id="tipo_fiscal" class="min-h-10 w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            <option value="">{% trans "— Sin seleccionar —" %}</option>
+            <option value="FA">FA</option>
+            <option value="FB">FB</option>
+            <option value="FC">FC</option>
+            <option value="FM">FM</option>
+          </select>
+          <p id="hint_letra_ocr" class="hidden mt-2 text-xs text-amber-800 dark:text-amber-200/90"></p>
+        </div>
+        <div>
+          <label for="nro_comp" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Nº comprobante formateado" %}</label>
+          <input id="nro_comp" type="text" autocomplete="off" placeholder="Ej. FA-0001-00001234" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+        </div>
+        <div>
+          <label for="fecha_comp" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Fecha comprobante" %}</label>
+          <input id="fecha_comp" type="date" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+        </div>
+        <div>
+          <label for="importe" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Importe total" %}</label>
+          <input id="importe" type="text" inputmode="decimal" placeholder="0.00" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+        </div>
+      </div>
+
+      <h3 class="mt-6 text-base font-semibold text-gray-900 dark:text-white">{% trans "Líneas del comprobante" %}</h3>
+      <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+        {% trans "Revisá cantidades e importes contra el PDF. Podés editar la descripción detectada y los códigos legacy." %}
+        {% trans "Para enviar a revisión, cada línea debe tener un artículo AdministraNET elegido en la columna «Art.» (búsqueda como en el TPV)." %}
+      </p>
+      <p id="hint_lineas_sin_art" class="hidden mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100" role="status"></p>
+      <div class="mt-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600">
+        <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-600">
+          <thead class="bg-gray-50 dark:bg-gray-900/50">
+            <tr>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">#</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Descripción" %}</th>
+              <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-24">{% trans "Cant." %}</th>
+              <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-32">{% trans "Precio u." %}</th>
+              <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 w-32">{% trans "Subtotal" %}</th>
+              <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300 min-w-[16rem] w-[40%]">{% trans "Art." %}</th>
+              <th scope="col" class="px-2 py-2 w-10"></th>
+            </tr>
+          </thead>
+          <tbody id="lineas_carrito_body" class="divide-y divide-gray-100 bg-white dark:divide-gray-700 dark:bg-gray-800/30"></tbody>
+          <tfoot class="bg-gray-50 dark:bg-gray-900/40">
+            <tr>
+              <td colspan="4" class="px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-200">{% trans "Total líneas" %}</td>
+              <td id="lineas_carrito_total_num" class="px-3 py-2 text-right font-mono text-sm font-semibold text-gray-900 dark:text-white">0,00</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" id="btn_linea_agregar" class="rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">{% trans "+ Agregar línea" %}</button>
+        <button type="button" id="btn_lineas_json_toggle" class="rounded-md px-3 py-1.5 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400" data-label-show="{% trans 'Ver JSON' %}" data-label-hide="{% trans 'Ocultar JSON' %}">{% trans "Ver JSON" %}</button>
+      </div>
+      <textarea id="lineas_json" spellcheck="false" class="hidden mt-2 min-h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-xs font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" aria-hidden="true"></textarea>
+
+      <p id="hint_flujo_aprobacion" class="mt-5 hidden text-xs text-gray-600 dark:text-gray-400 max-w-3xl" role="status"></p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700" id="btn_recargar">{% trans "Recargar" %}</button>
+        <button type="button" class="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_guardar">{% trans "Guardar borrador" %}</button>
+        <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_revision">{% trans "Enviar a revisión" %}</button>
+        <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_listo">{% trans "Marcar listo para aprobar" %}</button>
+        <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_solicitar_aprob">{% trans "Solicitar aprobación" %}</button>
+        <button type="button" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_aprobar" title="">{% trans "Aprobar" %}</button>
+        <button type="button" class="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50" id="btn_rechazar">{% trans "Rechazar" %}</button>
+      </div>
+      <div class="mt-3 hidden rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-700/50 dark:bg-rose-950/30 dark:text-rose-200" id="msg_err"></div>
+      <div class="mt-3 hidden rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/30 dark:text-emerald-200" id="msg_ok"></div>
+
+      <div class="mt-6">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-white">{% trans "Historial" %}</h3>
+        <ul id="lista_eventos" class="mt-2 divide-y divide-gray-200 dark:divide-gray-700"></ul>
+      </div>
+    </section>
+  </div>
+</div>
+
+<dialog id="dlg_rechazo" class="rounded-lg border border-gray-300 p-4 dark:border-gray-600 dark:bg-gray-900">
+  <p class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Motivo de rechazo (obligatorio)" %}</p>
+  <textarea id="motivo_rechazo" required class="mt-2 min-h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"></textarea>
+  <div class="mt-3 flex justify-end gap-2">
+    <button type="button" class="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-200" id="dlg_rechazo_cancel">{% trans "Cancelar" %}</button>
+    <button type="button" class="rounded-md bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-700" id="dlg_rechazo_ok">{% trans "Confirmar rechazo" %}</button>
+  </div>
+</dialog>
+{% endblock content %}
+
+{% block extra_js %}
+  <script>window._csrf = "{{ csrf_token_value|default:'' }}"; window._EXP = "{{ expediente_id }}";</script>
+  <script>
+    (function () {
+      const EID = window._EXP;
+      const csrftoken = window._csrf || (document.cookie.match(/(^|;) ?csrftoken=([^;]*)(;|$)/) || [])[2];
+      const api = (path, opts) => {
+        const o = Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken || '' } }, opts || {});
+        const method = (o.method || 'GET').toUpperCase();
+        if (method === 'GET' && o.cache === undefined) o.cache = 'no-store';
+        return fetch(path, o);
+      };
+      const errEl = document.getElementById('msg_err');
+      const okEl = document.getElementById('msg_ok');
+      const ocrHintEl = document.getElementById('ocr_hint');
+      function showErr(t) { errEl.classList.toggle('hidden', !t); errEl.textContent = t || ''; okEl.classList.add('hidden'); }
+      function showOk(t) { okEl.classList.toggle('hidden', !t); okEl.textContent = t || ''; errEl.classList.add('hidden'); }
+      function showOcrHint(t) { ocrHintEl.classList.toggle('hidden', !t); ocrHintEl.textContent = t || ''; }
+
+      function renderMotorPanel(d) {
+        const panel = document.getElementById('panel_motor_doc');
+        const ctx = d.revision_engine_context;
+        if (!panel) return;
+        if (!ctx) { panel.classList.add('hidden'); return; }
+        panel.classList.remove('hidden');
+        const wfs = ctx.workflow_facing_summary || {};
+        const hl = document.getElementById('motor_headline');
+        if (hl) hl.textContent = wfs.headline || '';
+        const badge = document.getElementById('motor_badge_revision');
+        if (badge) {
+          const rec = !!(wfs.review_recommended || (ctx.workflow_signals || {}).suggested_review);
+          badge.classList.toggle('hidden', !rec);
+        }
+        const elSc = document.getElementById('motor_score');
+        if (elSc) elSc.textContent = ctx.document_score != null ? String(ctx.document_score) : '—';
+        const vs = ctx.validation_summary || {};
+        const elV = document.getElementById('motor_validacion');
+        if (elV) {
+          const h = vs.health_score != null ? vs.health_score : '—';
+          const c = vs.counts || {};
+          elV.textContent = String(h) + ' (i' + (c.info || 0) + '/w' + (c.warning || 0) + '/e' + (c.error || 0) + ')';
+        }
+        const tp = ctx.template_performance || {};
+        const elP = document.getElementById('motor_plantilla');
+        if (elP) {
+          if (tp.matched && tp.template_id) {
+            elP.textContent = tp.template_id + ' · +' + (tp.header_fields_extracted_count || 0) + ' cab. · +' + (tp.line_supplement_count || 0) + ' líneas sup.';
+          } else {
+            elP.textContent = '—';
+          }
+        }
+        const ul = document.getElementById('motor_lista_cabecera');
+        if (ul) {
+          ul.innerHTML = '';
+          (ctx.header_campos || []).forEach(function (c) {
+            const li = document.createElement('li');
+            const conf = c.confidence != null ? ' conf:' + c.confidence : '';
+            var ev = (c.evidencia_preview || '').slice(0, 120);
+            li.textContent = c.campo + ': ' + String(c.valor != null ? c.valor : '') + conf + (ev ? ' · …' + ev : '');
+            ul.appendChild(li);
+          });
+        }
+        const ld = document.getElementById('motor_lista_lineas');
+        if (ld) {
+          ld.innerHTML = '';
+          (ctx.line_items_ui || []).forEach(function (row, i) {
+            const div = document.createElement('div');
+            div.className = 'rounded border border-slate-200/80 p-2 dark:border-slate-600/60';
+            var parts = ['#' + (i + 1)];
+            const campos = row.campos || {};
+            Object.keys(campos).forEach(function (k) {
+              const z = campos[k];
+              parts.push(k + ': ' + String(z.valor != null ? z.valor : '') + (z.confidence != null ? ' (' + z.confidence + ')' : ''));
+            });
+            div.textContent = parts.join(' · ');
+            ld.appendChild(div);
+          });
+        }
+        const corr = document.getElementById('motor_correcciones');
+        const af = ctx.analyst_feedback || {};
+        var n = (af.corrections && af.corrections.length) || 0;
+        if (corr) {
+          if (n) { corr.classList.remove('hidden'); corr.textContent = 'Correcciones de analista registradas: ' + n + '.'; }
+          else { corr.classList.add('hidden'); corr.textContent = ''; }
+        }
+      }
+
+      function escapeHtmlAttr(s) {
+        if (s == null) return '';
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function parseDecimalInput(s) {
+        if (s == null || String(s).trim() === '') return NaN;
+        return parseFloat(String(s).replace(/\s/g, '').replace(',', '.'));
+      }
+
+      function syncLineasJsonFromCarrito() {
+        const tbody = document.getElementById('lineas_carrito_body');
+        if (!tbody) return;
+        const lineas = [];
+        tbody.querySelectorAll('tr').forEach(function (tr, idx) {
+          const desc = (tr.querySelector('.linea-desc') && tr.querySelector('.linea-desc').value) || '';
+          const cant = (tr.querySelector('.linea-cant') && tr.querySelector('.linea-cant').value) || '0';
+          const pu = (tr.querySelector('.linea-pu') && tr.querySelector('.linea-pu').value) || '0';
+          const hid = tr.querySelector('.linea-id-art');
+          const idArt = hid && hid.value != null ? String(hid.value).trim() : '';
+          const meta = {};
+          if (desc.trim()) meta.descripcion_ocr = desc.trim();
+          if (tr.dataset.codigoArticulo) meta.codigo_articulo = tr.dataset.codigoArticulo;
+          if (tr.dataset.descripcionArticulo) meta.descripcion_articulo = tr.dataset.descripcionArticulo;
+          if (tr.dataset.etiquetaArticulo) meta.etiqueta_articulo = tr.dataset.etiquetaArticulo;
+          lineas.push({
+            orden: idx + 1,
+            id_art_legacy: idArt.trim() ? (parseInt(idArt, 10) || null) : null,
+            cantidad: cant,
+            precio_unitario: pu,
+            metadata: meta,
+          });
+        });
+        const ta = document.getElementById('lineas_json');
+        if (ta) ta.value = JSON.stringify(lineas, null, 2);
+      }
+
+      /** Autocompletado de artículos (misma API que lógica TPV, endpoint compras). */
+      function instalarBusquedaArticuloEnFila(tr) {
+        const search = tr.querySelector('.linea-art-search');
+        const sug = tr.querySelector('.linea-art-sug');
+        const hid = tr.querySelector('.linea-id-art');
+        if (!search || !sug || !hid) return;
+        let tmr;
+        function hideSug() {
+          sug.classList.add('hidden');
+          sug.innerHTML = '';
+        }
+        function showRes(items) {
+          sug.innerHTML = '';
+          if (!items.length) {
+            hideSug();
+            return;
+          }
+          items.forEach(function (it) {
+            const li = document.createElement('li');
+            li.className = 'cursor-pointer px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700';
+            li.setAttribute('role', 'option');
+            const cod = String(it.codigo_articulo != null ? it.codigo_articulo : '');
+            const des = String(it.descripcion != null ? it.descripcion : '');
+            li.textContent = (cod ? cod + ' · ' : '') + des;
+            li.addEventListener('mousedown', function (e) {
+              e.preventDefault();
+              hid.value = String(it.id_articulo);
+              tr.dataset.codigoArticulo = cod;
+              tr.dataset.descripcionArticulo = des;
+              tr.dataset.etiquetaArticulo = li.textContent;
+              search.value = li.textContent;
+              hideSug();
+              syncLineasJsonFromCarrito();
+              if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+              const descInp = tr.querySelector('.linea-desc');
+              if (descInp && !String(descInp.value || '').trim()) {
+                descInp.value = des;
+              }
+            });
+            sug.appendChild(li);
+          });
+          sug.classList.remove('hidden');
+        }
+        search.addEventListener('input', function () {
+          clearTimeout(tmr);
+          hid.value = '';
+          tr.dataset.codigoArticulo = '';
+          tr.dataset.descripcionArticulo = '';
+          tr.dataset.etiquetaArticulo = '';
+          const q = String(search.value || '').trim();
+          if (!q) {
+            hideSug();
+            syncLineasJsonFromCarrito();
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+            return;
+          }
+          syncLineasJsonFromCarrito();
+          if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          tmr = setTimeout(async function () {
+            try {
+              const u = '/api/compras/expedientes/' + encodeURIComponent(EID) + '/articulos-buscar/?search=' + encodeURIComponent(q) + '&limit=25';
+              const r = await api(u);
+              const data = await r.json();
+              if (!r.ok) {
+                hideSug();
+                return;
+              }
+              showRes(Array.isArray(data.articulos) ? data.articulos : []);
+            } catch (e) {
+              hideSug();
+            }
+          }, 280);
+        });
+        search.addEventListener('blur', function () {
+          setTimeout(hideSug, 200);
+        });
+      }
+
+      function actualizarSubtotalFila(tr) {
+        const c = parseDecimalInput((tr.querySelector('.linea-cant') || {}).value);
+        const p = parseDecimalInput((tr.querySelector('.linea-pu') || {}).value);
+        const subEl = tr.querySelector('.linea-sub');
+        if (!subEl) return;
+        if (isNaN(c) || isNaN(p)) { subEl.textContent = '—'; return; }
+        const sub = c * p;
+        subEl.textContent = sub.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+      }
+
+      function actualizarTotalCarrito() {
+        const tbody = document.getElementById('lineas_carrito_body');
+        const out = document.getElementById('lineas_carrito_total_num');
+        if (!tbody || !out) return;
+        let sum = 0;
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+          const c = parseDecimalInput((tr.querySelector('.linea-cant') || {}).value);
+          const p = parseDecimalInput((tr.querySelector('.linea-pu') || {}).value);
+          if (!isNaN(c) && !isNaN(p)) sum += c * p;
+        });
+        out.textContent = sum.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function renderCarritoDesdeLineas(lineas) {
+        const tbody = document.getElementById('lineas_carrito_body');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        const arr = Array.isArray(lineas) ? lineas : [];
+        if (!arr.length) {
+          arr.push({ orden: 1, id_art_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
+        }
+        arr.forEach(function (ln, idx) {
+          const meta = ln.metadata || {};
+          const desc = meta.descripcion_ocr != null ? String(meta.descripcion_ocr) : '';
+          const cant = ln.cantidad != null ? String(ln.cantidad) : '1';
+          const pu = ln.precio_unitario != null ? String(ln.precio_unitario) : '0';
+          const idArt = ln.id_art_legacy != null && ln.id_art_legacy !== '' ? String(ln.id_art_legacy) : '';
+          let artSearch = '';
+          if (meta.etiqueta_articulo) {
+            artSearch = String(meta.etiqueta_articulo);
+          } else if (meta.codigo_articulo && meta.descripcion_articulo) {
+            artSearch = String(meta.codigo_articulo) + ' · ' + String(meta.descripcion_articulo);
+          } else if (idArt) {
+            artSearch = idArt;
+          }
+          const tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="px-3 py-2 align-middle text-gray-500 dark:text-gray-400">' + (idx + 1) + '</td>' +
+            '<td class="px-2 py-1"><input type="text" class="linea-desc w-full min-w-[12rem] rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(desc) + '" /></td>' +
+            '<td class="px-2 py-1"><input type="text" inputmode="decimal" class="linea-cant w-full text-right rounded border border-gray-200 px-2 py-1.5 text-sm font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(cant) + '" /></td>' +
+            '<td class="px-2 py-1"><input type="text" inputmode="decimal" class="linea-pu w-full text-right rounded border border-gray-200 px-2 py-1.5 text-sm font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(pu) + '" /></td>' +
+            '<td class="linea-sub px-3 py-2 text-right font-mono text-sm text-gray-800 dark:text-gray-100">—</td>' +
+            '<td class="px-2 py-1 align-top min-w-[16rem]">' +
+            '<input type="hidden" class="linea-id-art" value="' + escapeHtmlAttr(idArt) + '" />' +
+            '<div class="relative linea-art-wrap">' +
+            '<input type="text" class="linea-art-search w-full rounded border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100" value="' + escapeHtmlAttr(artSearch) + '" placeholder="Buscar código o nombre…" autocomplete="off" />' +
+            '<ul class="linea-art-sug hidden absolute left-0 right-0 z-30 mt-0.5 max-h-52 overflow-auto rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100" role="listbox"></ul>' +
+            '</div></td>' +
+            '<td class="px-1 py-1 align-middle"><button type="button" class="linea-eliminar rounded p-1 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40" title="Quitar línea"><span class="material-icons text-lg">close</span></button></td>';
+          tbody.appendChild(tr);
+          if (meta.codigo_articulo) tr.dataset.codigoArticulo = String(meta.codigo_articulo);
+          if (meta.descripcion_articulo) tr.dataset.descripcionArticulo = String(meta.descripcion_articulo);
+          if (meta.etiqueta_articulo) tr.dataset.etiquetaArticulo = String(meta.etiqueta_articulo);
+          instalarBusquedaArticuloEnFila(tr);
+          actualizarSubtotalFila(tr);
+        });
+        actualizarTotalCarrito();
+        syncLineasJsonFromCarrito();
+      }
+
+      /** True si alguna fila no tiene código de artículo AdministraNET (entero ≥ 1). */
+      function hayLineaSinArticuloEnDom() {
+        const tbody = document.getElementById('lineas_carrito_body');
+        if (!tbody) return true;
+        let sin = false;
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+          const inp = tr.querySelector('.linea-id-art');
+          const raw = inp && inp.value != null ? String(inp.value).trim() : '';
+          const n = parseInt(raw, 10);
+          const ok = raw !== '' && !isNaN(n) && n >= 1;
+          tr.classList.toggle('bg-amber-50', !ok);
+          tr.classList.toggle('dark:bg-amber-950/25', !ok);
+          if (!ok) sin = true;
+        });
+        return sin;
+      }
+
+      function actualizarHintLineasSinArt(mostrar, texto) {
+        const el = document.getElementById('hint_lineas_sin_art');
+        if (!el) return;
+        if (mostrar && texto) {
+          el.textContent = texto;
+          el.classList.remove('hidden');
+        } else {
+          el.textContent = '';
+          el.classList.add('hidden');
+        }
+      }
+
+      /**
+       * Alineado al backend: POST /aprobar/ solo con estado aprobacion_solicitada.
+       * Las transiciones usan d.acciones_permitidas (listar_acciones_permitidas).
+       * «Enviar a revisión» exige además id_art_legacy en cada línea (validación servidor).
+       */
+      function aplicarBotonesWorkflow(d) {
+        const estado = String(d.estado || '');
+        const acc = Array.isArray(d.acciones_permitidas) ? d.acciones_permitidas : [];
+        const hintFlujo = document.getElementById('hint_flujo_aprobacion');
+        function permitir(nombre) {
+          return acc.indexOf(nombre) >= 0;
+        }
+        function armar(btnId, activo, titulo) {
+          const el = document.getElementById(btnId);
+          if (!el) return;
+          el.disabled = !activo;
+          el.title = titulo || '';
+        }
+        const term = estado === 'aprobado' || estado === 'rechazado' || estado === 'error_posting';
+        armar('btn_guardar', !term, term ? 'Expediente finalizado; no se edita el borrador desde aquí.' : '');
+        const puedePorEstado = permitir('enviar_revision');
+        const faltaArt = hayLineaSinArticuloEnDom();
+        const puedeRevision = puedePorEstado && !faltaArt;
+        armar(
+          'btn_revision',
+          puedeRevision,
+          !puedePorEstado
+            ? 'Requiere borrador u OCR completado y código de proveedor (AdministraNET).'
+            : (faltaArt
+              ? 'Elegí un artículo (columna Art., búsqueda) en todas las líneas y guardá el borrador.'
+              : '')
+        );
+        if (puedePorEstado && faltaArt) {
+          actualizarHintLineasSinArt(
+            true,
+            'Falta elegir un artículo AdministraNET en una o más líneas (columna «Art.»). Sin eso no se puede enviar a revisión. Buscá, elegí de la lista, guardá borrador y reintentá.'
+          );
+        } else {
+          actualizarHintLineasSinArt(false, '');
+        }
+        armar('btn_listo', permitir('marcar_listo_para_aprobar'), !permitir('marcar_listo_para_aprobar') ? 'Solo con el expediente en revisión.' : '');
+        armar('btn_solicitar_aprob', permitir('solicitar_aprobacion'), !permitir('solicitar_aprobacion') ? 'Solo desde revisión o listo para aprobar.' : '');
+        const puedeAprobar = estado === 'aprobacion_solicitada';
+        armar('btn_aprobar', puedeAprobar, puedeAprobar ? '' : 'Solo se aprueba con el expediente en «Aprobación solicitada». Usá antes «Solicitar aprobación».');
+        armar('btn_rechazar', permitir('rechazar'), !permitir('rechazar') ? 'Solo desde revisión o listo para aprobar.' : '');
+        if (hintFlujo) {
+          hintFlujo.classList.add('hidden');
+          hintFlujo.textContent = '';
+          if (estado === 'listo_para_aprobar') {
+            hintFlujo.classList.remove('hidden');
+            hintFlujo.textContent = 'Solicitá aprobación para habilitar «Aprobar» (el servidor solo acepta aprobar en ese estado).';
+          }
+        }
+      }
+
+      function onlyDigits(s) {
+        return String(s || '').replace(/\D/g, '');
+      }
+
+      function parseFechaDdMmYyyy(s) {
+        const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (!m) return '';
+        return m[3] + '-' + m[2] + '-' + m[1];
+      }
+
+      /** Evita usar etiquetas de factura (p. ej. "Fecha de Emisión:") como razón social. */
+      function pareceEtiquetaFactura(s) {
+        if (!s) return false;
+        const t = String(s).trim().toLowerCase();
+        if (t.length < 4) return false;
+        if (/fecha\s*de\s*emis|emisión|emision|vencimiento|subtotal|iva\s|cae|tipo\s+de|punto\s+de|comp\.|nro\.|nº|n°|original|duplicado|página|pagina/.test(t)) return true;
+        if (/^fecha\s|^total\s|^importe\s/.test(t)) return true;
+        if (t.endsWith(':') && t.length < 40) return true;
+        return false;
+      }
+
+      function refrescarVisorDocumento() {
+        const el = document.getElementById('visor_documento');
+        if (!el || !el.src) return;
+        try {
+          const u = new URL(el.src, window.location.origin);
+          u.searchParams.set('_', String(Date.now()));
+          el.src = u.href;
+        } catch (e) {
+          const sep = el.src.indexOf('?') >= 0 ? '&' : '?';
+          el.src = el.src + sep + '_=' + Date.now();
+        }
+      }
+
+      /** desdeBoton: true → mensaje de éxito y refresco del PDF/imagen (evita caché y feedback vacío). */
+      async function cargar(desdeBoton) {
+        showErr('');
+        const btn = document.getElementById('btn_recargar');
+        if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+        let d;
+        try {
+          const r = await api('/api/compras/expedientes/' + EID + '/');
+          d = await r.json();
+          if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        } catch (e) {
+          showErr('No se pudo cargar el expediente: ' + (e && e.message ? e.message : String(e)));
+          return;
+        } finally {
+          if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+        }
+        document.getElementById('badge_estado').textContent = d.estado.replace(/_/g, ' ');
+        document.getElementById('cod_prov').value = d.codigo_proveedor_legacy || '';
+        document.getElementById('origen').value = d.origen_datos || 'MANUAL';
+        const h = (d.metadata && d.metadata.posting_v1 && d.metadata.posting_v1.header) || {};
+        const p = (d.metadata && d.metadata.proveedor_synap) || {};
+        const docs = Array.isArray(d.documentos_fuente) ? d.documentos_fuente : [];
+        const lastDoc = docs.length ? docs[docs.length - 1] : null;
+        const ocr = (lastDoc && lastDoc.resultado_ocr) || {};
+        const ocrRaw = (ocr && ocr.raw) || {};
+        const cab = ocr.campos_cabecera || {};
+        const lineasSugeridas = Array.isArray(ocr.lineas_sugeridas) ? ocr.lineas_sugeridas : [];
+
+        let nro = String(h.nro_comprobante_formateado || '').trim();
+        let fecha = (h.fecha_comprobante || '').slice(0, 10);
+        let importe = h.importe_total != null && h.importe_total !== '' ? String(h.importe_total) : '';
+        let razon = String(p.razon_social || '').trim();
+        if (pareceEtiquetaFactura(razon)) razon = '';
+        let cuit = String(p.cuit || '').trim();
+
+        if (!nro && cab.nro_comprobante_texto) nro = String(cab.nro_comprobante_texto).trim();
+        if (!fecha && cab.fecha_comprobante_texto) fecha = parseFechaDdMmYyyy(cab.fecha_comprobante_texto);
+        if (!importe && cab.importe_total_texto) importe = String(cab.importe_total_texto).trim();
+        if (!razon && cab.proveedor_texto) razon = String(cab.proveedor_texto).trim();
+        if (pareceEtiquetaFactura(razon)) razon = '';
+        if (!cuit && cab.proveedor_cuit_texto) cuit = onlyDigits(cab.proveedor_cuit_texto);
+
+        document.getElementById('nro_comp').value = nro;
+        document.getElementById('fecha_comp').value = fecha;
+        document.getElementById('importe').value = importe;
+        {
+          const tipoGuardado = (h.tipo_factura || '').trim();
+          const tipoOcr = (cab.tipo_factura || '').trim();
+          const hintLetra = document.getElementById('hint_letra_ocr');
+          if (hintLetra) {
+            if (tipoOcr && tipoGuardado && tipoOcr !== tipoGuardado) {
+              hintLetra.textContent = 'El PDF sugiere letra ' + tipoOcr + ' (p. ej. COD. 011). El borrador guardado tiene ' + tipoGuardado + '. Se aplica la sugerencia del análisis; guardá para persistir.';
+              hintLetra.classList.remove('hidden');
+            } else {
+              hintLetra.classList.add('hidden');
+              hintLetra.textContent = '';
+            }
+          }
+          {
+            const ftd = (d.revision_engine_context && d.revision_engine_context.fiscal_type_detection) || null;
+            const sug = ftd && ftd.adminnet_tipo_factura ? ftd.adminnet_tipo_factura : '';
+            document.getElementById('tipo_fiscal').value = tipoOcr || tipoGuardado || sug || '';
+          }
+        }
+        document.getElementById('cuit_prov').value = cuit;
+        document.getElementById('razon_social_prov').value = razon;
+        document.getElementById('proveedor_estado').textContent = p.modo ? ('Modo proveedor: ' + p.modo.replace(/_/g, ' ')) : '';
+        const lineasExistentes = Array.isArray(d.lineas) ? d.lineas : [];
+        let lineasParaUi = lineasExistentes;
+        if (!lineasExistentes.length && lineasSugeridas.length) {
+          lineasParaUi = lineasSugeridas.map(function (ln, idx) {
+            return {
+              orden: idx + 1,
+              id_art_legacy: null,
+              cantidad: ln.cantidad || '1',
+              precio_unitario: ln.precio_unitario || '0',
+              metadata: { descripcion_ocr: ln.descripcion || '' },
+            };
+          });
+        }
+        renderCarritoDesdeLineas(lineasParaUi);
+        if (lastDoc && lastDoc.estado_procesamiento === 'completado') {
+          if (ocrRaw.advertencia) {
+            showOcrHint(String(ocrRaw.advertencia));
+          } else if (Object.keys(cab).length || lineasSugeridas.length) {
+            var hintBase = 'Se precargaron datos sugeridos desde el análisis del PDF. Revisá y ajustá antes de aprobar.';
+            if (cab.lineas_repetidas_omitidas) {
+              hintBase += ' Se omitieron ' + cab.lineas_repetidas_omitidas + ' línea(s) duplicada(s) (misma factura en varias páginas: Original/Duplicado/Triplicado).';
+            }
+            showOcrHint(hintBase);
+          } else {
+            showOcrHint('Documento procesado; no se detectaron campos automáticos. Completá manualmente o usá un servicio OCR externo (adapter http).');
+          }
+        } else {
+          showOcrHint('');
+        }
+
+        renderMotorPanel(d);
+        syncLineasJsonFromCarrito();
+        window._revision_last_expediente = d;
+        aplicarBotonesWorkflow(d);
+        window._revision_snapshot = {
+          nro_comp: document.getElementById('nro_comp').value,
+          fecha_comp: document.getElementById('fecha_comp').value,
+          importe: document.getElementById('importe').value,
+          cuit_prov: document.getElementById('cuit_prov').value,
+          razon_social_prov: document.getElementById('razon_social_prov').value,
+          tipo_fiscal: document.getElementById('tipo_fiscal').value,
+          lineas_json: document.getElementById('lineas_json').value
+        };
+
+        let evs;
+        try {
+          const re = await api('/api/compras/expedientes/' + EID + '/eventos/');
+          evs = await re.json();
+        } catch (e) {
+          evs = [];
+        }
+        const ul = document.getElementById('lista_eventos');
+        ul.innerHTML = '';
+        if (Array.isArray(evs) && evs.length) {
+          evs.slice().reverse().forEach(function (e) {
+            const li = document.createElement('li');
+            li.innerHTML = '<span class="ev-type">' + e.tipo_evento + '</span> · <time>' + e.creado_en + '</time>' + (e.actor_email ? ' · ' + e.actor_email : '');
+            ul.appendChild(li);
+          });
+        }
+
+        if (desdeBoton) {
+          refrescarVisorDocumento();
+          showOk('Datos actualizados desde el servidor.');
+        }
+      }
+
+      document.getElementById('btn_recargar').onclick = function () { cargar(true); };
+
+      (function wireCarrito() {
+        const tbody = document.getElementById('lineas_carrito_body');
+        if (tbody) {
+          tbody.addEventListener('input', function (ev) {
+            const t = ev.target;
+            if (!t || !t.classList) return;
+            if (t.classList.contains('linea-cant') || t.classList.contains('linea-pu')) {
+              const tr = t.closest('tr');
+              if (tr) { actualizarSubtotalFila(tr); actualizarTotalCarrito(); syncLineasJsonFromCarrito(); }
+            }
+            if (t.classList.contains('linea-desc')) {
+              syncLineasJsonFromCarrito();
+              if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+            }
+          });
+          tbody.addEventListener('click', function (ev) {
+            const btn = ev.target && ev.target.closest && ev.target.closest('.linea-eliminar');
+            if (!btn) return;
+            const tr = btn.closest('tr');
+            const tb = document.getElementById('lineas_carrito_body');
+            if (!tr || !tb || tb.querySelectorAll('tr').length < 2) return;
+            tr.remove();
+            tb.querySelectorAll('tr').forEach(function (row, idx) {
+              const num = row.querySelector('td:first-child');
+              if (num) num.textContent = String(idx + 1);
+            });
+            actualizarTotalCarrito();
+            syncLineasJsonFromCarrito();
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          });
+        }
+        const btnAdd = document.getElementById('btn_linea_agregar');
+        if (btnAdd) {
+          btnAdd.onclick = function () {
+            renderCarritoDesdeLineas(
+              (function () {
+                syncLineasJsonFromCarrito();
+                let cur = [];
+                try { cur = JSON.parse(document.getElementById('lineas_json').value || '[]'); } catch (e) { cur = []; }
+                if (!Array.isArray(cur)) cur = [];
+                cur.push({ orden: cur.length + 1, id_art_legacy: null, cantidad: '1', precio_unitario: '0', metadata: {} });
+                return cur;
+              })()
+            );
+            if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          };
+        }
+        const btnJson = document.getElementById('btn_lineas_json_toggle');
+        if (btnJson) {
+          btnJson.onclick = function () {
+            syncLineasJsonFromCarrito();
+            const ta = document.getElementById('lineas_json');
+            if (!ta) return;
+            ta.classList.toggle('hidden');
+            const oculto = ta.classList.contains('hidden');
+            var ls = btnJson.getAttribute('data-label-show') || 'Ver JSON';
+            var lh = btnJson.getAttribute('data-label-hide') || 'Ocultar JSON';
+            btnJson.textContent = oculto ? ls : lh;
+          };
+        }
+      })();
+
+      /** Cuerpo PATCH alineado a «Guardar borrador» (cabecera + líneas + feedback opcional). */
+      function construirBodyPatchBorradorRevision() {
+        syncLineasJsonFromCarrito();
+        let lineas;
+        try { lineas = JSON.parse(document.getElementById('lineas_json').value || '[]'); }
+        catch (e) { throw new Error('JSON de líneas inválido.'); }
+        const body = {
+          codigo_proveedor_legacy: parseInt(document.getElementById('cod_prov').value, 10) || null,
+          origen_datos: document.getElementById('origen').value,
+          lineas: lineas,
+          metadata: {
+            proveedor_synap: {
+              cuit: (document.getElementById('cuit_prov').value || '').trim(),
+              razon_social: (document.getElementById('razon_social_prov').value || '').trim(),
+            },
+          },
+          posting_header: {
+            nro_comprobante_formateado: document.getElementById('nro_comp').value.trim(),
+            fecha_comprobante: document.getElementById('fecha_comp').value || null,
+            importe_total: document.getElementById('importe').value || null,
+            tipo_factura: document.getElementById('tipo_fiscal').value,
+          },
+        };
+        const snap = window._revision_snapshot || null;
+        const append = [];
+        if (snap) {
+          function neq(a, b) { return String(a || '') !== String(b || ''); }
+          if (neq(document.getElementById('nro_comp').value.trim(), snap.nro_comp)) {
+            append.push({ campo: 'nro_comprobante_formateado', valor_anterior: snap.nro_comp || null, valor_nuevo: document.getElementById('nro_comp').value.trim() || null });
+          }
+          if (neq(document.getElementById('fecha_comp').value, snap.fecha_comp)) {
+            append.push({ campo: 'fecha_comprobante', valor_anterior: snap.fecha_comp || null, valor_nuevo: document.getElementById('fecha_comp').value || null });
+          }
+          if (neq(document.getElementById('importe').value, snap.importe)) {
+            append.push({ campo: 'importe_total', valor_anterior: snap.importe || null, valor_nuevo: document.getElementById('importe').value || null });
+          }
+          if (neq(document.getElementById('cuit_prov').value, snap.cuit_prov)) {
+            append.push({ campo: 'cuit_proveedor', valor_anterior: snap.cuit_prov || null, valor_nuevo: document.getElementById('cuit_prov').value || null });
+          }
+          if (neq(document.getElementById('razon_social_prov').value, snap.razon_social_prov)) {
+            append.push({ campo: 'razon_social_borrador', valor_anterior: snap.razon_social_prov || null, valor_nuevo: document.getElementById('razon_social_prov').value || null });
+          }
+          if (neq(document.getElementById('tipo_fiscal').value, snap.tipo_fiscal)) {
+            append.push({ campo: 'tipo_factura', valor_anterior: snap.tipo_fiscal || null, valor_nuevo: document.getElementById('tipo_fiscal').value || null });
+          }
+          syncLineasJsonFromCarrito();
+          if (neq(document.getElementById('lineas_json').value, snap.lineas_json)) {
+            append.push({
+              campo: 'lineas_comprobante',
+              valor_anterior: (snap.lineas_json || '').slice(0, 500),
+              valor_nuevo: (document.getElementById('lineas_json').value || '').slice(0, 500),
+            });
+          }
+        }
+        if (append.length) body.analyst_feedback_append = append;
+        return body;
+      }
+
+      async function patchExpedienteBorradorDesdeFormulario() {
+        let body;
+        try { body = construirBodyPatchBorradorRevision(); }
+        catch (e) { return { ok: false, errMsg: e.message || String(e) }; }
+        const r = await api('/api/compras/expedientes/' + EID + '/', { method: 'PATCH', body: JSON.stringify(body) });
+        const d = await r.json();
+        if (!r.ok) return { ok: false, d };
+        return { ok: true, d };
+      }
+
+      document.getElementById('btn_guardar').onclick = async function () {
+        showErr('');
+        const res = await patchExpedienteBorradorDesdeFormulario();
+        if (!res.ok) {
+          if (res.errMsg) { showErr(res.errMsg); return; }
+          showErr(JSON.stringify(res.d, null, 2)); return;
+        }
+        showOk('Guardado.');
+        cargar(false);
+      };
+
+      document.getElementById('btn_resolver_proveedor').onclick = async function () {
+        const cuit = (document.getElementById('cuit_prov').value || '').trim();
+        if (!cuit) { showErr('Indicá CUIT para resolver proveedor.'); return; }
+        const r = await api('/api/compras/expedientes/' + EID + '/resolver-proveedor/', {
+          method: 'POST',
+          body: JSON.stringify({
+            cuit: cuit,
+            razon_social: (document.getElementById('razon_social_prov').value || '').trim(),
+            tipo_factura: (document.getElementById('tipo_fiscal').value || '').trim(),
+          }),
+        });
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        if (d.codigo_proveedor_legacy) {
+          document.getElementById('cod_prov').value = d.codigo_proveedor_legacy;
+        }
+        if (d.proveedor_synap && d.proveedor_synap.razon_social) {
+          document.getElementById('razon_social_prov').value = d.proveedor_synap.razon_social;
+        }
+        if (d.proveedor_synap && d.proveedor_synap.tipo_factura_sugerida) {
+          var tfEl = document.getElementById('tipo_fiscal');
+          var sug = d.proveedor_synap.tipo_factura_sugerida;
+          if (!(tfEl.value === 'FC' && (sug === 'FA' || sug === 'FB'))) {
+            tfEl.value = sug;
+          }
+        }
+        var msgRes = d.detail || 'Proveedor resuelto.';
+        if (d.enviar_revision && d.enviar_revision.realizado) {
+          msgRes += ' Enviado a revisión.';
+        } else if (d.enviar_revision && d.enviar_revision.realizado === false && d.enviar_revision.detail) {
+          msgRes += ' No se envió a revisión automáticamente: ' + d.enviar_revision.detail;
+        }
+        showOk(msgRes);
+        cargar(false);
+      };
+
+      function postTransicion(accion, extra) {
+        return api('/api/compras/expedientes/' + EID + '/transiciones/', { method: 'POST', body: JSON.stringify(Object.assign({ accion: accion }, extra || {})) });
+      }
+
+      function primerCampoApi(v) {
+        if (v == null) return '';
+        if (Array.isArray(v)) return primerCampoApi(v[0]);
+        return String(v);
+      }
+
+      function mensajeErrorApiCompras(d) {
+        if (!d || typeof d !== 'object') return JSON.stringify(d);
+        var cod = primerCampoApi(d.codigo);
+        var det = primerCampoApi(d.detail);
+        if (cod === 'linea_sin_articulo') {
+          return (det || 'Cada línea debe tener id_art_legacy (artículo elegido en AdministraNET).') + ' En «Art.» buscá y elegí un ítem de la lista; el texto suelto sin elegir no guarda el código interno.';
+        }
+        if (cod === 'proveedor_requerido') return det || 'Falta código de proveedor.';
+        if (cod === 'lineas_requeridas') return det || 'Se requiere al menos una línea.';
+        if (cod === 'linea_cantidad_invalida') return det || 'Revisá cantidades en las líneas.';
+        if (det) return det;
+        return JSON.stringify(d, null, 2);
+      }
+
+      document.getElementById('btn_revision').onclick = async function () {
+        showErr('');
+        syncLineasJsonFromCarrito();
+        if (hayLineaSinArticuloEnDom()) {
+          showErr('Cada línea debe tener un artículo elegido en «Art.» (resultado de la búsqueda, no solo texto). Si ves la fila resaltada, elegí de la lista desplegable.');
+          if (window._revision_last_expediente) aplicarBotonesWorkflow(window._revision_last_expediente);
+          return;
+        }
+        /* La transición valida líneas en BD: persistimos el mismo PATCH que «Guardar borrador» antes de POST. */
+        const patchRes = await patchExpedienteBorradorDesdeFormulario();
+        if (!patchRes.ok) {
+          if (patchRes.errMsg) { showErr(patchRes.errMsg); return; }
+          showErr(JSON.stringify(patchRes.d, null, 2)); return;
+        }
+        const r = await postTransicion('enviar_revision');
+        const d = await r.json();
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); cargar(false); return; }
+        showOk('Enviado a revisión.'); cargar(false);
+      };
+      document.getElementById('btn_listo').onclick = async function () {
+        const r = await postTransicion('marcar_listo_para_aprobar');
+        const d = await r.json();
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); return; }
+        showOk('Listo para aprobar.'); cargar(false);
+      };
+      document.getElementById('btn_solicitar_aprob').onclick = async function () {
+        const r = await postTransicion('solicitar_aprobacion');
+        const d = await r.json();
+        if (!r.ok) { showErr(mensajeErrorApiCompras(d)); return; }
+        showOk('Aprobación solicitada.'); cargar(false);
+      };
+      document.getElementById('btn_aprobar').onclick = async function () {
+        const r = await api('/api/compras/expedientes/' + EID + '/aprobar/', { method: 'POST', body: '{}' });
+        const d = await r.json();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Aprobado. Posting simulado: codmov ' + d.legacy_codigo_movimiento + ', nro ' + d.legacy_nro_comprobante);
+        cargar(false);
+      };
+
+      const dlg = document.getElementById('dlg_rechazo');
+      document.getElementById('btn_rechazar').onclick = function () { dlg.showModal(); };
+      document.getElementById('dlg_rechazo_cancel').onclick = function () { dlg.close(); };
+      document.getElementById('dlg_rechazo_ok').onclick = async function () {
+        const motivo = document.getElementById('motivo_rechazo').value.trim();
+        if (!motivo) return;
+        const r = await postTransicion('rechazar', { motivo: motivo });
+        const d = await r.json();
+        dlg.close();
+        if (!r.ok) { showErr(JSON.stringify(d, null, 2)); return; }
+        showOk('Rechazado.');
+        document.getElementById('motivo_rechazo').value = '';
+        cargar(false);
+      };
+
+      cargar(false);
+    })();
+  </script>
+{% endblock extra_js %}

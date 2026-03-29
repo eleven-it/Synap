@@ -6,12 +6,15 @@
 {% if request.is_mobile %}
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 {% endif %}
-<div class="max-w-6xl mx-auto" x-data="ingresoMovStock()" x-init="init()">
-  <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-6">Ingreso Mov. Stock</h1>
+<div class="mx-auto w-full min-w-0 max-w-5xl px-4 py-5 sm:px-6 sm:py-6 lg:py-8" x-data="ingresoMovStock()" x-init="init()">
+  <header class="mb-5 sm:mb-6">
+    <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Ingreso Mov. Stock</h1>
+    <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-600 dark:text-slate-400">Complete la cabecera del movimiento y, en la siguiente pestaña, agregue los artículos.</p>
+  </header>
 
   <!-- Mensajes -->
-  <div x-show="mensajeError" x-cloak class="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 break-words overflow-hidden" x-text="mensajeError"></div>
-  <div x-show="mensajeOk" x-cloak class="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300">
+  <div x-show="mensajeError" x-cloak class="mb-4 overflow-hidden break-words rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" x-text="mensajeError"></div>
+  <div x-show="mensajeOk" x-cloak class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
     <p x-text="mensajeOk"></p>
     <template x-if="nroComprobante">
       <p class="mt-2 break-words">
@@ -30,18 +33,18 @@
   </div>
 
   <!-- Tabs -->
-  <div class="mb-6 border-b border-gray-200 dark:border-gray-700" role="tablist">
-    <div class="flex gap-1">
+  <div class="mb-5 border-b border-slate-200 dark:border-slate-700" role="tablist">
+    <div class="flex flex-wrap gap-1">
       <button type="button" role="tab" :aria-selected="tabActivo === 'datos'" aria-controls="panel-datos" id="tab-datos"
         @click="forzarCerrarTooltipRenglon(); tabActivo = 'datos'"
-        :class="tabActivo === 'datos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
-        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        :class="tabActivo === 'datos' ? 'border-purple-600 text-purple-700 dark:border-purple-500 dark:text-purple-300 border-b-2 -mb-px' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'"
+        class="min-h-10 rounded-t-lg px-4 py-2 text-sm font-semibold transition border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
         Datos del movimiento
       </button>
       <button type="button" role="tab" :aria-selected="tabActivo === 'articulos'" aria-controls="panel-articulos" id="tab-articulos"
         @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo()"
-        :class="tabActivo === 'articulos' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 border-b-2 -mb-px' : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'"
-        class="px-4 py-2 font-medium text-sm transition border-b-2">
+        :class="tabActivo === 'articulos' ? 'border-purple-600 text-purple-700 dark:border-purple-500 dark:text-purple-300 border-b-2 -mb-px' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'"
+        class="min-h-10 rounded-t-lg px-4 py-2 text-sm font-semibold transition border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
         Artículos
       </button>
     </div>
@@ -49,46 +52,45 @@
 
   <!-- Panel: Datos del movimiento -->
   <div x-show="tabActivo === 'datos'" role="tabpanel" id="panel-datos" aria-labelledby="tab-datos" class="mb-6">
-    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Datos del movimiento</h2>
-      <div class="space-y-4">
-        <!-- Fecha -->
-        <div class="max-w-xs">
-          <label for="fecha" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha</label>
-          <input type="date" id="fecha" x-model="cabecera.fecha" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-        </div>
-        <!-- Motivo | Depósito origen | Depósito destino | Vendedor (según motivo) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label for="motivo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Motivo</label>
-            <select id="motivo" x-model="cabecera.motivo_movimiento" @change="if(parseInt(cabecera.motivo_movimiento, 10) !== 6) cabecera.detalle = ''; setDefaultESDesdeMotivo()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+    <section class="mb-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+      <h2 class="sr-only">Datos del movimiento</h2>
+      <div class="space-y-5">
+        <!-- Fecha + Motivo + Depósitos + Vendedor (una franja en pantallas anchas) -->
+        <div class="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-end">
+          <div class="w-full shrink-0 sm:max-w-[12.5rem]">
+            <label for="fecha" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Fecha</label>
+            <input type="date" id="fecha" x-model="cabecera.fecha" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+          </div>
+          <div class="min-w-0 flex-1 basis-[min(100%,14rem)]">
+            <label for="motivo" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Motivo</label>
+            <select id="motivo" x-model="cabecera.motivo_movimiento" @change="if(parseInt(cabecera.motivo_movimiento, 10) !== 6) cabecera.detalle = ''; setDefaultESDesdeMotivo()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
               <option value="">Seleccione motivo</option>
               <template x-for="m in motivos" :key="m.codigo">
                 <option :value="m.codigo" x-text="m.nombre"></option>
               </template>
             </select>
           </div>
-          <div>
-            <label for="dep_origen" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito origen</label>
-            <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+          <div class="min-w-0 flex-1 basis-[min(100%,14rem)]">
+            <label for="dep_origen" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Depósito origen</label>
+            <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
               <option value="">Seleccione depósito</option>
               <template x-for="d in depositos" :key="d.CodDeposito">
                 <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
               </template>
             </select>
           </div>
-          <div x-show="mostrarDepDestino" x-cloak>
-            <label for="dep_destino" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Depósito destino</label>
-            <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+          <div x-show="mostrarDepDestino" x-cloak class="min-w-0 flex-1 basis-[min(100%,14rem)]">
+            <label for="dep_destino" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Depósito destino</label>
+            <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
               <option value="">Ninguno</option>
               <template x-for="d in depositosDestino" :key="d.CodDeposito">
                 <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
               </template>
             </select>
           </div>
-          <div x-show="mostrarVendedor" x-cloak>
-            <label for="vendedor" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vendedor</label>
-            <select id="vendedor" x-model="cabecera.id_vendedor" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+          <div x-show="mostrarVendedor" x-cloak class="min-w-0 flex-1 basis-[min(100%,12rem)]">
+            <label for="vendedor" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Vendedor</label>
+            <select id="vendedor" x-model="cabecera.id_vendedor" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
               <option value="">Sin asignar</option>
               <template x-for="v in viajantes" :key="v.CodViajante">
                 <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
@@ -108,13 +110,14 @@
             </select>
           </div>
           <div>
-            <label for="ref" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Referencia</label>
-            <select id="ref" x-model="cabecera.id_ref_movstock" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
+            <label for="ref" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Referencia</label>
+            <select id="ref" x-model="cabecera.id_ref_movstock" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
               <option value="">Sin referencia</option>
               <template x-for="r in refMovstock" :key="r.id_ref_movstock">
                 <option :value="r.id_ref_movstock" x-text="r.nombre_ref_movstock"></option>
               </template>
             </select>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Referencia parametrizada en AdministraNET (opcional).</p>
           </div>
         </div>
         <!-- Operario | Máquina | Cantidad armado (solo Parte producción, OPT/OPP) -->
@@ -147,18 +150,18 @@
             <label for="valor_variable" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor variable (%)</label>
             <input type="number" id="valor_variable" x-model.number="cabecera.valor_variable" placeholder="100" step="0.01" min="0" max="100" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
           </div>
-          <div x-show="mostrarBuscaPEDI" x-cloak>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Pedidos internos a depósito</label>
+          <div x-show="mostrarBuscaPEDI" x-cloak class="w-full md:col-span-3">
+            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Pedidos internos a depósito</label>
             <template x-if="!cabecera.nro_pedi">
-              <button type="button" @click="abrirModalPedidos()" :disabled="parseInt(cabecera.motivo_movimiento, 10) === 6 && !cabecera.deposito_destino" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                <span class="material-icons text-lg">list</span>
-                <span x-text="tituloBotonPedidos"></span>
+              <button type="button" @click="abrirModalPedidos()" :disabled="parseInt(cabecera.motivo_movimiento, 10) === 6 && !cabecera.deposito_destino" class="flex w-full min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+                <span class="material-icons shrink-0 text-lg">list</span>
+                <span class="text-center" x-text="tituloBotonPedidos"></span>
               </button>
             </template>
             <template x-if="cabecera.nro_pedi">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="pedidoSeleccionadoResumen ? (pedidoSeleccionadoResumen.tipo === 'PEDI' ? 'PEDI #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi) : 'Pedido #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi)) : ('#' + cabecera.nro_pedi)"></span>
-                <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
+                <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1.5 text-sm text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
                 <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
               </div>
             </template>
@@ -174,7 +177,7 @@
             <template x-if="cabecera.id_proyecto && cabecera.id_proyecto !== ''">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="proyectoSeleccionadoResumen ? proyectoSeleccionadoResumen.nombre_proyecto : ('#' + cabecera.id_proyecto)"></span>
-                <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-1.5 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
+                <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-1.5 text-sm text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
                 <button type="button" @click="cabecera.id_proyecto = ''; proyectoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
               </div>
             </template>
@@ -182,8 +185,8 @@
         </div>
         <!-- Detalle (texto largo, 3 líneas) -->
         <div>
-          <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Detalle</label>
-          <textarea id="detalle" x-model="cabecera.detalle" rows="3" placeholder="Observaciones" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 resize-y"></textarea>
+          <label for="detalle" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Detalle</label>
+          <textarea id="detalle" x-model="cabecera.detalle" rows="3" placeholder="Observaciones" class="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"></textarea>
         </div>
       </div>
     </section>
@@ -191,9 +194,9 @@
 
   <!-- Panel: Artículos (tabla única con fila de búsqueda) -->
   <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6 min-w-0 overflow-hidden" x-cloak>
-    <section class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 min-w-0 overflow-hidden">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Artículos</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 break-words" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en Datos del movimiento.</p>
+    <section class="min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+      <h2 class="sr-only">Artículos del movimiento</h2>
+      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 break-words" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en la primera pestaña.</p>
       <div x-show="mostrarSaldoDeseado" x-cloak class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
         <label for="saldo_deseado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo deseado</label>
         <div class="flex flex-wrap items-center gap-2">
@@ -215,7 +218,7 @@
             class="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
           <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" placeholder="Cant."
             class="w-16 text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-2.5 text-sm">
-          <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white" title="Escanear código de barras">
+          <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white" title="Escanear código de barras">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2"/></svg>
           </button>
         </div>
@@ -242,12 +245,12 @@
                   class="w-16 text-center rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-600 px-1 py-0.5 text-sm">
               </div>
               <template x-if="r.lote_articulo === 'Si'">
-                <button type="button" @click="abrirModalLote(r)" class="text-xs text-indigo-600 dark:text-indigo-400">
+                <button type="button" @click="abrirModalLote(r)" class="text-xs text-purple-600 dark:text-purple-400">
                   <span x-text="r.cod_lote ? ('Lote: ' + r.cod_lote) : 'Elegir lote'"></span>
                 </button>
               </template>
               <template x-if="r.serie_articulo === 'Si'">
-                <button type="button" @click="abrirModalSeries(r)" class="text-xs text-indigo-600 dark:text-indigo-400">Series</button>
+                <button type="button" @click="abrirModalSeries(r)" class="text-xs text-purple-600 dark:text-purple-400">Series</button>
               </template>
             </div>
           </div>
@@ -311,20 +314,20 @@
                   <div class="flex items-center gap-1">
                     <input type="number" x-model.number="r.unidad_art_peso" @change="actualizarMovimientoCantidad(r)" min="0" step="0.001" placeholder="0"
                       class="w-16 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
-                    <button type="button" @click="abrirModalPeso(r)" class="p-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Ingresar peso (lista)"><span class="material-icons text-base">list</span></button>
+                    <button type="button" @click="abrirModalPeso(r)" class="p-1 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20" title="Ingresar peso (lista)"><span class="material-icons text-base">list</span></button>
                   </div>
                 </td>
                 <td class="px-3 py-2" x-text="r.nro_pedi || '—'"></td>
                 <td class="px-3 py-2">
                   <template x-if="r.lote_articulo === 'Si' && !r.id_lote && !r.cod_lote">
-                    <button type="button" @click="abrirModalLote(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Elegir lote"><span class="material-icons text-lg">inventory_2</span></button>
+                    <button type="button" @click="abrirModalLote(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Elegir lote"><span class="material-icons text-lg">inventory_2</span></button>
                   </template>
                   <template x-if="r.lote_articulo === 'Si' && (r.id_lote || r.cod_lote)">
                     <div class="flex flex-wrap items-center gap-1.5">
                       <span class="text-xs font-medium text-gray-900 dark:text-white" x-text="r.cod_lote || '—'"></span>
                       <span x-show="r.vto_lote" class="text-xs text-gray-500 dark:text-gray-400" x-text="'Vto: ' + r.vto_lote"></span>
                       <span x-show="r.stock_lote != null" class="text-xs text-gray-500 dark:text-gray-400">Stock: <span x-text="formatoEntero(r.stock_lote)"></span></span>
-                      <button type="button" @click="abrirModalLote(r)" class="p-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Cambiar lote"><span class="material-icons text-base">edit</span></button>
+                      <button type="button" @click="abrirModalLote(r)" class="p-1 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20" title="Cambiar lote"><span class="material-icons text-base">edit</span></button>
                     </div>
                   </template>
                   <template x-if="r.lote_articulo !== 'Si'">
@@ -333,7 +336,7 @@
                 </td>
                 <td class="px-3 py-2 text-center">
                   <template x-if="r.serie_articulo === 'Si'">
-                    <button type="button" @click="abrirModalSeries(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Números de serie"><span class="material-icons text-lg">layers</span></button>
+                    <button type="button" @click="abrirModalSeries(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Números de serie"><span class="material-icons text-lg">layers</span></button>
                   </template>
                   <template x-if="r.serie_articulo !== 'Si'">
                     <span class="material-icons text-lg text-gray-400 cursor-default" title="Artículo no seriado">layers</span>
@@ -377,7 +380,7 @@
               </td>
               <td colspan="4" class="px-3 py-2">
                 <button type="button" @click="confirmarFilaBusqueda()" :disabled="agregando || !cabeceraMinimaCompleta || !filaBusqueda.articuloSeleccionado"
-                  class="rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 text-sm" title="Agregar">Agregar</button>
+                  class="rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-3 py-1.5 text-sm" title="Agregar">Agregar</button>
               </td>
             </tr>
           </tbody>
@@ -393,7 +396,7 @@
         <template x-for="(a, i) in dropdownSugerencias" :key="'art-' + (a.IDArt || a.esMensajeSinResultados || i) + '-' + i">
           <div class="border-b border-gray-100 dark:border-gray-600 last:border-0">
             <div x-show="a.esMensajeSinResultados" class="w-full text-left px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 italic cursor-default" x-text="a.Descripcion || 'No hay artículos'"></div>
-            <button type="button" x-show="!a.esMensajeSinResultados" @click="seleccionarArticuloFilaBusqueda(a)" class="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm">
+            <button type="button" x-show="!a.esMensajeSinResultados" @click="seleccionarArticuloFilaBusqueda(a)" class="w-full text-left px-3 py-2.5 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-sm">
               <div class="font-medium text-gray-900 dark:text-gray-100" x-text="(a.id_manual || a.CodigoArticulo || '') + ' · ' + (a.Descripcion || '')"></div>
               <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400" x-show="a.PrecioCosto != null || a.Precio1V != null">
                 <span x-show="a.PrecioCosto != null">P. Costo: <span x-text="formatoMoneda(a.PrecioCosto)"></span></span>
@@ -419,22 +422,24 @@
     </section>
   </div>
 
-  <!-- Pie: Continuar / Confirmar / Cancelar -->
-  <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
-    <button x-show="tabActivo === 'datos'" type="button" @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo(); window.scrollTo({top: 0, behavior: 'smooth'})" :disabled="!cabeceraMinimaCompleta"
-      class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
-      <span class="material-icons text-xl">arrow_forward</span>
-      <span>Continuar</span>
-    </button>
-    <button x-show="tabActivo === 'articulos'" x-cloak type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
-      class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition w-full sm:w-auto">
-      <span class="material-icons text-xl">save</span>
-      <span>Confirmar movimiento</span>
-    </button>
-    <button type="button" @click="cancelarYSalir()" class="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-900 dark:text-gray-100 font-medium rounded-lg transition w-full sm:w-auto">
+  <!-- Pie: Continuar / Confirmar / Cancelar (móvil: acción principal arriba) -->
+  <div class="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <button type="button" @click="cancelarYSalir()" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 sm:w-auto">
       <span class="material-icons text-xl">close</span>
       <span>Cancelar</span>
     </button>
+    <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end sm:gap-3">
+      <button x-show="tabActivo === 'datos'" type="button" @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo(); window.scrollTo({top: 0, behavior: 'smooth'})" :disabled="!cabeceraMinimaCompleta"
+        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+        <span class="material-icons text-xl">arrow_forward</span>
+        <span>Continuar</span>
+      </button>
+      <button x-show="tabActivo === 'articulos'" x-cloak type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
+        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+        <span class="material-icons text-xl">save</span>
+        <span>Confirmar movimiento</span>
+      </button>
+    </div>
   </div>
 
   <!-- Modal resumen -->
@@ -502,7 +507,7 @@
       </div>
       <div class="flex justify-end gap-2">
         <button type="button" @click="cerrarModalPeso()" class="px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">Cancelar</button>
-        <button type="button" @click="confirmarPesoModal()" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Aceptar</button>
+        <button type="button" @click="confirmarPesoModal()" class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 text-white">Aceptar</button>
       </div>
     </div>
   </div>
@@ -521,7 +526,7 @@
       <div x-show="!loadingLotesRenglon && lotesParaRenglon.length === 0" class="text-sm text-gray-500 dark:text-gray-400 py-4">No hay lotes con stock en el depósito origen.</div>
       <div x-show="!loadingLotesRenglon && lotesParaRenglon.length > 0" class="max-h-64 overflow-y-auto space-y-1">
         <template x-for="lt in lotesParaRenglon" :key="lt.id_lote">
-          <button type="button" @click="seleccionarLoteRenglon(lt)" class="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm">
+          <button type="button" @click="seleccionarLoteRenglon(lt)" class="w-full text-left px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-sm">
             <span class="font-medium text-gray-900 dark:text-white" x-text="lt.cod_lote"></span>
             <span class="text-gray-600 dark:text-gray-400" x-show="lt.vto_lote" x-text="' (Vto: ' + lt.vto_lote + ')'"></span>
             <span class="ml-2 text-gray-500 dark:text-gray-400">Stock: <span x-text="formatoEntero(lt.stock_lote)"></span></span>
@@ -563,7 +568,7 @@
               <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Vto. (opc.)</label>
               <input type="date" x-model="nuevoVtoSerie" @keydown.enter.prevent="agregarSerieRenglon()" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm w-32">
             </div>
-            <button type="button" @click="agregarSerieRenglon()" :disabled="!nuevoNroSerie || !nuevoNroSerie.trim()" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm">Agregar</button>
+            <button type="button" @click="agregarSerieRenglon()" :disabled="!nuevoNroSerie || !nuevoNroSerie.trim()" class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm">Agregar</button>
           </div>
         </template>
         <!-- Agregar: Salida (elegir disponible) -->
@@ -578,7 +583,7 @@
                 </template>
               </select>
             </div>
-            <button type="button" @click="agregarSerieRenglon()" :disabled="!serieSalidaSeleccionada" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm">Agregar</button>
+            <button type="button" @click="agregarSerieRenglon()" :disabled="!serieSalidaSeleccionada" class="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm">Agregar</button>
           </div>
         </template>
       </div>
@@ -614,7 +619,7 @@
                 <td class="px-3 py-2" x-text="p.Estado || '—'"></td>
                 <td class="px-3 py-2" x-show="parseInt(cabecera.motivo_movimiento, 10) !== 6" x-text="p.nombre_cliente || '—'"></td>
                 <td class="px-3 py-2">
-                  <button type="button" @click="seleccionarPedido(p)" class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
+                  <button type="button" @click="seleccionarPedido(p)" class="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
                 </td>
               </tr>
             </template>
@@ -656,7 +661,7 @@
                 <td class="px-3 py-2" x-text="p.nombre_zona || '—'"></td>
                 <td class="px-3 py-2" x-text="p.nombre_cliente || '—'"></td>
                 <td class="px-3 py-2">
-                  <button type="button" @click="seleccionarProyecto(p)" class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
+                  <button type="button" @click="seleccionarProyecto(p)" class="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 hover:underline text-sm"><span class="material-icons text-base">check_circle</span>Seleccionar</button>
                 </td>
               </tr>
             </template>

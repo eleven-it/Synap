@@ -18,6 +18,54 @@ LISTA_COLUMNS = [
 ]
 
 
+def promocion_desde_fila_articulo(
+    row: Optional[Dict[str, Any]],
+    id_lista: int,
+    fecha: Optional[date] = None,
+) -> Dict[str, Any]:
+    """
+    Evalúa promoción vigente a partir de columnas de `articulo` ya cargadas (sin SELECT extra).
+    `row` debe incluir las claves que devolvía el SELECT de obtener_promocion_articulo.
+    """
+    if fecha is None:
+        fecha = date.today()
+    out: Dict[str, Any] = {
+        'aplica': False,
+        'promocion': 'No',
+        'promocion_tipo': '',
+        'promocion_por': Decimal('0'),
+        'promocion_cant': Decimal('0'),
+    }
+    id_lista = max(0, min(5, int(id_lista)))
+    if not row or (row.get('promocion') or '').strip() != 'Si':
+        return out
+    col_lista = LISTA_COLUMNS[id_lista]
+    if (row.get(col_lista) or '').strip() != 'Si':
+        return out
+    vigencia_desde = row.get('vigencia_desde')
+    vigencia_hasta = row.get('vigencia_hasta')
+    if vigencia_desde and hasattr(vigencia_desde, 'date'):
+        vigencia_desde = vigencia_desde.date() if hasattr(vigencia_desde, 'date') else vigencia_desde
+    if vigencia_hasta and hasattr(vigencia_hasta, 'date'):
+        vigencia_hasta = vigencia_hasta.date() if hasattr(vigencia_hasta, 'date') else vigencia_hasta
+    if vigencia_desde and fecha < vigencia_desde:
+        return out
+    if vigencia_hasta and fecha > vigencia_hasta:
+        return out
+    out['aplica'] = True
+    out['promocion'] = 'Si'
+    out['promocion_tipo'] = (row.get('promocion_tipo') or '').strip()
+    try:
+        out['promocion_por'] = Decimal(str(row.get('promocion_por') or 0))
+    except Exception:
+        out['promocion_por'] = Decimal('0')
+    try:
+        out['promocion_cant'] = Decimal(str(row.get('promocion_cant') or 0))
+    except Exception:
+        out['promocion_cant'] = Decimal('0')
+    return out
+
+
 def obtener_promocion_articulo(
     base_empresa: str,
     id_articulo: int,
@@ -34,16 +82,13 @@ def obtener_promocion_articulo(
         'promocion_cant': Decimal|float,
     }
     """
-    if fecha is None:
-        fecha = date.today()
-    out = {
+    sin_promo = {
         'aplica': False,
         'promocion': 'No',
         'promocion_tipo': '',
         'promocion_por': Decimal('0'),
         'promocion_cant': Decimal('0'),
     }
-    id_lista = max(0, min(5, int(id_lista)))
     with mysql_cursor(base_empresa, dict_cursor=True) as c:
         try:
             c.execute("""
@@ -62,36 +107,9 @@ def obtener_promocion_articulo(
             row = c.fetchone()
         except Exception as e:
             if 'Unknown column' in str(e):
-                return out
+                return sin_promo
             raise
-        if not row or (row.get('promocion') or '').strip() != 'Si':
-            return out
-        # Lista aplicable
-        col_lista = LISTA_COLUMNS[id_lista]
-        if (row.get(col_lista) or '').strip() != 'Si':
-            return out
-        vigencia_desde = row.get('vigencia_desde')
-        vigencia_hasta = row.get('vigencia_hasta')
-        if vigencia_desde and hasattr(vigencia_desde, 'date'):
-            vigencia_desde = vigencia_desde.date() if hasattr(vigencia_desde, 'date') else vigencia_desde
-        if vigencia_hasta and hasattr(vigencia_hasta, 'date'):
-            vigencia_hasta = vigencia_hasta.date() if hasattr(vigencia_hasta, 'date') else vigencia_hasta
-        if vigencia_desde and fecha < vigencia_desde:
-            return out
-        if vigencia_hasta and fecha > vigencia_hasta:
-            return out
-        out['aplica'] = True
-        out['promocion'] = 'Si'
-        out['promocion_tipo'] = (row.get('promocion_tipo') or '').strip()
-        try:
-            out['promocion_por'] = Decimal(str(row.get('promocion_por') or 0))
-        except Exception:
-            out['promocion_por'] = Decimal('0')
-        try:
-            out['promocion_cant'] = Decimal(str(row.get('promocion_cant') or 0))
-        except Exception:
-            out['promocion_cant'] = Decimal('0')
-    return out
+    return promocion_desde_fila_articulo(row, id_lista, fecha)
 
 
 def aplicar_precio_promocion(

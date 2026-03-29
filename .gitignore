@@ -48,6 +48,8 @@ test_*.py
 # Permitir tests Django dentro de paquetes de apps
 !*/tests/test_*.py
 !*/tests/**/test_*.py
+# Suite bajo tests/ en la raíz del proyecto (ej. tests/compras/)
+!tests/**/test_*.py
 investigate_*.py
 build_*.sh
 verify_*.sh
@@ -106,7 +108,7 @@ logs/
 staticfiles/
 
 # Media files (se suben en runtime)
-
+media/factura_compra/
 
 # Certificados
 certs/

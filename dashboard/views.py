@@ -108,8 +108,11 @@ def dashboard_view(request):
         "chart_data": {
             "labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
             "sales": [12000, 19000, 15000, 25000, 22000, 30000, 28000],
-            "orders": [45, 52, 38, 65, 58, 72, 68]
-        }
+            "orders": [45, 52, 38, 65, 58, 72, 68],
+        },
     }
+    # Mismo subconjunto para JS vía json_script (sin |safe en plantilla)
+    _cd = dashboard_data["chart_data"]
+    dashboard_data["chart_js_bundle"] = {"sales": _cd["sales"], "labels": _cd["labels"]}
     
     return render(request, "dashboard/dashboard.html", dashboard_data)

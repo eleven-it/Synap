@@ -6,47 +6,46 @@
 {% block extra_css %}
 <style>
   .bom-form-input:focus { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
-  .bom-form-btn { transition: transform 0.15s ease, box-shadow 0.2s ease; }
-  .bom-form-btn:hover { transform: translateY(-1px); }
-  .bom-form-btn:active { transform: translateY(0); }
 </style>
 {% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50/80 dark:bg-gray-900/95 py-8 transition-colors duration-300">
-    <div class="max-w-xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span aria-hidden="true">/</span>
-            <a href="{% url 'mpr:bom_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Lista de materiales</a>
-            <span aria-hidden="true">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Nuevo conjunto</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-4xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{% url 'mpr:bom_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Lista de materiales</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Nuevo conjunto</span></li>
+            </ol>
         </nav>
 
-        <div class="mb-8">
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Nueva receta de armado</h1>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Cree un conjunto (lista de materiales). Luego podrá añadir componentes en la pantalla de edición.</p>
-        </div>
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Nueva receta de armado</h1>
+            <p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600 dark:text-gray-300">Cree un conjunto (lista de materiales). Luego podrá añadir componentes en la pantalla de edición.</p>
+        </header>
 
-        <form method="post" action="" class="space-y-6 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl bg-white dark:bg-gray-800/50 shadow-sm p-6 sm:p-8">
+        <form method="post" action="" class="mx-auto max-w-xl space-y-6 rounded-2xl border border-gray-200/90 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-8">
             {% csrf_token %}
             <div>
-                <label for="nombre_en_abm" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nombre del conjunto <span class="text-red-500">*</span></label>
+                <label for="nombre_en_abm" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Nombre del conjunto <span class="text-red-600 dark:text-red-400">*</span></label>
                 <input type="text" id="nombre_en_abm" name="nombre_en_abm" value="{{ bom.cabecera.nombre_en_abm }}" maxlength="200" required
-                       class="bom-form-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500"
+                       class="bom-form-input h-12 w-full rounded-xl border border-gray-300 bg-white px-4 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
                        placeholder="Ej. Pack 6 medias"/>
             </div>
             <div>
-                <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Detalle (opcional)</label>
-                <textarea id="detalle" name="detalle" rows="2" maxlength="500"
-                          class="bom-form-input w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/50 text-gray-900 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 resize-none"
+                <label for="detalle" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Detalle (opcional)</label>
+                <textarea id="detalle" name="detalle" rows="3" maxlength="500"
+                          class="bom-form-input w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
                           placeholder="Descripción breve">{{ bom.cabecera.detalle }}</textarea>
             </div>
-            <div class="flex flex-wrap gap-3 pt-2">
-                <button type="submit" class="bom-form-btn inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow">
+            <div class="flex flex-wrap gap-3 border-t border-gray-100 pt-6 dark:border-gray-700">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">
                     Crear conjunto
                 </button>
-                <a href="{% url 'mpr:bom_list' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:bom_list' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-800">
                     Cancelar
                 </a>
             </div>

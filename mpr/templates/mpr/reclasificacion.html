@@ -4,31 +4,35 @@
 {% block title %}Reclasificación (2da / Scrap) - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Reclasificación</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-4xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Reclasificación</span></li>
+            </ol>
         </nav>
 
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Reclasificación (2da / Scrap)</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">
-            Mueva stock de un depósito a otro (ej. a 2da selección o Scrap). Se genera un movimiento de stock tipo Reclasificación.
-        </p>
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Reclasificación (2da / Scrap)</h1>
+            <p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600 dark:text-gray-300">
+                Mueva stock de un depósito a otro (ej. a 2da selección o Scrap). Se genera un movimiento de stock tipo Reclasificación.
+            </p>
+        </header>
 
-        <form method="post" action="" class="space-y-6">
+        <form method="post" action="" class="space-y-8">
             {% csrf_token %}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span class="material-icons text-purple-500 dark:text-purple-400">inventory_2</span>
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+                <h2 class="mb-5 flex items-center gap-2 text-base font-bold text-gray-900 dark:text-white">
+                    <span class="material-icons text-purple-500 dark:text-purple-400" aria-hidden="true">inventory_2</span>
                     Artículo y cantidad
                 </h2>
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-5 sm:grid-cols-2">
                     <div>
-                        <label for="id_articulo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Artículo</label>
+                        <label for="id_articulo" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Artículo</label>
                         <select id="id_articulo" name="id_articulo" required
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">Seleccione artículo</option>
                             {% for a in articulos %}
                             <option value="{{ a.id_articulo }}">{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:8 }}</option>
@@ -36,28 +40,28 @@
                         </select>
                     </div>
                     <div>
-                        <label for="cantidad" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cantidad</label>
+                        <label for="cantidad" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Cantidad</label>
                         <input type="number" id="cantidad" name="cantidad" value="1" min="1" required
-                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                               class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm tabular-nums text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
                     </div>
                 </div>
-                <div class="mt-4">
-                    <label for="detalle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Motivo (opcional)</label>
+                <div class="mt-5">
+                    <label for="detalle" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Motivo (opcional)</label>
                     <input type="text" id="detalle" name="detalle" maxlength="200" placeholder="Ej. Pase a 2da por defecto menor"
-                           class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent"/>
+                           class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
                 </div>
             </div>
 
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-5">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <span class="material-icons text-purple-500 dark:text-purple-400">warehouse</span>
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+                <h2 class="mb-5 flex items-center gap-2 text-base font-bold text-gray-900 dark:text-white">
+                    <span class="material-icons text-purple-500 dark:text-purple-400" aria-hidden="true">warehouse</span>
                     Depósitos
                 </h2>
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid gap-5 sm:grid-cols-2">
                     <div>
-                        <label for="deposito_origen" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Origen</label>
+                        <label for="deposito_origen" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Origen</label>
                         <select id="deposito_origen" name="deposito_origen" required
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">Seleccione</option>
                             {% for dep in depositos %}
                             <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
@@ -65,9 +69,9 @@
                         </select>
                     </div>
                     <div>
-                        <label for="deposito_destino" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Destino (2da / Scrap / otro)</label>
+                        <label for="deposito_destino" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Destino (2da / Scrap / otro)</label>
                         <select id="deposito_destino" name="deposito_destino" required
-                                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">Seleccione</option>
                             {% for dep in depositos %}
                             <option value="{{ dep.CodDeposito }}">{{ dep.NombreDeposito|default:dep.CodDeposito }} — Suma stock: {{ dep.suma_stock|default:'Si' }}</option>
@@ -77,16 +81,16 @@
                 </div>
             </div>
 
-            <div class="rounded-xl bg-slate-800 dark:bg-slate-900 border border-slate-700 p-5 text-white">
-                <p class="text-sm text-slate-200 dark:text-slate-300 mb-4">
+            <div class="rounded-2xl border border-slate-700/80 bg-slate-800 p-5 text-white dark:bg-slate-900 sm:p-6">
+                <p class="mb-5 text-sm leading-relaxed text-slate-200 dark:text-slate-300">
                     Se descontará la cantidad del depósito origen y se sumará en el destino. Compruebe que haya stock suficiente en origen.
                 </p>
                 <div class="flex flex-wrap gap-3">
-                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 transition-all">
-                        <span class="material-icons text-lg">swap_horiz</span>
+                    <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                        <span class="material-icons text-lg" aria-hidden="true">swap_horiz</span>
                         Ejecutar reclasificación
                     </button>
-                    <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                    <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-500 bg-slate-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                         Cancelar
                     </a>
                 </div>

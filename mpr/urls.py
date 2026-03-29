@@ -5,6 +5,7 @@ app_name = "mpr"
 
 urlpatterns = [
     path("", views.TableroView.as_view(), name="tablero"),
+    path("ordenes/", views.OpListView.as_view(), name="op_list"),
     path("wizard/", views.WizardProduccionView.as_view(), name="wizard"),
     path("bom/", views.BomListView.as_view(), name="bom_list"),
     path("bom/nuevo/", views.BomCreateView.as_view(), name="bom_create"),

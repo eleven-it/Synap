@@ -4,70 +4,87 @@
 {% block title %}Pedidos con estado de producción - Demanda - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Pedidos con estado de producción</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Pedidos con estado de producción</span></li>
+            </ol>
         </nav>
-        <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white tracking-tight">Pedidos con estado de producción</h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Pedidos de venta (PED) con estado Pendiente, Producción, Parcial o Terminado. La demanda para fabricación incluye pedidos en estado Pendiente y Parcial.</p>
+
+        <header class="mb-8 flex flex-col gap-6 border-b border-gray-200/80 pb-8 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Pedidos con estado de producción</h1>
+                <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Pedidos de venta (PED) con estado Pendiente, Producción, Parcial o Terminado. La demanda para fabricación incluye pedidos en estado Pendiente y Parcial.</p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Orden de Producción de Trabajo (OPT)</a>
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all">Tablero</a>
+            <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+                <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-center text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">Orden de Producción de Trabajo (OPT)</a>
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">Tablero</a>
             </div>
         </header>
-        <form method="get" class="flex flex-wrap items-center gap-3 mb-6">
-            <label for="estado" class="text-sm font-medium text-gray-700 dark:text-gray-300">Estado de producción</label>
-            <select name="estado" id="estado" class="w-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm">
-                {% for valor, etiqueta in opciones_estado %}
-                <option value="{{ valor }}" {% if filtro_estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white transition-colors">Filtrar</button>
+
+        <form method="get" class="mb-8 rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5" aria-label="Filtro por estado de producción">
+            <h2 class="sr-only">Filtros</h2>
+            <div class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+                <div class="min-w-0 sm:max-w-xs">
+                    <label for="estado" class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-200">Estado de producción</label>
+                    <select name="estado" id="estado" class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                        {% for valor, etiqueta in opciones_estado %}
+                        <option value="{{ valor }}" {% if filtro_estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">Filtrar</button>
+            </div>
         </form>
-        <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Pedidos</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
+            </div>
+            <div class="overflow-x-auto" role="region" aria-label="Tabla de pedidos con producción">
+                <table class="min-w-[48rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <caption class="sr-only">Listado de pedidos y estado de producción</caption>
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nº movimiento</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Comprobante</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado producción</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Trazabilidad</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">N.º movimiento</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Comprobante</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Fecha</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cliente</th>
+                            <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Estado producción</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Trazabilidad</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for p in pedidos %}
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ p.CodigoMovimiento }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ p.NroComprobante }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ p.Fecha|default:"—" }}</td>
-                            <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ p.nombre_cliente|truncatewords:6 }}</td>
-                            <td class="px-4 py-3 text-center">
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ p.CodigoMovimiento }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ p.NroComprobante }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm text-gray-600 dark:text-gray-400 sm:px-5">{{ p.Fecha|default:"—" }}</td>
+                            <td class="max-w-[10rem] truncate px-4 py-3.5 text-sm text-gray-600 dark:text-gray-300 sm:max-w-xs sm:px-5" title="{{ p.nombre_cliente }}">{{ p.nombre_cliente|truncatewords:6 }}</td>
+                            <td class="px-4 py-3.5 text-center sm:px-5">
                                 {% if p.estado_pedido_opt == 'Parcial' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">Parcial</span>
+                                <span class="inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Parcial</span>
                                 {% elif p.estado_pedido_opt == 'Terminado' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300">Terminado</span>
+                                <span class="inline-flex rounded-md bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">Terminado</span>
                                 {% elif p.estado_pedido_opt == 'Produccion' %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">Producción</span>
+                                <span class="inline-flex rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">Producción</span>
                                 {% else %}
-                                <span class="inline-flex px-2 py-0.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{{ p.estado_pedido_opt }}</span>
+                                <span class="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300">{{ p.estado_pedido_opt }}</span>
                                 {% endif %}
                             </td>
-                            <td class="px-4 py-3">
-                                <a href="{% url 'mpr:opts_por_pedido' %}?codigo={{ p.CodigoMovimiento }}" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline">Ver OPTs</a>
+                            <td class="px-4 py-3.5 sm:px-5">
+                                <a href="{% url 'mpr:opts_por_pedido' %}?codigo={{ p.CodigoMovimiento }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver OPTs</a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">No hay pedidos con estado de producción (Pendiente, Producción, Parcial, Terminado).</td>
+                            <td colspan="6" class="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">No hay pedidos con estado de producción (Pendiente, Producción, Parcial, Terminado).</td>
                         </tr>
                         {% endfor %}
                     </tbody>

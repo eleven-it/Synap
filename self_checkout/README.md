@@ -344,6 +344,10 @@ Requisito: `pip install mysqlclient` (Django carga el backend MySQL al iniciar).
 
 ## FE (Factura Electrónica) con pyafipws
 
+### Código local y SOAP
+
+La carpeta **`pyafipws/`** en la **raíz del repo Synap** no se versiona (`.gitignore`). Clonar allí el upstream: `git clone https://github.com/reingart/pyafipws.git pyafipws`. Instalar con `pip install -r requirements.txt` (incluye **`pysimplesoap`** y **`future`**, usados por la cadena SOAP de `ws_sr_padron`) y **`pip install -e ./pyafipws`**. En Docker, el **Dockerfile** instala en editable `./pyafipws` si existe en el contexto de build. Detalle: **`docs/self_checkout/PYAFIPWS_DOCKER.md`**.
+
 ### Configuración por UI (recomendado)
 
 La configuración FE se realiza desde **Facturación AFIP** en el menú (Self Checkout → Facturación AFIP): certificado, clave privada, CUIT y **modo Homologación/Producción**. Homologación usa entornos de prueba AFIP (todas las pruebas); Producción solo cuando esté validado. La config se guarda por base empresa (administraNET).

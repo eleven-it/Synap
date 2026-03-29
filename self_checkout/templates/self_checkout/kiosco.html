@@ -32,7 +32,10 @@
 }
 /* Modo autoservicio cliente: layout 100% viewport, contenido adaptable con scroll interno */
 body.kiosk-client-mode header.w-full.fixed { display: none !important; }
+body.kiosk-client-mode .pt-14,
+body.kiosk-client-mode .md\:pt-16,
 body.kiosk-client-mode .pt-16 { padding-top: 0 !important; }
+body.kiosk-client-mode .app-content > div { padding: 0 !important; }
 /* Reservar espacio para la barra de estado fija (#status-bar h-8) para que los botones inferiores no queden ocultos */
 body.kiosk-client-mode .kiosk-root { height: 100vh !important; min-height: 100vh !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; padding-bottom: 2rem !important; box-sizing: border-box !important; }
 body.kiosk-client-mode .kiosk-card { flex: 1 !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
@@ -41,7 +44,10 @@ body.kiosk-client-mode .kiosk-col-left { min-height: 0 !important; overflow-y: a
 body.kiosk-client-mode .kiosk-col-right { max-height: none !important; min-height: 0 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
 /* Pantalla completa: mismo efecto de viewport; también reservar espacio para barra de estado */
 body.kiosk-fullscreen header.w-full.fixed { display: none !important; }
+body.kiosk-fullscreen .pt-14,
+body.kiosk-fullscreen .md\:pt-16,
 body.kiosk-fullscreen .pt-16 { padding-top: 0 !important; }
+body.kiosk-fullscreen .app-content > div { padding: 0 !important; }
 body.kiosk-fullscreen .kiosk-root { height: 100vh !important; min-height: 100vh !important; padding-bottom: 2rem !important; box-sizing: border-box !important; }
 body.kiosk-fullscreen .kiosk-main-two-cols { min-height: 0 !important; flex: 1 !important; overflow: hidden !important; }
 body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
@@ -59,7 +65,7 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
 {% block content %}
 <script>document.body.classList.add('kiosk-client-mode');</script>
 <section class="kiosk-root min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
-  <div class="flex flex-1 flex-col min-h-0 w-full px-4 sm:px-6 lg:px-8 py-2 sm:py-4">
+  <div class="flex flex-1 flex-col min-h-0 w-full px-4 sm:px-6 lg:px-8 py-0.5 sm:py-1">
     <div
       x-data="kioscoApp()"
       @keydown.escape.window="cerrarModales()"
@@ -91,7 +97,8 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
       </div>
       <!-- Modal login supervisor para CAEA (solo si no es supervisor) -->
       <div x-show="modalSupervisorCaea" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/98 rounded-3xl p-4"
-           x-transition>
+           x-transition
+           x-init="$watch('modalSupervisorCaea', v => v && enfocarPrimerCampoEnModal($el))">
         <div class="w-full max-w-sm rounded-2xl bg-slate-800 border border-slate-600 p-6 shadow-xl">
           <p class="text-sm font-medium text-slate-200 mb-4">Ingresá como supervisor para habilitar modo CAEA</p>
           <input type="text" x-model="supervisorCod" placeholder="Usuario"
@@ -128,6 +135,7 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
       </div>
       <!-- Modal Selección de números de serie (artículos seriados) -->
       <div x-show="modalSeries" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/90 rounded-3xl p-4" x-transition
+           x-ref="modalSeriesRoot"
            x-init="$watch('modalSeries', v => v && cargarModalSeries())">
         <div class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 shadow-xl max-h-[90vh] flex flex-col">
           <div class="flex-shrink-0 px-5 py-4 border-b border-slate-200 dark:border-slate-600">
@@ -176,15 +184,15 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
 
       <!-- Main: desktop = dos columnas; mobile = bloque override -->
       {% block kiosk_main %}
-      <main class="kiosk-main-two-cols flex flex-1 gap-6 p-6 md:p-8 overflow-hidden min-h-0 bg-background-light dark:bg-background-dark" x-show="estado !== 'success'" x-cloak>
-    <div class="kiosk-col-left flex-[1.2] flex flex-col gap-6 min-h-0 overflow-hidden">
+      <main class="kiosk-main-two-cols flex min-h-0 flex-1 gap-5 overflow-hidden bg-background-light p-5 dark:bg-background-dark md:gap-6 md:p-7 lg:p-8" x-show="estado !== 'success'" x-cloak>
+    <div class="kiosk-col-left flex min-h-0 flex-[1.2] flex-col gap-5 overflow-hidden md:gap-6">
       {% include "self_checkout/includes/_search_scan.html" %}
     </div>
-    <aside class="kiosk-col-right flex-1 flex flex-col gap-4 min-h-0 min-w-0">
-      <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col h-full overflow-hidden">
+    <aside class="kiosk-col-right flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+      <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md dark:border-slate-700/90 dark:bg-slate-800/95 dark:shadow-none">
         {% include "self_checkout/includes/_cart_list.html" %}
         {% include "self_checkout/includes/_cart_totals.html" %}
-        <div class="p-4 md:p-6 shrink-0">
+        <div class="shrink-0 border-t border-slate-200/80 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-900/50 md:p-5">
           {% include "self_checkout/includes/_payment_keypad.html" %}
         </div>
       </div>
@@ -192,10 +200,13 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
   </main>
       {% endblock %}
 
+      {% include "self_checkout/includes/_promo_ofertas_footer.html" %}
+
   {% include "self_checkout/includes/_post_sale.html" %}
 
   <!-- Modal factura: 1) Elegir Factura A o Consumidor Final  2) Datos (CUIT+email o solo email). Pantalla táctil/teclado; teclado virtual configurable. -->
-  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalEmail" x-cloak x-transition>
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalEmail" x-cloak x-transition
+       x-init="$watch('modalEmail', v => v && enfocarPrimerCampoEnModal($el)); $watch('tipoFactura', () => modalEmail && enfocarPrimerCampoEnModal($el))">
     <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
       <!-- Paso 1: elegir tipo de factura (touch-friendly) -->
       <template x-if="tipoFactura === null">
@@ -315,7 +326,8 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
   </div>
 
   <!-- Modal RFID -->
-  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalRfid" x-cloak x-transition>
+  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalRfid" x-cloak x-transition
+       x-init="$watch('modalRfid', v => v && enfocarPrimerCampoEnModal($el))">
     <div class="w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl">
       <h3 class="text-lg font-bold text-slate-900 dark:text-white">Detectamos <span x-text="rfidPropuesta.length"></span> productos</h3>
       <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Revisá cantidades y confirmá</p>
@@ -349,7 +361,7 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
 
   <!-- Modal pago: elegir método; en modo TPV se muestran Efectivo, Tarjeta y Mercado Pago -->
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalPago" x-cloak x-transition
-       x-init="$watch('modalPago', v => { if (v) { pagoModo = 'elegir'; pagoTipoCobro = ''; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'; pagoRedondeoTipo = 'Arriba'; pagoMediosError = ''; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; cargarMediosDePago(); } detenerPollingPago(); })">
+       x-init="$watch('modalPago', v => { if (v) { pagoModo = 'elegir'; pagoTipoCobro = ''; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'; pagoRedondeoTipo = 'Arriba'; pagoMediosError = ''; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; cargarMediosDePago(); enfocarPrimerCampoEnModal($el); } detenerPollingPago(); })">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
       <h3 class="text-lg font-bold text-slate-900 dark:text-white">Elegí cómo pagar</h3>
       <div class="mt-3 text-center">
@@ -677,7 +689,8 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
 
   <!-- Modales TPV: Cliente, Lista de precio, Vendedor -->
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvCliente" x-cloak x-transition
-       x-on:click.self="modalTpvCliente = false">
+       x-on:click.self="modalTpvCliente = false"
+       x-init="$watch('modalTpvCliente', v => v && enfocarPrimerCampoEnModal($el))">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[85vh] flex flex-col"
          x-on:click.stop>
       <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Cliente</h3>
@@ -712,7 +725,8 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
   </div>
 
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvListaPrecio" x-cloak x-transition
-       x-on:click.self="modalTpvListaPrecio = false">
+       x-on:click.self="modalTpvListaPrecio = false"
+       x-init="$watch('modalTpvListaPrecio', v => v && enfocarPrimerCampoEnModal($el))">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
          x-on:click.stop>
       <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Lista de precio</h3>
@@ -734,7 +748,8 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
   </div>
 
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalTpvVendedor" x-cloak x-transition
-       x-on:click.self="modalTpvVendedor = false">
+       x-on:click.self="modalTpvVendedor = false"
+       x-init="$watch('modalTpvVendedor', v => v && enfocarPrimerCampoEnModal($el))">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[80vh] flex flex-col"
          x-on:click.stop>
       <h3 class="text-lg font-bold text-slate-900 dark:text-white mb-3">Vendedor</h3>
@@ -890,8 +905,11 @@ document.addEventListener('alpine:init', () => {
     paymentMethodsList: [],
     articulosGrid: [],
     articulosGridLoading: false,
+    articulosBusquedaAbort: null,
     searchProductos: '',
     selectedSearchIndex: -1,
+    tpvFocusedItemId: null,
+    _tpvShortcutsBound: false,
     // TPV: selección cliente, lista de precio, vendedor (botón + modal)
     tpvCliente: { id_cliente: 1, nombre_cliente: 'Consumidor Final' },
     tpvListaPrecio: { id_lista: 1, nombre: 'Lista 1' },
@@ -945,6 +963,27 @@ document.addEventListener('alpine:init', () => {
     round2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; },
     format2(n) { return (Math.round((parseFloat(n) || 0) * 100) / 100).toFixed(2); },
 
+    /** Primer input/select/textarea habilitado dentro del overlay del modal (doble tick + rAF para x-if). */
+    enfocarPrimerCampoEnModal(rootEl) {
+      if (!rootEl || typeof rootEl.querySelector !== 'function') return;
+      const sel = 'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]):not([disabled]), textarea:not([disabled]), select:not([disabled])';
+      const aplicar = () => {
+        const el = rootEl.querySelector(sel);
+        if (!el || typeof el.focus !== 'function') return;
+        try {
+          el.focus({ preventScroll: true });
+        } catch (_) {
+          el.focus();
+        }
+      };
+      this.$nextTick(() => {
+        this.$nextTick(() => {
+          aplicar();
+          requestAnimationFrame(aplicar);
+        });
+      });
+    },
+
     ultimoItemLineaTexto() {
       if (!this.items || !this.items.length) return '';
       const item = this.items[this.items.length - 1];
@@ -974,6 +1013,7 @@ document.addEventListener('alpine:init', () => {
     async init() {
       await this.acquireSession();
       if (!this.sessionAcquired) return;
+      this._setupTpvShortcuts();
       const params = new URLSearchParams(window.location.search);
       const mpReturn = params.get('mp_return');
       const cartIdFromUrl = params.get('cart_id');
@@ -1003,10 +1043,96 @@ document.addEventListener('alpine:init', () => {
       if (this.modoTpv) await this.cargarArticulos();
       this.$nextTick(() => (this.modoTpv ? document.getElementById('tpv-busqueda-producto')?.focus() : this.$refs.scanInput?.focus()));
       this._setupFullscreen();
+      this._setupTpvShortcuts();
       this._setupSessionHeartbeat();
       this._setupSessionRelease();
       this._startAfipHealthCheck();
       this.checkAfipHealth();
+    },
+
+    _hayModalAbierto() {
+      return !!(
+        this.modalEmail ||
+        this.modalRfid ||
+        this.modalPago ||
+        this.modalConnectionError ||
+        this.modalConfirmEliminar ||
+        this.modalTpvCliente ||
+        this.modalTpvListaPrecio ||
+        this.modalTpvVendedor ||
+        this.modalCuentaCorriente ||
+        this.modalSeries ||
+        this.modalVouchers ||
+        this.modalFueraDeServicio ||
+        this.modalSupervisorCaea
+      );
+    },
+    _esTargetDeTexto(el) {
+      if (!el) return false;
+      const tag = (el.tagName || '').toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el.isContentEditable;
+    },
+    _obtenerItemEnFocoCarrito() {
+      const el = document.activeElement;
+      const row = el ? el.closest('[data-cart-item-id]') : null;
+      const idFromDom = row ? parseInt(row.getAttribute('data-cart-item-id') || '', 10) : null;
+      const idItem = Number.isFinite(idFromDom) ? idFromDom : this.tpvFocusedItemId;
+      if (!idItem || !this.items || !this.items.length) return null;
+      return this.items.find(i => Number(i.id) === Number(idItem)) || null;
+    },
+    async _eliminarLineaFocoTpv() {
+      const item = this._obtenerItemEnFocoCarrito();
+      if (!item) return;
+      await this.quitarItem(item.id);
+      this.tpvFocusedItemId = null;
+    },
+    async _handleTpvShortcut(e) {
+      if (!this.modoTpv) return false;
+      if (this.estado === 'paying' || this.estado === 'confirming') return false;
+      if (this._hayModalAbierto()) return false;
+      const key = (e.key || '').toUpperCase();
+      if (!['F1', 'F2', 'F3', 'F4', 'F5', 'F8', 'F12'].includes(key)) return false;
+      e.preventDefault();
+      if (key === 'F1') {
+        this.tpvClienteBusqueda = '';
+        this.tpvClienteResultados = [];
+        this.tpvClienteError = '';
+        this.modalTpvCliente = true;
+        return true;
+      }
+      if (key === 'F2') {
+        await this.abrirModalListaPrecio();
+        return true;
+      }
+      if (key === 'F3') {
+        await this.abrirModalVendedor();
+        return true;
+      }
+      if (key === 'F4') {
+        await this.abrirModalVouchers();
+        return true;
+      }
+      if (key === 'F5') {
+        const idCli = this.tpvCliente?.id_cliente;
+        if (idCli != null && Number(idCli) !== 1) this.abrirCuentaCorriente();
+        return true;
+      }
+      if (key === 'F8') {
+        await this._eliminarLineaFocoTpv();
+        return true;
+      }
+      if (key === 'F12') {
+        this.irAPago();
+        return true;
+      }
+      return false;
+    },
+    _setupTpvShortcuts() {
+      if (this._tpvShortcutsBound) return;
+      this._tpvShortcutsBound = true;
+      document.addEventListener('keydown', (e) => {
+        void this._handleTpvShortcut(e);
+      });
     },
 
     async checkAfipHealth() {
@@ -1178,6 +1304,9 @@ document.addEventListener('alpine:init', () => {
         const data = r.ok ? await r.json().catch(() => ({})) : await r.json().catch(() => ({}));
         return { ok: r.ok, data, status: r.status };
       } catch (e) {
+        if (e && e.name === 'AbortError') {
+          return { ok: false, data: {}, aborted: true };
+        }
         this.connectionErrorHost = window.location.host || 'servidor';
         this.modalConnectionError = true;
         return { ok: false, data: { error: 'Error de conexión' } };
@@ -1361,6 +1490,8 @@ document.addEventListener('alpine:init', () => {
       this.modalSeriesDisponibles = (disp.ok && disp.data.series) ? disp.data.series : [];
       this.modalSeriesAsignadas = (asig.ok && asig.data.series) ? asig.data.series : [];
       this.modalSeriesSeleccionados = this.modalSeriesAsignadas.map(s => s.id_serie_entrada);
+      const root = this.$refs.modalSeriesRoot;
+      if (root) this.enfocarPrimerCampoEnModal(root);
     },
     toggleSerie(idSerie) {
       const idx = this.modalSeriesSeleccionados.indexOf(idSerie);
@@ -1671,7 +1802,12 @@ document.addEventListener('alpine:init', () => {
     onBusquedaProductosInput() {
       const q = (this.searchProductos || '').trim();
       if (!q.length) {
+        if (this.articulosBusquedaAbort) {
+          try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+          this.articulosBusquedaAbort = null;
+        }
         this.articulosGrid = [];
+        this.articulosGridLoading = false;
         this.selectedSearchIndex = -1;
         return;
       }
@@ -1685,11 +1821,19 @@ document.addEventListener('alpine:init', () => {
         this.selectedSearchIndex = -1;
         return;
       }
+      if (this.articulosBusquedaAbort) {
+        try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+      }
+      this.articulosBusquedaAbort = new AbortController();
+      const ac = this.articulosBusquedaAbort;
       this.articulosGridLoading = true;
       const idLista = (this.tpvListaPrecio && this.tpvListaPrecio.id_lista != null) ? this.tpvListaPrecio.id_lista : 1;
       let url = '/api/self-checkout/articulos/?limit=25&id_lista=' + encodeURIComponent(idLista) + '&search=' + encodeURIComponent(search);
       if (this.tpvIdDeposito != null) url += '&id_deposito=' + encodeURIComponent(this.tpvIdDeposito);
-      const { ok, data } = await this.fetch(url);
+      const res = await this.fetch(url, { signal: ac.signal });
+      if (ac.signal.aborted || res.aborted) return;
+      if ((this.searchProductos || '').trim() !== search) return;
+      const { ok, data } = res;
       this.articulosGrid = (ok && data.articulos) ? data.articulos : [];
       this.articulosGridLoading = false;
       this.selectedSearchIndex = this.articulosGrid.length > 0 ? 0 : -1;
@@ -1850,6 +1994,8 @@ document.addEventListener('alpine:init', () => {
       this.modalTpvVendedor = true;
     },
     abrirCuentaCorriente() {
+      const id = this.tpvCliente?.id_cliente;
+      if (id == null || Number(id) === 1) return;
       this.cuentaCorrienteError = '';
       this.cuentaCorrienteData = {};
       this.modalCuentaCorriente = true;

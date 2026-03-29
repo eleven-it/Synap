@@ -137,7 +137,6 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         report = self.get_report()
         config = report.config or {}
         is_declarative = config.get("version") == "declarative-v1"
-        import json
         context.update(
             {
                 "page_title": report.name,
@@ -148,7 +147,7 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "schema_api_url": reverse("reports-api:reports-schema", kwargs={"slug": report.slug}),
                 "is_declarative": is_declarative,
                 "can_builder": BuilderReportsPermission().has_permission(self.request, self),
-                "report_config_json": json.dumps(config, ensure_ascii=False) if config else "{}",  # Configuración del reporte en JSON para JavaScript
+                "report_config_for_script": config if isinstance(config, dict) else {},
             }
         )
         return context

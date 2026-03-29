@@ -4,16 +4,18 @@
 {% block title %}Armado OPT {{ opt_numero }} - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 dark:bg-gray-900 py-6 transition-colors duration-300">
-    <div class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <nav class="flex text-sm text-gray-500 dark:text-gray-400 mb-6" aria-label="Breadcrumb">
-            <a href="{% url 'mpr:tablero' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">Producción</a>
-            <span class="mx-2">/</span>
-            <a href="{% url 'mpr:opt_list' %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">OPT</a>
-            <span class="mx-2">/</span>
-            <a href="{% url 'mpr:opt_detail' id_lista %}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors">OPT {{ opt_numero }}</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-700 dark:text-gray-300 font-medium">Armado</span>
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mx-auto w-full min-w-0 max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{% url 'mpr:opt_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">OPT</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{% url 'mpr:opt_detail' id_lista %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">OPT {{ opt_numero }}</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Armado</span></li>
+            </ol>
         </nav>
 
         {% if messages %}
@@ -27,22 +29,26 @@
         {% endfor %}
         {% endif %}
 
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight mb-2">Armado OPT {{ opt_numero }}</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Origen: <strong>{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong>{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack.</p>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mb-6">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en el depósito Semi elaborado. OPT y OPP solo mueven los artículos pack; el stock de componentes debe cargarse por compras, transferencias o producción previa.</p>
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Armado OPT {{ opt_numero }}</h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Origen: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack.</p>
+            <p class="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en el depósito Semi elaborado. OPT y OPP solo mueven los artículos pack; el stock de componentes debe cargarse por compras, transferencias o producción previa.</p>
+        </header>
 
         <form method="post" action="{% url 'mpr:armado_opt' id_lista %}" id="form-armado-opt" class="space-y-6">
             {% csrf_token %}
-            <div class="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-800/50">
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente</p>
+                <div class="overflow-x-auto" role="region" aria-label="Armado por artículo">
+                    <table class="min-w-[40rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                        <caption class="sr-only">Cantidades a armar por pack</caption>
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                             <tr class="align-bottom">
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cod. Sist</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Artículo (pack)</th>
-                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Receta</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Máx. armable</th>
-                                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider align-bottom">Cant. a armar</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cod. sist.</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Artículo (pack)</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Receta</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Máx. armable</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cant. a armar</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
@@ -69,11 +75,11 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-500/30 transition-all">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">build</span>
                     Ejecutar armado
                 </button>
-                <a href="{% url 'mpr:opt_detail' id_lista %}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                <a href="{% url 'mpr:opt_detail' id_lista %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
                     Volver a la OPT
                 </a>
             </div>
