@@ -322,7 +322,11 @@
                         {% endif %}
                     {% else %}
                         <!-- Reportes Legacy: Usar templates unificados -->
+                        {% if report.slug == 'bo-stock-facturacion' %}
+                        {% include "reports/includes/filters_period_bo_dual.html" %}
+                        {% else %}
                         {% include "reports/includes/filters_period.html" %}
+                        {% endif %}
                         {% if report.slug == 'bo-stock-facturacion' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
                         {% elif report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
@@ -4983,7 +4987,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260329c"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260329e"></script>
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
 {% endif %}

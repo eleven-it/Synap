@@ -4049,6 +4049,26 @@ const setupDetailedMovementsControls = () => {
   // Botón limpiar filtros eliminado - funcionalidad removida
 };
 
+/** Debe estar en ámbito de módulo: renderSummary (también de módulo) la invoca al cargar datos BO. */
+function syncBoDualSummaryPeriod() {
+  const slug = document.querySelector("#dashboard-root")?.dataset?.reportSlug;
+  if (slug !== "bo-stock-facturacion" || !document.getElementById("bo-period-filters-root")) {
+    return;
+  }
+  const boPeriodEl = document.getElementById("bo-summary-period");
+  if (!boPeriodEl) return;
+  const fmt = (s) => {
+    if (!s) return "—";
+    const p = String(s).split("-");
+    return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : s;
+  };
+  const fif = document.getElementById("fecha_inicio_facturacion")?.value;
+  const fff = document.getElementById("fecha_fin_facturacion")?.value;
+  const bi = document.getElementById("fecha_inicio")?.value;
+  const bf = document.getElementById("fecha_fin")?.value;
+  boPeriodEl.textContent = `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
+}
+
 const renderSummary = (meta, totals) => {
   const summaryContainer = document.querySelector("[data-summary-container]");
   const summaryGrid = document.querySelector("[data-summary-grid]");
@@ -4078,10 +4098,9 @@ const renderSummary = (meta, totals) => {
   const fechaFin = document.getElementById("fecha_fin")?.value;
   const periodText = fechaInicio && fechaFin ? `Periodo ${formatDateForPeriod(fechaInicio)} al ${formatDateForPeriod(fechaFin)}` : "";
 
-  // bo-stock-facturacion: período y "Última actualización" en una línea (mismo criterio que pedidos-pendientes)
+  // bo-stock-facturacion: doble rango (facturación/remitos vs backorder)
   if (isBoStockFacturacion) {
-    const boPeriodEl = document.getElementById("bo-summary-period");
-    if (boPeriodEl) boPeriodEl.textContent = periodText;
+    syncBoDualSummaryPeriod();
     if (summaryContainer) summaryContainer.classList.add("hidden");
     updateLastUpdateTime();
     return;
@@ -7041,14 +7060,132 @@ if (dashboardRoot) {
     });
   };
 
+  const setupBoDualPeriodoTipo = () => {
+    const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    const root = document.getElementById("bo-period-filters-root");
+    if (reportSlug !== "bo-stock-facturacion" || !root) {
+      return;
+    }
+    if (root.getAttribute("data-bo-period-setup") === "true") {
+      return;
+    }
+    root.setAttribute("data-bo-period-setup", "true");
+
+    const activeClasses = ["active", "border-sky-500", "bg-sky-50", "dark:bg-sky-900/20", "text-sky-700", "dark:text-sky-300", "shadow-md"];
+    const inactiveClasses = ["border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800", "text-slate-700", "dark:text-slate-300"];
+
+    const updateBtn = (buttons, selected) => {
+      buttons.forEach((btn) => {
+        const periodo = btn.dataset.periodo;
+        if (periodo === selected) {
+          btn.classList.add(...activeClasses);
+          inactiveClasses.forEach((c) => btn.classList.remove(c));
+        } else {
+          activeClasses.forEach((c) => btn.classList.remove(c));
+          inactiveClasses.forEach((c) => btn.classList.add(c));
+        }
+      });
+    };
+
+    const applyTipo = (tipo, fiInput, ffInput) => {
+      const today = new Date();
+      if (tipo === "dia_actual") {
+        const s = today.toISOString().split("T")[0];
+        fiInput.value = s;
+        ffInput.value = s;
+        fiInput.disabled = true;
+        ffInput.disabled = true;
+      } else if (tipo === "mes_actual") {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        fiInput.value = firstDay.toISOString().split("T")[0];
+        ffInput.value = lastDay.toISOString().split("T")[0];
+        fiInput.disabled = true;
+        ffInput.disabled = true;
+      } else if (tipo === "año_actual") {
+        const firstDay = new Date(today.getFullYear(), 0, 1);
+        const lastDay = new Date(today.getFullYear(), 11, 31);
+        fiInput.value = firstDay.toISOString().split("T")[0];
+        ffInput.value = lastDay.toISOString().split("T")[0];
+        fiInput.disabled = true;
+        ffInput.disabled = true;
+      } else {
+        fiInput.disabled = false;
+        ffInput.disabled = false;
+        if (!fiInput.value || !ffInput.value) {
+          const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+          const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          fiInput.value = firstDay.toISOString().split("T")[0];
+          ffInput.value = lastDay.toISOString().split("T")[0];
+        }
+      }
+    };
+
+    const wireRow = (rowAttr, selectId, fiId, ffId) => {
+      const row = root.querySelector(`[data-bo-period-row="${rowAttr}"]`);
+      if (!row) return;
+      const sel = document.getElementById(selectId);
+      const fi = document.getElementById(fiId);
+      const ff = document.getElementById(ffId);
+      const buttons = row.querySelectorAll(".periodo-tipo-btn-bo");
+      if (!sel || !fi || !ff || !buttons.length) return;
+
+      const setPeriodo = (tipo) => {
+        sel.value = tipo;
+        updateBtn(buttons, tipo);
+        applyTipo(tipo, fi, ff);
+        syncBoDualSummaryPeriod();
+        saveFilters();
+        fetchDashboardData();
+      };
+
+      buttons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setPeriodo(btn.dataset.periodo);
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      });
+      sel.addEventListener("change", () => {
+        updateBtn(buttons, sel.value);
+        applyTipo(sel.value, fi, ff);
+        syncBoDualSummaryPeriod();
+      });
+
+      const onDateChange = () => {
+        if (sel.value === "personalizado") {
+          syncBoDualSummaryPeriod();
+          saveFilters();
+          fetchDashboardData();
+        }
+      };
+      fi.addEventListener("change", onDateChange);
+      ff.addEventListener("change", onDateChange);
+
+      updateBtn(buttons, sel.value);
+      if (sel.value !== "personalizado") {
+        applyTipo(sel.value, fi, ff);
+      } else {
+        fi.disabled = false;
+        ff.disabled = false;
+      }
+    };
+
+    wireRow("facturacion", "periodo_tipo_facturacion", "fecha_inicio_facturacion", "fecha_fin_facturacion");
+    wireRow("backorder", "periodo_tipo", "fecha_inicio", "fecha_fin");
+    syncBoDualSummaryPeriod();
+  };
+
   const setupPeriodoTipo = () => {
+    const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    if (reportSlug === "bo-stock-facturacion" && document.getElementById("bo-period-filters-root")) {
+      return;
+    }
     const buttons = document.querySelectorAll(".periodo-tipo-btn");
     const periodoTipoSelect = document.getElementById("periodo_tipo");
     const fechaInicioInput = document.getElementById("fecha_inicio");
     const fechaFinInput = document.getElementById("fecha_fin");
     
     // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pedidos-pendientes, sales_summary, bo-stock-facturacion)
-    const reportSlug = dashboardRoot?.dataset?.reportSlug;
     if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
       return;
     }
@@ -7248,6 +7385,7 @@ if (dashboardRoot) {
   // Cuando el template genera los controles de período (ej. ventas_netas con config.filters como objeto), enlazar recarga y guardado
   window.addEventListener("reportPeriodFiltersReady", () => {
     setupPeriodoTipo();
+    setupBoDualPeriodoTipo();
   });
 
   const setupCashFlowFilters = () => {
@@ -7670,6 +7808,35 @@ if (dashboardRoot) {
       }
     }
 
+    const periodoTipoFacSelect = document.getElementById("periodo_tipo_facturacion");
+    if (reportSlug === "bo-stock-facturacion" && periodoTipoFacSelect) {
+      if (filters.dia_actual_facturacion) {
+        periodoTipoFacSelect.value = "dia_actual";
+      } else if (filters.mes_actual_facturacion) {
+        periodoTipoFacSelect.value = "mes_actual";
+      } else if (filters.año_actual_facturacion) {
+        periodoTipoFacSelect.value = "año_actual";
+      } else {
+        periodoTipoFacSelect.value = filters.periodo_tipo_facturacion || "personalizado";
+      }
+      const fifEl = document.getElementById("fecha_inicio_facturacion");
+      const fffEl = document.getElementById("fecha_fin_facturacion");
+      if (fifEl) {
+        if (filters.fecha_inicio_facturacion) {
+          fifEl.value = filters.fecha_inicio_facturacion;
+        } else if (filters.fecha_inicio) {
+          fifEl.value = filters.fecha_inicio;
+        }
+      }
+      if (fffEl) {
+        if (filters.fecha_fin_facturacion) {
+          fffEl.value = filters.fecha_fin_facturacion;
+        } else if (filters.fecha_fin) {
+          fffEl.value = filters.fecha_fin;
+        }
+      }
+    }
+
     // Aplicar refresh_interval
     if (filters.refresh_interval) {
       const refreshIntervalSelect = document.getElementById("refresh_interval");
@@ -7920,13 +8087,29 @@ if (dashboardRoot) {
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
     } else if (currentReportSlug === "bo-stock-facturacion") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
+      const periodoTipoFac = document.getElementById("periodo_tipo_facturacion")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
+      const fechaInicioFac = document.getElementById("fecha_inicio_facturacion")?.value;
+      const fechaFinFac = document.getElementById("fecha_fin_facturacion")?.value;
       const puntoVentaSelect = document.getElementById("punto_venta");
       const sucursalesSelect = document.getElementById("sucursales");
       const depositosIncluidosSelect = document.getElementById("depositos_incluidos");
       const clientesExcluidosSelect = document.getElementById("clientes_excluidos");
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
+      filters.periodo_tipo_facturacion = periodoTipoFac;
+      filters.fecha_inicio_facturacion = fechaInicioFac;
+      filters.fecha_fin_facturacion = fechaFinFac;
+      delete filters.dia_actual_facturacion;
+      delete filters.mes_actual_facturacion;
+      delete filters.año_actual_facturacion;
+      if (periodoTipoFac === "dia_actual") {
+        filters.dia_actual_facturacion = true;
+      } else if (periodoTipoFac === "mes_actual") {
+        filters.mes_actual_facturacion = true;
+      } else if (periodoTipoFac === "año_actual") {
+        filters.año_actual_facturacion = true;
+      }
       const refreshIntervalSelect = document.getElementById("refresh_interval");
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
       if (puntoVentaSelect) {
@@ -8463,6 +8646,7 @@ if (dashboardRoot) {
     // Cargar opciones de filtros primero
     loadFilterOptions().then(() => {
       setupPeriodoTipo();
+      setupBoDualPeriodoTipo();
       setupRefreshIntervalButtons();
       setupCashFlowFilters();
       fetchDashboardData();

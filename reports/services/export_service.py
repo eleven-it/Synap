@@ -552,11 +552,13 @@ class ExportService:
                 cell.alignment = Alignment(horizontal='left', vertical='center')
                 row += 1
                 if query_result.notes:
-                    ws.merge_cells(f"A{row}:D{row}")
-                    cell = ws[f"A{row}"]
-                    cell.value = query_result.notes[0] if query_result.notes else ""
-                    cell.font = Font(size=10, italic=True)
-                    row += 1
+                    for note_line in query_result.notes[:2]:
+                        ws.merge_cells(f"A{row}:D{row}")
+                        cell = ws[f"A{row}"]
+                        cell.value = note_line
+                        cell.font = Font(size=10, italic=True)
+                        cell.alignment = Alignment(horizontal="left", vertical="center")
+                        row += 1
                 row += 1
 
             if not headers:

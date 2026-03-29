@@ -2997,6 +2997,13 @@ class QueryRunnerService:
                     totals={},
                     notes=["Debe proporcionar fecha de inicio y fecha fin, o seleccionar un período predefinido."],
                 )
+            # Facturación y remitos: rango propio (fallback = backorder si no se envía)
+            fi_fac_raw = filters.get("fecha_inicio_facturacion")
+            ff_fac_raw = filters.get("fecha_fin_facturacion")
+            fi_fac = str(fi_fac_raw).strip() if fi_fac_raw else ""
+            ff_fac = str(ff_fac_raw).strip() if ff_fac_raw else ""
+            if not fi_fac or not ff_fac:
+                fi_fac, ff_fac = fecha_inicio, fecha_fin
             if not base_empresa:
                 if hasattr(self.user, 'base_empresa'):
                     base_empresa = self.user.base_empresa
@@ -3078,7 +3085,10 @@ class QueryRunnerService:
                 logger.error(f"❌ Error conectando a MySQL ({base_empresa}): {conn_error}")
                 raise
             
-            logger.info(f"🔍 Ejecutando reporte BO vs Stock vs Facturación: {fecha_inicio} a {fecha_fin}, base={base_empresa}")
+            logger.info(
+                "🔍 Ejecutando reporte BO vs Stock vs Facturación: backorder %s a %s | facturación/remitos %s a %s | base=%s",
+                fecha_inicio, fecha_fin, fi_fac, ff_fac, base_empresa,
+            )
             try:
                 cursor.execute("SET SESSION max_execution_time = 90000")
             except Exception:
@@ -3094,7 +3104,7 @@ class QueryRunnerService:
             #   CREATE INDEX idx_cc_fecha_tipo_anul ON cuentacliente (Fecha, TipoComprobante, Anulado);
             # Ver plan: EXPLAIN <query>; evitar type=ALL, asegurar key usado.
             # MAX_EXECUTION_TIME (ms): evita colgarse con bases grandes. MySQL 5.7.8+.
-            params_facturacion = [fecha_inicio, fecha_fin]
+            params_facturacion = [fi_fac, ff_fac]
             where_fact = [
                 "Fecha >= %s", "Fecha <= %s",
                 "Anulado = 'No'",
@@ -3141,7 +3151,7 @@ class QueryRunnerService:
                 "cc.Anulado = 'No'",
                 "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
             ]
-            params_fac_cli = [fecha_inicio, fecha_fin]
+            params_fac_cli = [fi_fac, ff_fac]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
@@ -3198,7 +3208,7 @@ class QueryRunnerService:
             # 2. REMITOS NO FACTURADOS (comp_ped)
             # =========================================================
             where_remitos = ["cp.Fecha >= %s", "cp.Fecha <= %s", "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'"]
-            params_remitos = [fecha_inicio, fecha_fin]
+            params_remitos = [fi_fac, ff_fac]
             # BO reporte consolidado: no filtrar por sucursal ni punto de venta
             if clientes_excluidos:
                 placeholders = ','.join(['%s'] * len(clientes_excluidos))
@@ -3816,7 +3826,8 @@ class QueryRunnerService:
             
             # Notes
             notes = [
-                f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+                f"Período facturación y remitos: {self._format_date(fi_fac)} a {self._format_date(ff_fac)}",
+                f"Período backorder: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
                 f"Facturación neta: ${facturacion_neta:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Remitos no facturados: ${remitos_no_facturados_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
                 f"Total sin stock: ${sin_stock_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'),
@@ -3840,6 +3851,10 @@ class QueryRunnerService:
                 "lista_precio_label": lista_precio_labels[lista_precio],
                 "depositos_incluidos": depositos_incluidos,
                 "clientes_excluidos": clientes_excluidos,
+                "fecha_inicio": fecha_inicio,
+                "fecha_fin": fecha_fin,
+                "fecha_inicio_facturacion": fi_fac,
+                "fecha_fin_facturacion": ff_fac,
             }
             if num_depositos > 1:
                 notes.append(
