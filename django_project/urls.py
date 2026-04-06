@@ -32,6 +32,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", include("login.urls")),  
     path("core/", include("core.urls", namespace="core")),
+    path("ecom/", include("ecom.urls", namespace="ecom")),
     # PWA: sw.js y manifest.json deben servirse desde la raíz del dominio
     path("sw.js", serve_sw, name="pwa_sw"),
     path("manifest.json", serve_manifest, name="pwa_manifest"),

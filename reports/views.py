@@ -88,7 +88,7 @@ class ReportsCatalogView(ReportsLoginRequiredMixin, TemplateView):
         empresa = getattr(self.request.user, "empresa_activa", None)
         empresa_id = empresa.id if empresa else None
         catalog = build_catalog_for_user(self.request.user, empresa_id)
-        
+
         # Verificar si el usuario es el supervisor (por cod_usuario)
         is_supervisor_user = False
         if hasattr(self.request.user, 'cod_usuario') and (self.request.user.cod_usuario or '').lower() == 'supervisor':

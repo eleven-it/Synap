@@ -24,7 +24,9 @@
             </button>
         </div>
 
-        {% regroup catalog|dictsort:"category" by category as catalog_groups %}
+        {# El catálogo ya viene ordenado por categoría + orden legacy + nombre (# reports.services.catalog_service) #}
+        {% regroup catalog by category as catalog_groups %}
+
         {% for group in catalog_groups %}
             <section data-category="{{ group.grouper }}">
                 <header class="flex items-center justify-between mb-6">
@@ -64,9 +66,17 @@
                             <div class="absolute inset-x-6 -top-3 h-[3px] rounded-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                             <header class="mb-4">
                                 <div class="flex items-center justify-between gap-3">
-                                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">
-                                        {{ item.name }}
-                                    </h3>
+                                    <div class="min-w-0 flex flex-col gap-1">
+                                        <h3 class="text-base font-semibold text-slate-900 dark:text-white">
+                                            {{ item.name }}
+                                        </h3>
+                                        {% if item.legacy_section %}
+                                            <span class="inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                                  title="Informe alineado a AdministraNET / mayoristapp">
+                                                Informe legacy
+                                            </span>
+                                        {% endif %}
+                                    </div>
                                     <div class="flex items-center gap-2">
                                         {% if is_supervisor_user %}
                                         <label class="relative inline-flex items-center cursor-pointer" title="Mostrar/Ocultar para usuarios con puesto Supervisor">
@@ -159,6 +169,9 @@
                                             </div>
                                             <div>
                                                 <h4 class="text-sm font-semibold text-slate-900 dark:text-white">{{ item.name }}</h4>
+                                                {% if item.legacy_section %}
+                                                    <span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Informe legacy</span>
+                                                {% endif %}
                                                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{{ item.description|truncatechars:80 }}</p>
                                             </div>
                                         </div>

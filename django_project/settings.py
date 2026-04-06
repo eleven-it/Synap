@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'factura_compra_captura',  # Expediente captura/workflow factura compra (PostgreSQL)
     'legacy_db',  # Capa escritura compatible VB6 (tablas MySQL administraNET)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
+    'ecom',  # Migración administraNET-ecom (mayorista B2B / relays PHP)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
     # 'administraNET_integration',  # No necesario

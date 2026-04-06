@@ -1,5 +1,9 @@
 from django.urls import path
 
+from .ventas_netas_relay_views import (
+    VentasNetasGerenciaRelayAPIView,
+    VentasNetasRelayAPIView,
+)
 from .api_views import (
     ReconciliacionMovimientoDetalleAPIView,
     ReportCatalogAPIView,
@@ -36,6 +40,16 @@ from .api_views import (
 app_name = "reports-api"
 
 urlpatterns = [
+    path(
+        "ventas-netas/relay/",
+        VentasNetasRelayAPIView.as_view(),
+        name="reports-ventas-netas-relay",
+    ),
+    path(
+        "ventas-netas/relay/gerencia/",
+        VentasNetasGerenciaRelayAPIView.as_view(),
+        name="reports-ventas-netas-relay-gerencia",
+    ),
     path("reconciliacion-movimiento-detalle/", ReconciliacionMovimientoDetalleAPIView.as_view(), name="reports-reconciliacion-movimiento-detalle"),
     path("catalog/", ReportCatalogAPIView.as_view(), name="reports-catalog"),
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),

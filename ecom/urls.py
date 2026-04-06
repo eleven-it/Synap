@@ -1,0 +1,332 @@
+from django.urls import path
+
+from ecom import views
+from ecom.mayoristapp_web_views import PresupuestosVendedorView
+from ecom.logistica_estado_pedidos_views import (
+    EstadoPedidosKanbanAPIView,
+    EstadoPedidosPreparacionView,
+)
+from ecom.cliente_relay_views import (
+    ClienteBuscarRelayAPIView,
+    ClienteComprobanteFormularioRelayAPIView,
+    ClienteContactoRelayAPIView,
+    ClienteDomicilioOpcionesVisitaRelayAPIView,
+    ClienteDomicilioRelayAPIView,
+    ClienteRapidoRelayAPIView,
+    ClienteSeleccionadoRelayAPIView,
+    ClienteSeleccionarRelayAPIView,
+)
+from ecom.precio_relay_views import ListaPrecioRelayAPIView, PromocionesRelayAPIView
+from ecom.comprobantes_relay_views import (
+    ComprobantesAnularPedidoRelayAPIView,
+    ComprobanteAMailRelayAPIView,
+    ComprobanteAMailEnqueueRelayAPIView,
+    ComprobanteAMailQueueStatusRelayAPIView,
+    ComprobantesNoCanceladosRelayAPIView,
+    ComprobantesNoCanceladosResumenRelayAPIView,
+    ComprobantesPedidosRelayAPIView,
+    ComprobantesPresupuestosRelayAPIView,
+    ComprobantesRemitosRelayAPIView,
+    ComprobantesSugerenciasNroRelayAPIView,
+)
+from ecom.ctacte_relay_views import (
+    ConsumosResumenRelayAPIView,
+    CuentaCorrientePedidosRelayAPIView,
+    CuentaCorrientePedidosSugerenciasNroRelayAPIView,
+    CtacteMovimientosRelayAPIView,
+    CtacteSugerenciasNroRelayAPIView,
+)
+from ecom.recibos_relay_views import RecibosListadoRelayAPIView
+from ecom.nota_credito_relay_views import (
+    NotaCreditoListadoRelayAPIView,
+    NotaCreditoSugerenciasNroRelayAPIView,
+)
+from ecom.factura_electronica_relay_views import (
+    FacturaElectronicaListadoRelayAPIView,
+    FacturaElectronicaSugerenciasNroRelayAPIView,
+)
+from ecom.facturas_imputar_relay_views import (
+    FacturasImputarAccionRelayAPIView,
+    FacturasImputarListadoRelayAPIView,
+    FacturasImputarSugerenciasNroRelayAPIView,
+)
+from ecom.filtros_estadisticas_relay_views import FiltrosEstadisticasRelayAPIView
+from ecom.devoluciones_relay_views import (
+    DevolucionesRelayAPIView,
+    DevolucionesSugerenciasNroRelayAPIView,
+)
+from ecom.catalogo_relay_views import (
+    CatalogoArticulosAutocompleteAPIView,
+    CatalogoFiltroRubroCatalogoAPIView,
+    CatalogoLaboratoriosRelayAPIView,
+    CatalogoLotesRelayAPIView,
+    CatalogoMarcasRelayAPIView,
+    CatalogoMasVendidosRelayAPIView,
+    CatalogoProveedoresRelayAPIView,
+    CatalogoRubrosRelayAPIView,
+    CatalogoSubrubrosRelayAPIView,
+    CatalogoSubrubrosTipoClienteRelayAPIView,
+    CatalogoTaccRelayAPIView,
+)
+
+app_name = "ecom"
+
+urlpatterns = [
+    path(
+        "mayoristapp/presupuestos-vendedor/",
+        PresupuestosVendedorView.as_view(),
+        name="mayoristapp_presupuestos_vendedor",
+    ),
+    path(
+        "mayoristapp/logistica/estado-pedidos/",
+        EstadoPedidosPreparacionView.as_view(),
+        name="mayoristapp_estado_pedidos_preparacion",
+    ),
+    path(
+        "api/mayoristapp/logistica/estado-pedidos/",
+        EstadoPedidosKanbanAPIView.as_view(),
+        name="mayoristapp_logistica_estado_pedidos",
+    ),
+    path("api/health/", views.health, name="health"),
+    path("api/migration-info/", views.migration_info, name="migration_info"),
+    path(
+        "api/mayoristapp/relay-inventory/",
+        views.mayoristapp_relay_inventory,
+        name="mayoristapp_relay_inventory",
+    ),
+    path(
+        "api/mayoristapp/catalogo/rubros/",
+        CatalogoRubrosRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_rubros",
+    ),
+    path(
+        "api/mayoristapp/catalogo/subrubros/",
+        CatalogoSubrubrosRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_subrubros",
+    ),
+    path(
+        "api/mayoristapp/catalogo/filtro-rubro-catalogo/",
+        CatalogoFiltroRubroCatalogoAPIView.as_view(),
+        name="mayoristapp_catalogo_filtro_rubro",
+    ),
+    path(
+        "api/mayoristapp/catalogo/articulos/autocomplete/",
+        CatalogoArticulosAutocompleteAPIView.as_view(),
+        name="mayoristapp_catalogo_articulos_autocomplete",
+    ),
+    path(
+        "api/mayoristapp/catalogo/subrubros-tipo-cliente/",
+        CatalogoSubrubrosTipoClienteRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_subrubros_tipo_cliente",
+    ),
+    path(
+        "api/mayoristapp/catalogo/marcas/",
+        CatalogoMarcasRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_marcas",
+    ),
+    path(
+        "api/mayoristapp/catalogo/laboratorios/",
+        CatalogoLaboratoriosRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_laboratorios",
+    ),
+    path(
+        "api/mayoristapp/catalogo/proveedores/",
+        CatalogoProveedoresRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_proveedores",
+    ),
+    path(
+        "api/mayoristapp/catalogo/lotes/",
+        CatalogoLotesRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_lotes",
+    ),
+    path(
+        "api/mayoristapp/catalogo/tacc-opciones/",
+        CatalogoTaccRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_tacc_opciones",
+    ),
+    path(
+        "api/mayoristapp/catalogo/mas-vendidos/",
+        CatalogoMasVendidosRelayAPIView.as_view(),
+        name="mayoristapp_catalogo_mas_vendidos",
+    ),
+    path(
+        "api/mayoristapp/precios/lista-precio/",
+        ListaPrecioRelayAPIView.as_view(),
+        name="mayoristapp_precios_lista_precio",
+    ),
+    path(
+        "api/mayoristapp/precios/promociones/",
+        PromocionesRelayAPIView.as_view(),
+        name="mayoristapp_precios_promociones",
+    ),
+    path(
+        "api/mayoristapp/clientes/buscar/",
+        ClienteBuscarRelayAPIView.as_view(),
+        name="mayoristapp_clientes_buscar",
+    ),
+    path(
+        "api/mayoristapp/clientes/seleccionado/",
+        ClienteSeleccionadoRelayAPIView.as_view(),
+        name="mayoristapp_clientes_seleccionado",
+    ),
+    path(
+        "api/mayoristapp/clientes/comprobante-formulario/",
+        ClienteComprobanteFormularioRelayAPIView.as_view(),
+        name="mayoristapp_clientes_comprobante_formulario",
+    ),
+    path(
+        "api/mayoristapp/clientes/seleccionar/",
+        ClienteSeleccionarRelayAPIView.as_view(),
+        name="mayoristapp_clientes_seleccionar",
+    ),
+    path(
+        "api/mayoristapp/clientes/domicilio/",
+        ClienteDomicilioRelayAPIView.as_view(),
+        name="mayoristapp_clientes_domicilio",
+    ),
+    path(
+        "api/mayoristapp/clientes/domicilio-opciones-visita/",
+        ClienteDomicilioOpcionesVisitaRelayAPIView.as_view(),
+        name="mayoristapp_clientes_domicilio_opciones_visita",
+    ),
+    path(
+        "api/mayoristapp/clientes/contacto/",
+        ClienteContactoRelayAPIView.as_view(),
+        name="mayoristapp_clientes_contacto",
+    ),
+    path(
+        "api/mayoristapp/clientes/rapido/",
+        ClienteRapidoRelayAPIView.as_view(),
+        name="mayoristapp_clientes_rapido",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/pedidos/",
+        ComprobantesPedidosRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_pedidos",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/presupuestos/",
+        ComprobantesPresupuestosRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_presupuestos",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/remitos/",
+        ComprobantesRemitosRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_remitos",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/sugerencias-nro/",
+        ComprobantesSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/comprobante-a-mail/",
+        ComprobanteAMailRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_comprobante_a_mail",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/comprobante-a-mail/enqueue/",
+        ComprobanteAMailEnqueueRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_comprobante_a_mail_enqueue",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/comprobante-a-mail/queue-status/",
+        ComprobanteAMailQueueStatusRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_comprobante_a_mail_queue_status",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/no-cancelados/",
+        ComprobantesNoCanceladosRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_no_cancelados",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/no-cancelados-resumen/",
+        ComprobantesNoCanceladosResumenRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_no_cancelados_resumen",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/anular-pedido/",
+        ComprobantesAnularPedidoRelayAPIView.as_view(),
+        name="mayoristapp_comprobantes_anular_pedido",
+    ),
+    path(
+        "api/mayoristapp/ctacte/consumos-resumen/",
+        ConsumosResumenRelayAPIView.as_view(),
+        name="mayoristapp_ctacte_consumos_resumen",
+    ),
+    path(
+        "api/mayoristapp/ctacte/movimientos/",
+        CtacteMovimientosRelayAPIView.as_view(),
+        name="mayoristapp_ctacte_movimientos",
+    ),
+    path(
+        "api/mayoristapp/ctacte/sugerencias-nro/",
+        CtacteSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_ctacte_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/ctacte/pedidos/sugerencias-nro/",
+        CuentaCorrientePedidosSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_ctacte_pedidos_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/ctacte/pedidos/",
+        CuentaCorrientePedidosRelayAPIView.as_view(),
+        name="mayoristapp_ctacte_pedidos",
+    ),
+    path(
+        "api/mayoristapp/recibos/listado/",
+        RecibosListadoRelayAPIView.as_view(),
+        name="mayoristapp_recibos_listado",
+    ),
+    path(
+        "api/mayoristapp/fe/nota-credito/listado/",
+        NotaCreditoListadoRelayAPIView.as_view(),
+        name="mayoristapp_fe_nota_credito_listado",
+    ),
+    path(
+        "api/mayoristapp/fe/nota-credito/sugerencias-nro/",
+        NotaCreditoSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_fe_nota_credito_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/fe/factura-electronica/listado/",
+        FacturaElectronicaListadoRelayAPIView.as_view(),
+        name="mayoristapp_fe_factura_electronica_listado",
+    ),
+    path(
+        "api/mayoristapp/fe/factura-electronica/sugerencias-nro/",
+        FacturaElectronicaSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_fe_factura_electronica_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/fe/facturas-imputar/listado/",
+        FacturasImputarListadoRelayAPIView.as_view(),
+        name="mayoristapp_fe_facturas_imputar_listado",
+    ),
+    path(
+        "api/mayoristapp/fe/facturas-imputar/sugerencias-nro/",
+        FacturasImputarSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_fe_facturas_imputar_sugerencias_nro",
+    ),
+    path(
+        "api/mayoristapp/fe/facturas-imputar/accion/",
+        FacturasImputarAccionRelayAPIView.as_view(),
+        name="mayoristapp_fe_facturas_imputar_accion",
+    ),
+    path(
+        "api/mayoristapp/estadisticas/filtros/",
+        FiltrosEstadisticasRelayAPIView.as_view(),
+        name="mayoristapp_estadisticas_filtros",
+    ),
+    path(
+        "api/mayoristapp/estadisticas/devoluciones/",
+        DevolucionesRelayAPIView.as_view(),
+        name="mayoristapp_estadisticas_devoluciones",
+    ),
+    path(
+        "api/mayoristapp/estadisticas/devoluciones/sugerencias-nro/",
+        DevolucionesSugerenciasNroRelayAPIView.as_view(),
+        name="mayoristapp_estadisticas_devoluciones_sugerencias_nro",
+    ),
+]
