@@ -275,6 +275,10 @@ def menu_context(request):
         #     current_app_id = 'purchases'
         elif app_name == 'reports':
             current_app_id = 'reports'
+        elif app_name == 'ventas':
+            current_app_id = 'ventas'
+        elif app_name == 'self_checkout':
+            current_app_id = 'self_checkout'
     
     # Obtener submenús de la app actual con permisos procesados
     current_sidebar_items = []
@@ -287,6 +291,13 @@ def menu_context(request):
         
         # Obtener submenús filtrados por permisos
         current_sidebar_items = obtener_submenus_por_app(current_app_id, permisos_usuario, request)
+
+    # Móvil/PWA: no mostrar sidebar de módulos no incluidos en Nivel A
+    if request and getattr(request, "is_mobile", False):
+        from core.pwa_nivel_a import sidebar_visible_en_pwa
+
+        if not sidebar_visible_en_pwa(current_app_id):
+            current_sidebar_items = []
 
     return {
         "apps_menu": apps_menu,

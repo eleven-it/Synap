@@ -1,6 +1,8 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from ecom import views
+from ecom.logistica_legacy_redirects import redirect_api_remito_legacy
 from ecom.mayoristapp_web_views import PresupuestosVendedorView
 from ecom.logistica_estado_pedidos_views import (
     EstadoPedidosKanbanAPIView,
@@ -76,6 +78,56 @@ urlpatterns = [
         "mayoristapp/presupuestos-vendedor/",
         PresupuestosVendedorView.as_view(),
         name="mayoristapp_presupuestos_vendedor",
+    ),
+    # Logística operativa vive en la app ``logistica`` (/logistica/…). Redirecciones 301 por bookmarks.
+    path(
+        "logistica/entregas/",
+        RedirectView.as_view(
+            pattern_name="logistica:entregas", permanent=True, query_string=True
+        ),
+        name="logistica_entregas",
+    ),
+    path(
+        "api/logistica/entregas/lista/",
+        RedirectView.as_view(
+            pattern_name="logistica:api_entregas_lista", permanent=True, query_string=True
+        ),
+        name="logistica_entregas_api_lista",
+    ),
+    path(
+        "api/logistica/entregas/catalogos/",
+        RedirectView.as_view(
+            pattern_name="logistica:api_entregas_catalogos", permanent=True, query_string=True
+        ),
+        name="logistica_entregas_api_catalogos",
+    ),
+    path(
+        "api/logistica/entregas/remito/<int:cod_mov>/",
+        redirect_api_remito_legacy,
+        name="logistica_entregas_api_remito",
+    ),
+    path(
+        "api/logistica/entregas/entrega/",
+        RedirectView.as_view(
+            pattern_name="logistica:api_entregas_entrega", permanent=True, query_string=True
+        ),
+        name="logistica_entregas_api_entrega",
+    ),
+    path(
+        "api/logistica/entregas/motivos-no-entrega/",
+        RedirectView.as_view(
+            pattern_name="logistica:api_entregas_motivos", permanent=True, query_string=True
+        ),
+        name="logistica_entregas_api_motivos",
+    ),
+    path(
+        "api/logistica/entregas/clientes/autocomplete/",
+        RedirectView.as_view(
+            pattern_name="logistica:api_entregas_clientes_autocomplete",
+            permanent=True,
+            query_string=True,
+        ),
+        name="logistica_entregas_api_clientes_autocomplete",
     ),
     path(
         "mayoristapp/logistica/estado-pedidos/",

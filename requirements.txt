@@ -37,7 +37,7 @@ future>=0.18.0,<1  # import chain pyafipws / pysimplesoap (No module named 'futu
 # fastapi - No necesario
 # uvicorn - No necesario
 # firebase-admin - No necesario
-# celery>=5.2 - No necesario (sin tareas asíncronas)
+celery>=5.3,<6  # tiendanube_administranet: sincronización en segundo plano (requiere broker en producción)
 # django-celery-beat>=2.8.1 - No necesario
 # mysql-connector-python - Redundante con mysqlclient
 # geopy - No necesario

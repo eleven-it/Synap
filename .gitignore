@@ -39,8 +39,6 @@ qdrant/
 reports_ai/
 sales/
 support_ai/
-tiendanube/
-tiendanube_administranet/
 
 # Archivos de desarrollo y prueba
 debug_*.py

@@ -2,6 +2,8 @@
 
 **Código fuente PHP:** repositorio `git@github.com:licPflores/administraNET-ecom.git` (clonar como `administraNET-ecom` en el entorno de desarrollo).
 
+**Ejecutar el PHP legacy en Docker (localhost:8050, volumen para `git pull`):** [DOCKER_ADMINISTRANET_ECOM.md](./DOCKER_ADMINISTRANET_ECOM.md).
+
 ## Alcance entregado (fase inicial)
 
 - Documentación de ingeniería inversa: [REVERSE_ENGINEERING.md](./REVERSE_ENGINEERING.md).

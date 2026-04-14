@@ -144,6 +144,12 @@ PERMISOS_POR_MODULO = {
         ("self_checkout.supervisor", "Supervisar autoservicios"),
         ("self_checkout.admin", "Configurar autoservicios y talonarios"),
     ],
+    "Logística": [
+        (
+            "logistica_editar_entregas",
+            "Operar entregas (pantalla Logística — Entregas)",
+        ),
+    ],
     "Reportes": [
         ("reports.view_operational", "Informes operativos"),
         ("reports.view_managerial", "Informes gerenciales"),
@@ -234,8 +240,8 @@ PERMISOS_POR_MODULO = {
         ("tiendanube_administranet.delete_tiendanubeconfig", "Eliminar configuración de Tiendanube"),
         
         # Configuración AdministraNET
-        ("tiendanube_administranet.view_administraNETconfig", "Ver configuración de AdministraNET"),
-        ("tiendanube_administranet.change_administraNETconfig", "Editar configuración de AdministraNET"),
+        ("tiendanube_administranet.view_administranetconfig", "Ver configuración de AdministraNET"),
+        ("tiendanube_administranet.change_administranetconfig", "Editar configuración de AdministraNET"),
         
         # Webhooks
         ("tiendanube_administranet.view_webhookconfig", "Ver configuraciones de webhook"),

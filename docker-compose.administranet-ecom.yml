@@ -1,0 +1,41 @@
+# Portal PHP legacy administraNET-ecom — PHP 5.6 + Apache 2.4 (imagen oficial php:5.6-apache; ver docs para Apache 2.2).
+#
+# Requisitos:
+#   - Red `synap_net` y MySQL `Synap_mysql57` (p. ej. docker-compose.mysql.yml).
+#   - Repo PHP en ../administraNET-ecom o ruta en ECOM_PHP_SRC (ver administranet-ecom.docker.env).
+#
+# Arranque recomendado (interpola ECOM_PHP_SRC y pasa SYNAP_* al contenedor):
+#   docker compose -f docker-compose.administranet-ecom.yml --env-file administranet-ecom.docker.env up -d --build
+#
+# Atajo: ./scripts/administranet-ecom-docker-up.sh
+#
+# URL: http://localhost:8050/  → /mayoristapp/
+# Actualizaciones: git pull en administraNET-ecom; opcional RUN_COMPOSER_INSTALL=1 si cambian composer en subcarpetas.
+
+services:
+  administranet_ecom_php:
+    platform: linux/amd64
+    build:
+      context: ./docker/ecom-php
+      dockerfile: Dockerfile
+    image: synap-administranet-ecom-php:5.6
+    container_name: Synap_administranet_ecom_php
+    ports:
+      - "8050:80"
+    env_file:
+      - administranet-ecom.docker.env
+    volumes:
+      - ${ECOM_PHP_SRC:-../administraNET-ecom}:/var/www/html
+      - ./docker/ecom-php/includes.docker-synap.inc.php:/var/www/html/mayoristapp/includes/includes.docker-synap.inc.php:ro
+    networks:
+      - synap_net
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  synap_net:
+    external: true

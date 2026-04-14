@@ -55,15 +55,18 @@ INSTALLED_APPS = [
     'core',
     'login',
     'dashboard',
+    'logistica',  # Logística (operación entregas; dominio MySQL compartido con Reports)
     'reports',
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
+    'ventas',  # Objetivos de venta (MySQL legacy) e informes asociados
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
     'factura_compra_posting',  # Contrato + stub posting factura compra (sin MySQL en Fase 1)
     'factura_compra_captura',  # Expediente captura/workflow factura compra (PostgreSQL)
     'legacy_db',  # Capa escritura compatible VB6 (tablas MySQL administraNET)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
     'ecom',  # Migración administraNET-ecom (mayorista B2B / relays PHP)
+    'tiendanube_administranet',  # Integración Tienda Nube ↔ AdministraNET (MySQL vía pool Synap)
     # Módulos eliminados para instalación mínima de Reportes
     # 'reports_ai',  # No necesario
     # 'administraNET_integration',  # No necesario
@@ -86,15 +89,17 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Mensajes antes de RequestScopedMysql: si hay que cerrar sesión por MySQL inválido, messages.error funciona.
+    'django.contrib.messages.middleware.MessageMiddleware',
     'core.middleware.request_scoped_mysql.RequestScopedMysqlMiddleware',  # Una conexión MySQL por request
     'django.middleware.locale.LocaleMiddleware',  # Middleware para i18n
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',  # Movido antes de los middlewares personalizados
     'core.middleware.RequestUserMiddleware',
     'core.middleware.AdminAccessMiddleware',
     'core.middleware.DeviceDetectionMiddleware',  # Detección de dispositivos
+    'core.middleware.mobile_level_a_middleware.MobileLevelAOnlyMiddleware',  # Móvil: solo Nivel A (login, perfil, TPV, PWA)
     'core.middleware.module_middleware.ModuleMiddleware',  # Gestión de módulos
     'core.middleware.module_middleware.ModulePermissionMiddleware',  # Permisos de módulos
     'core.middleware.module_middleware.ModuleContextMiddleware',  # Contexto de módulos

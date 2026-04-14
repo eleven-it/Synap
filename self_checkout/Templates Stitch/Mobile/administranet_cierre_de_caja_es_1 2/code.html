@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#7f13ec",
+              "background-light": "#f7f6f8",
+              "background-dark": "#191022",
+            },
+            fontFamily: {
+              "display": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<title>AdministraNET Cierre de Caja</title>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-slate-100">
+<div class="relative flex min-h-screen w-full flex-col max-w-md mx-auto bg-background-light dark:bg-background-dark overflow-x-hidden">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-10 flex items-center bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md p-4 pb-2 justify-between">
+<div class="text-primary flex size-10 shrink-0 items-center justify-center rounded-full hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</div>
+<h1 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10">Cierre de Caja</h1>
+</header>
+<main class="flex-1 overflow-y-auto">
+<div class="px-4 py-2">
+<h2 class="text-slate-500 dark:text-slate-400 text-sm font-semibold uppercase tracking-wider">Hoy, 24 de Mayo</h2>
+</div>
+<!-- Summary Card -->
+<div class="p-4">
+<div class="flex flex-col items-center justify-center rounded-xl bg-primary p-8 text-white shadow-lg shadow-primary/20 relative overflow-hidden">
+<div class="absolute top-0 right-0 -mr-8 -mt-8 size-32 bg-white/10 rounded-full blur-2xl"></div>
+<div class="absolute bottom-0 left-0 -ml-8 -mb-8 size-24 bg-white/10 rounded-full blur-xl"></div>
+<p class="text-primary-100/80 text-sm font-medium uppercase tracking-widest mb-2">Saldo Total Esperado</p>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-semibold opacity-80">$</span>
+<span class="text-5xl font-bold tracking-tighter">45,200.00</span>
+</div>
+</div>
+</div>
+<!-- Payment Breakdown -->
+<div class="px-4 pb-4 space-y-3">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-bold px-1">Desglose por método</h3>
+<!-- Cash Section -->
+<div class="flex flex-col gap-3 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<div class="flex flex-col">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold">Efectivo</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Esperado: $12,500.00</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-slate-900 dark:text-slate-100 text-base font-bold">$12,500.00</p>
+</div>
+</div>
+<div class="mt-2">
+<label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 ml-1" for="cash-counted">Efectivo Contado</label>
+<div class="relative">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+<input class="w-full pl-7 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg focus:ring-primary focus:border-primary text-slate-900 dark:text-slate-100 font-medium" id="cash-counted" placeholder="0.00" type="number"/>
+</div>
+</div>
+</div>
+<!-- Card Section -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm justify-between">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">credit_card</span>
+</div>
+<div class="flex flex-col">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold">Tarjeta</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Esperado: $22,400.00</p>
+</div>
+</div>
+<div class="shrink-0 text-slate-900 dark:text-slate-100 text-base font-bold">$22,400.00</div>
+</div>
+<!-- QR Section -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm justify-between">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">qr_code_2</span>
+</div>
+<div class="flex flex-col">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold">QR / Transferencia</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Esperado: $8,300.00</p>
+</div>
+</div>
+<div class="shrink-0 text-slate-900 dark:text-slate-100 text-base font-bold">$8,300.00</div>
+</div>
+<!-- Others Section -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm justify-between">
+<div class="flex items-center gap-3">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-10">
+<span class="material-symbols-outlined">more_horiz</span>
+</div>
+<div class="flex flex-col">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold">Otros</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Esperado: $2,000.00</p>
+</div>
+</div>
+<div class="shrink-0 text-slate-900 dark:text-slate-100 text-base font-bold">$2,000.00</div>
+</div>
+</div>
+<!-- Summary / Discrepancy Section -->
+<div class="p-4 mt-2">
+<div class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30 rounded-xl">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-red-600 dark:text-red-400">warning</span>
+<span class="text-slate-900 dark:text-slate-100 font-semibold">Diferencia</span>
+</div>
+<span class="text-red-600 dark:text-red-400 font-bold text-lg">-$12,500.00</span>
+</div>
+<p class="text-center text-xs text-slate-500 dark:text-slate-400 mt-2 px-4">
+                    Ingresa el efectivo contado para calcular la diferencia total del cierre.
+                </p>
+</div>
+</main>
+<!-- Fixed Footer Action -->
+<footer class="p-4 bg-background-light dark:bg-background-dark border-t border-slate-200 dark:border-slate-800">
+<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/30 transition-all flex items-center justify-center gap-2">
+<span>Confirmar Cierre de Caja</span>
+<span class="material-symbols-outlined">check_circle</span>
+</button>
+</footer>
+</div>
+</body></html>

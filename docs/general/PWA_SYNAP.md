@@ -14,6 +14,8 @@ Navegador (móvil)
 
 En desktop, el navegador no recibe meta tags PWA ni registra el Service Worker.
 
+**`start_url` del manifest:** `/login/`, alineado con la restricción móvil «solo Nivel A» (`MobileLevelAOnlyMiddleware`): en móvil no se debe abrir la app en rutas no adaptadas (p. ej. el dashboard general).
+
 ---
 
 ## Archivos creados/modificados
@@ -28,6 +30,9 @@ En desktop, el navegador no recibe meta tags PWA ni registra el Service Worker.
 | `theme/templates/base_app.html` | Modificado | Bloque PWA condicional `{% if request.is_mobile %}` |
 | `theme/static/img/pwa/` | Nuevo dir | Directorio para iconos (pendiente generarlos) |
 | `core/tests/test_pwa.py` | Nuevo | 62 tests automatizados |
+| `core/middleware/mobile_level_a_middleware.py` | Nuevo | En móvil, solo rutas Nivel A + APIs TPV |
+| `core/templates/core/mobile_desktop_only.html` | Nuevo | Mensaje 403 móvil (solo escritorio) |
+| `docs/general/MOBILE_SOLO_NIVEL_A.md` | Nuevo | Política y lista de rutas permitidas |
 
 ---
 

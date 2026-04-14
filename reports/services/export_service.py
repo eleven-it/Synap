@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 import logging
+
+from datetime import date, datetime
 
 from django.conf import settings
 from django.utils import timezone
@@ -65,7 +68,7 @@ class ExportService:
         export_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{report_slug}_{timestamp}.xlsx"
+        filename = self._resolve_export_filename(report_slug, payload, timestamp)
         file_path = export_dir / filename
         
         # Generar Excel usando openpyxl
@@ -77,6 +80,33 @@ class ExportService:
             expires_at=None,
             filename=filename,
         )
+
+    def _resolve_export_filename(self, report_slug: str, payload: Dict[str, Any], timestamp: str) -> str:
+        """
+        Nombre del .xlsx en disco y en Content-Disposition.
+        Objetivos vs BO: Ventas_objetivo_vendedores_{fecha_inicio_fact}_{fecha_fin_fact}.xlsx
+        """
+        if report_slug != "ventas-objetivos-vs-bo":
+            return f"{report_slug}_{timestamp}.xlsx"
+
+        filters = payload.get("filters") or {}
+        fi = filters.get("fecha_inicio_facturacion")
+        ff = filters.get("fecha_fin_facturacion")
+
+        def _segmento_fecha(v: Any) -> str:
+            if v is None or v == "":
+                return "sin_fecha"
+            if isinstance(v, datetime):
+                return v.date().isoformat()[:10]
+            if isinstance(v, date):
+                return v.isoformat()[:10]
+            s = str(v).strip().replace("/", "-")[:10]
+            s = re.sub(r"[^\d\-]", "_", s)
+            return s if s else "sin_fecha"
+
+        a = _segmento_fecha(fi)
+        b = _segmento_fecha(ff)
+        return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
         """
@@ -163,6 +193,25 @@ class ExportService:
                 "ventas_netas",
                 "notas_credito",
                 "ventas_brutas",
+            ]
+            return [h for h in preferred if h in available]
+
+        if slug == "ventas-objetivos-vs-bo":
+            preferred = [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "objetivo",
+                "facturacion",
+                "remitos",
+                "total",
+                "falta",
+                "cantidades_vendidas",
+                "backorder_total",
+                "bo_con_stock",
+                "bo_con_ingreso",
+                "bo_sin_stock",
             ]
             return [h for h in preferred if h in available]
 
@@ -310,11 +359,38 @@ class ExportService:
                 ws.append(["Sin datos disponibles"])
                 row += 1
             else:
+                currency_headers_data = {
+                    "ventas_brutas",
+                    "notas_credito",
+                    "ventas_netas",
+                    "subtotal_desc",
+                }
+                if report.slug == "ventas-objetivos-vs-bo":
+                    currency_headers_data.update(
+                        {
+                            "objetivo",
+                            "facturacion",
+                            "remitos",
+                            "total",
+                            "falta",
+                            "backorder_total",
+                            "bo_con_stock",
+                            "bo_con_ingreso",
+                            "bo_sin_stock",
+                        }
+                    )
+
                 # Orden y columnas alineados con la tabla del dashboard / schema declarativo
                 headers = self._resolve_export_headers(report, query_result.data[0])
                 
                 # Traducir headers al español si es necesario
                 header_translations = {
+                    "id_art": "ID sistema",
+                    "codigo_articulo": "Código artículo",
+                    "nombre": "Nombre",
+                    "stock": "Stock",
+                    "reservado": "Reservado",
+                    "disponible": "Disponible",
                     "mes": "Mes",
                     "mes_formato": "Mes (Formato)",
                     "id_sucursal": "ID Sucursal",
@@ -333,6 +409,19 @@ class ExportService:
                     "punto_venta": "Punto de Venta",
                     "cliente": "Cliente",
                     "nombre_cliente": "Cliente",
+                    "cod_viajante": "Cód. vendedor",
+                    "nombre_vendedor": "Vendedor",
+                    "codigo_cliente": "Cód. cliente",
+                    "objetivo": "Objetivo",
+                    "facturacion": "Facturación",
+                    "remitos": "Remitos",
+                    "total": "Total (fac.+rem.)",
+                    "falta": "Falta",
+                    "cantidades_vendidas": "Unidades vendidas",
+                    "backorder_total": "BO total",
+                    "bo_con_stock": "BO con stock",
+                    "bo_con_ingreso": "BO con ingreso",
+                    "bo_sin_stock": "BO sin stock",
                 }
                 # Ventas Netas: etiqueta "Mes" para la primera columna (mes_formato)
                 if report.slug in ("ventas_netas", "ventas-netas"):
@@ -352,15 +441,20 @@ class ExportService:
                     cell.border = border
                 
                 row += 1
-                
-                # Escribir datos
-                for data_row in query_result.data:
-                    row_values = []
-                    # Convertir valores numéricos a float para asegurar formato correcto
-                    for header in headers:
-                        value = data_row.get(header, "")
-                        # Si es un campo numérico, convertir a float
-                        if header in ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]:
+
+                def _vo_build_row_values(data_row: Dict[str, Any]) -> List[Any]:
+                    row_values: List[Any] = []
+                    for h in headers:
+                        value = data_row.get(h, "")
+                        if h in currency_headers_data:
+                            try:
+                                if value == "" or value is None:
+                                    row_values.append(0.0)
+                                else:
+                                    row_values.append(float(value))
+                            except (ValueError, TypeError):
+                                row_values.append(0.0)
+                        elif h == "cantidades_vendidas":
                             try:
                                 if value == "" or value is None:
                                     row_values.append(0.0)
@@ -370,26 +464,74 @@ class ExportService:
                                 row_values.append(0.0)
                         else:
                             row_values.append(value)
-                    
-                    ws.append(row_values)
-                    
-                    # Aplicar formato a valores numéricos y bordes
-                    for col_num, (header, value) in enumerate(zip(headers, row_values), 1):
-                        cell = ws.cell(row=row, column=col_num)
+                    return row_values
+
+                def _vo_format_data_row(ridx: int, row_values: List[Any]) -> None:
+                    for col_num, (h, val) in enumerate(zip(headers, row_values), 1):
+                        cell = ws.cell(row=ridx, column=col_num)
                         cell.border = border
-                        
-                        # Formatear valores numéricos como moneda
-                        if header in ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]:
-                            if isinstance(value, (int, float)):
+                        if h in currency_headers_data:
+                            if isinstance(val, (int, float)):
                                 cell.number_format = '"$"#,##0.00'
-                                cell.alignment = Alignment(horizontal='right', vertical='center')
+                                cell.alignment = Alignment(horizontal="right", vertical="center")
                             else:
-                                cell.alignment = Alignment(horizontal='left', vertical='center')
+                                cell.alignment = Alignment(horizontal="left", vertical="center")
+                        elif h == "cantidades_vendidas" and isinstance(val, (int, float)):
+                            cell.number_format = "#,##0.00"
+                            cell.alignment = Alignment(horizontal="right", vertical="center")
                         else:
-                            cell.alignment = Alignment(horizontal='left', vertical='center')
-                    
-                    row += 1
-                
+                            cell.alignment = Alignment(horizontal="left", vertical="center")
+
+                def _vo_append_data_row(data_row: Dict[str, Any], outline_lvl: int = 0) -> None:
+                    vals = _vo_build_row_values(data_row)
+                    ws.append(vals)
+                    ridx = ws.max_row
+                    if outline_lvl > 0:
+                        ws.row_dimensions[ridx].outline_level = outline_lvl
+                    _vo_format_data_row(ridx, vals)
+
+                # Escribir datos (objetivos vs BO: orden por cód. vendedor + cód. cliente, agrupación Excel)
+                if report.slug == "ventas-objetivos-vs-bo":
+                    from openpyxl.worksheet.properties import Outline
+
+                    ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
+                    vendor_fill = PatternFill(start_color="DCE6F2", end_color="DCE6F2", fill_type="solid")
+                    vendor_title_font = Font(bold=True, size=11, color="1E3A5F")
+                    sorted_data = sorted(
+                        query_result.data,
+                        key=lambda r: (int(r.get("cod_viajante") or 0), int(r.get("codigo_cliente") or 0)),
+                    )
+                    last_cv = None
+                    for data_row in sorted_data:
+                        cv = int(data_row.get("cod_viajante") or 0)
+                        if last_cv is None or cv != last_cv:
+                            last_cv = cv
+                            nv = (data_row.get("nombre_vendedor") or "").strip() or f"Cód. {cv}"
+                            label = f"Vendedor {cv} — {nv}"
+                            ws.append([label] + [""] * (len(headers) - 1))
+                            vr = ws.max_row
+                            if len(headers) > 1:
+                                ws.merge_cells(
+                                    start_row=vr,
+                                    start_column=1,
+                                    end_row=vr,
+                                    end_column=len(headers),
+                                )
+                            top = ws.cell(row=vr, column=1)
+                            top.value = label
+                            top.font = vendor_title_font
+                            top.fill = vendor_fill
+                            top.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                            for cx in range(1, len(headers) + 1):
+                                ws.cell(row=vr, column=cx).border = border
+                            ws.row_dimensions[vr].outline_level = 0
+                        _vo_append_data_row(data_row, outline_lvl=1)
+                else:
+                    for data_row in query_result.data:
+                        _vo_append_data_row(data_row, outline_lvl=0)
+
+                row = ws.max_row + 1
+
                 # Agregar fila de totales si existe
                 if query_result.totals:
                     # Mapeo de headers a nombres de totales en query_result.totals
@@ -425,8 +567,6 @@ class ExportService:
                     # Escribir la fila completa (row ya apunta a la siguiente fila libre)
                     ws.append(total_row)
                     
-                    # Mismo criterio de columnas numéricas que en las filas de datos
-                    currency_headers_data = ["ventas_brutas", "notas_credito", "ventas_netas", "subtotal_desc"]
                     # Aplicar estilo y formato a la fila de totales (la que acabamos de escribir en row)
                     for col_num in range(1, len(total_row) + 1):
                         if col_num <= len(total_row):
@@ -444,6 +584,13 @@ class ExportService:
                                     value = total_row[col_num - 1]
                                     if isinstance(value, (int, float)):
                                         cell.number_format = '"$"#,##0.00'
+                                        cell.alignment = Alignment(horizontal='right', vertical='center')
+                                    else:
+                                        cell.alignment = Alignment(horizontal='right', vertical='center')
+                                elif header == "cantidades_vendidas":
+                                    value = total_row[col_num - 1]
+                                    if isinstance(value, (int, float)):
+                                        cell.number_format = "#,##0.00"
                                         cell.alignment = Alignment(horizontal='right', vertical='center')
                                     else:
                                         cell.alignment = Alignment(horizontal='right', vertical='center')

@@ -297,5 +297,28 @@ MODULE_CONFIGS = {
             'tiendanube_administranet.sync_completed',
         ]
     },
+
+    'logistica': {
+        'name': 'logistica',
+        'display_name': 'Logística',
+        'description': (
+            'Operación de entregas en ruta: listados por chofer, registro de entrega y APIs '
+            'sobre datos AdministraNET (MySQL).'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['reports'],
+        'settings': {
+            'max_list_rows': 2000,
+        },
+        'permissions': [
+            'logistica_editar_entregas',
+            'logistica.*',
+        ],
+        'hooks': [],
+    },
     # self_checkout: app core (siempre instalada), URLs en django_project/urls.py, permisos en PERMISOS_POR_MODULO + sync.
 } 

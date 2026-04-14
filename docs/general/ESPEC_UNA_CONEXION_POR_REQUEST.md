@@ -65,7 +65,15 @@ Opcional: `/admin/` si no se usa MySQL de administraNET en el admin de Django.
 
 ---
 
-## 6. Consideraciones
+## 6. Sesión inválida respecto a MySQL (base inexistente o sin permiso)
+
+Si al abrir la conexión para `base_empresa` MySQL devuelve **1049** (base desconocida) o **1044** (acceso denegado a esa base), no tiene sentido mantener la sesión: el usuario debe volver a iniciar sesión y elegir otra empresa.
+
+**Comportamiento:** `RequestScopedMysqlMiddleware` captura esos errores, ejecuta `request.session.flush()`, muestra un mensaje de error (framework de mensajes) y **redirige** a la vista de login. `MessageMiddleware` debe ejecutarse **antes** de este middleware en `settings.MIDDLEWARE` para que el mensaje se pueda encolar.
+
+---
+
+## 7. Consideraciones
 
 - **Timeout:** La conexión permanece abierta durante todo el request; en requests muy largos podría aplicarse timeout del servidor MySQL (p. ej. `wait_timeout`). No se cambia por defecto en esta especificación.
 - **Hilos:** La conexión de request no debe usarse desde otro hilo; `contextvars` es por contexto de ejecución, no por hilo.

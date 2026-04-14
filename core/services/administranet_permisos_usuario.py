@@ -136,4 +136,6 @@ def tiene_permiso_administranet(
             modulo = perm[:-2]
             if codigo.startswith(modulo + "."):
                 return True
+            if codigo.startswith(modulo + "_"):
+                return True
     return False

@@ -3,17 +3,14 @@
 Aplica el schema MPR en la base administranet (base_empresa): columnas
 deposito.suma_stock y articulo.stock_reserva. Si ya existen, no hace nada.
 Referencia: docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md
+
+La lógica vive en ``core.services.legacy_mysql_schema.catalog.run_mpr_deposito_articulo_mysql``.
 """
 from django.core.management.base import BaseCommand
 
 from core.mysql_pool import get_connection
-
-
-def _columna_existe(cursor, tabla: str, columna: str) -> bool:
-    # Nombre de tabla fijo por este comando; LIKE recibe parámetro
-    sql = "SHOW COLUMNS FROM `%s` LIKE %%s" % tabla.replace("`", "``")
-    cursor.execute(sql, (columna,))
-    return cursor.fetchone() is not None
+from core.services.legacy_mysql_schema import run_mpr_deposito_articulo_mysql
+from core.services.legacy_mysql_schema.helpers import columna_existe
 
 
 class Command(BaseCommand):
@@ -44,32 +41,29 @@ class Command(BaseCommand):
         try:
             with get_connection(base_empresa) as conn:
                 cursor = conn.cursor()
-                alter_deposito = not _columna_existe(cursor, "deposito", "suma_stock")
-                alter_articulo = not _columna_existe(cursor, "articulo", "stock_reserva")
+                alter_deposito = not columna_existe(cursor, "deposito", "suma_stock")
+                alter_articulo = not columna_existe(cursor, "articulo", "stock_reserva")
+                cursor.close()
 
                 if dry_run:
                     if alter_deposito:
-                        self.stdout.write("Se ejecutaría: ALTER TABLE deposito ADD COLUMN suma_stock VARCHAR(2) DEFAULT 'Si';")
+                        self.stdout.write(
+                            "Se ejecutaría: ALTER TABLE deposito ADD COLUMN suma_stock VARCHAR(2) DEFAULT 'Si';"
+                        )
                     else:
                         self.stdout.write("deposito.suma_stock ya existe, no se modifica.")
                     if alter_articulo:
-                        self.stdout.write("Se ejecutaría: ALTER TABLE articulo ADD COLUMN stock_reserva DECIMAL(15,2) DEFAULT NULL;")
+                        self.stdout.write(
+                            "Se ejecutaría: ALTER TABLE articulo ADD COLUMN stock_reserva DECIMAL(15,2) DEFAULT NULL;"
+                        )
                     else:
                         self.stdout.write("articulo.stock_reserva ya existe, no se modifica.")
                     return
 
-                if alter_deposito:
-                    cursor.execute("ALTER TABLE deposito ADD COLUMN suma_stock VARCHAR(2) DEFAULT 'Si'")
-                    self.stdout.write(self.style.SUCCESS("deposito.suma_stock agregada."))
+                result = run_mpr_deposito_articulo_mysql(conn)
+                if result.get("success"):
+                    self.stdout.write(self.style.SUCCESS(result.get("message", "OK")))
                 else:
-                    self.stdout.write("deposito.suma_stock ya existe, omitido.")
-
-                if alter_articulo:
-                    cursor.execute("ALTER TABLE articulo ADD COLUMN stock_reserva DECIMAL(15,2) DEFAULT NULL")
-                    self.stdout.write(self.style.SUCCESS("articulo.stock_reserva agregada."))
-                else:
-                    self.stdout.write("articulo.stock_reserva ya existe, omitido.")
-
-                conn.commit()
+                    self.stdout.write(self.style.ERROR(result.get("message", "Error")))
         except Exception as e:
             self.stdout.write(self.style.ERROR("Error aplicando schema MPR en %s: %s" % (base_empresa, e)))

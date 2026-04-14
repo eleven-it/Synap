@@ -57,3 +57,4 @@ Misma línea que otros informes ecom migrados: cabecera gradiente «Foco operati
 
 - Inventario e ingeniería inversa: `docs/ecom/INVENTARIO_REVERSE_LOGISTICA_PANTALLA_PREPARACION.md`.
 - Estados `comp_ped`: `reports/docs/VALIDACION_PEDIDOS_PENDIENTES.md`.
+- **Lista de comprobantes en rutas** (`logistica_lista_comprobantes_rutas.php`): se migra como **informe legacy en el módulo Reports** (no como vista ecom); ver `docs/ecom/SPEC_LOGISTICA_LISTA_COMPROBANTES_RUTAS.md`.

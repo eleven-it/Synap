@@ -1,0 +1,68 @@
+{# Modal solo resultado de entrega (pantalla Entregas; sin modal de detalle). #}
+<style>
+@media (prefers-reduced-motion: no-preference) {
+  #logistica-modal-entrega:not(.hidden) .synap-logistica-modal-panel {
+    animation: synap-logistica-modal-in-entrega 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+@keyframes synap-logistica-modal-in-entrega {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+</style>
+<div id="logistica-modal-entrega" class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/55 dark:bg-black/65 backdrop-blur-sm p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="logistica-entrega-titulo">
+    <div class="synap-logistica-modal-panel w-full max-w-lg sm:max-w-xl max-h-[92vh] overflow-hidden flex flex-col rounded-3xl border border-slate-200/90 dark:border-slate-700/80 bg-white dark:bg-slate-900 shadow-2xl shadow-slate-900/25 dark:shadow-black/50 ring-1 ring-slate-900/5 dark:ring-white/5">
+        <div class="relative flex items-start justify-between gap-3 px-5 sm:px-7 py-5 bg-gradient-to-r from-slate-800 via-indigo-900 to-purple-900 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900">
+            <div class="min-w-0">
+                <p class="text-[10px] uppercase tracking-[0.28em] text-indigo-200/90 font-semibold mb-1">Logística</p>
+                <h3 id="logistica-entrega-titulo" class="text-base sm:text-lg font-semibold text-white tracking-tight">Registrar resultado</h3>
+                <p class="text-xs text-indigo-200/80 mt-1 max-w-md">Elegí si el remito quedó entregado o no. Si no hubo entrega, indicá el motivo (catálogo de la empresa).</p>
+            </div>
+            <button type="button" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white text-xl leading-none hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 transition-colors" data-logistica-cerrar-entrega aria-label="Cerrar">&times;</button>
+        </div>
+        <form id="logistica-form-entrega" class="overflow-y-auto flex-1 px-5 sm:px-7 py-6 space-y-5 text-sm bg-gradient-to-b from-slate-50/90 via-white to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-900">
+            <input type="hidden" id="logistica_entrega_cod_remito" name="cod_mov_remito" />
+            <input type="hidden" id="logistica_entrega_cod_pedido" name="cod_mov_pedido" />
+            <input type="hidden" id="logistica_entrega_estado" value="" autocomplete="off" />
+
+            <div>
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3">Resultado <span class="text-rose-500 dark:text-rose-400">*</span></p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="group" aria-label="Resultado de entrega en destino">
+                    <button type="button" id="logistica_btn_entrega_si" data-logistica-resultado="Si"
+                        class="logistica-btn-resultado group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/80 py-5 px-4 text-center transition-all hover:border-emerald-400/80 dark:hover:border-emerald-500/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+                        <span class="material-icons text-3xl text-emerald-600 dark:text-emerald-400" aria-hidden="true">check_circle</span>
+                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100">Entregado</span>
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Mercadería recibida en destino</span>
+                    </button>
+                    <button type="button" id="logistica_btn_entrega_no" data-logistica-resultado="No"
+                        class="logistica-btn-resultado group relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800/80 py-5 px-4 text-center transition-all hover:border-rose-400/80 dark:hover:border-rose-500/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+                        <span class="material-icons text-3xl text-rose-600 dark:text-rose-400" aria-hidden="true">cancel</span>
+                        <span class="text-sm font-bold text-slate-800 dark:text-slate-100">No entregado</span>
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">Cliente ausente, rechazo u otro motivo</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="logistica_entrega_motivo_wrap" class="hidden space-y-2">
+                <label class="flex flex-col gap-2">
+                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">Motivo <span class="text-rose-500 dark:text-rose-400">*</span></span>
+                    <select id="logistica_entrega_motivo" class="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 px-3 text-slate-900 dark:text-slate-100 text-sm shadow-sm focus:ring-2 focus:ring-sky-400/80 focus:border-sky-500">
+                        <option value="">Seleccionar motivo…</option>
+                    </select>
+                </label>
+            </div>
+
+            <label class="flex flex-col gap-2">
+                <span id="logistica_entrega_detalle_label" class="text-xs font-semibold text-slate-600 dark:text-slate-300">Comentario / detalle</span>
+                <textarea id="logistica_entrega_detalle" rows="3" placeholder="Observaciones para trazabilidad interna…"
+                    class="rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 py-2.5 px-3 text-slate-900 dark:text-slate-100 text-sm shadow-sm focus:ring-2 focus:ring-sky-400/80 focus:border-sky-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"></textarea>
+                <span id="logistica_entrega_detalle_hint" class="text-[11px] text-slate-500 dark:text-slate-400">Opcional salvo que el motivo exija aclaración.</span>
+            </label>
+
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-slate-200/80 dark:border-slate-700/80">
+                <button type="button" data-logistica-cerrar-entrega class="inline-flex items-center justify-center rounded-full px-5 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancelar</button>
+                <button type="submit" class="inline-flex items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25 hover:brightness-[1.05] active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-slate-900">Guardar resultado</button>
+            </div>
+        </form>
+    </div>
+</div>

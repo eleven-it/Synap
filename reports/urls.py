@@ -41,6 +41,15 @@ urlpatterns = [
         ),
         name="dashboard_mayoristapp_estado_pedidos_preparacion_redirect",
     ),
+    # Compatibilidad: slug antiguo → canónico comprobantes-rutas
+    path(
+        "dashboard/mayoristapp-lista-comprobantes-rutas/",
+        RedirectView.as_view(
+            url=reverse_lazy("reports:dashboard_detail", kwargs={"slug": "comprobantes-rutas"}),
+            permanent=True,
+        ),
+        name="dashboard_logistica_lista_comprobantes_rutas_legacy_redirect",
+    ),
     path("dashboard/<slug:slug>/", DashboardDetailView.as_view(), name="dashboard_detail"),
     path("builder/", ReportBuilderListView.as_view(), name="builder_list"),
     path("builder/data-map/", DataMapView.as_view(), name="data_map"),  # Ruta específica debe ir ANTES de la genérica

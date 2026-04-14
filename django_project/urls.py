@@ -32,7 +32,12 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("login/", include("login.urls")),  
     path("core/", include("core.urls", namespace="core")),
+    path("logistica/", include("logistica.urls", namespace="logistica")),
     path("ecom/", include("ecom.urls", namespace="ecom")),
+    path(
+        "tiendanube_administranet/",
+        include("tiendanube_administranet.urls", namespace="tiendanube_administranet"),
+    ),
     # PWA: sw.js y manifest.json deben servirse desde la raíz del dominio
     path("sw.js", serve_sw, name="pwa_sw"),
     path("manifest.json", serve_manifest, name="pwa_manifest"),
@@ -42,8 +47,7 @@ urlpatterns = [
     path("media/<path:path>", serve_media_file, name="serve_media"),
     # Mercado Pago se carga por registro de módulos cuando está activo (evita W005 namespace duplicado).
     # path("mercadopago/", include("mercadopago.urls")),
-    # path("tiendanube-adminet/", include("tiendanube_administranet.urls", namespace="tiendanube_administranet")),
-    # path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),
+    # path("tiendanube/", include("tiendanube.urls", namespace="tiendanube")),  # app legado opcional
 ]
 
 # URLs críticas siempre disponibles (workaround para tests y desarrollo)
@@ -54,7 +58,10 @@ urlpatterns.extend([
     # path('api/sales/', include('sales.api.urls')),
     path('core/api/', include('core.api.urls', namespace='core_api')),
     # path('administraNET_integration/', include('administraNET_integration.urls', namespace='administraNET_integration')),
-    # path('api/tiendanube-adminet/', include('tiendanube_administranet.api.urls', namespace='tiendanube_administranet_api')),
+    path(
+        "api/tiendanube_administranet/",
+        include("tiendanube_administranet.api.urls", namespace="tiendanube_administranet_api"),
+    ),
 ])
 
 # URLs de módulos dinámicos
@@ -102,6 +109,7 @@ urlpatterns.extend([
     # path('support/', include('support_ai.urls', namespace='support_ai')),
     path('reports/', include('reports.urls', namespace='reports')),
     path('stock/', include('stock.urls', namespace='stock')),
+    path('ventas/', include('ventas.urls', namespace='ventas')),
     path('compras/', include('compras.urls', namespace='compras')),
     path('api/legacy-hub/', include('legacy_db.urls', namespace='legacy_hub')),
     path('mpr/', include('mpr.urls', namespace='mpr')),

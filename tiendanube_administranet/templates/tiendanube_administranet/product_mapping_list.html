@@ -1,0 +1,326 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Product Mappings" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="integration-header">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="integration-title">
+                {% trans "Product Mappings" %}
+            </h1>
+            <p class="integration-subtitle">
+                {% trans "Manage product synchronization between Tiendanube and AdministraNET" %}
+            </p>
+        </div>
+                    <a href="{% url 'tiendanube_administranet:product_create' %}" class="btn btn-primary">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            {% trans "New Mapping" %}
+        </a>
+    </div>
+</div>
+
+<!-- Search and Filters -->
+<div class="integration-card mb-8">
+    <div class="integration-card-body">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Search -->
+            <div class="form-group">
+                <label for="search" class="form-label">{% trans "Search Products" %}</label>
+                <div class="relative">
+                    <input type="text" id="search" class="form-input pl-10" placeholder="{% trans 'Search by name, SKU, or ID...' %}">
+                    <svg class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Status Filter -->
+            <div class="form-group">
+                <label for="status-filter" class="form-label">{% trans "Sync Status" %}</label>
+                <select id="status-filter" class="form-select">
+                    <option value="">{% trans "All Statuses" %}</option>
+                    <option value="active">{% trans "Active" %}</option>
+                    <option value="inactive">{% trans "Inactive" %}</option>
+                    <option value="pending">{% trans "Pending" %}</option>
+                    <option value="error">{% trans "Error" %}</option>
+                </select>
+            </div>
+
+            <!-- Direction Filter -->
+            <div class="form-group">
+                <label for="direction-filter" class="form-label">{% trans "Sync Direction" %}</label>
+                <select id="direction-filter" class="form-select">
+                    <option value="">{% trans "All Directions" %}</option>
+                    <option value="TO_ADMINET">{% trans "To AdministraNET" %}</option>
+                    <option value="TO_TIENDANUBE">{% trans "To Tiendanube" %}</option>
+                    <option value="BIDIRECTIONAL">{% trans "Bidirectional" %}</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Mappings -->
+    <div class="integration-card">
+        <div class="integration-card-body text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+            </div>
+            <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ object_list.count }}</h3>
+            <p class="text-gray-600 dark:text-gray-400 font-medium">{% trans "Total Mappings" %}</p>
+        </div>
+    </div>
+
+    <!-- Active Mappings -->
+    <div class="integration-card">
+        <div class="integration-card-body text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ object_list.filter.is_active.count }}</h3>
+            <p class="text-gray-600 dark:text-gray-400 font-medium">{% trans "Active Mappings" %}</p>
+        </div>
+    </div>
+
+    <!-- Last Sync -->
+    <div class="integration-card">
+        <div class="integration-card-body text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ object_list.count }}</h3>
+            <p class="text-gray-600 dark:text-gray-400 font-medium">{% trans "Last Sync" %}</p>
+        </div>
+    </div>
+
+    <!-- Sync Errors -->
+    <div class="integration-card">
+        <div class="integration-card-body text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">0</h3>
+            <p class="text-gray-600 dark:text-gray-400 font-medium">{% trans "Sync Errors" %}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Product Mappings Table -->
+<div class="integration-card">
+    <div class="integration-card-header">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white">{% trans "Product Mappings" %}</h3>
+    </div>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>{% trans "Product" %}</th>
+                    <th>{% trans "Tiendanube ID" %}</th>
+                    <th>{% trans "AdministraNET ID" %}</th>
+                    <th>{% trans "Sync Status" %}</th>
+                    <th>{% trans "Direction" %}</th>
+                    <th>{% trans "Last Sync" %}</th>
+                    <th>{% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for mapping in object_list %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-200">
+                    <td>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{{ mapping.tiendanube_product_name|default:mapping.adminet_product_name|default:"N/A" }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ mapping.tiendanube_sku|default:mapping.adminet_sku|default:"No SKU" }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="font-mono text-sm text-gray-900 dark:text-white">{{ mapping.tiendanube_product_id|default:"N/A" }}</span>
+                    </td>
+                    <td>
+                        <span class="font-mono text-sm text-gray-900 dark:text-white">{{ mapping.adminet_product_id|default:"N/A" }}</span>
+                    </td>
+                    <td>
+                        {% if mapping.is_active %}
+                            <span class="badge badge-success">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                {% trans "Active" %}
+                            </span>
+                        {% else %}
+                            <span class="badge badge-pending">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                {% trans "Inactive" %}
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if mapping.sync_direction == 'TO_ADMINET' %}
+                            <span class="badge badge-info">{% trans "To Adminet" %}</span>
+                        {% elif mapping.sync_direction == 'TO_TIENDANUBE' %}
+                            <span class="badge badge-warning">{% trans "To Tiendanube" %}</span>
+                        {% else %}
+                            <span class="badge badge-success">{% trans "Bidirectional" %}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">
+                            {% if mapping.last_sync %}
+                                {{ mapping.last_sync|date:"M d, Y H:i" }}
+                            {% else %}
+                                {% trans "Never" %}
+                            {% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="flex items-center space-x-2">
+                                                            <a href="{% url 'tiendanube_administranet:product_detail' mapping.pk %}" class="btn btn-sm btn-secondary" title="{% trans 'View Details' %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </a>
+                                                            <a href="{% url 'tiendanube_administranet:product_edit' mapping.pk %}" class="btn btn-sm btn-primary" title="{% trans 'Edit' %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </a>
+                                                            <a href="{% url 'tiendanube_administranet:product_delete' mapping.pk %}" class="btn btn-sm btn-danger" title="{% trans 'Delete' %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-12">
+                        <div class="flex flex-col items-center">
+                            <div class="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+                                <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">{% trans "No Product Mappings" %}</h3>
+                            <p class="text-gray-600 dark:text-gray-400 mb-4">{% trans "Get started by creating your first product mapping" %}</p>
+                            <a href="{% url 'tiendanube_administranet:product_create' %}" class="btn btn-primary">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                </svg>
+                                {% trans "Create First Mapping" %}
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if is_paginated %}
+<div class="flex items-center justify-between mt-8">
+    <div class="text-sm text-gray-700 dark:text-gray-300">
+        {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+    </div>
+    
+    <div class="flex items-center space-x-2">
+        {% if page_obj.has_previous %}
+            <a href="?page=1" class="btn btn-sm btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+                </svg>
+            </a>
+            <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-sm btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+            </a>
+        {% endif %}
+        
+        <span class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            {% trans "Page" %} {{ page_obj.number }} {% trans "of" %} {{ page_obj.paginator.num_pages }}
+        </span>
+        
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="btn btn-sm btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+            <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-sm btn-secondary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>
+                </svg>
+            </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Search functionality
+        const searchInput = document.getElementById('search');
+        const statusFilter = document.getElementById('status-filter');
+        const directionFilter = document.getElementById('direction-filter');
+        
+        function filterTable() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const statusValue = statusFilter.value;
+            const directionValue = directionFilter.value;
+            
+            const rows = document.querySelectorAll('tbody tr');
+            
+            rows.forEach(row => {
+                const productName = row.querySelector('td:first-child p:first-child')?.textContent.toLowerCase() || '';
+                const sku = row.querySelector('td:first-child p:last-child')?.textContent.toLowerCase() || '';
+                const status = row.querySelector('td:nth-child(4) .badge')?.textContent.toLowerCase() || '';
+                const direction = row.querySelector('td:nth-child(5) .badge')?.textContent.toLowerCase() || '';
+                
+                const matchesSearch = productName.includes(searchTerm) || sku.includes(searchTerm);
+                const matchesStatus = !statusValue || status.includes(statusValue);
+                const matchesDirection = !directionValue || direction.includes(directionValue);
+                
+                if (matchesSearch && matchesStatus && matchesDirection) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        searchInput.addEventListener('input', filterTable);
+        statusFilter.addEventListener('change', filterTable);
+        directionFilter.addEventListener('change', filterTable);
+    });
+</script>
+{% endblock %} 

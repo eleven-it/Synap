@@ -80,7 +80,7 @@
                         </svg>
                         <span class="hidden sm:inline">Actualizar</span>
                     </button>
-                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
+                    {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'pedidos-pendientes' or report.slug == 'sales_summary' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'stock-existencias' or report.slug == 'comprobantes-rutas' %}
                     <button type="button"
                             data-export-excel
                             class="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-green-500 hover:text-green-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-400 transition-all duration-300">
@@ -152,8 +152,8 @@
                         <div id="period-filters-container" class="hidden lg:col-span-6">
                             <!-- Se generará dinámicamente si hay filtros de fecha -->
                             </div>
-                        {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' %}
-                        {% if report.slug != 'bo-stock-facturacion' %}
+                        {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' %}
+                        {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' %}
                         <!-- Fila 2: Punto de venta, Sucursales (no para BO: reporte consolidado) -->
                         <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 sm:col-span-3">
                             Punto de venta
@@ -202,7 +202,7 @@
                             <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Si no seleccionas ninguna sucursal, se mostrarán todas</span>
                         </label>
                         {% endif %}
-                        {% if report.slug == 'bo-stock-facturacion' %}
+                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' %}
                         <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 sm:col-span-3">
                             Depósitos
                             <div class="relative">
@@ -249,6 +249,9 @@
                             </div>
                             <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluidos de facturación, remitos y backorder</span>
                         </label>
+                        {% if report.slug == 'ventas-objetivos-vs-bo' %}
+                        {% include "reports/includes/filters_vendedores_excluidos_objetivos.html" %}
+                        {% endif %}
                         {% endif %}
                         {% elif report.slug == 'cash_flow_waterfall' or report.slug == 'cash_flow_by_account' %}
                         <!-- Fila 2: Caja -->
@@ -322,17 +325,26 @@
                         {% endif %}
                     {% else %}
                         <!-- Reportes Legacy: Usar templates unificados -->
-                        {% if report.slug == 'bo-stock-facturacion' %}
+                        {% if report.slug == 'stock-existencias' %}
+                        {% include "reports/includes/filters_stock_existencias.html" %}
+                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
-                        {% if report.slug == 'bo-stock-facturacion' %}
+                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
-                        {% elif report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
+                        {% endif %}
+                        {% if report.slug == 'ventas-objetivos-vs-bo' %}
+                        {% include "reports/includes/filters_vendedores_excluidos_objetivos.html" %}
+                        {% endif %}
+                        {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
                         {% endif %}
                         {% include "reports/includes/filters_interval.html" %}
+                        {% if report.slug == 'comprobantes-rutas' %}
+                        {% include "reports/includes/filters_logistica_lista_comprobantes_rutas.html" %}
+                        {% endif %}
                         {% comment %}
                         Nota: Los campos "Unidad de negocio" y "Canal" se removieron porque no son parte
                         de los filtros estándar. Si un reporte legacy específico los necesita, deben
@@ -351,7 +363,7 @@
                 {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
                 <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
                 {% endif %}
-                {% if report.slug != 'bo-stock-facturacion' %}
+                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'stock-existencias' %}
                 {% with widget=widgets|first %}
                 {% if widget %}
                 {% with widget_id=widget.id|stringformat:"s" %}
@@ -368,6 +380,7 @@
                             <div>
                                 <h2 class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">{{ widget.name }}</h2>
                             </div>
+                            {% if report.slug != 'comprobantes-rutas' %}
                             <div class="flex items-center gap-2 text-[11px]">
                                 <button type="button"
                                         class="inline-flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-semibold text-sky-500 hover:text-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 rounded-full px-2.5 sm:px-3 py-1 transition"
@@ -378,15 +391,19 @@
                                     <span class="hidden sm:inline">Ver tabla</span>
                                 </button>
                             </div>
+                            {% endif %}
                         </header>
+                        {% if report.slug == 'comprobantes-rutas' %}
+                        {% include "reports/includes/logistica_lista_comprobantes_rutas_tabla_toolbar.html" %}
+                        {% endif %}
                         <div class="relative">
-                            <div class="w-full h-[400px] sm:h-[500px] bg-white dark:bg-slate-950 p-4 sm:p-6"
+                            <div class="w-full h-[400px] sm:h-[500px] bg-white dark:bg-slate-950 p-4 sm:p-6 {% if report.slug == 'comprobantes-rutas' %}hidden{% endif %}"
                                  data-widget-content>
                                 <div class="h-full w-full grid place-content-center text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase">
                                     Cargando datos...
                                 </div>
                             </div>
-                            <div class="p-4 sm:p-6 hidden" data-widget-table-wrapper></div>
+                            <div class="p-4 sm:p-6 {% if report.slug == 'comprobantes-rutas' %}{% else %}hidden{% endif %}" data-widget-table-wrapper></div>
                         </div>
                     </section>
                     {{ widget.configuration|json_script:config_id }}
@@ -399,6 +416,47 @@
                 </div>
                 {% endif %}
                 {% endwith %}
+                {% endif %}
+                
+                {% if report.slug == 'stock-existencias' %}
+                <section id="stock-existencias-section" class="relative rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden">
+                    <header class="px-4 sm:px-6 py-3 border-b border-slate-100 dark:border-slate-800">
+                        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Resultados</h2>
+                        <p id="stock-existencias-filters-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1" aria-live="polite"></p>
+                    </header>
+                    {# Misma disposición 70/30 y componente de tags que BO (Detalle con/sin stock, etc.) #}
+                    <div id="stock-existencias-toolbar" class="px-4 sm:px-6 pt-4 pb-2 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex flex-nowrap gap-4 items-start w-full overflow-visible">
+                            <div class="min-w-0 flex-[0_0_70%]">
+                                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Agrupar por</label>
+                                <div class="relative overflow-visible">
+                                    <select id="stock_existencias_group_by" name="stock_existencias_group_by" multiple class="hidden" data-tags-field="group_by">
+                                        <option value="deposito">Depósito</option>
+                                        <option value="articulo">Artículo (nombre)</option>
+                                        <option value="marca">Marca</option>
+                                        <option value="rubro">Rubro</option>
+                                        <option value="subrubro">Subrubro</option>
+                                    </select>
+                                    <div id="stock_existencias_group_by_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300 relative overflow-visible">
+                                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                                        <input type="text" id="stock_existencias_group_by_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar campo de agrupación..." autocomplete="off">
+                                        <div id="stock_existencias_group_by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-[100] mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden min-w-[180px]"></div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] text-slate-400 dark:text-slate-500 italic mt-1 block">Puedes seleccionar múltiples campos para agrupar. El orden determina los niveles de agrupación.</span>
+                            </div>
+                            <div class="min-w-0 flex-[0_0_30%] flex flex-col items-stretch shrink-0">
+                                <label for="stock_existencias_busqueda" class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Buscar</label>
+                                <input type="search" name="stock_existencias_busqueda" id="stock_existencias_busqueda" maxlength="120" autocomplete="off"
+                                       class="w-full min-h-[2.5rem] py-2 px-3 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                                       placeholder="Nombre, código, ID manual, barras, depósito, marca, rubro…">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="stock-existencias-table-wrap" class="p-4 sm:p-6 overflow-x-auto min-h-[120px]">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Pulse «Actualizar» o espere la carga automática.</p>
+                    </div>
+                </section>
                 {% endif %}
                 
                 {% if report.slug == 'cash_flow_by_account' %}
@@ -678,6 +736,48 @@
                 </section>
                 {% endif %}
                 
+                {% if report.slug == 'ventas-objetivos-vs-bo' %}
+                <div class="mt-4 mb-2 flex flex-row flex-wrap justify-between items-start gap-2">
+                    <div class="flex flex-col gap-0.5">
+                        <p id="vo-summary-period" class="text-sm text-slate-600 dark:text-slate-400 m-0"></p>
+                        <p id="vo-filters-summary" class="text-xs text-slate-500 dark:text-slate-500 m-0 mt-1" aria-live="polite"></p>
+                    </div>
+                    <div id="vo-last-update-time" class="text-right text-xs text-slate-600 dark:text-slate-400"></div>
+                </div>
+                <!-- KPIs (mismo patrón que BO Stock Facturación: tarjeta rounded-2xl, tipografía uppercase label) -->
+                <section id="vo-kpis-section" class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="Resumen de objetivos">
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Total objetivo</span>
+                            <svg class="w-5 h-5 text-sky-500 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div id="vo-kpi-total-objetivo" class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">Suma de objetivos por cliente (período y filtros actuales)</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Falta para el objetivo</span>
+                            <svg class="w-5 h-5 text-amber-500 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div id="vo-kpi-total-falta" class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">Objetivo − facturación − remitos (filas visibles). Negativo: superávit sobre el objetivo.</p>
+                    </div>
+                </section>
+                <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden">
+                    <div class="relative isolate max-h-[min(75vh,56rem)] overflow-x-auto overflow-y-auto overscroll-contain p-4" id="vo-jerarquia-container">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Cargando objetivos y métricas…</p>
+                    </div>
+                </section>
+                {% endif %}
+                
                 {% if report.slug == 'cash_flow_waterfall' %}
                 <!-- Sección de Movimientos Detallados -->
                 <section id="detailed-movements-section" 
@@ -802,7 +902,45 @@
             </div>
         </div>
     </div>
+    {% if not is_declarative %}
+        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' %}
+        {# Modal de carga compartido (petición API + render): stock, BO, ventas netas, comprobantes en ruta. fixed + z alto; flex desde JS. #}
+        <div id="reports-legacy-query-loading-modal"
+             class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
+             aria-hidden="true"
+             aria-busy="false"
+             role="alertdialog"
+             aria-labelledby="reports-query-loading-title">
+            <div class="relative w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-2xl shadow-sky-900/10 overflow-hidden mx-auto">
+                <div class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+                    <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 via-violet-500 to-emerald-400 animate-[reports-query-load-bar_1.4s_ease-in-out_infinite]"></div>
+                </div>
+                <div class="px-8 pt-10 pb-8 flex flex-col items-center text-center gap-5">
+                    <div class="relative w-16 h-16">
+                        <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+                        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-500 border-r-violet-500 animate-spin" style="animation-duration: 0.9s;"></div>
+                        <div class="absolute inset-2 rounded-full border-2 border-transparent border-b-emerald-400/80 animate-spin" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+                    </div>
+                    <div>
+                        <p id="reports-query-loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-tight">Cargando datos</p>
+                        <p id="reports-query-loading-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">Espera un momento…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <style>
+            @keyframes reports-query-load-bar {
+                0%, 100% { transform: translateX(-100%); width: 40%; }
+                50% { transform: translateX(200%); width: 55%; }
+            }
+        </style>
+        {% endif %}
+    {% endif %}
 </section>
+
+{% if report.slug == 'comprobantes-rutas' %}
+{% include "reports/includes/logistica_lista_comprobantes_rutas_modals.html" %}
+{% endif %}
 
 <script>
 // Inyectar configuración del reporte (lee el nodo #report-config-data generado arriba con |json_script)
@@ -1072,7 +1210,7 @@ document.addEventListener('DOMContentLoaded', function() {
                            name="${dateParams.inicio}"
                            id="fecha_inicio"
                            data-param-name="${dateParams.inicio}"
-                           class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                           class="synap-input min-w-[148px] overflow-hidden px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
                 </label>
                 <!-- Fecha hasta (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
                 <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
@@ -1081,7 +1219,7 @@ document.addEventListener('DOMContentLoaded', function() {
                            name="${dateParams.fin}"
                            id="fecha_fin"
                            data-param-name="${dateParams.fin}"
-                           class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                           class="synap-input min-w-[148px] overflow-hidden px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
                 </label>
             </div>
         `;
@@ -1529,7 +1667,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input type="date"
                                    name="${inicioParam}"
                                    id="${inicioParam}"
-                                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                                   class="synap-input min-w-[148px] overflow-hidden px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
                         </label>
                         <!-- Fecha hasta (mismo estilo redondeado y tamaño que Día/Mes/Año/Personalizado) -->
                         <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
@@ -1537,7 +1675,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input type="date"
                                    name="${finParam}"
                                    id="${finParam}"
-                                   class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
+                                   class="synap-input min-w-[148px] overflow-hidden px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200">
                         </label>
                     </div>
                 `;
@@ -1640,6 +1778,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const inputType = determineInputType(dataType, fieldName, paramName, operator);
             
             const inputClass = 'synap-input focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300 text-xs';
+            const dateInputClass =
+                'synap-input min-w-[148px] overflow-hidden px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-200';
             const upperOperator = operator.toUpperCase();
             
             // Si el operador es BETWEEN, necesitamos dos campos (desde/hasta)
@@ -1651,7 +1791,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input type="date"
                                    name="${paramName}_inicio"
                                    id="${filterId}_inicio"
-                                   class="${inputClass}"
+                                   class="${dateInputClass}"
                                    data-filter-index="${variableIndex}"
                                    data-filter-operator="${operator}">
                         </label>
@@ -1660,7 +1800,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <input type="date"
                                    name="${paramName}_fin"
                                    id="${filterId}_fin"
-                                   class="${inputClass}"
+                                   class="${dateInputClass}"
                                    data-filter-index="${variableIndex}"
                                    data-filter-operator="${operator}">
                         </label>
@@ -1698,13 +1838,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
             } else {
                 // Para otros operadores, un solo campo
+                const singleFieldClass = inputType === 'date' ? dateInputClass : inputClass;
                 html += `
                     <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2">
                         ${filterName}
                         <input type="${inputType}"
                                name="${paramName}"
                                id="${filterId}"
-                               class="${inputClass}"
+                               class="${singleFieldClass}"
                                placeholder="${inputType === 'number' ? 'Ingresar número' : inputType === 'date' ? 'Seleccionar fecha' : 'Ingresar valor'}"
                                data-filter-index="${variableIndex}"
                                data-filter-operator="${operator}"
@@ -4987,9 +5128,15 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260329e"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=20260413g"></script>
+{% if report.slug == 'comprobantes-rutas' %}
+<script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260413j" defer></script>
+{% endif %}
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
+{% endif %}
+{% if report.slug == 'ventas-objetivos-vs-bo' %}
+<script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=20260419"></script>
 {% endif %}
 {% endif %}
 {% endblock %}

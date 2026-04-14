@@ -741,3 +741,44 @@ class RelationshipAuditLog(models.Model):
         return f"{actor_str} - {self.action} - {self.relationship} ({self.created_at})"
 
 
+class PuntoVentaCanalEjecutivo(models.Model):
+    """
+    Clasificación Mayorista / Minorista (salón) por PV para el panel ejecutivo de ventas.
+    Persistido en Synap (no en MySQL legacy). PV sin fila aquí se tratan como «sin asignar».
+    """
+
+    class Canal(models.TextChoices):
+        MAYORISTA = "mayorista", _("Mayorista")
+        MINORISTA = "minorista", _("Minorista (Salón)")
+
+    empresa = models.ForeignKey(
+        "core.Empresa",
+        on_delete=models.CASCADE,
+        related_name="punto_venta_canales_ejecutivo",
+        verbose_name=_("Empresa"),
+    )
+    id_pv = models.PositiveIntegerField(verbose_name=_("ID punto de venta (AdministraNET)"))
+    canal = models.CharField(
+        max_length=16,
+        choices=Canal.choices,
+        verbose_name=_("Canal"),
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated at"))
+
+    class Meta:
+        verbose_name = _("Clasificación PV — panel ejecutivo")
+        verbose_name_plural = _("Clasificaciones PV — panel ejecutivo")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("empresa", "id_pv"),
+                name="reports_pv_canal_unico_por_empresa",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["empresa", "id_pv"], name="reports_pv_canal_emp_pv_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.empresa_id} PV {self.id_pv} → {self.canal}"
+
+

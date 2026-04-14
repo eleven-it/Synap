@@ -45,7 +45,7 @@ Implementar PWA a nivel intermedio en Synap para permitir:
 | `name` | `"Synap - Gestión Empresarial"` |
 | `short_name` | `"Synap"` |
 | `description` | `"Sistema de gestión empresarial integrado"` |
-| `start_url` | `"/core/dashboard/"` |
+| `start_url` | `"/login/"` |
 | `scope` | `"/"` |
 | `display` | `"standalone"` |
 | `orientation` | `"any"` |
@@ -61,7 +61,7 @@ Implementar PWA a nivel intermedio en Synap para permitir:
 - CA-MAN-01: El archivo contiene todos los campos de la tabla anterior.
 - CA-MAN-02: La respuesta HTTP tiene `Content-Type: application/manifest+json`.
 - CA-MAN-03: El JSON es válido y parseable.
-- CA-MAN-04: `start_url` apunta a una URL existente que retorna 200 (autenticada) o 302 (redirect a login).
+- CA-MAN-04: `start_url` apunta a una URL permitida en móvil (`/login/`, 200 o flujo de sesión acorde a la política «solo Nivel A»).
 - CA-MAN-05: `icons` contiene al menos entradas para 192x192 y 512x512.
 
 ---

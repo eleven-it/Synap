@@ -17,6 +17,7 @@ _LEGACY_COMPROBANTES_SLUGS = frozenset(
         "cash_flow_detailed_movements",
         "cash_flow_by_account",
         "mayoristapp-comprobantes-no-cancelados",
+        "comprobantes-rutas",
     }
 )
 _LEGACY_LISTADOS_SLUGS = frozenset(
@@ -30,6 +31,9 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "mayoristapp-filtros-estadisticas",
         "mayoristapp-presupuestos-vendedor",
         "mayoristapp-estado-pedidos-preparacion",
+        "ventas-objetivos-vs-bo",
+        "stock-existencias",
+        "resumen-ejecutivo-ventas",
     }
 )
 _LEGACY_ORDER_DEFAULT = 999

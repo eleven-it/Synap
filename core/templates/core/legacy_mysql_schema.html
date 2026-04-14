@@ -1,0 +1,101 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{% trans "Migración de esquema MySQL (legacy)" %}</h1>
+    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-3xl">
+      {% trans "Aplica ALTER en la base AdministraNET de la empresa activa (no sustituye a migrate de Django/PostgreSQL). Solo usuario supervisor." %}
+    </p>
+    {% if base_empresa %}
+    <p class="mt-2 text-sm">
+      <span class="font-medium text-gray-700 dark:text-gray-300">{% trans "Base empresa:" %}</span>
+      <code class="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{{ base_empresa }}</code>
+    </p>
+    {% else %}
+    <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">{% trans "Sin base_empresa en sesión." %}</p>
+    {% endif %}
+  </div>
+
+  {% if messages %}
+  <ul class="mb-6 space-y-2">
+    {% for message in messages %}
+    <li class="text-sm px-3 py-2 rounded border {% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100{% elif message.tags == 'error' %}border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/30 dark:text-red-100{% else %}border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50{% endif %}">
+      {{ message }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if last_result and last_result.migrations_applied %}
+  <div class="mb-4 text-sm text-gray-700 dark:text-gray-300">
+    <span class="font-medium">{% trans "Aplicado:" %}</span>
+    <ul class="list-disc list-inside mt-1">
+      {% for m in last_result.migrations_applied %}
+      <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if last_result and last_result.migrations_failed %}
+  <div class="mb-4 text-sm text-red-800 dark:text-red-200">
+    <span class="font-medium">{% trans "Fallos:" %}</span>
+    <ul class="list-disc list-inside mt-1">
+      {% for m in last_result.migrations_failed %}
+      <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-100 dark:border-gray-800 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{% trans "Proveedores" %}</h2>
+      {% if base_empresa %}
+      <form method="post" class="inline" onsubmit="return confirm('¿Ejecutar todos los proveedores en orden? Esto puede modificar tablas en la base indicada.');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="run_all">
+        <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg bg-purple-600 hover:bg-purple-700 text-white">
+          <span class="material-icons text-base">play_arrow</span>
+          {% trans "Ejecutar todos" %}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+      {% for p in providers %}
+      <li class="px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="font-medium text-gray-900 dark:text-gray-100">{{ p.title }}</div>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ p.description }}</p>
+          <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded
+            {% if p.risk == 'bajo' %}bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200
+            {% elif p.risk == 'medio' %}bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200
+            {% else %}bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200{% endif %}">
+            {% trans "Riesgo:" %} {{ p.risk }}
+          </span>
+        </div>
+        {% if base_empresa %}
+        <form method="post" class="shrink-0" onsubmit="return confirm('¿Ejecutar este proveedor sobre la base de sesión?');">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="run_one">
+          <input type="hidden" name="provider" value="{{ p.id }}">
+          <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200">
+            <span class="material-icons text-base">build</span>
+            {% trans "Ejecutar" %}
+          </button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <p class="mt-6 text-xs text-gray-500 dark:text-gray-400">
+    {% trans "Documentación:" %} <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">docs/general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md</code>
+  </p>
+</div>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+{% endblock admin_content %}

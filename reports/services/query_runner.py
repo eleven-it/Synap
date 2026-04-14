@@ -206,7 +206,15 @@ class QueryRunnerService:
             return 1800  # 30 minutos
         
         # Reportes de estado (frecuencia media)
-        status_reports = ['uninvoiced_remitos', 'pedidos-pendientes', 'bo-stock-facturacion']
+        status_reports = [
+            'uninvoiced_remitos',
+            'pedidos-pendientes',
+            'bo-stock-facturacion',
+            'ventas-objetivos-vs-bo',
+            'stock-existencias',
+            'comprobantes-rutas',
+            'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
+        ]
         if report_slug in status_reports:
             return 300  # 5 minutos
         
@@ -263,7 +271,13 @@ class QueryRunnerService:
         filters = payload.get('filters', {})
         payload_hash = self._hash_payload(filters)
         # Cache buster para BO: OC cubre primero faltante reservado (evitar usar caché antiguo)
-        cache_payload_hash = f"{payload_hash}:oc_reservado_v1" if report.slug == "bo-stock-facturacion" else payload_hash
+        cache_payload_hash = (
+            f"{payload_hash}:oc_reservado_v1"
+            if report.slug == "bo-stock-facturacion"
+            else f"{payload_hash}:vov_v2"
+            if report.slug == "ventas-objetivos-vs-bo"
+            else payload_hash
+        )
 
         # Intentar obtener del caché con protección contra stampeding (solo si está habilitado)
         if getattr(settings, 'REPORTS_CACHE_ENABLED', False):
@@ -287,12 +301,20 @@ class QueryRunnerService:
             result = self._run_uninvoiced_remitos(report, payload)
         elif report.slug == "pedidos-pendientes":
             result = self._run_pending_orders(report, payload)
+        elif report.slug in ("comprobantes-rutas", "mayoristapp-lista-comprobantes-rutas"):
+            result = self._run_logistica_lista_comprobantes_rutas(report, payload)
         elif report.slug == "sales_summary":
             result = self._run_sales_summary(report, payload)
         elif report.slug == "total-consolidado-operativo":
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
+        elif report.slug == "ventas-objetivos-vs-bo":
+            from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
+
+            result = run_ventas_objetivos_vs_bo(report, payload, self.user)
+        elif report.slug == "stock-existencias":
+            result = self._run_stock_existencias(report, payload)
         elif report.slug == "mpr-opt-atrasadas":
             result = self._run_mpr_opt_atrasadas(report, payload)
         elif report.slug == "mpr-pedidos-estado":
@@ -2572,6 +2594,299 @@ class QueryRunnerService:
                 notes=[f"Error al ejecutar la consulta: {str(e)}"],
             )
 
+    def _run_stock_existencias(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """
+        Listado de stock y existencias por artículo y depósito. Disponible alineado al informe BO:
+        GREATEST(0, stock_deposito.saldo − reservado), con reservado por (IDArt, CodDeposito)
+        desde stockp+comp_ped (PED En preparación/Preparado), sin usar saldo_pedido_cliente.
+        La búsqueda predictiva y el orden por columnas se resuelven en el cliente.
+        """
+        started_at = timezone.now()
+        try:
+            filters = payload.get("filters") or {}
+            base_empresa = filters.get("base_empresa")
+            if not base_empresa:
+                if hasattr(self.user, "base_empresa"):
+                    base_empresa = self.user.base_empresa
+            if not base_empresa:
+                base_empresa = getattr(settings, "DEFAULT_BASE_EMPRESA", None)
+            if not base_empresa:
+                return QueryResult(
+                    meta={
+                        "slug": report.slug,
+                        "name": report.name,
+                        "category": report.category,
+                        "version": report.version,
+                    },
+                    data=[],
+                    totals={},
+                    notes=["No se pudo determinar la base de datos de la empresa."],
+                )
+
+            depositos_incluidos = filters.get("depositos_incluidos", [])
+            if isinstance(depositos_incluidos, str):
+                depositos_incluidos = [depositos_incluidos] if depositos_incluidos else []
+            elif not isinstance(depositos_incluidos, list):
+                depositos_incluidos = []
+            depositos_incluidos = [
+                int(x)
+                for x in depositos_incluidos
+                if str(x).strip() and str(x).replace("-", "").isdigit()
+            ]
+
+            raw_stock = filters.get("incluir_stock_cero") or filters.get("stock_cero") or "no"
+            incluir_cero = str(raw_stock).strip().lower() in ("si", "sí", "1", "true", "yes")
+
+            def _parse_int_id_list(key: str) -> List[int]:
+                raw = filters.get(key)
+                if raw is None:
+                    return []
+                if isinstance(raw, str):
+                    raw = [raw] if str(raw).strip() else []
+                elif not isinstance(raw, list):
+                    return []
+                out: List[int] = []
+                for x in raw:
+                    try:
+                        out.append(int(str(x).strip()))
+                    except (TypeError, ValueError):
+                        continue
+                return out
+
+            marcas_incluidos = _parse_int_id_list("marcas_incluidos")
+            rubros_incluidos = _parse_int_id_list("rubros_incluidos")
+            subrubros_incluidos = _parse_int_id_list("subrubros_incluidos")
+
+            def _opt_int(key: str):
+                v = filters.get(key)
+                if v is None or v == "":
+                    return None
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return None
+
+            if not marcas_incluidos:
+                cm = _opt_int("codigo_marca")
+                if cm is not None:
+                    marcas_incluidos = [cm]
+            if not rubros_incluidos:
+                cr = _opt_int("codigo_rubro")
+                if cr is not None:
+                    rubros_incluidos = [cr]
+            if not subrubros_incluidos:
+                isr = _opt_int("id_subrubro")
+                if isr is not None:
+                    subrubros_incluidos = [isr]
+
+            mysql_config = settings.DATABASES["mysql"]
+            import MySQLdb
+
+            conn = MySQLdb.connect(
+                host=mysql_config["HOST"],
+                port=int(mysql_config["PORT"]),
+                user=mysql_config["USER"],
+                passwd=mysql_config["PASSWORD"],
+                db=base_empresa,
+                charset="latin1",
+            )
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SET SESSION max_execution_time = 300000")
+            except Exception:
+                pass
+
+            where_art = [
+                "a.Discontinuo = 'No'",
+                "a.disponible_vta = 'Si'",
+                "a.tipo_art = 'Articulo'",
+            ]
+            params: List = []
+
+            if marcas_incluidos:
+                where_art.append("a.CodigoMarca IN (" + ",".join(["%s"] * len(marcas_incluidos)) + ")")
+                params.extend(marcas_incluidos)
+            if rubros_incluidos:
+                where_art.append("a.CodigoRubro IN (" + ",".join(["%s"] * len(rubros_incluidos)) + ")")
+                params.extend(rubros_incluidos)
+            if subrubros_incluidos:
+                where_art.append("a.IDSubRubro IN (" + ",".join(["%s"] * len(subrubros_incluidos)) + ")")
+                params.extend(subrubros_incluidos)
+
+            where_sd: List[str] = []
+            if depositos_incluidos:
+                where_sd.append("sd.id_deposito IN (" + ",".join(str(d) for d in depositos_incluidos) + ")")
+
+            if not incluir_cero:
+                where_sd.append("COALESCE(sd.saldo, 0) > 0")
+
+            where_sd_sql = (" AND " + " AND ".join(where_sd)) if where_sd else ""
+
+            where_s = " AND ".join(where_art)
+
+            reservado_join_sql = """
+                LEFT JOIN (
+                    SELECT sp_res.IDArt AS id_articulo,
+                        sp_res.CodDeposito AS id_deposito,
+                        SUM(COALESCE(sp_res.cantidad_pendiente,
+                            sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0))) AS reservado
+                    FROM stockp sp_res
+                    INNER JOIN comp_ped cp_res ON cp_res.CodigoMovimiento = sp_res.CodigoMovimiento
+                    WHERE cp_res.TipoComprobante = 'PED'
+                        AND (sp_res.Comprobante = 'PED' OR sp_res.Comprobante IS NULL)
+                        AND cp_res.Anulado = 'No'
+                        AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
+                        AND cp_res.Estado IN ('En preparación', 'Preparado')
+                        AND (COALESCE(sp_res.cantidad_pendiente,
+                            sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0)
+                    GROUP BY sp_res.IDArt, sp_res.CodDeposito
+                ) res ON res.id_articulo = a.IDArt AND res.id_deposito = sd.id_deposito
+            """
+
+            sql = f"""
+                SELECT /*+ MAX_EXECUTION_TIME(300000) */
+                    a.IDArt AS id_art,
+                    COALESCE(a.CodigoArticulo, 0) AS codigo_articulo,
+                    a.id_manual AS id_manual,
+                    IFNULL(a.NroCodBarra, '') AS codigo_barras,
+                    a.NombreArticulo AS nombre,
+                    sd.id_deposito AS id_deposito,
+                    IFNULL(dep.NombreDeposito, CONCAT('Depósito ', sd.id_deposito)) AS deposito_nombre,
+                    IFNULL(ma.NombreMarca, '') AS marca_nombre,
+                    IFNULL(ru.NombreRubro, '') AS rubro_nombre,
+                    IFNULL(su.NombreSubRubro, '') AS subrubro_nombre,
+                    COALESCE(sd.saldo, 0) AS stock,
+                    COALESCE(res.reservado, 0) AS reservado,
+                    GREATEST(0, COALESCE(sd.saldo, 0) - COALESCE(res.reservado, 0)) AS disponible
+                FROM stock_deposito sd
+                INNER JOIN articulo a ON a.IDArt = sd.id_articulo
+                INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
+                LEFT JOIN marca ma ON ma.CodMarca = a.CodigoMarca
+                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                LEFT JOIN subrubro su ON su.IDSubRubro = a.IDSubRubro
+                {reservado_join_sql}
+                WHERE {where_s}
+                {where_sd_sql}
+                ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC
+            """
+
+            exec_params = tuple(params)
+            cursor.execute(sql, exec_params)
+            rows = cursor.fetchall()
+            cols = [d[0] for d in cursor.description]
+            cursor.close()
+            conn.close()
+
+            data = []
+            for row in rows:
+                item = {}
+                for i, c in enumerate(cols):
+                    v = row[i]
+                    if c in ("stock", "reservado", "disponible") and v is not None:
+                        item[c] = float(v)
+                    elif c in ("id_art", "codigo_articulo", "id_deposito") and v is not None:
+                        item[c] = int(v) if str(v).replace("-", "").isdigit() else v
+                    else:
+                        item[c] = v
+                data.append(item)
+
+            notes = []
+
+            filters_applied = {
+                "depositos_incluidos": depositos_incluidos,
+                "incluir_stock_cero": incluir_cero,
+                "marcas_incluidos": marcas_incluidos,
+                "rubros_incluidos": rubros_incluidos,
+                "subrubros_incluidos": subrubros_incluidos,
+            }
+
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                    "filters_applied": filters_applied,
+                    "executed_at": started_at.isoformat(),
+                    "row_count": len(data),
+                },
+                data=data,
+                totals={},
+                notes=notes,
+            )
+        except Exception as e:
+            logger.error("Error ejecutando stock-existencias: %s", e, exc_info=True)
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=[],
+                totals={},
+                notes=[f"Error al ejecutar la consulta: {str(e)}"],
+            )
+
+    def _run_logistica_lista_comprobantes_rutas(self, report: ReportDefinition, payload: Dict) -> QueryResult:
+        """Comprobantes en rutas (logística mayoristapp) — pool MySQL + lógica en logistica_lista_comprobantes_rutas."""
+        from .logistica_lista_comprobantes_rutas import (
+            ejecutar_listado,
+            resolve_base_empresa,
+            resolve_id_usuario_from_user,
+        )
+
+        filters = payload.get("filters") or {}
+        base_empresa = resolve_base_empresa(filters, self.user)
+        if not base_empresa:
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=[],
+                totals={},
+                notes=["No se pudo determinar la base de datos de la empresa."],
+            )
+
+        id_u = resolve_id_usuario_from_user(self.user)
+        try:
+            pool = get_mysql_pool()
+            with pool.get_connection(base_empresa) as conn:
+                data, extra_notes = ejecutar_listado(conn, filters, id_u)
+
+            notes = list(extra_notes)
+            notes.append(f"Registros: {len(data)}")
+            if len(data) >= 2000:
+                notes.append("Límite de 2000 filas aplicado.")
+
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=data,
+                totals={},
+                notes=notes,
+            )
+        except Exception as e:
+            logger.error("Error listado comprobantes rutas: %s", e, exc_info=True)
+            return QueryResult(
+                meta={
+                    "slug": report.slug,
+                    "name": report.name,
+                    "category": report.category,
+                    "version": report.version,
+                },
+                data=[],
+                totals={},
+                notes=[f"Error al ejecutar la consulta: {str(e)}"],
+            )
+
     def _parse_sucursales_pv(self, filters: Dict) -> Tuple[List[int], List[int]]:
         """Normaliza sucursales y punto_venta desde filters a listas de enteros."""
         sucursales = filters.get("sucursales", [])
@@ -2614,6 +2929,21 @@ class QueryRunnerService:
             except (ValueError, TypeError):
                 continue
         return out
+
+    def _parse_vendedores_excluidos(self, filters: Dict) -> List[int]:
+        """Normaliza ``vendedores_excluidos`` (CodViajante) desde filters para NOT IN en consultas."""
+        raw = filters.get("vendedores_excluidos", [])
+        if isinstance(raw, str):
+            raw = [raw] if (raw and str(raw).strip()) else []
+        elif not isinstance(raw, list):
+            raw = []
+        out: List[int] = []
+        for x in raw:
+            try:
+                out.append(int(str(x).strip()))
+            except (ValueError, TypeError):
+                continue
+        return sorted(set(out))
 
     def _get_ventas_netas_total(
         self, cursor, fecha_inicio: str, fecha_fin: str,
@@ -3026,7 +3356,13 @@ class QueryRunnerService:
                 sucursales = [sucursales] if sucursales else []
             elif not isinstance(sucursales, list):
                 sucursales = []
-            
+            sucursales_ints: List[int] = []
+            for s in sucursales:
+                try:
+                    sucursales_ints.append(int(s))
+                except (TypeError, ValueError):
+                    pass
+
             puntos_venta = filters.get("punto_venta", [])
             if isinstance(puntos_venta, str):
                 puntos_venta = [puntos_venta] if puntos_venta else []
@@ -3114,6 +3450,10 @@ class QueryRunnerService:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
                 where_fact.append(f"Codigo NOT IN ({ph})")
                 params_facturacion.extend(clientes_excluidos)
+            if sucursales_ints:
+                phs = ",".join(["%s"] * len(sucursales_ints))
+                where_fact.append(f"CodSucursal IN ({phs})")
+                params_facturacion.extend(sucursales_ints)
             where_fact_s = " AND ".join(where_fact)
             sql_facturacion = f"""
                 SELECT /*+ MAX_EXECUTION_TIME(90000) */
@@ -3144,7 +3484,7 @@ class QueryRunnerService:
             # - Vendedor: del cliente (cliente.CodViajante -> viajantes.Nombre). No del movimiento.
             # - Zona: cliente.id_zona -> erp_zona.id_zona; erp_zona.nombre_zona.
             # - Última compra: MAX(cc.Fecha) dentro del período filtrado (no global).
-            # - Sucursal/PV en facturación: cuentacliente.CodSucursal, id_pv. Filtros aplicados cuando se envían.
+            # - Sucursal/PV en facturación: cuentacliente.CodSucursal, id_pv.
             where_fac_cli = [
                 "cc.Fecha >= %s",
                 "cc.Fecha <= %s",
@@ -3152,7 +3492,10 @@ class QueryRunnerService:
                 "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
             ]
             params_fac_cli = [fi_fac, ff_fac]
-            # BO reporte consolidado: no filtrar por sucursal ni punto de venta
+            if sucursales_ints:
+                phs = ",".join(["%s"] * len(sucursales_ints))
+                where_fac_cli.append(f"cc.CodSucursal IN ({phs})")
+                params_fac_cli.extend(sucursales_ints)
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
                 where_fac_cli.append(f"cc.Codigo NOT IN ({ph})")
@@ -3209,7 +3552,10 @@ class QueryRunnerService:
             # =========================================================
             where_remitos = ["cp.Fecha >= %s", "cp.Fecha <= %s", "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'"]
             params_remitos = [fi_fac, ff_fac]
-            # BO reporte consolidado: no filtrar por sucursal ni punto de venta
+            if sucursales_ints:
+                phs = ",".join(["%s"] * len(sucursales_ints))
+                where_remitos.append(f"cp.CodSucursal IN ({phs})")
+                params_remitos.extend(sucursales_ints)
             if clientes_excluidos:
                 placeholders = ','.join(['%s'] * len(clientes_excluidos))
                 where_remitos.append(f"cp.Codigo NOT IN ({placeholders})")
@@ -3276,6 +3622,13 @@ class QueryRunnerService:
                 clientes_excl_bo = " AND cp.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
                 reservado_excl_clause = " AND cp_res.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
 
+            suc_bo_ph = ""
+            if sucursales_ints:
+                suc_bo_ph = " AND cp.CodSucursal IN (" + ",".join(["%s"] * len(sucursales_ints)) + ")"
+            suc_res_inner = ""
+            if sucursales_ints:
+                suc_res_inner = " AND cp_res.CodSucursal IN (" + ",".join(str(x) for x in sucursales_ints) + ")"
+
             # Detalle BO por producto con cálculo de cobertura
             # bo_importe = SUM(PrecioNetoxR), alineado con VB6 (stock físico, disponibles y backorder).
             # Backorder filtrado por stockp.Fecha en el intervalo (como VB6).
@@ -3327,7 +3680,7 @@ class QueryRunnerService:
                         AND cp_res.Anulado = 'No'
                         AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
                         AND cp_res.Estado IN ('En preparación', 'Preparado')
-                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){reservado_excl_clause}
+                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){suc_res_inner}{reservado_excl_clause}
                     GROUP BY sp_res.IDArt
                 ) reservado_sub ON reservado_sub.id_articulo = sp.IDArt
                 WHERE cp.TipoComprobante = 'PED'
@@ -3336,13 +3689,15 @@ class QueryRunnerService:
                     AND (sp.anulado IS NULL OR sp.anulado = 'No')
                     AND cp.Estado IN {bo_estados}
                     AND sp.CodigoMovimiento IS NOT NULL
+                    {suc_bo_ph}
                     AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                     AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
                 GROUP BY sp.IDArt, a.id_manual, a.NombreArticulo, r.NombreRubro, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
                 ORDER BY bo_importe DESC
             """
-            cursor.execute(sql_bo_detalle, [fecha_inicio_bo, fecha_fin_bo])
+            _bo_det_params = list(sucursales_ints) + [fecha_inicio_bo, fecha_fin_bo] if sucursales_ints else [fecha_inicio_bo, fecha_fin_bo]
+            cursor.execute(sql_bo_detalle, _bo_det_params)
             bo_rows = cursor.fetchall()
             logger.info("📊 [BO] Detalle BO (producto) OK (%d filas)", len(bo_rows))
 
@@ -3477,6 +3832,9 @@ class QueryRunnerService:
 
             # BO detalle (para tooltip en columna BO QTY): fecha, nro_comprobante, cliente, cantidad por comprobante
             try:
+                bo_comp_suc = ""
+                if sucursales_ints:
+                    bo_comp_suc = " AND cp.CodSucursal IN (" + ",".join(["%s"] * len(sucursales_ints)) + ")"
                 sql_bo_comp_detalle = f"""
                     SELECT /*+ MAX_EXECUTION_TIME(15000) */
                         sp.IDArt,
@@ -3493,10 +3851,12 @@ class QueryRunnerService:
                         AND (sp.anulado IS NULL OR sp.anulado = 'No')
                         AND cp.Estado IN {bo_estados}
                         AND sp.CodigoMovimiento IS NOT NULL
+                        {bo_comp_suc}
                         AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                     ORDER BY sp.IDArt, cp.Fecha, cp.NroComprobante
                 """
-                cursor.execute(sql_bo_comp_detalle, [fecha_inicio_bo, fecha_fin_bo])
+                _bo_comp_params = list(sucursales_ints) + [fecha_inicio_bo, fecha_fin_bo] if sucursales_ints else [fecha_inicio_bo, fecha_fin_bo]
+                cursor.execute(sql_bo_comp_detalle, _bo_comp_params)
                 bo_comp_rows = cursor.fetchall()
 
                 def _fmt_bo_date(d):
@@ -3530,6 +3890,7 @@ class QueryRunnerService:
             # Reservado detalle (para tooltip en columna Reservado): PED En preparación/Preparado (NO Pendiente ni Parcial), fecha, nro, cliente, estado, cantidad
             reservado_estados = "('En preparación', 'Preparado')"
             try:
+                res_det_suc = suc_res_inner if sucursales_ints else ""
                 sql_reservado_detalle = f"""
                     SELECT /*+ MAX_EXECUTION_TIME(15000) */
                         sp_res.IDArt,
@@ -3547,7 +3908,7 @@ class QueryRunnerService:
                         AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
                         AND cp_res.Estado IN {reservado_estados}
                         AND sp_res.CodigoMovimiento IS NOT NULL
-                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){reservado_excl_clause}
+                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){res_det_suc}{reservado_excl_clause}
                     ORDER BY sp_res.IDArt, cp_res.Fecha, cp_res.NroComprobante
                 """
                 cursor.execute(sql_reservado_detalle)
@@ -3851,6 +4212,7 @@ class QueryRunnerService:
                 "lista_precio_label": lista_precio_labels[lista_precio],
                 "depositos_incluidos": depositos_incluidos,
                 "clientes_excluidos": clientes_excluidos,
+                "sucursales": sucursales_ints,
                 "fecha_inicio": fecha_inicio,
                 "fecha_fin": fecha_fin,
                 "fecha_inicio_facturacion": fi_fac,

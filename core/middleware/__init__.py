@@ -10,6 +10,7 @@ from .base_middleware import (
     RequestUserMiddleware,
     DeviceDetectionMiddleware,
 )
+from .mobile_level_a_middleware import MobileLevelAOnlyMiddleware
 from .request_scoped_mysql import RequestScopedMysqlMiddleware
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     'CDNCacheMiddleware',
     'RequestUserMiddleware',
     'DeviceDetectionMiddleware',
+    'MobileLevelAOnlyMiddleware',
     'RequestScopedMysqlMiddleware',
 ] 

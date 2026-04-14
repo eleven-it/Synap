@@ -23,8 +23,8 @@ class Command(BaseCommand):
             'is_active': True,
             'is_required': False,
             'is_core': False,
-            'dependencies': ['core', 'tiendanube', 'administraNET_integration'],
-            'optional_dependencies': ['sales', 'inventory'],
+            'dependencies': ['core'],
+            'optional_dependencies': [],
             'settings': {
                 'enable_customer_sync': True,
                 'enable_product_sync': True,

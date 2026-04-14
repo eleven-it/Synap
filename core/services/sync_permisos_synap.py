@@ -17,7 +17,7 @@ from core.constantes_permisos import PERMISOS_POR_MODULO
 logger = logging.getLogger(__name__)
 
 CACHE_KEY_PREFIX = "synap_perm_sync:"
-MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout")
+MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica")
 
 
 def _lista_permisos_synap(grupo_permiso: str = "Synap") -> List[Dict]:

@@ -3,6 +3,7 @@ Gestor central de módulos del sistema Synap
 Maneja la activación, desactivación y gestión de dependencias de módulos
 """
 
+from django.apps import apps as django_apps
 from django.core.cache import cache
 from django.utils import timezone
 from django.db import transaction
@@ -31,14 +32,31 @@ class ModuleManager:
     def _load_default_modules(self):
         """Carga módulos por defecto (core, login, dashboard)"""
         self.active_modules = {'core', 'login', 'dashboard'}
+
+    @staticmethod
+    def _django_app_installed(module_name):
+        """
+        El nombre de módulo en MODULE_CONFIGS coincide con el app_label de Django.
+        Si la app no está en INSTALLED_APPS, no se deben cargar URLs/hooks ni tratar
+        el módulo como operativo (p. ej. tiendanube_administranet comentado en settings).
+        """
+        try:
+            return django_apps.is_installed(module_name)
+        except Exception:
+            return False
     
     def is_module_active(self, module_name):
-        """Verifica si un módulo está activo"""
-        return module_name in self.active_modules
+        """Verifica si un módulo está activo y su app Django está instalada."""
+        return (
+            module_name in self.active_modules
+            and self._django_app_installed(module_name)
+        )
     
     def get_active_modules(self):
-        """Retorna la lista de módulos activos"""
-        return list(self.active_modules)
+        """Retorna la lista de módulos activos (solo apps presentes en INSTALLED_APPS)."""
+        return sorted(
+            m for m in self.active_modules if self._django_app_installed(m)
+        )
     
     def get_all_modules(self):
         """Retorna todos los módulos disponibles"""
@@ -51,6 +69,8 @@ class ModuleManager:
     def can_activate_module(self, module_name):
         """Verifica si se puede activar un módulo"""
         if module_name not in MODULE_CONFIGS:
+            return False
+        if not self._django_app_installed(module_name):
             return False
         
         config = MODULE_CONFIGS[module_name]
@@ -83,6 +103,11 @@ class ModuleManager:
     
     def activate_module(self, module_name, user=None):
         """Activa un módulo"""
+        if module_name in MODULE_CONFIGS and not self._django_app_installed(module_name):
+            return (
+                False,
+                f"No se puede activar el módulo {module_name}: la app no está en INSTALLED_APPS.",
+            )
         if not self.can_activate_module(module_name):
             return False, f"No se puede activar el módulo {module_name}"
         
@@ -286,7 +311,7 @@ class ModuleManager:
         """Obtiene un resumen de todos los módulos"""
         summary = {
             'total_modules': len(MODULE_CONFIGS),
-            'active_modules': len(self.active_modules),
+            'active_modules': len(self.get_active_modules()),
             'core_modules': 0,
             'required_modules': 0,
             'optional_modules': 0,

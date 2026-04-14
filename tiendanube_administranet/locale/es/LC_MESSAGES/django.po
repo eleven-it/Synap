@@ -1,0 +1,474 @@
+# Synap - Tiendanube-AdministraNET Spanish Translation
+# Copyright (C) 2025 Synap
+# This file is distributed under the same license as the Synap package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Synap 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-24 17:00+0000\n"
+"PO-Revision-Date: 2025-10-24 17:00+0000\n"
+"Last-Translator: Synap Team\n"
+"Language-Team: Spanish\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+# Navegación
+msgid "Dashboard"
+msgstr "Panel de Control"
+
+msgid "Configuration"
+msgstr "Configuración"
+
+msgid "Synchronization"
+msgstr "Sincronización"
+
+msgid "Mappings"
+msgstr "Mapeos"
+
+msgid "Webhooks"
+msgstr "Webhooks"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Manual Sync"
+msgstr "Sincronización Manual"
+
+msgid "Auto Sync Config"
+msgstr "Configuración de Sincronización Automática"
+
+msgid "Sync History"
+msgstr "Historial de Sincronización"
+
+msgid "Back to Dashboard"
+msgstr "Volver al Panel de Control"
+
+# Títulos
+msgid "Automatic Synchronization"
+msgstr "Sincronización Automática"
+
+msgid "Automatic Synchronization Configuration"
+msgstr "Configuración de Sincronización Automática"
+
+msgid "Schema Migration"
+msgstr "Migración de Esquema"
+
+msgid "Synchronization Interval"
+msgstr "Intervalo de Sincronización"
+
+msgid "What to Synchronize"
+msgstr "Qué Sincronizar"
+
+msgid "Synchronization Statistics"
+msgstr "Estadísticas de Sincronización"
+
+msgid "AdministraNET Configuration"
+msgstr "Configuración de AdministraNET"
+
+msgid "Tiendanube Configuration"
+msgstr "Configuración de Tiendanube"
+
+# Acciones
+msgid "Save Configuration"
+msgstr "Guardar Configuración"
+
+msgid "Test Connection"
+msgstr "Probar Conexión"
+
+msgid "Migrate Schema"
+msgstr "Migrar Esquema"
+
+msgid "Test Sync Now"
+msgstr "Probar Sincronización Ahora"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Submit"
+msgstr "Enviar"
+
+msgid "Save"
+msgstr "Guardar"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "Create"
+msgstr "Crear"
+
+msgid "Update"
+msgstr "Actualizar"
+
+msgid "Refresh"
+msgstr "Actualizar"
+
+msgid "Close"
+msgstr "Cerrar"
+
+msgid "Back"
+msgstr "Volver"
+
+msgid "Next"
+msgstr "Siguiente"
+
+msgid "Previous"
+msgstr "Anterior"
+
+# Sincronización
+msgid "Sync Products"
+msgstr "Sincronizar Productos"
+
+msgid "Sync Customers"
+msgstr "Sincronizar Clientes"
+
+msgid "Sync Orders"
+msgstr "Sincronizar Pedidos"
+
+msgid "Sync Stock"
+msgstr "Sincronizar Stock"
+
+msgid "Last sync"
+msgstr "Última sincronización"
+
+msgid "Next sync"
+msgstr "Próxima sincronización"
+
+msgid "Never"
+msgstr "Nunca"
+
+msgid "Calculating..."
+msgstr "Calculando..."
+
+msgid "Full Sync"
+msgstr "Sincronización Completa"
+
+msgid "Sync Now"
+msgstr "Sincronizar Ahora"
+
+# Estados
+msgid "Active"
+msgstr "Activo"
+
+msgid "Inactive"
+msgstr "Inactivo"
+
+msgid "Pending"
+msgstr "Pendiente"
+
+msgid "Processing"
+msgstr "Procesando"
+
+msgid "Completed"
+msgstr "Completado"
+
+msgid "Failed"
+msgstr "Fallido"
+
+msgid "Success"
+msgstr "Éxito"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Synced"
+msgstr "Sincronizado"
+
+msgid "Not Synced"
+msgstr "No Sincronizado"
+
+msgid "In Progress"
+msgstr "En Progreso"
+
+# Modelos
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Customers"
+msgstr "Clientes"
+
+msgid "Product"
+msgstr "Producto"
+
+msgid "Products"
+msgstr "Productos"
+
+msgid "Order"
+msgstr "Pedido"
+
+msgid "Orders"
+msgstr "Pedidos"
+
+msgid "Stock"
+msgstr "Stock"
+
+msgid "Mapping"
+msgstr "Mapeo"
+
+msgid "Customer Mappings"
+msgstr "Mapeos de Clientes"
+
+msgid "Product Mappings"
+msgstr "Mapeos de Productos"
+
+msgid "Order Mappings"
+msgstr "Mapeos de Pedidos"
+
+# Tiempo
+msgid "minutes"
+msgstr "minutos"
+
+msgid "hours"
+msgstr "horas"
+
+msgid "days"
+msgstr "días"
+
+msgid "5 min"
+msgstr "5 min"
+
+msgid "15 min"
+msgstr "15 min"
+
+msgid "30 min"
+msgstr "30 min"
+
+msgid "1 hour"
+msgstr "1 hora"
+
+msgid "3 hours"
+msgstr "3 horas"
+
+msgid "6 hours"
+msgstr "6 horas"
+
+msgid "12 hours"
+msgstr "12 horas"
+
+msgid "24 hours"
+msgstr "24 horas"
+
+# Mensajes
+msgid "Configuration saved successfully"
+msgstr "Configuración guardada exitosamente"
+
+msgid "Connection tested successfully"
+msgstr "Conexión probada exitosamente"
+
+msgid "Synchronization completed"
+msgstr "Sincronización completada"
+
+msgid "Error during synchronization"
+msgstr "Error durante la sincronización"
+
+msgid "Loading..."
+msgstr "Cargando..."
+
+msgid "Processing..."
+msgstr "Procesando..."
+
+msgid "Saving..."
+msgstr "Guardando..."
+
+msgid "Testing..."
+msgstr "Probando..."
+
+# Descripciones
+msgid "Configure automatic synchronization intervals and preferences"
+msgstr "Configurar intervalos y preferencias de sincronización automática"
+
+msgid "Currently enabled - Active synchronization"
+msgstr "Actualmente habilitado - Sincronización activa"
+
+msgid "Currently disabled - Manual synchronization only"
+msgstr "Actualmente deshabilitado - Solo sincronización manual"
+
+msgid "Use custom interval"
+msgstr "Usar intervalo personalizado"
+
+msgid "Sync product data"
+msgstr "Sincronizar datos de productos"
+
+msgid "Sync customer data"
+msgstr "Sincronizar datos de clientes"
+
+msgid "Sync order data"
+msgstr "Sincronizar datos de pedidos"
+
+msgid "Sync stock levels"
+msgstr "Sincronizar niveles de stock"
+
+# Migraciones
+msgid "Migration Progress"
+msgstr "Progreso de Migración"
+
+msgid "Applied Migrations"
+msgstr "Migraciones Aplicadas"
+
+msgid "Failed Migrations"
+msgstr "Migraciones Fallidas"
+
+msgid "No migrations needed"
+msgstr "No se necesitan migraciones"
+
+msgid "Database schema is up to date"
+msgstr "El esquema de la base de datos está actualizado"
+
+msgid "Initializing migration..."
+msgstr "Inicializando migración..."
+
+msgid "Migration completed successfully!"
+msgstr "¡Migración completada exitosamente!"
+
+msgid "Migration failed"
+msgstr "Migración fallida"
+
+msgid "Migration Results"
+msgstr "Resultados de Migración"
+
+# Información
+msgid "Tiendanube Information"
+msgstr "Información de Tiendanube"
+
+msgid "AdministraNET Information"
+msgstr "Información de AdministraNET"
+
+msgid "Sync Status"
+msgstr "Estado de Sincronización"
+
+msgid "Last Synced"
+msgstr "Última Sincronización"
+
+msgid "Error Message"
+msgstr "Mensaje de Error"
+
+msgid "Progress"
+msgstr "Progreso"
+
+msgid "Details"
+msgstr "Detalles"
+
+msgid "Actions"
+msgstr "Acciones"
+
+# Estadísticas
+msgid "Total Syncs"
+msgstr "Total de Sincronizaciones"
+
+msgid "Successful"
+msgstr "Exitosas"
+
+msgid "Duration"
+msgstr "Duración"
+
+msgid "Avg Duration"
+msgstr "Duración Promedio"
+
+msgid "Total Items"
+msgstr "Total de Elementos"
+
+msgid "Processed Items"
+msgstr "Elementos Procesados"
+
+msgid "Failed Items"
+msgstr "Elementos Fallidos"
+
+# Mensajes de error específicos
+msgid "No active configurations found"
+msgstr "No se encontraron configuraciones activas"
+
+msgid "Please configure Tiendanube and AdministraNET first"
+msgstr "Por favor configura Tiendanube y AdministraNET primero"
+
+msgid "Tiendanube configuration not found"
+msgstr "Configuración de Tiendanube no encontrada"
+
+msgid "Please configure Tiendanube first"
+msgstr "Por favor configura Tiendanube primero"
+
+msgid "AdministraNET configuration not found"
+msgstr "Configuración de AdministraNET no encontrada"
+
+msgid "Please configure AdministraNET first"
+msgstr "Por favor configura AdministraNET primero"
+
+msgid "Starting test synchronization..."
+msgstr "Iniciando sincronización de prueba..."
+
+msgid "Error during test sync"
+msgstr "Error durante sincronización de prueba"
+
+msgid "An error occurred during migration"
+msgstr "Ocurrió un error durante la migración"
+
+msgid "An error occurred while testing the connection"
+msgstr "Ocurrió un error al probar la conexión"
+
+msgid "Testing connection..."
+msgstr "Probando conexión..."
+
+# Intervalos
+msgid "1-1440 minutes"
+msgstr "1-1440 minutos"
+
+# Configuración AdministraNET
+msgid "Configure AdministraNET database connection settings"
+msgstr "Configurar ajustes de conexión a la base de datos de AdministraNET"
+
+msgid "Database Configuration"
+msgstr "Configuración de Base de Datos"
+
+msgid "Connection Parameters"
+msgstr "Parámetros de Conexión"
+
+# Auto Sync
+msgid "Enable automatic synchronization"
+msgstr "Habilitar sincronización automática"
+
+msgid "Disable automatic synchronization"
+msgstr "Deshabilitar sincronización automática"
+
+# Webhooks
+msgid "Webhook Configurations"
+msgstr "Configuraciones de Webhook"
+
+msgid "Webhook Events"
+msgstr "Eventos de Webhook"
+
+msgid "Event"
+msgstr "Evento"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Received"
+msgstr "Recibido"
+
+# Opciones generales
+msgid "Yes"
+msgstr "Sí"
+
+msgid "No"
+msgstr "No"
+
+msgid "All"
+msgstr "Todos"
+
+msgid "None"
+msgstr "Ninguno"
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Unknown"
+msgstr "Desconocido"
+
+msgid "N/A"
+msgstr "N/D"
+

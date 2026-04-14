@@ -1,0 +1,357 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "System Status" %} - {% trans "Tiendanube-AdministraNET" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="breadcrumb">
+    <div class="breadcrumb-item">
+        <span class="material-icons text-sm">monitor_heart</span>
+        <span>{% trans "System Status" %}</span>
+    </div>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {% trans "System Status" %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "Overview of Tiendanube-AdministraNET integration health and activity" %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button onclick="refreshStatus()" class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">refresh</span>
+                {% trans "Refresh" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Connection Status Cards -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Tiendanube Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                        <span class="material-icons text-2xl text-white">cloud</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Tiendanube</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "E-commerce Platform" %}</p>
+                    </div>
+                </div>
+                {% if tiendanube_configured and tiendanube_connection_status %}
+                <div class="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    <span class="material-icons text-sm mr-2">check_circle</span>
+                    {% trans "Connected" %}
+                </div>
+                {% else %}
+                <div class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                    <span class="material-icons text-sm mr-2">error</span>
+                    {% trans "Disconnected" %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Configuration" %}</span>
+                    {% if tiendanube_configured %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        {% trans "Configured" %}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        {% trans "Not Configured" %}
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "API Connection" %}</span>
+                    {% if tiendanube_connection_status %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        {% trans "Online" %}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        {% trans "Offline" %}
+                    </span>
+                    {% endif %}
+                </div>
+                {% if tiendanube_config %}
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Store ID" %}</span>
+                    <span class="text-sm font-mono text-gray-900 dark:text-white">{{ tiendanube_config.store_id|default:"N/A" }}</span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Total Webhook Events" %}</span>
+                    <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ total_webhook_events|default:0 }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AdministraNET Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                        <span class="material-icons text-2xl text-white">storage</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">AdministraNET</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "ERP System" %}</p>
+                    </div>
+                </div>
+                {% if adminet_configured and adminet_connection_status %}
+                <div class="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                    <span class="material-icons text-sm mr-2">check_circle</span>
+                    {% trans "Connected" %}
+                </div>
+                {% else %}
+                <div class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                    <span class="material-icons text-sm mr-2">error</span>
+                    {% trans "Disconnected" %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Configuration" %}</span>
+                    {% if adminet_configured %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        {% trans "Configured" %}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        {% trans "Not Configured" %}
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Database Connection" %}</span>
+                    {% if adminet_connection_status %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        {% trans "Online" %}
+                    </span>
+                    {% else %}
+                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        {% trans "Offline" %}
+                    </span>
+                    {% endif %}
+                </div>
+                {% if adminet_config %}
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Esquema MySQL (empresa)" %}</span>
+                    <span class="text-sm font-mono text-gray-900 dark:text-white">{{ adminet_config.database|default:"N/A" }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Servidor MySQL (pool Synap)" %}</span>
+                    <span class="text-sm font-mono text-gray-900 dark:text-white">
+                        {% if mysql_pool_host %}{{ mysql_pool_host }}{% if mysql_pool_port %}:{{ mysql_pool_port }}{% endif %}{% else %}—{% endif %}
+                    </span>
+                </div>
+                {% endif %}
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "Last Sync" %}</span>
+                    {% if last_sync %}
+                    <span class="text-sm font-medium text-gray-900 dark:text-white">{{ last_sync.started_at|timesince }} {% trans "ago" %}</span>
+                    {% else %}
+                    <span class="text-sm text-gray-500 dark:text-gray-400">{% trans "Never" %}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mapping Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <a href="{% url 'tiendanube_administranet:product_list' %}" class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-4">
+                <span class="material-icons text-blue-600">inventory_2</span>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Products" %}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "Product mappings" %}</p>
+            </div>
+        </div>
+        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ product_mappings|default:0 }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "mapped products" %}</div>
+    </a>
+
+    <a href="{% url 'tiendanube_administranet:customer_mapping_list' %}" class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center mr-4">
+                <span class="material-icons text-green-600">people</span>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Customers" %}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "Customer mappings" %}</p>
+            </div>
+        </div>
+        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ customer_mappings|default:0 }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "mapped customers" %}</div>
+    </a>
+
+    <a href="{% url 'tiendanube_administranet:order_mapping_list' %}" class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300">
+        <div class="flex items-center mb-4">
+            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center mr-4">
+                <span class="material-icons text-purple-600">receipt_long</span>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Orders" %}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">{% trans "Order mappings" %}</p>
+            </div>
+        </div>
+        <div class="text-2xl font-bold text-gray-900 dark:text-white">{{ order_mappings|default:0 }}</div>
+        <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "mapped orders" %}</div>
+    </a>
+</div>
+
+<!-- Synchronization Activity -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Recent Sync Logs -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">sync</span>
+                    {% trans "Recent Synchronizations" %}
+                </h3>
+                <a href="{% url 'tiendanube_administranet:sync_history' %}" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    {% trans "View All" %}
+                </a>
+            </div>
+        </div>
+        <div class="p-6">
+            {% if recent_logs %}
+            <div class="space-y-3">
+                {% for log in recent_logs %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div class="flex items-center flex-1 min-w-0">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0
+                            {% if log.status == 'success' %}bg-green-100 dark:bg-green-900/30{% endif %}
+                            {% if log.status == 'error' %}bg-red-100 dark:bg-red-900/30{% endif %}
+                            {% if log.status == 'pending' %}bg-yellow-100 dark:bg-yellow-900/30{% endif %}">
+                            <span class="material-icons text-xs
+                                {% if log.status == 'success' %}text-green-600 dark:text-green-400{% endif %}
+                                {% if log.status == 'error' %}text-red-600 dark:text-red-400{% endif %}
+                                {% if log.status == 'pending' %}text-yellow-600 dark:text-yellow-400{% endif %}">
+                                {% if log.status == 'success' %}check{% endif %}
+                                {% if log.status == 'error' %}error{% endif %}
+                                {% if log.status == 'pending' %}schedule{% endif %}
+                            </span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {{ log.get_sync_type_display }} - {{ log.get_direction_display }}
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ log.started_at|timesince }} {% trans "ago" %}
+                            </p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ml-2
+                        {% if log.status == 'success' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400{% endif %}
+                        {% if log.status == 'error' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400{% endif %}
+                        {% if log.status == 'pending' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400{% endif %}">
+                        {{ log.get_status_display }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span class="material-icons text-gray-400">sync</span>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "No synchronizations yet" %}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Webhook Events -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-green-600 dark:text-green-400 mr-2">webhook</span>
+                    {% trans "Recent Webhook Events" %}
+                </h3>
+                <a href="{% url 'tiendanube_administranet:webhook_event_list' %}" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                    {% trans "View All" %}
+                </a>
+            </div>
+        </div>
+        <div class="p-6">
+            {% if recent_webhook_events %}
+            <div class="space-y-3">
+                {% for event in recent_webhook_events %}
+                <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div class="flex items-center flex-1 min-w-0">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0
+                            {% if event.status == 'processed' %}bg-green-100 dark:bg-green-900/30{% endif %}
+                            {% if event.status == 'error' %}bg-red-100 dark:bg-red-900/30{% endif %}
+                            {% if event.status == 'processing' %}bg-yellow-100 dark:bg-yellow-900/30{% endif %}">
+                            <span class="material-icons text-xs
+                                {% if event.status == 'processed' %}text-green-600 dark:text-green-400{% endif %}
+                                {% if event.status == 'error' %}text-red-600 dark:text-red-400{% endif %}
+                                {% if event.status == 'processing' %}text-yellow-600 dark:text-yellow-400{% endif %}">
+                                {% if event.status == 'processed' %}check{% endif %}
+                                {% if event.status == 'error' %}error{% endif %}
+                                {% if event.status == 'processing' %}schedule{% endif %}
+                            </span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                {{ event.event_type|default:"N/A" }}
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                {{ event.received_at|timesince }} {% trans "ago" %}
+                            </p>
+                        </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ml-2
+                        {% if event.status == 'processed' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400{% endif %}
+                        {% if event.status == 'error' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400{% endif %}
+                        {% if event.status == 'processing' %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400{% endif %}">
+                        {{ event.get_status_display }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span class="material-icons text-gray-400">webhook</span>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% trans "No webhook events yet" %}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function refreshStatus() {
+    // Recargar la página para obtener datos actualizados
+    window.location.reload();
+}
+</script>
+{% endblock %} 

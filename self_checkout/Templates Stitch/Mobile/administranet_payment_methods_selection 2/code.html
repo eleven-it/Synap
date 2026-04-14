@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#7f13ec",
+                        "background-light": "#f7f6f8",
+                        "background-dark": "#191022",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<title>AdministraNET Selección de Pago</title>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased text-slate-900 dark:text-slate-100">
+<div class="relative flex h-screen max-w-md mx-auto flex-col bg-white dark:bg-background-dark overflow-hidden shadow-2xl">
+<div class="flex items-center bg-white dark:bg-background-dark p-4 pb-2 justify-between border-b border-slate-100 dark:border-slate-800">
+<button class="text-slate-900 dark:text-slate-100 flex size-10 shrink-0 items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10">Seleccionar Método de Pago</h2>
+</div>
+<div class="flex flex-col items-center justify-center py-10 bg-white dark:bg-background-dark">
+<span class="text-slate-500 dark:text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">TOTAL A PAGAR</span>
+<h1 class="text-slate-900 dark:text-slate-100 tracking-tight text-[42px] font-bold leading-tight">$45.50</h1>
+</div>
+<div class="flex-1 overflow-y-auto px-4 space-y-3 pb-24">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-bold leading-tight tracking-tight pt-2 pb-2">Métodos de Pago</h3>
+<label class="relative flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border-2 border-primary shadow-sm cursor-pointer group">
+<div class="text-primary flex items-center justify-center rounded-lg bg-primary/10 shrink-0 size-12">
+<span class="material-symbols-outlined text-2xl">payments</span>
+</div>
+<div class="flex-1">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-normal">Efectivo</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Pago con efectivo</p>
+</div>
+<div class="shrink-0">
+<div class="flex size-6 items-center justify-center rounded-full bg-primary">
+<span class="material-symbols-outlined text-white text-sm">check</span>
+</div>
+</div>
+<input checked="" class="hidden" name="payment_method" type="radio"/>
+</label>
+<label class="relative flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-all cursor-pointer group">
+<div class="text-slate-600 dark:text-slate-400 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 size-12 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">credit_card</span>
+</div>
+<div class="flex-1">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-normal">Tarjeta de Crédito/Débito</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Visa, Mastercard, Amex</p>
+</div>
+<div class="shrink-0">
+<div class="flex size-6 items-center justify-center rounded-full border-2 border-slate-200 dark:border-slate-700"></div>
+</div>
+<input class="hidden" name="payment_method" type="radio"/>
+</label>
+<label class="relative flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-all cursor-pointer group">
+<div class="text-slate-600 dark:text-slate-400 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 size-12 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">contactless</span>
+</div>
+<div class="flex-1">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-normal">Pago Móvil</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Apple Pay, Google Pay</p>
+</div>
+<div class="shrink-0">
+<div class="flex size-6 items-center justify-center rounded-full border-2 border-slate-200 dark:border-slate-700"></div>
+</div>
+<input class="hidden" name="payment_method" type="radio"/>
+</label>
+<label class="relative flex items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-all cursor-pointer group">
+<div class="text-slate-600 dark:text-slate-400 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 size-12 group-hover:bg-primary/5 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-2xl">qr_code_2</span>
+</div>
+<div class="flex-1">
+<p class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-normal">Billetera Virtual QR</p>
+<p class="text-slate-500 dark:text-slate-400 text-xs">Escanea para pagar al instante</p>
+</div>
+<div class="shrink-0">
+<div class="flex size-6 items-center justify-center rounded-full border-2 border-slate-200 dark:border-slate-700"></div>
+</div>
+<input class="hidden" name="payment_method" type="radio"/>
+</label>
+</div>
+<div class="absolute bottom-0 left-0 w-full p-4 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-t border-slate-100 dark:border-slate-800">
+<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-xl shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2">
+<span>Completar Transacción</span>
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<div class="mt-2 text-center">
+<p class="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-bold">AdministraNET POS System</p>
+</div>
+</div>
+</div>
+
+</body></html>

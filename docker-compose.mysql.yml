@@ -1,7 +1,9 @@
 # MySQL 5.7 local para DB administraNET (reportes, BO, etc.) — SOLO DESARROLLO
 # En producción la app apunta al MySQL productivo; no se levanta este contenedor.
 # Uso: docker compose -f docker-compose.mysql.yml up -d
-# Restaurar backup: ./scripts/restore-mysql-local.sh backups/backup_administranet_*.zip
+# Importar backups: siempre a una base NUEVA (ver docs/general/MYSQL_LOCAL_IMPORTACIONES.md).
+#   ./scripts/restore-mysql-local.sh backups/*.zip [nombre_base]
+#   ./scripts/import-mysql-sql-new-database.sh ruta/archivo.sql [nombre_base]
 
 services:
   mysql_administranet:

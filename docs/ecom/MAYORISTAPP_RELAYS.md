@@ -41,7 +41,7 @@
 | 17 | `relay-filtros-estadisticas.php` | Estadísticas | `ecom` / `reports` | `mayoristapp_informes` | **v1** → `GET/POST …/estadisticas/filtros/?tabla=...` (JSON opciones por tabla) |
 | 18 | `relay-laboratorio.php` | Catálogo | `ecom` | `mayoristapp_catalogo` | **v1** → `GET …/catalogo/laboratorios/` |
 | 19 | `relay-lista-precio.php` | Precios | `ecom` (`precio_relays` + `configuracion`) | `mayoristapp_precios` | **v1** → `GET …/precios/lista-precio/` |
-| 20 | `relay-logistica-comprobantes.php` | Logística | `ecom` | `mayoristapp_logistica` | pendiente |
+| 20 | `relay-logistica-comprobantes.php` | Logística | **`reports` (legacy)** + servicios compartidos si aplica | `mayoristapp_logistica` | **en especificación** → [SPEC_LOGISTICA_LISTA_COMPROBANTES_RUTAS.md](./SPEC_LOGISTICA_LISTA_COMPROBANTES_RUTAS.md): `ReportDefinition` slug `comprobantes-rutas`, `query_runner`, API `POST /api/reports/query/`, pool `core.mysql_pool` |
 | 21 | `relay-lote.php` | Catálogo | `ecom` | `mayoristapp_catalogo` | **v1** → `GET …/catalogo/lotes/` (JSON; PHP era HTML) |
 | 22 | `relay-marca.php` | Catálogo | `ecom` | `mayoristapp_catalogo` | **v1** → `GET …/catalogo/marcas/` |
 | 23 | `relay-mas-vendidos.php` | Catálogo | `ecom` | `mayoristapp_catalogo` | **v1** → `GET …/catalogo/mas-vendidos/` (SQL vía `mas-vendidos.php` include) |
