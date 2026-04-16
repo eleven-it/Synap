@@ -16,6 +16,7 @@ from django.http import HttpResponseForbidden
 from functools import wraps
 from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
+from core.utils.permissions import get_user_permission_set, user_has_full_access
 
 logger = logging.getLogger(__name__)
 
@@ -384,6 +385,44 @@ APPS_MENU = [
                         "permission": "reports.ver",
                         "menu_item_id": "reports_cat_workspace",
                     }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "ia",
+        "nombre": _("IA"),
+        "permiso": "ia.ver",
+        "url": "ia:home",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423L16.5 15.75l.394 1.183a2.25 2.25 0 001.423 1.423L19.5 18.75l-1.183.394a2.25 2.25 0 00-1.423 1.423z'/></svg>""",
+        "orden": 6.5,
+        "color": "fuchsia",
+        "submenus": [
+            {
+                "seccion": _("Asistentes"),
+                "items": [
+                    {
+                        "label": _("Inicio IA"),
+                        "url": "ia:home",
+                        "icon": "smart_toy",
+                        "permission": "ia.ver",
+                        "menu_item_id": "ia_home",
+                    },
+                    {
+                        "label": _("Asistente de Reportes"),
+                        "url": "ia:chat",
+                        "url_kwargs": {"slug": "asistente-reportes"},
+                        "icon": "analytics",
+                        "permission": "ia.reportes",
+                        "menu_item_id": "ia_reportes_chat",
+                    },
+                    {
+                        "label": _("Configuración IA"),
+                        "url": "ia:configuration",
+                        "icon": "tune",
+                        "permission": "ia.admin",
+                        "menu_item_id": "ia_configuration",
+                    },
                 ]
             }
         ]
@@ -977,25 +1016,14 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return []
 
-    permisos_usuario = set()
-    if isinstance(user, UsuarioExtendido):
-        permisos_usuario = user.get_permisos_totales()
-    elif hasattr(user, 'get_permisos_totales'):
-        # Para AdministraNETUser (usuario de administraNET Gestión)
-        permisos_usuario = user.get_permisos_totales()
-    
-    # Solo el usuario "supervisor" (por cod_usuario) tiene todos los permisos
-    # NOTA: El puesto/rol "Supervisor" NO otorga acceso total, solo permisos específicos (reports.ver)
-    es_supervisor_usuario = False
-    if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
-        es_supervisor_usuario = True
-        permisos_usuario = {"*"}
+    permisos_usuario = get_user_permission_set(user)
+    es_supervisor_usuario = user_has_full_access(user)
 
     # Obtener módulos activos desde la base de datos
     active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
     
     # Agregar módulos core que siempre deben estar activos (como stock, compras, mpr)
-    core_modules = {'core', 'login', 'dashboard', 'reports', 'stock', 'ventas', 'mpr', 'compras', 'self_checkout'}
+    core_modules = {'core', 'login', 'dashboard', 'reports', 'ia', 'stock', 'ventas', 'mpr', 'compras', 'self_checkout'}
     active_modules.update(core_modules)
 
     from core.services.navbar_visibilidad import (
@@ -1016,11 +1044,7 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
         # NOTA: El puesto/rol "Supervisor" NO puede ver estos módulos
         if app_id in ["archivo", "module_management", "settings"]:
             # Solo el usuario 'supervisor' (por cod_usuario) es superuser
-            es_superuser = False
-            if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
-                es_superuser = True
-            
-            if es_superuser or user.is_superuser:
+            if es_supervisor_usuario or user.is_superuser:
                 app_copy = app.copy()
                 try:
                     app_copy["url"] = reverse(app["url"])
@@ -1042,11 +1066,7 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
             
         # REGLA 3: Si la app es solo para superusuarios y el usuario no lo es, saltar
         # Solo el usuario 'supervisor' (por cod_usuario) es superuser
-        es_superuser = False
-        if hasattr(user, 'cod_usuario') and (user.cod_usuario or '').lower() == 'supervisor':
-            es_superuser = True
-        
-        if app.get("superuser_only") and not (es_superuser or user.is_superuser):
+        if app.get("superuser_only") and not (es_supervisor_usuario or user.is_superuser):
             continue
             
         # REGLA 4: Verificar permisos

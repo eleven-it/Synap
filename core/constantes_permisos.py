@@ -200,10 +200,14 @@ PERMISOS_POR_MODULO = {
         ("administrar.sync", "Sincronización con sistemas externos"),
     ],
     "IA": [
+        ("ia.ver", "Ver módulo IA"),
+        ("ia.agentes", "Acceder a asistentes IA"),
         ("ia.reportes", "Generar reportes con IA"),
+        ("ia.memoria", "Gestionar memoria de asistentes IA"),
         ("ia.recomendaciones", "Recibir recomendaciones de IA"),
         ("ia.predicciones", "Acceso a predicciones"),
         ("ia.automatizacion", "Configurar automatizaciones"),
+        ("ia.admin", "Administrar agentes, modelos y políticas IA"),
     ],
     "TiendaNube": [
         ("tiendanube.access", "Access TiendaNube integration")

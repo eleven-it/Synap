@@ -5,6 +5,7 @@ from typing import Iterable, List, Optional, Tuple
 
 from django.db.models import Q
 
+from core.utils.permissions import user_has_full_access
 from ..models import ReportDefinition, ReportCategory
 
 # Slugs con metadata inferida «comprobantes» / «listados» (orden + etiqueta «Informe legacy» en tarjetas).
@@ -250,7 +251,7 @@ class CatalogService:
         """Evalúa permisos soportando superusuarios y comodín."""
         if not self.user or not getattr(self.user, "is_authenticated", False):
             return False
-        if getattr(self.user, "is_superuser", False):
+        if user_has_full_access(self.user):
             return True
         if hasattr(self.user, "tiene_permiso") and callable(self.user.tiene_permiso):
             return self.user.tiene_permiso(code)

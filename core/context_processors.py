@@ -1,4 +1,5 @@
 from core.utils import permisos_contextuales, apps_visibles_para_usuario, obtener_app_por_id, obtener_submenus_por_app
+from core.utils.permissions import get_user_permission_set, user_has_full_access
 from core.models import UsuarioExtendido
 import logging
 
@@ -45,31 +46,21 @@ def usuario_y_permisos(request):
         }
 
     permisos_totales = set()
-    es_admin = False
+    es_admin = user_has_full_access(user)
 
     # Para usuarios de administraNET (AdministraNETUser), usar get_permisos_totales()
     if hasattr(user, 'get_permisos_totales'):
-        permisos_totales = user.get_permisos_totales()
-        # Solo el usuario 'supervisor' (por cod_usuario) es admin/superuser
-        # NOTA: El puesto/rol "Supervisor" NO otorga permisos de admin
-        if hasattr(user, "is_admin") and user.is_admin():
-            es_admin = True
-        elif hasattr(user, "cod_usuario"):
-            cod_usuario_lower = (user.cod_usuario or '').lower()
-            if cod_usuario_lower == 'supervisor':
-                es_admin = True
+        permisos_totales = get_user_permission_set(user)
     # Para usuarios de Synap (UsuarioExtendido), usar el sistema antiguo
     elif isinstance(user, UsuarioExtendido):
         permisos_roles = set()
         if hasattr(user, "roles"):
             for rol in user.roles.all():
                 permisos_roles.update(rol.permisos.values_list("codigo", flat=True))
-                if rol.nombre.lower() == "administrador":
-                    es_admin = True
         permisos_directos = set(user.permisos_extra.values_list("codigo", flat=True))
         permisos_totales = permisos_roles | permisos_directos
-        if user.is_admin():
-            es_admin = True
+        if es_admin:
+            permisos_totales = {"*"}
 
     if es_admin:
         permisos_totales = {"*"}

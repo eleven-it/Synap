@@ -42,6 +42,8 @@ def get_current_module(context):
         return 'compras'
     elif app_name == 'stock':
         return app_name
+    elif app_name == 'ia':
+        return 'ia'
     elif app_name == 'mpr':
         return 'mpr'
 
@@ -89,6 +91,7 @@ def has_module_permission(user, module_id):
     # Mapeo de módulos a permisos
     module_permissions = {
         'stock': 'stock.ver',
+        'ia': 'ia.ver',
         'settings': 'core.admin_access',
     }
     

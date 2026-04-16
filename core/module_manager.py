@@ -13,6 +13,9 @@ from .models import ModuleConfig
 
 class ModuleManager:
     """Gestor central de módulos del sistema"""
+
+    ACTIVE_MODULES_CACHE_KEY = "core.active_modules.db"
+    ACTIVE_MODULES_CACHE_TTL = 300
     
     def __init__(self):
         self.modules = {}
@@ -22,8 +25,14 @@ class ModuleManager:
     def load_modules(self):
         """Carga la configuración de módulos desde la base de datos"""
         try:
-            for config in ModuleConfig.objects.filter(is_active=True):
-                self.active_modules.add(config.name)
+            self.active_modules = {
+                config.name for config in ModuleConfig.objects.filter(is_active=True)
+            }
+            cache.set(
+                self.ACTIVE_MODULES_CACHE_KEY,
+                sorted(self.active_modules),
+                self.ACTIVE_MODULES_CACHE_TTL,
+            )
         except Exception as e:
             # Si hay error al cargar desde DB, usar configuración por defecto
             print(f"Error loading modules from DB: {e}")
@@ -32,6 +41,36 @@ class ModuleManager:
     def _load_default_modules(self):
         """Carga módulos por defecto (core, login, dashboard)"""
         self.active_modules = {'core', 'login', 'dashboard'}
+        cache.set(
+            self.ACTIVE_MODULES_CACHE_KEY,
+            sorted(self.active_modules),
+            self.ACTIVE_MODULES_CACHE_TTL,
+        )
+
+    def _refresh_active_modules_from_cache_or_db(self, force=False):
+        """Sincroniza módulos activos desde cache/DB para evitar estado stale en procesos vivos."""
+        if force:
+            cache.delete(self.ACTIVE_MODULES_CACHE_KEY)
+
+        cached = cache.get(self.ACTIVE_MODULES_CACHE_KEY)
+        if cached is not None:
+            self.active_modules = set(cached)
+            return self.active_modules
+
+        try:
+            self.active_modules = {
+                config.name for config in ModuleConfig.objects.filter(is_active=True)
+            }
+        except Exception:
+            self._load_default_modules()
+            return self.active_modules
+
+        cache.set(
+            self.ACTIVE_MODULES_CACHE_KEY,
+            sorted(self.active_modules),
+            self.ACTIVE_MODULES_CACHE_TTL,
+        )
+        return self.active_modules
 
     @staticmethod
     def _django_app_installed(module_name):
@@ -47,6 +86,7 @@ class ModuleManager:
     
     def is_module_active(self, module_name):
         """Verifica si un módulo está activo y su app Django está instalada."""
+        self._refresh_active_modules_from_cache_or_db()
         return (
             module_name in self.active_modules
             and self._django_app_installed(module_name)
@@ -54,6 +94,7 @@ class ModuleManager:
     
     def get_active_modules(self):
         """Retorna la lista de módulos activos (solo apps presentes en INSTALLED_APPS)."""
+        self._refresh_active_modules_from_cache_or_db()
         return sorted(
             m for m in self.active_modules if self._django_app_installed(m)
         )
@@ -302,6 +343,7 @@ class ModuleManager:
             'active_modules',
             'module_configs',
             'module_dependencies',
+            self.ACTIVE_MODULES_CACHE_KEY,
         ]
         
         for key in cache_keys:

@@ -1,0 +1,173 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ agent.name }} | Synap IA{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] gap-6">
+    <aside class="space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Agente</p>
+            <h1 class="mt-2 text-2xl font-semibold text-slate-900">{{ agent.name }}</h1>
+            <p class="mt-2 text-sm text-slate-600">{{ agent.description|default:"Sin descripción." }}</p>
+            <dl class="mt-4 space-y-3 text-sm">
+                <div>
+                    <dt class="text-slate-400">Proveedor</dt>
+                    <dd class="text-slate-700">{{ agent.default_provider.name|default:"No configurado" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-400">Modelo principal</dt>
+                    <dd class="text-slate-700">{{ agent.default_model_name|default:"No configurado" }}</dd>
+                </div>
+                <div>
+                    <dt class="text-slate-400">Modelo tool use</dt>
+                    <dd class="text-slate-700">{{ agent.tool_use_model_name|default:"No configurado" }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+            <p class="text-sm font-semibold text-slate-900">Cómo usarlo</p>
+            <ul class="mt-3 space-y-2 text-sm text-slate-600">
+                <li>1. Escribí una consulta en lenguaje natural.</li>
+                <li>2. El agente usa memoria persistente si corresponde.</li>
+                <li>3. Si no tiene provider/modelo configurado, degrada en modo seguro.</li>
+            </ul>
+        </div>
+    </aside>
+
+    <section class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+            <div>
+                <p class="text-sm text-slate-500">Conversación</p>
+                <p class="font-medium text-slate-900" id="conversation-title">
+                    {% if conversation %}{{ conversation.title|default:"Sin título" }}{% else %}Nueva conversación{% endif %}
+                </p>
+            </div>
+            {% if conversation %}
+            <span class="text-xs text-slate-400">{{ conversation.conversation_uuid }}</span>
+            {% endif %}
+        </div>
+
+        <div id="messages" class="p-4 md:p-6 space-y-4 min-h-[420px] max-h-[65vh] overflow-y-auto bg-slate-50">
+            {% if conversation %}
+                {% for message in conversation.messages.all %}
+                <div class="{% if message.role == 'user' %}flex justify-end{% else %}flex justify-start{% endif %}">
+                    <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm {% if message.role == 'user' %}bg-slate-900 text-white{% else %}bg-white text-slate-800 border border-slate-200{% endif %}">
+                        <p class="whitespace-pre-wrap">{{ message.content }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="flex justify-start">
+                    <div class="max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm bg-white text-slate-800 border border-slate-200">
+                        <p class="whitespace-pre-wrap">Todavía no hay mensajes. Iniciá la conversación con una consulta.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="border-t border-slate-100 p-4">
+            <form id="chat-form" class="space-y-3">
+                {% csrf_token %}
+                <textarea id="message-input" rows="4" maxlength="5000" class="w-full rounded-2xl border border-slate-300 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="Escribí tu consulta..."></textarea>
+                <div class="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                    <p id="runtime-note" class="text-xs text-slate-500">
+                        Si el proveedor o el modelo no están configurados por UI, el agente responderá en modo seguro.
+                    </p>
+                    <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-medium">
+                        Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message-input");
+    const messages = document.getElementById("messages");
+    const note = document.getElementById("runtime-note");
+    const agentSlug = "{{ agent.slug }}";
+    let conversationUuid = "{% if conversation %}{{ conversation.conversation_uuid }}{% endif %}";
+
+    function getCsrfToken() {
+        const tokenInput = form.querySelector("input[name=csrfmiddlewaretoken]");
+        return tokenInput ? tokenInput.value : "";
+    }
+
+    function appendMessage(role, text) {
+        const wrapper = document.createElement("div");
+        wrapper.className = role === "user" ? "flex justify-end" : "flex justify-start";
+
+        const bubble = document.createElement("div");
+        bubble.className = role === "user"
+            ? "max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm bg-slate-900 text-white"
+            : "max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm bg-white text-slate-800 border border-slate-200";
+
+        const p = document.createElement("p");
+        p.className = "whitespace-pre-wrap";
+        p.textContent = text;
+        bubble.appendChild(p);
+        wrapper.appendChild(bubble);
+        messages.appendChild(wrapper);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function ensureConversation() {
+        if (conversationUuid) return conversationUuid;
+        const response = await fetch("/api/ia/conversations/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCsrfToken()
+            },
+            body: JSON.stringify({
+                agent_slug: agentSlug,
+                channel: "{{ request.is_mobile|yesno:'pwa,web' }}"
+            })
+        });
+        if (!response.ok) {
+            throw new Error("No se pudo crear la conversación.");
+        }
+        const data = await response.json();
+        conversationUuid = data.conversation_uuid;
+        window.history.replaceState({}, "", `?conversation=${conversationUuid}`);
+        return conversationUuid;
+    }
+
+    form.addEventListener("submit", async function(event) {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        appendMessage("user", text);
+        input.value = "";
+        note.textContent = "Procesando consulta...";
+
+        try {
+            const convUuid = await ensureConversation();
+            const response = await fetch(`/api/ia/conversations/${convUuid}/messages/`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": getCsrfToken()
+                },
+                body: JSON.stringify({ message: text })
+            });
+            if (!response.ok) {
+                throw new Error("No se pudo procesar el mensaje.");
+            }
+            const data = await response.json();
+            appendMessage("assistant", data.assistant_message);
+            note.textContent = `Modelo usado: ${data.selected_model.model_name} · Provider: ${data.selected_model.provider_name || "sin provider"} · Memoria: ${data.memory_hits}`;
+        } catch (error) {
+            appendMessage("assistant", `Ocurrió un error al procesar la consulta. ${error.message}`);
+            note.textContent = "La interacción falló.";
+        }
+    });
+})();
+</script>
+{% endblock %}

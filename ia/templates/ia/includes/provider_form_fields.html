@@ -1,0 +1,42 @@
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% if form.name.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.name.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.provider_kind.label }}</label>
+        {{ form.provider_kind }}
+        {% if form.provider_kind.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.provider_kind.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.base_url.label }}</label>
+        {{ form.base_url }}
+        {% if form.base_url.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.base_url.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.organization_id.label }}</label>
+        {{ form.organization_id }}
+        {% if form.organization_id.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.organization_id.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.api_key_plain.label }}</label>
+        {{ form.api_key_plain }}
+        <p class="text-xs text-slate-500 mt-1">{{ form.api_key_plain.help_text }}</p>
+        {% if form.api_key_plain.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.api_key_plain.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.available_models_text.label }}</label>
+        {{ form.available_models_text }}
+        <p class="text-xs text-slate-500 mt-1">{{ form.available_models_text.help_text }}</p>
+        {% if form.available_models_text.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.available_models_text.errors|join:", " }}</p>{% endif %}
+    </div>
+</div>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2">
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.is_active }} Activo</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_structured_output }} Structured output</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_tool_use }} Tool use</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_streaming }} Streaming</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_vision }} Vision</label>
+</div>

@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synap.local/ia/agents/reportes/schema-report-query-spec.json",
+  "title": "ReportQuerySpec",
+  "description": "Contrato estructurado que el Asistente de Reportes debe producir antes de ejecutar herramientas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "intent",
+    "report_slug",
+    "metric_keys",
+    "dimension_keys",
+    "filters",
+    "date_range",
+    "limit",
+    "sort",
+    "needs_clarification",
+    "clarification_question"
+  ],
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "aggregate_summary",
+        "comparative_analysis",
+        "ranking",
+        "status_query",
+        "trend_analysis",
+        "detail_lookup"
+      ]
+    },
+    "report_slug": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "metric_keys": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "dimension_keys": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "filters": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "operator",
+          "value"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "eq",
+              "neq",
+              "in",
+              "not_in",
+              "gt",
+              "gte",
+              "lt",
+              "lte",
+              "contains",
+              "starts_with",
+              "ends_with",
+              "between"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "array",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "date_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "start_date",
+        "end_date",
+        "timezone"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "calendar_day",
+            "calendar_week_current",
+            "calendar_month_current",
+            "calendar_month_previous",
+            "rolling_7_days",
+            "rolling_30_days",
+            "calendar_quarter_current",
+            "calendar_year_current",
+            "custom"
+          ]
+        },
+        "start_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "end_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 500
+    },
+    "sort": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "direction"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        }
+      }
+    },
+    "needs_clarification": {
+      "type": "boolean"
+    },
+    "clarification_question": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 300
+    },
+    "security_notes": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "maxLength": 200
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "needs_clarification": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "clarification_question": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  ]
+}

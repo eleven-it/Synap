@@ -58,6 +58,7 @@ class URLRegistry:
             'core',
             'login',
             'reports',
+            'ia',
             'self_checkout',
             'logistica',
             'tiendanube_administranet',
