@@ -2,6 +2,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from django.shortcuts import get_object_or_404
 from django.db import models
+from core.utils.permissions import user_has_full_access
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -428,12 +429,7 @@ class ReportVisibilityAPIView(APIView):
 
     def post(self, request, *args, **kwargs):
         """Cambia la visibilidad de un reporte."""
-        # Solo el usuario 'supervisor' (por cod_usuario) puede cambiar la visibilidad
-        is_supervisor_user = False
-        if hasattr(request.user, 'cod_usuario') and (request.user.cod_usuario or '').lower() == 'supervisor':
-            is_supervisor_user = True
-        
-        if not is_supervisor_user:
+        if not user_has_full_access(request.user):
             return Response(
                 {"detail": "Solo el usuario supervisor puede cambiar la visibilidad de reportes."},
                 status=status.HTTP_403_FORBIDDEN

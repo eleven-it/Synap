@@ -242,6 +242,42 @@ MODULE_CONFIGS = {
             'reports.export_created',
         ]
     },
+
+    'ia': {
+        'name': 'ia',
+        'display_name': 'IA y Asistentes',
+        'description': (
+            'Plataforma de asistentes personales persistentes con memoria, orquestación multiagente '
+            'y configuración de proveedores/modelos por UI.'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard', 'reports'],
+        'optional_dependencies': ['stock', 'ventas', 'compras', 'mpr', 'logistica', 'self_checkout'],
+        'settings': {
+            'memory_enabled': True,
+            'provider_ui_enabled': True,
+            'conversation_surface': 'pwa-mobile-first',
+            'default_agent_slug': 'asistente-reportes',
+        },
+        'permissions': [
+            'ia.ver',
+            'ia.agentes',
+            'ia.reportes',
+            'ia.memoria',
+            'ia.recomendaciones',
+            'ia.predicciones',
+            'ia.automatizacion',
+            'ia.admin',
+        ],
+        'hooks': [
+            'ia.conversation_created',
+            'ia.execution_completed',
+            'ia.memory_written',
+        ]
+    },
     
     'tiendanube_administranet': {
         'name': 'tiendanube_administranet',

@@ -9,6 +9,7 @@ from django.shortcuts import redirect
 def _(s): return s
 from django.views.generic import TemplateView
 
+from core.utils.permissions import user_has_full_access
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission, BuilderReportsPermission
@@ -88,11 +89,7 @@ class ReportsCatalogView(ReportsLoginRequiredMixin, TemplateView):
         empresa = getattr(self.request.user, "empresa_activa", None)
         empresa_id = empresa.id if empresa else None
         catalog = build_catalog_for_user(self.request.user, empresa_id)
-        
-        # Verificar si el usuario es el supervisor (por cod_usuario)
-        is_supervisor_user = False
-        if hasattr(self.request.user, 'cod_usuario') and (self.request.user.cod_usuario or '').lower() == 'supervisor':
-            is_supervisor_user = True
+        is_supervisor_user = user_has_full_access(self.request.user)
 
         context.update(
             {

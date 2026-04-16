@@ -10,6 +10,37 @@ from django.utils.translation import gettext_lazy as _
 from core.decorators import tiene_permiso
 
 
+def user_has_full_access(user) -> bool:
+    """
+    Define el criterio canónico de acceso total en Synap.
+
+    Regla de negocio vigente:
+    - superuser Django => acceso total
+    - user.is_admin() => acceso total
+    - cod_usuario == 'supervisor' => acceso total
+    """
+    if not user:
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    if hasattr(user, "is_admin") and callable(user.is_admin) and user.is_admin():
+        return True
+    cod_usuario = getattr(user, "cod_usuario", "") or ""
+    return cod_usuario.lower() == "supervisor"
+
+
+def get_user_permission_set(user):
+    """Obtiene permisos efectivos, forzando '*' para usuarios con acceso total."""
+    if user_has_full_access(user):
+        return {"*"}
+    if hasattr(user, "get_permisos_totales"):
+        try:
+            return set(user.get_permisos_totales())
+        except Exception:
+            return set()
+    return set()
+
+
 class CorePermissionRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
     """
     Mixin personalizado para verificación de permisos del core
@@ -22,7 +53,7 @@ class CorePermissionRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
             return self.handle_no_permission()
         
         # Verificar si el usuario tiene rol administrador (acceso total)
-        if hasattr(request.user, 'is_admin') and request.user.is_admin():
+        if user_has_full_access(request.user):
             return super().dispatch(request, *args, **kwargs)
         
         # Verificar permisos específicos
@@ -59,7 +90,7 @@ class CoreModulePermissionMixin(CorePermissionRequiredMixin):
             return self.handle_no_permission()
         
         # Verificar si el usuario tiene rol administrador (acceso total)
-        if hasattr(request.user, 'is_admin') and request.user.is_admin():
+        if user_has_full_access(request.user):
             return super().dispatch(request, *args, **kwargs)
         
         # Verificar permisos del módulo

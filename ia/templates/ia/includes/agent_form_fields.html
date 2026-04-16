@@ -1,0 +1,81 @@
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% if form.name.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.name.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.description.label }}</label>
+        {{ form.description }}
+        {% if form.description.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.description.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.required_permission.label }}</label>
+        {{ form.required_permission }}
+        {% if form.required_permission.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.required_permission.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.reasoning_profile.label }}</label>
+        {{ form.reasoning_profile }}
+        {% if form.reasoning_profile.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.reasoning_profile.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.default_provider.label }}</label>
+        {{ form.default_provider }}
+        {% if form.default_provider.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.default_provider.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.fallback_provider.label }}</label>
+        {{ form.fallback_provider }}
+        {% if form.fallback_provider.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.fallback_provider.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.default_model_name.label }}</label>
+        {{ form.default_model_name }}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.tool_use_model_name.label }}</label>
+        {{ form.tool_use_model_name }}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.memory_write_model_name.label }}</label>
+        {{ form.memory_write_model_name }}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.fast_model_name.label }}</label>
+        {{ form.fast_model_name }}
+    </div>
+    <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.fallback_model_name.label }}</label>
+        {{ form.fallback_model_name }}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.max_input_tokens.label }}</label>
+        {{ form.max_input_tokens }}
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.max_output_tokens.label }}</label>
+        {{ form.max_output_tokens }}
+    </div>
+</div>
+
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2">
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.is_active }} Activo</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_structured_output }} Structured output</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_parallel_tool_calls }} Parallel tools</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_streaming }} Streaming</label>
+    <label class="flex items-center gap-2 text-sm text-slate-700">{{ form.supports_vision }} Vision</label>
+</div>
+
+{% if agent.default_provider and agent.default_provider.available_models %}
+<div class="mt-4 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+    <p class="text-sm font-medium text-slate-800">Modelos disponibles en el provider principal</p>
+    <div class="mt-2 flex flex-wrap gap-2">
+        {% for model in agent.default_provider.available_models %}
+        <span class="inline-flex items-center rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-600">
+            {{ model }}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

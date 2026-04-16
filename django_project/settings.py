@@ -22,7 +22,7 @@ if ENVIRONMENT.strip().lower() in ('production', 'produccion') and not str(_SECR
         'SECRET_KEY es obligatorio cuando ENVIRONMENT es production o produccion.'
     )
 ALLOWED_HOSTS = list(config('ALLOWED_HOSTS', default='127.0.0.1,localhost,testserver,synap.administranet.com.ar', cast=Csv()))
-# Permitir peticiones desde Support en Docker (host.docker.internal) para RAG /core/api/support/conocimiento/
+# host.docker.internal: útil para clientes en Docker que llaman a Synap en el host (integraciones locales).
 if 'host.docker.internal' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('host.docker.internal')
 
@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'login',
     'dashboard',
     'reports',
+    'ia',  # Módulo transversal de asistentes IA persistentes
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
@@ -78,7 +79,6 @@ INSTALLED_APPS = [
     # 'clover',
     # 'logistics',
     # 'finance',
-    # "support_ai",
 ]
 
 MIDDLEWARE = [
@@ -225,9 +225,6 @@ GOOGLE_CLIENT_SECRET = config('GOOGLE_CLIENT_SECRET', default='')
 
 # Geocodificación (CargaSucursal / APIs core); no se acepta clave desde el cliente
 GOOGLE_GEOCODING_API_KEY = config('GOOGLE_GEOCODING_API_KEY', default='')
-
-# JWT del servicio Support → GET /core/api/support/conocimiento/ (mismo secret en Support: SUPPORT_SYNAP_JWT_SECRET)
-SUPPORT_SYNAP_JWT_SECRET = config('SUPPORT_SYNAP_JWT_SECRET', default='')
 
 # AES para validación de password_usuario en MySQL (paridad AdministraNET Gestión); preferir variable en prod
 ADMINISTRANET_MYSQL_AES_KEY = config('ADMINISTRANET_MYSQL_AES_KEY', default='a7v8xx2')

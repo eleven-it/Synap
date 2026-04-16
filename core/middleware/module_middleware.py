@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from core.module_manager import module_manager
 from core.module_registry import MODULE_CONFIGS
+from core.utils.permissions import get_user_permission_set, user_has_full_access
 
 
 class ModuleMiddleware:
@@ -168,7 +169,7 @@ class ModulePermissionMiddleware:
         
         # Solo el usuario 'supervisor' (por cod_usuario) tiene acceso total
         # NOTA: El puesto/rol "Supervisor" NO otorga acceso total, solo permisos específicos
-        if user.is_superuser or user.is_admin():
+        if user_has_full_access(user):
             logger.debug(f"Usuario {getattr(user, 'cod_usuario', 'unknown')} tiene acceso a {module_name} (is_admin/is_superuser)")
             return True
         
@@ -184,7 +185,7 @@ class ModulePermissionMiddleware:
         # Obtener todos los permisos del usuario
         user_permissions = set()
         if hasattr(user, 'get_permisos_totales'):
-            user_permissions = user.get_permisos_totales()
+            user_permissions = get_user_permission_set(user)
             logger.debug(f"Usuario {getattr(user, 'cod_usuario', 'unknown')} tiene permisos: {user_permissions}")
         elif hasattr(user, 'tiene_permiso') and callable(user.tiene_permiso):
             # Si no tiene get_permisos_totales pero tiene tiene_permiso, verificar directamente

@@ -98,8 +98,8 @@ handler403 = "core.views.error_403_view"
 # Finance web (mantener reports)
 urlpatterns.extend([
     # path('finance/', include('finance.urls', namespace='finance')),
-    # path('support/', include('support_ai.urls', namespace='support_ai')),
     path('reports/', include('reports.urls', namespace='reports')),
+    path('ia/', include('ia.urls', namespace='ia')),
     path('stock/', include('stock.urls', namespace='stock')),
     path('compras/', include('compras.urls', namespace='compras')),
     path('api/legacy-hub/', include('legacy_db.urls', namespace='legacy_hub')),
@@ -116,6 +116,7 @@ urlpatterns.extend([
 urlpatterns.extend([
     # path('api/finance/', include('finance.api_urls')),
     path('api/reports/', include('reports.api_urls', namespace='reports-api')),
+    path('api/ia/', include('ia.api_urls', namespace='ia-api')),
     path('api/self-checkout/', include('self_checkout.api_urls')),
     path('api/compras/', include('factura_compra_captura.api.urls')),
     path(

@@ -54,7 +54,15 @@ class URLRegistry:
         """
         url_patterns = []
         # Módulos ya incluidos explícitamente en django_project/urls.py (core como stock, compras, mpr)
-        skip_in_main = ('core', 'login', 'reports', 'self_checkout')
+        skip_in_main = (
+            'core',
+            'login',
+            'reports',
+            'ia',
+            'self_checkout',
+            'logistica',
+            'tiendanube_administranet',
+        )
 
         for module_name, module_urls in self.module_urls.items():
             if module_name in skip_in_main or not module_urls:
