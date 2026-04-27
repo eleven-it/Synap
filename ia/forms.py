@@ -4,6 +4,11 @@ from django import forms
 from django.db.models import Q
 
 from ia.models import AgentDefinition, LlmProviderConfig
+from ia.services.provider_presets import (
+    apply_provider_preset,
+    get_provider_models,
+    get_recommended_model,
+)
 
 
 class LlmProviderConfigForm(forms.ModelForm):
@@ -58,6 +63,7 @@ class LlmProviderConfigForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
+        apply_provider_preset(instance)
         instance.available_models = self.cleaned_data.get("available_models_text", [])
         api_key_plain = (self.cleaned_data.get("api_key_plain") or "").strip()
         if api_key_plain:
@@ -119,6 +125,109 @@ class AgentDefinitionConfigForm(forms.ModelForm):
                 widget.attrs.setdefault("rows", 3)
             else:
                 widget.attrs.setdefault("class", base_class)
+
+
+class AgentQuickSetupForm(forms.Form):
+    default_provider = forms.ModelChoiceField(
+        queryset=LlmProviderConfig.objects.none(),
+        label="Proveedor",
+        empty_label=None,
+    )
+    api_key_plain = forms.CharField(
+        required=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        label="API key",
+        help_text="Solo se usa para crear o reemplazar la clave del proveedor seleccionado.",
+    )
+    selected_model_name = forms.ChoiceField(
+        choices=(),
+        label="Modelo",
+    )
+
+    def __init__(self, *args, agent: AgentDefinition, **kwargs):
+        self.agent = agent
+        super().__init__(*args, **kwargs)
+        self._apply_widget_classes()
+
+        providers = LlmProviderConfig.objects.filter(is_active=True).order_by("name")
+        if self.agent.default_provider_id:
+            providers = LlmProviderConfig.objects.filter(Q(is_active=True) | Q(id=self.agent.default_provider_id)).order_by("name")
+        self.fields["default_provider"].queryset = providers
+
+        selected_provider = self._resolve_selected_provider()
+        self._configure_model_choices(selected_provider)
+
+        if not self.is_bound:
+            if self.agent.default_provider_id:
+                self.fields["default_provider"].initial = self.agent.default_provider_id
+            if self.agent.default_model_name:
+                self.fields["selected_model_name"].initial = self.agent.default_model_name
+            elif selected_provider:
+                self.fields["selected_model_name"].initial = get_recommended_model(selected_provider)
+
+    def _apply_widget_classes(self):
+        base_class = "w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", base_class)
+
+    def _resolve_selected_provider(self):
+        if self.is_bound:
+            provider_id = self.data.get(self.add_prefix("default_provider")) or self.data.get("default_provider")
+            try:
+                return LlmProviderConfig.objects.get(pk=int(provider_id))
+            except (TypeError, ValueError, LlmProviderConfig.DoesNotExist):
+                return self.agent.default_provider
+        return self.agent.default_provider
+
+    def _configure_model_choices(self, provider):
+        model_choices = [("", "Seleccionar modelo")]
+        models = get_provider_models(provider)
+        model_choices.extend((model, model) for model in models)
+        self.fields["selected_model_name"].choices = model_choices
+
+    def clean(self):
+        cleaned = super().clean()
+        provider = cleaned.get("default_provider")
+        selected_model = cleaned.get("selected_model_name")
+        available_models = [value for value, _label in self.fields["selected_model_name"].choices if value]
+        if provider and not provider.is_configured and not (cleaned.get("api_key_plain") or "").strip():
+            self.add_error("api_key_plain", "Ingresá la API key para dejar operativo el agente.")
+        if selected_model and available_models and selected_model not in available_models:
+            self.add_error("selected_model_name", "Seleccioná un modelo válido del proveedor.")
+        if provider and not available_models:
+            self.add_error("selected_model_name", "El proveedor no tiene modelos disponibles. Cargá o sincronizá sus modelos.")
+        return cleaned
+
+    def save(self):
+        provider = self.cleaned_data["default_provider"]
+        api_key_plain = (self.cleaned_data.get("api_key_plain") or "").strip()
+        if api_key_plain:
+            provider.set_api_key(api_key_plain)
+        apply_provider_preset(provider)
+        provider.save()
+
+        selected_model = self.cleaned_data["selected_model_name"]
+        self.agent.default_provider = provider
+        self.agent.default_model_name = selected_model
+        self.agent.tool_use_model_name = selected_model
+        self.agent.memory_write_model_name = selected_model
+        self.agent.fast_model_name = selected_model
+        self.agent.fallback_provider = self.agent.fallback_provider or provider
+        self.agent.fallback_model_name = self.agent.fallback_model_name or selected_model
+        self.agent.reasoning_profile = self.agent.reasoning_profile or "balanced"
+        self.agent.supports_structured_output = provider.supports_structured_output
+        self.agent.supports_parallel_tool_calls = False
+        self.agent.supports_streaming = provider.supports_streaming
+        self.agent.supports_vision = provider.supports_vision
+        self.agent.max_input_tokens = self.agent.max_input_tokens or 16000
+        self.agent.max_output_tokens = self.agent.max_output_tokens or 4000
+        self.agent.is_active = True
+        config = dict(self.agent.config or {})
+        config["temperature"] = config.get("temperature", 0.2)
+        config["auto_configured"] = True
+        self.agent.config = config
+        self.agent.save()
+        return self.agent
 
 
 class AgentConversationStartForm(forms.Form):

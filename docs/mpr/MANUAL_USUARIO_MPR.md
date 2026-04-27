@@ -53,18 +53,24 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Ruta:** Producción → desde Tablero “Ver demanda”, o menú Demanda → Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/`).
 
-**Vista Pack / Unidades:** Toggle para alternar etiquetas (misma data).
+**Vista Pack / Unidades:** Toggle para alternar entre demanda por **pack** y desglose por **componentes** (receta/BOM).
+
+- **Docenas:** en las columnas «Docenas» de esta pantalla y en **Confirmar OPT**, el valor mostrado es **unidades ÷ `articulo.cantidad_promedio_bulto`**. Si el bulto es ≤ 0 o no está definido, se usa **12** como divisor (docena clásica). Al editar cantidades en Confirmar OPT, la sincronización unidades ↔ docenas sigue el mismo criterio por fila.
+- **Pestaña Unidades (BOM):** el **Saldo** del componente es **solo** el de `stock_deposito` en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`). No se suman otros depósitos aunque tengan `suma_stock = 'Si'`. Si no hay depósito Semi elaborado asignado, el saldo se muestra en **0** y se muestra un aviso.
+- **Pestaña Unidades — reserva y trazabilidad:** la política de colchón (`articulo.stock_reserva`) aplica **solo al pack terminado**; en la tabla de componentes la columna **Reserva** se muestra en **0** (no se usa maestro de receta para R). La necesidad se desglosa en **Dem. pedido** (atribuible a `max(0, P_ped − S)` del pack, explotado por BOM) y **Dem. reserva pack** (resto de la cantidad a fabricar del pack atribuible al colchón del terminado), con badge **Origen** (Pedido / Reserva pack / Ped.+res.). **Cant. a fabricar** (componente) = `max(0, Dem. pedido + Dem. reserva pack − saldo en Semi elaborado)`; **Urgente** = `max(0, Dem. pedido − saldo en Semi elaborado)`.
 
 **Qué muestra (tabla):**
 
 - Artículo (código y descripción).
 - Saldo (stock terminado en depósitos con `suma_stock = 'Si'`).
 - Reserva (indicador de stock mínimo; no es saldo).
-- Cant. pedida (demanda total del pedido).
-- **Cant. parcial fabricada:** unidades de pack ya armadas acumuladas en base (`lista_produccion_agrupada.cantidad_fabricada_acumulada`), incrementadas al confirmar armado (OPA) vinculado a la OPT. Si la columna no existe en la base, se muestra el valor derivado **Cant. pedida − Pendiente por producir** como respaldo.
-- **Pedido(s):** icono con tooltip personalizado (sin tooltip nativo del navegador) que muestra por cada **pedido único** (`CodigoMovimiento`) en una línea: **estado de producción** | **número de comprobante del pedido** | **Cliente:** nombre (`comp_ped` + `cliente`). No se repite el mismo pedido aunque haya varias filas en `lista_produccion_detalle` para el mismo artículo. Los pedidos se listan **ordenados por número de comprobante descendente** (más reciente / mayor primero según el texto del comprobante).
-- **Cant. a fabricar:** **max(0, (Cant. pedida agregada − Saldo terminado) + Reserva)** — no usa el pendiente de producción (`cantidad_pendiente_prod`) como “pedido” para esta columna. Saldo = stock terminado en depósitos con suma_stock='Si'; Reserva = articulo.stock_reserva.
-- **Cant. urgente:** **max(0, Cant. Pedida − Saldo)**. Indica cuánto falta de stock para cubrir la cantidad pedida; la reserva no interviene.
+- **Origen:** indicador Pedido / Reserva / Ped.+res. según si la demanda viene de líneas PED en detalle, de la fila sintética por reserva (`codigo_movimiento_pedido = 0`) o ambas.
+- **Cant. pedido** (**P_ped**): suma en `lista_produccion_detalle` de cantidades vinculadas a comprobantes PED (código de pedido distinto de 0).
+- **Dem. reserva** (**Q_res**): cantidad de la fila de detalle con código de pedido **0** (demanda por quiebre de reserva, sincronizada al pulsar **Actualizar**).
+- **Cant. parcial fabricada:** unidades de pack ya armadas acumuladas en base (`lista_produccion_agrupada.cantidad_fabricada_acumulada`), incrementadas al confirmar armado (OPA) vinculado a la OPT. Si la columna no existe en la base, se muestra el valor derivado **Cant. total pedida en agrupada − Pendiente por producir** como respaldo.
+- **Pedido(s):** icono con tooltip que lista pedidos reales (`comp_ped` + `cliente`) y, si aplica, una línea **Demanda reserva** con la cantidad **Q_res**. Los pedidos se ordenan por número de comprobante descendente.
+- **Cant. a fabricar:** **max(0, P_ped + R − S)** con **R** = `articulo.stock_reserva` y **S** = saldo terminado (depósitos `suma_stock = 'Si'`). **Q_res** ya refleja la parte de meta por reserva persistida en detalle; no se suma dos veces a **R**.
+- **Cant. urgente:** **max(0, P_ped − S)**. La reserva de artículo y **Q_res** no incrementan la urgencia respecto al saldo.
 - Stock reserva / Brecha (si existe `articulo.stock_reserva`).
 
 **Acciones:**
@@ -78,7 +84,7 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Ruta:** Tras marcar artículos y pulsar **Continuar** en Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/agrupar/`).
 
-Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Stock, Cant. Pedida, **Cant. a fabricar** (editable), Urgente, Operario. Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
+Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Saldo (solo Semi elaborado), Reserva (0 en componentes), Cant. pedida, **Dem. pedido**, **Dem. reserva pack**, **Origen**, **Cant. a fabricar** (editable), Urgente, Operario. Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
 
 ### 3.2 Pedidos a fábrica
 

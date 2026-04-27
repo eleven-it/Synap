@@ -100,8 +100,10 @@
                                 <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom">Cod. Manual y nombre artículo</th>
                                 <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
                                 <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">Reserva</th>
-                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom">Cant. Pedida</th>
-                                <th class="px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom w-24 max-w-[7rem]" title="Cantidad ya fabricada para este pedido (Cant. pedida − Pendiente por producir). Relación: Cant. a fabricar = Cant. pedida − Saldo cuando aplica reserva.">Cant. parcial fabricada</th>
+                                <th class="px-2 py-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom w-[5.5rem]" title="Origen de la demanda en lista de producción: pedidos PED, reserva de stock o ambos.">Origen</th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Suma de cantidades pedidas en lista_produccion_detalle vinculadas a comprobantes PED (no incluye la fila sintética de reserva).">Cant. pedido</th>
+                                <th class="px-3 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Demanda persistida por quiebre de reserva (detalle con código de pedido 0).">Dem. reserva</th>
+                                <th class="px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom w-24 max-w-[7rem]" title="Cantidad ya fabricada (Cant. total pedida − Pendiente). Cant. a fabricar = max(0, Cant. pedido + Reserva artículo − Saldo); no doble cuenta reserva con Dem. reserva.">Cant. parcial fabricada</th>
                                 <th class="px-4 py-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom w-14">Pedido(s)</th>
                                 <th colspan="2" class="border-l border-slate-200 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 align-bottom dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100">Cantidad a fabricar</th>
                                 <th colspan="2" class="border-l-2 border-l-rose-400/70 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-rose-800 align-bottom dark:border-l-rose-500/60 dark:bg-slate-800/90 dark:text-rose-200">Urgente</th>
@@ -112,19 +114,21 @@
                                 <th class="px-4 py-2 align-bottom"></th>
                                 <th class="px-4 py-2 align-bottom"></th>
                                 <th class="px-4 py-2 align-bottom"></th>
+                                <th class="px-2 py-2 align-bottom w-[5.5rem]"></th>
                                 <th class="px-4 py-2 align-bottom"></th>
+                                <th class="px-3 py-2 align-bottom"></th>
                                 <th class="px-2 py-2 align-bottom w-24 max-w-[7rem]"></th>
                                 <th class="px-4 py-2 align-bottom w-14"></th>
                                 <th class="border-l border-slate-200 bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Unidades</th>
-                                <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200">Docenas</th>
+                                <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200" title="Unidades ÷ articulo.cantidad_promedio_bulto (si bulto ≤ 0, ÷ 12).">Docenas</th>
                                 <th class="border-l-2 border-l-rose-400/50 bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:border-l-rose-500/40 dark:bg-slate-900/40 dark:text-slate-200">Unidades</th>
-                                <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200">Docenas</th>
+                                <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200" title="Unidades ÷ articulo.cantidad_promedio_bulto (si bulto ≤ 0, ÷ 12).">Docenas</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for f in filas %}
                             <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida|floatformat:0 }} {{ f.cantidad_parcial_fabricada|floatformat:0 }} {% for p in f.pedidos_resumen %}{{ p.nro_pedido|default:'' }} {{ p.estado_pedido_opt|default:'' }} {{ p.nombre_cliente|default:''|escape }} {% endfor %} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
+                                data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.origen_demanda_etiqueta|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida_pedido|default:0|floatformat:0 }} {{ f.cantidad_demanda_reserva|default:0|floatformat:0 }} {{ f.cantidad_parcial_fabricada|floatformat:0 }} {% for p in f.pedidos_resumen %}{{ p.nro_pedido|default:'' }} {{ p.estado_pedido_opt|default:'' }} {{ p.nombre_cliente|default:''|escape }} {% endfor %} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
                                 x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                                 <td class="px-4 py-3">
                                     <input type="checkbox" name="sel" value="{{ f.id_articulo }}" class="row-sel rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500" aria-label="Incluir en OPT"/>
@@ -142,8 +146,22 @@
                                           title="">{{ f.stock_terminado|floatformat:0 }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Indicador de stock mínimo a garantizar al producir (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
-                                <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_pedida|floatformat:0 }}</td>
-                                <td class="px-2 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs w-24 max-w-[7rem]" title="Cant. pedida − Pendiente por producir. Ayuda a ver cómo se calcula Cant. a fabricar con reserva y saldo.">{{ f.cantidad_parcial_fabricada|floatformat:0 }}</td>
+                                <td class="px-2 py-3 text-center align-middle">
+                                    {% with o=f.origen_demanda_etiqueta|default:"" %}
+                                    {% if o == "Pedido + reserva" %}
+                                    <span class="inline-flex rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100" title="Demanda desde pedidos y desde reserva de stock.">Ped.+res.</span>
+                                    {% elif o == "Reserva" %}
+                                    <span class="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100" title="Solo demanda por reserva (sin líneas PED en detalle).">Reserva</span>
+                                    {% elif o == "Pedido" %}
+                                    <span class="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100" title="Demanda desde pedidos PED.">Pedido</span>
+                                    {% else %}
+                                    <span class="text-slate-400 dark:text-slate-500 text-xs">—</span>
+                                    {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="P_ped: suma en detalle de ítems con código de pedido distinto de 0.">{{ f.cantidad_pedida_pedido|default:0|floatformat:0 }}</td>
+                                <td class="px-3 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Q_res: demanda por quiebre de reserva (detalle código pedido 0).">{{ f.cantidad_demanda_reserva|default:0|floatformat:0 }}</td>
+                                <td class="px-2 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs w-24 max-w-[7rem]" title="Cant. total pedida en agrupada − Pendiente por producir.">{{ f.cantidad_parcial_fabricada|floatformat:0 }}</td>
                                 <td class="px-4 py-3 text-center text-slate-700 dark:text-slate-300">
                                     {% if f.pedidos_resumen %}
                                         <span class="pedidos-tooltip-trigger cursor-help inline-flex items-center justify-center w-8 h-8 rounded text-slate-500 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" data-pedidos="{{ f.pedidos_resumen_json|escape }}" aria-label="Ver estado del pedido, número de comprobante y cliente">
@@ -158,7 +176,7 @@
                                     <input type="hidden" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|floatformat:0 }}"/>
                                 </td>
                                 <td class="bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums text-slate-700 dark:bg-slate-800/35 dark:text-slate-300">{{ f.cantidad_a_fabricar_docenas|floatformat:2 }}</td>
-                                <td class="border-l-2 border-l-rose-200/80 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:border-l-rose-900/50 dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Si Cant. Pedida − Saldo > 0 entonces Urgente = Cant. Pedida − Saldo; sino 0.">
+                                <td class="border-l-2 border-l-rose-200/80 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:border-l-rose-900/50 dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Urgente = max(0, Cant. pedido − Saldo); la reserva de artículo y la Dem. reserva no suman aquí.">
                                     {{ f.cantidad_urgente_abs|floatformat:0 }}
                                 </td>
                                 <td class="bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">
@@ -167,7 +185,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="11" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                                <td colspan="14" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                                     No hay artículos con demanda de producción.
                                 </td>
                             </tr>
@@ -192,8 +210,13 @@
 
         {# Panel Unidades (solo lectura, desglose por componentes de recetas) #}
         <div id="panel-unidades" class="ventana-pack-panel hidden flex flex-col">
+        {% if mpr_aviso_sin_deposito_semi_bom %}
+        <p class="mb-2 rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-600/60 dark:bg-amber-950/40 dark:text-amber-100" role="status">
+            No hay depósito <strong>Semi elaborado</strong> configurado (MPR → Config. depósitos). El saldo de componentes en la pestaña Unidades se muestra en 0 hasta asignar <code class="text-[11px]">tipo_mpr=SemiElaborado</code>.
+        </p>
+        {% endif %}
         <p class="mb-2 flex-shrink-0 text-xs leading-snug text-slate-600 dark:text-slate-400 sm:mb-3">
-            Desglose por unidades: artículos de las recetas (BOM) de cada pack con cantidades agregadas. Solo consulta.
+            Desglose por unidades (BOM): saldo solo en depósito <strong>Semi elaborado</strong>. La necesidad total se desglosa en parte por <strong>pedido</strong> (brecha <span class="whitespace-nowrap">P_ped − saldo pack</span> en el terminado) y parte por <strong>reserva del pack</strong> (colchón del terminado). La columna Reserva en componentes no usa maestro de receta (siempre 0).
         </p>
         <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div class="h-[min(26rem,52vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Demanda unidades">
@@ -202,9 +225,12 @@
                         <tr class="align-bottom">
                             <th scope="col" class="px-4 py-2 text-right text-xs font-semibold text-slate-600 align-bottom dark:text-slate-300">Cod. sistema</th>
                             <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom">Cod. Manual y nombre artículo</th>
-                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
-                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Indicador de stock mínimo a garantizar (no es saldo).">Reserva</th>
-                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom">Cant. Pedida</th>
+                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Saldo del componente solo en el depósito configurado como Semi elaborado (tipo MPR).">Saldo</th>
+                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="En recetas no aplica stock_reserva de maestro; se muestra 0. La política de colchón es solo del pack terminado.">Reserva</th>
+                            <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Suma de necesidad por pedido + por reserva pack (unidades componente).">Cant. pedida</th>
+                            <th class="px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Necesidad atribuible a brecha de pedidos del pack (explosión BOM).">Dem. pedido</th>
+                            <th class="px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom" title="Necesidad atribuible al colchón / reserva del pack terminado (explosión BOM).">Dem. reserva pack</th>
+                            <th class="px-2 py-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 align-bottom">Origen</th>
                             <th colspan="2" class="border-l border-slate-200 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 align-bottom dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-100">Cantidad a fabricar</th>
                             <th colspan="2" class="border-l-2 border-l-rose-400/70 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-rose-800 align-bottom dark:border-l-rose-500/60 dark:bg-slate-800/90 dark:text-rose-200">Urgente</th>
                         </tr>
@@ -214,16 +240,19 @@
                             <th class="px-4 py-2 align-bottom"></th>
                             <th class="px-4 py-2 align-bottom"></th>
                             <th class="px-4 py-2 align-bottom"></th>
+                            <th class="px-2 py-2 align-bottom"></th>
+                            <th class="px-2 py-2 align-bottom"></th>
+                            <th class="px-2 py-2 align-bottom"></th>
                             <th class="border-l border-slate-200 bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Unidades</th>
-                            <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200">Docenas</th>
+                            <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200" title="Unidades ÷ articulo.cantidad_promedio_bulto (si bulto ≤ 0, ÷ 12).">Docenas</th>
                             <th class="border-l-2 border-l-rose-400/50 bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:border-l-rose-500/40 dark:bg-slate-900/40 dark:text-slate-200">Unidades</th>
-                            <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200">Docenas</th>
+                            <th class="bg-slate-50 px-4 py-1.5 text-right text-xs font-semibold text-slate-700 align-bottom dark:bg-slate-900/40 dark:text-slate-200" title="Brecha atribuible a pedido vs saldo en Semi elaborado; docenas con bulto del componente.">Docenas</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
                             {% for f in filas_unidades %}
                         <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                            data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida|floatformat:0 }} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
+                            data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.origen_demanda_unidades_etiqueta|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida|floatformat:0 }} {{ f.cantidad_demanda_pedido|default:0|floatformat:0 }} {{ f.cantidad_demanda_reserva_pack|default:0|floatformat:0 }} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
                             x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.id_articulo }}</td>
                             <td class="px-4 py-3">
@@ -235,11 +264,26 @@
                                       data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}"
                                       title="">{{ f.stock_terminado|floatformat:0 }}</span>
                             </td>
-                            <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="Indicador de stock mínimo a garantizar (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
+                            <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs" title="No aplica maestro de reserva en componentes.">0</td>
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_pedida|floatformat:0 }}</td>
+                            <td class="px-2 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_demanda_pedido|default:0|floatformat:0 }}</td>
+                            <td class="px-2 py-3 text-right text-slate-700 dark:text-slate-300 tabular-nums text-xs">{{ f.cantidad_demanda_reserva_pack|default:0|floatformat:0 }}</td>
+                            <td class="px-2 py-3 text-center align-middle">
+                                {% with o=f.origen_demanda_unidades_etiqueta|default:"" %}
+                                {% if o == "Pedido + reserva pack" %}
+                                <span class="inline-flex rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100" title="Parte por pedido y parte por colchón del pack.">Ped.+res.</span>
+                                {% elif o == "Reserva pack" %}
+                                <span class="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100" title="Solo colchón del pack terminado.">Res. pack</span>
+                                {% elif o == "Pedido" %}
+                                <span class="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100" title="Solo brecha de pedido del pack.">Pedido</span>
+                                {% else %}
+                                <span class="text-slate-400 dark:text-slate-500 text-xs">—</span>
+                                {% endif %}
+                                {% endwith %}
+                            </td>
                             <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums text-slate-700 dark:border-slate-700 dark:bg-slate-800/35 dark:text-slate-300">{{ f.cantidad_a_fabricar|floatformat:0 }}</td>
                             <td class="bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums text-slate-700 dark:bg-slate-800/35 dark:text-slate-300">{{ f.cantidad_a_fabricar_docenas|floatformat:2 }}</td>
-                            <td class="border-l-2 border-l-rose-200/80 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:border-l-rose-900/50 dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Si Cant. Pedida − Saldo > 0 entonces Urgente = Cant. Pedida − Saldo; sino 0.">
+                            <td class="border-l-2 border-l-rose-200/80 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:border-l-rose-900/50 dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="max(0, Dem. pedido − saldo en Semi elaborado).">
                                 {{ f.cantidad_urgente_abs|floatformat:0 }}
                             </td>
                             <td class="bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">
@@ -248,7 +292,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
+                            <td colspan="12" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-xs">
                                 No hay componentes con demanda. Incluya packs con receta (BOM) y Cant a producir &gt; 0 en el tab Packs.
                             </td>
                         </tr>
@@ -434,6 +478,18 @@
                             '<colgroup><col style="width:9.5rem"/><col style="width:12rem"/><col/></colgroup>' +
                             '<tbody>';
                         pedidos.forEach(function(p) {
+                            if (p && p.es_demanda_reserva) {
+                                var qres = (p.cantidad_demanda_reserva != null) ? escPedidos(String(p.cantidad_demanda_reserva)) : '-';
+                                body +=
+                                    '<tr class="border-b border-slate-700/40 last:border-b-0">' +
+                                    '<td class="py-1.5 pr-2 align-top whitespace-nowrap font-medium text-amber-300">' + escPedidos('Demanda reserva') + '</td>' +
+                                    '<td class="py-1.5 pr-3 align-top whitespace-nowrap tabular-nums text-slate-200">—</td>' +
+                                    '<td class="py-1.5 align-top text-slate-200 min-w-0 leading-snug break-words">' +
+                                    '<span class="text-slate-400">Cant.:</span> ' + qres +
+                                    ' <span class="text-slate-500">(meta max(0, R−S) en lista de producción)</span></td>' +
+                                    '</tr>';
+                                return;
+                            }
                             var nro = (p && p.nro_pedido != null) ? escPedidos(String(p.nro_pedido)) : '-';
                             var estado = (p && p.estado_pedido_opt != null) ? String(p.estado_pedido_opt) : 'Pendiente';
                             var nomCli = (p && p.nombre_cliente != null) ? String(p.nombre_cliente).trim() : '';

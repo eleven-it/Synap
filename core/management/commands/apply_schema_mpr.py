@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Aplica el schema MPR en la base administranet (base_empresa): columnas
-deposito.suma_stock y articulo.stock_reserva. Si ya existen, no hace nada.
+deposito.suma_stock, deposito.tipo_mpr y articulo.stock_reserva. Si ya existen, no hace nada.
 Referencia: docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md
 
 La lógica vive en ``core.services.legacy_mysql_schema.catalog.run_mpr_deposito_articulo_mysql``.
@@ -10,13 +10,13 @@ from django.core.management.base import BaseCommand
 
 from core.mysql_pool import get_connection
 from core.services.legacy_mysql_schema import run_mpr_deposito_articulo_mysql
-from core.services.legacy_mysql_schema.helpers import columna_existe
+from core.services.legacy_mysql_schema.helpers import columna_existe, nombre_tabla_real
 
 
 class Command(BaseCommand):
     help = (
-        "Aplica columnas MPR en base administranet: deposito.suma_stock, articulo.stock_reserva. "
-        "Ejecutar por base de empresa (ej: administranet89)."
+        "Aplica columnas MPR en base administranet: deposito.suma_stock, deposito.tipo_mpr, "
+        "articulo.stock_reserva. Ejecutar por base de empresa (ej: administranet89)."
     )
 
     def add_arguments(self, parser):
@@ -41,17 +41,26 @@ class Command(BaseCommand):
         try:
             with get_connection(base_empresa) as conn:
                 cursor = conn.cursor()
-                alter_deposito = not columna_existe(cursor, "deposito", "suma_stock")
-                alter_articulo = not columna_existe(cursor, "articulo", "stock_reserva")
+                tbl_dep = nombre_tabla_real(cursor, "deposito")
+                tbl_art = nombre_tabla_real(cursor, "articulo")
+                alter_suma = tbl_dep and not columna_existe(cursor, tbl_dep, "suma_stock")
+                alter_tipo_mpr = tbl_dep and not columna_existe(cursor, tbl_dep, "tipo_mpr")
+                alter_articulo = tbl_art and not columna_existe(cursor, tbl_art, "stock_reserva")
                 cursor.close()
 
                 if dry_run:
-                    if alter_deposito:
+                    if alter_suma:
                         self.stdout.write(
                             "Se ejecutaría: ALTER TABLE deposito ADD COLUMN suma_stock VARCHAR(2) DEFAULT 'Si';"
                         )
                     else:
                         self.stdout.write("deposito.suma_stock ya existe, no se modifica.")
+                    if alter_tipo_mpr:
+                        self.stdout.write(
+                            "Se ejecutaría: ALTER TABLE deposito ADD COLUMN tipo_mpr VARCHAR(20) NULL;"
+                        )
+                    else:
+                        self.stdout.write("deposito.tipo_mpr ya existe, no se modifica.")
                     if alter_articulo:
                         self.stdout.write(
                             "Se ejecutaría: ALTER TABLE articulo ADD COLUMN stock_reserva DECIMAL(15,2) DEFAULT NULL;"

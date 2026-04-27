@@ -90,6 +90,7 @@ Documento de referencia del esquema de base de datos usado por el módulo MPR en
 | Descripcion | TEXT | — |
 | anulado | VARCHAR | Filtrar anulado = 'No'. |
 | **suma_stock** | **VARCHAR(2)** | **Añadido por plan.** Default 'Si'. Si 'Si', el depósito suma al stock total para Pedido producción trabajo (OPT)/Unidades y reportes; si 'No' (tránsito, scrap, etc.) no suma. |
+| **tipo_mpr** | **VARCHAR(20) NULL** | **Synap MPR.** Rol del depósito: `Produccion`, `SemiElaborado`, `Terminado`, `Scrap`, `2daSeleccion`, o NULL. Un depósito por tipo (validado en aplicación). Script: `sql/ALTER_deposito_tipo_mpr.sql`; migración global: proveedor «MPR — depósito y artículo». |
 
 ---
 
@@ -116,6 +117,10 @@ Agrupación por artículo de demanda de producción (órdenes de producción).
 **Uso en Synap:** Lectura en listado OP y detalle; UPDATE `cantidad_pendiente_prod`, `id_operario_opt`, `codigo_movimiento_opt` según flujo OPT (crear OPT con placeholder negativo, liberar OPT con MSTOCK); incremento de `cantidad_fabricada_acumulada` al armar (OPA); «Actualizar» sincroniza `cantidad_pedida` y `cantidad_pendiente_prod`. El **número de OPT** mostrado al usuario es el `id_lista_produccion` de la línea principal (primera del lote al generar). No se usan tablas mpr_opt/mpr_opt_linea. Compatibilidad lectura de `id_opt` si aún existe en BD.
 
 **Nota:** En **administranet89** esta tabla no existía; en **administranet92** sí existe con la estructura anterior.
+
+**Synap — herramienta global:** En bases donde aún no exista `lista_produccion_agrupada`, se puede crear y alinear columnas MPR desde **Archivo → Parámetros → Migración esquema MySQL (legacy)** con el proveedor **«MPR — tabla lista_produccion_agrupada»** (`core/services/legacy_mysql_schema/catalog.py`, id `mpr_lista_produccion_agrupada`). Requiere que exista la tabla `articulo` (no se crea desde Synap).
+
+Para **`lista_produccion_detalle`** (falta frecuente al pulsar «Actualizar» o abrir demanda): proveedor **«MPR — tabla lista_produccion_detalle»** (`mpr_lista_produccion_detalle`), después **«MPR — trazabilidad lista producción (detalle)»** para FK e índice hacia agrupada.
 
 ---
 
@@ -156,12 +161,17 @@ Detalle por pedido y artículo. Relación explícita con `lista_produccion_agrup
 |-------|------|-----|
 | **id_lista_detalle** | **BIGINT PK, AUTO_INCREMENT** | **Identificador propio de la fila.** (Tras ALTER: antes era id_lista_produccion renombrado.) |
 | **id_lista_produccion** | **BIGINT NULL, FK** | **FK a lista_produccion_agrupada.id_lista_produccion.** Trazabilidad: esta fila de detalle pertenece a esa línea de agrupada/OPT. |
-| codigo_movimiento_pedido | INT | Pedido (comp_ped). |
+| codigo_movimiento_pedido | INT | Pedido (`comp_ped.CodigoMovimiento`). Valor **0**: fila sintética de **demanda por reserva** (no existe en `comp_ped`). |
+| origen_demanda | VARCHAR(16) NULL | Opcional: `RESERVA` en la fila con código 0; el catálogo Synap añade la columna si falta. |
 | id_articulo | INT | Artículo. |
 | cantidad_pedida | NUMERIC | Cantidad pedida. |
 | cantidad_pendiente_prod | NUMERIC | Pendiente. |
 | en_proceso_produccion | VARCHAR | Ej. 'Si'/'No'. |
+| id_usuario | INT NULL | Opcional. Usuario al insertar desde «Actualizar». |
+| Fecha | DATE NULL | Opcional. Fecha de alta de la línea (`actualizar_pedidos_produccion`). |
 | **id_operario_opt** | **INT NULL** | **Opcional.** `sue_abm_empleado.id_sue_abm_empleado` del operario asociado al pedido/línea (Synap escribe al confirmar OPT, liberar, OPP y armado). Script: `sql/alter_mpr_id_operario_opt_detalle_historico_stock.sql`. |
+
+**Synap — herramienta global:** creación de la tabla en bases vacías: proveedor **«MPR — tabla lista_produccion_detalle»** (`mpr_lista_produccion_detalle`); en tablas ya existentes también intenta quitar una **FK heredada** `codigo_movimiento_pedido` → `comp_ped` si existe (impide el valor **0** usado por Synap para demanda por reserva). FK/índice hacia agrupada: **«MPR — trazabilidad lista producción (detalle)»**.
 
 **Relación:** `lista_produccion_detalle.id_lista_produccion` → `lista_produccion_agrupada.id_lista_produccion`. Al ejecutar «Actualizar» se asigna; al crear la OPT se marcan por `id_lista_produccion IN (...)` las filas de detalle que pasan a `en_proceso_produccion = 'Si'`.
 

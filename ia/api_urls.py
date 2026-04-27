@@ -6,6 +6,7 @@ from .api_views import (
     AgentConversationCreateAPIView,
     AgentConversationDetailAPIView,
     AgentConversationMessageAPIView,
+    AgentLearningExampleReviewAPIView,
     AgentMemoryAPIView,
 )
 
@@ -21,5 +22,10 @@ urlpatterns = [
         "conversations/<uuid:conversation_uuid>/messages/",
         AgentConversationMessageAPIView.as_view(),
         name="conversation-messages",
+    ),
+    path(
+        "conversations/<uuid:conversation_uuid>/learning-examples/<int:pk>/review/",
+        AgentLearningExampleReviewAPIView.as_view(),
+        name="learning-example-review",
     ),
 ]

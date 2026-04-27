@@ -13,6 +13,32 @@ def columna_existe(cursor, tabla: str, columna: str) -> bool:
     return cursor.fetchone() is not None
 
 
+def nombre_columna_ci(cursor, tabla: str, nombre_logico: str) -> Optional[str]:
+    """
+    Devuelve el nombre físico de la columna en ``tabla`` si existe (comparación
+    case-insensitive con ``nombre_logico``), o None.
+
+    En servidores MySQL Linux, ``SHOW COLUMNS ... LIKE 'foo'`` distingue mayúsculas;
+    si el esquema legado tiene ``Foo`` o ``CANTIDAD_PROMEDIO_BULTO``, ``columna_existe``
+    puede fallar en falso negativo. Para lecturas dinámicas (p. ej. ``articulo``) usar
+    esta función y referenciar el nombre devuelto entre backticks en el SQL.
+    """
+    nombre_logico = (nombre_logico or "").strip()
+    if not nombre_logico:
+        return None
+    target = nombre_logico.lower()
+    tabla_esc = tabla.replace("`", "``")
+    cursor.execute("SHOW COLUMNS FROM `%s`" % tabla_esc)
+    for row in cursor.fetchall() or []:
+        if isinstance(row, dict):
+            field = row.get("Field") or row.get("field")
+        else:
+            field = row[0] if row else None
+        if field is not None and str(field).strip().lower() == target:
+            return str(field).strip()
+    return None
+
+
 def nombre_tabla_real(cursor, nombre_lower: str) -> Optional[str]:
     cursor.execute("SHOW TABLES")
     for row in cursor.fetchall():

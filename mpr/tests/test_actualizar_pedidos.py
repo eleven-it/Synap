@@ -58,8 +58,8 @@ class ActualizarPedidosProduccionFiltroEstadoTest(TestCase):
                     fecha_desde=date(2026, 1, 1),
                     fecha_hasta=date(2026, 3, 31),
                 )
-        self.assertFalse(ok)
-        self.assertIn("pedidos pendientes", msg)
+        self.assertTrue(ok, "Sin pedidos en rango la actualización sigue siendo válida (sincroniza demanda por reserva).")
+        self.assertIn("demanda por reserva", msg.lower())
 
         # Debe haberse ejecutado al menos SHOW COLUMNS y el SELECT de pedidos
         self.assertGreaterEqual(

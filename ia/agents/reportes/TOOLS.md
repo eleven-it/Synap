@@ -17,6 +17,15 @@ El objetivo es permitir acceso seguro, controlado y trazable a la información n
 - toda respuesta debe basarse en resultados obtenidos por herramientas autorizadas;
 - toda tool call debe validarse con esquema antes de ejecutarse.
 
+### Interpretación y fechas (implementación `ia.services`)
+
+- El desglose por tipo de comprobante **no** debe activarse cuando el mensaje actual pide explícitamente **cantidad de facturas** (la intención de facturas tiene prioridad sobre frases «por tipo» arrastradas en el snippet de conversación).
+- Los períodos del tipo **«febrero 2026»**, **«mes de febrero de 2026»** o **«en febrero 2026»** se resuelven como **mes calendario completo** (1.º al último día del mes), vía `DateRangeService`.
+- Si el usuario pide totales **por punto de venta** junto con el conteo de facturas FA–FM, la respuesta lista cada punto de venta y debajo solo las **letras** (FA…FM) con cantidad mayor que cero; sin nombres de columnas SQL ni descripción del armado de la consulta.
+- Si además indica **mes a mes**, **mes x mes**, **mes por mes**, **cada mes**, **mensualmente** o **desglose mensual**, el resultado se arma **un bloque por cada mes calendario** del período (título del mes, rango de fechas del mes y debajo los puntos de venta con letras).
+- Las fechas en el texto de respuesta se formatean según el **idioma de sesión** (`PolicyContext.locale`): p. ej. `es` → día/mes/año; inglés EE. UU. → mes/día/año.
+- Si no hay movimientos que cumplan el filtro, el mensaje debe ser en lenguaje natural (p. ej. «No hay facturas para los filtros que pediste»), sin preámbulo técnico vacío.
+
 ## Secuencia recomendada
 
 Ante una consulta del usuario, el agente debe seguir este orden:
@@ -621,6 +630,14 @@ el agente debe:
 9. `summarize_result`
 10. `audit_ai_interaction`
 11. `export_report` si el usuario lo pide
+
+## Rutas implementadas en backend (Synap `ia` + `reports`)
+
+Complemento operativo respecto del diseño ideal de tools: hoy parte de la lógica vive en `ia.services.report_tools` y `ia.services.report_agent_service` con SQL parametrizado y mismos criterios de perímetro que los informes de `reports`.
+
+- **Desglose por tipo de comprobante** (`cuentacliente`): cantidad de `CodigoMovimiento` distintos y suma de `SubtotalDesc` por `TipoComprobante`, ordenado por cantidad descendente; admite filtro por sucursal si el nombre matchea en `sucursales`; período explícito `DD-MM-YYYY` / `DD/MM/YYYY` o ISO `YYYY-MM-DD` enlazado con `y`, `al`, `a`, `hasta` o `-`; si falta período se usa mes calendario en curso.
+- **Contexto de conversación**: el orquestador envía un snippet de los últimos mensajes para que aclaraciones en varios turnos («ventas» + fechas) sigan la misma intención sin depender solo del último mensaje.
+- **Pedidos / stock**: las palabras clave de estos dominios se evalúan solo sobre el **mensaje actual**, para no disparar falsos positivos cuando el asistente menciona «stock» u «pedidos» en el texto de aclaración.
 
 ## Política de fallback
 

@@ -24,7 +24,7 @@ Al ejecutar **Cerrar OPT** (desde el wizard paso 5 o desde el detalle de la OPT)
 ### 2.1 `comp_ped` (pedidos de venta)
 
 - **Qué se hace:** Se actualiza `estado_pedido_opt` según si queda demanda pendiente para ese pedido: **`'Parcial'`** si en `lista_produccion_detalle` ese pedido tiene alguna línea con `cantidad_pendiente_prod > 0`; **`'Terminado'`** si no queda pendiente.
-- **Criterio:** Por cada `codigo_movimiento_pedido` de la OPT se suma `cantidad_pendiente_prod` en detalle; si suma > 0 → `'Parcial'`, si no → `'Terminado'`.
+- **Criterio:** Por cada `codigo_movimiento_pedido` de la OPT **distinto de 0** (el 0 es demanda sintética por reserva, no un `comp_ped`) se suma `cantidad_pendiente_prod` en detalle; si suma > 0 → `'Parcial'`, si no → `'Terminado'`.
 - **Función auxiliar:** `_actualizar_comp_ped_estado_produccion(cursor, tbl_cp, codigos, estado)`.
 
 ### 2.2 `lista_produccion_agrupada`

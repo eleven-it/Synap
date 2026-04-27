@@ -10,7 +10,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 |--------|-------------|
 | **OPT (Orden de producción)** | Orden que agrupa demanda de producción por artículo. En AdministraNET se representa en `lista_produccion_agrupada` (por `id_lista_produccion` e `id_articulo`). Estados: pendiente de liberar, en proceso, cerrada. |
 | **Lista de producción agrupada** | Tabla que agrupa la demanda por artículo: `cantidad_pedida`, `cantidad_pendiente_prod`, `en_proceso_produccion`, y opcionalmente `cantidad_fabricada_acumulada` (unidades de pack armadas acumuladas por línea, persistidas al registrar OPA). Es la fuente de “qué fabricar” y “cuánto falta”. |
-| **Lista de producción detalle** | Desglose por pedido y artículo (`lista_produccion_detalle`): vincula demanda a pedidos de venta (comp_ped) y stockp. |
+| **Lista de producción detalle** | Desglose por pedido y artículo (`lista_produccion_detalle`): vincula demanda a pedidos de venta (`comp_ped` + `stockp`) y, con `codigo_movimiento_pedido = 0`, la **demanda por reserva** (meta `max(0, R−S)` sin fila en `comp_ped`). Opcional: columna `origen_demanda` (`RESERVA`). |
 | **Pendiente de producción** | Cantidad que falta producir de una OPT: `cantidad_pendiente_prod` en lista_produccion_agrupada. Se reduce al liberar OPT y al registrar OPP. |
 
 ---
@@ -53,7 +53,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 |--------|-------------|
 | **Stock terminado** | Suma de saldos en depósitos con `deposito.suma_stock = 'Si'`. Usado en Pedido producción trabajo (OPT)/Unidades para “cantidad a fabricar” y “cantidad urgente”. |
 | **Cant. parcial fabricada (ventana demanda)** | Unidades de producto terminado (pack) ya armadas en la campaña: se lee de `cantidad_fabricada_acumulada` si la columna existe; si no, respaldo algebraico Cant. pedida − Pendiente producción. |
-| **Stock reserva** | Campo en artículo (`stock_reserva`): solo indicador de stock mínimo a garantizar al producir. No se usa para calcular saldos. **Cant. a fabricar** = max(0, (Cant. pedida agregada − Saldo terminado) + Reserva). |
+| **Stock reserva** | Campo en artículo (`stock_reserva`): indicador **R** de stock mínimo a garantizar; no es saldo. En ventana OPT/Packs: **P_ped** = suma en detalle con código de pedido ≠ 0; **Q_res** = fila código 0; **S** = stock terminado. **Cant. a fabricar** = max(0, **P_ped + R − S**) (un solo pool **S**; no se suma **Q_res** otra vez). **Urgente** = max(0, **P_ped − S**). |
 | **Depósito suma_stock** | Campo en `deposito`: 'Si' o 'No'. Solo los depósitos con suma_stock = 'Si' entran en el cálculo de stock terminado y en indicadores de Pack/Unidades. |
 | **2da selección** | Productos con defectos aptos para venta a menor costo. Se suele usar un depósito específico (ej. “Depósito 2da selección”) y reclasificación desde producción. |
 | **Scrap** | Desecho no vendible. Depósito dedicado o motivo de movimiento para dar de baja producto descartado. |

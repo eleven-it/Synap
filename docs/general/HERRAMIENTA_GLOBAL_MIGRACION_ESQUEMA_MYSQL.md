@@ -11,7 +11,7 @@
 
 | Origen | Mecanismo | Ejemplo |
 |--------|-----------|---------|
-| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR depósito/artículo, trazabilidad lista producción |
+| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR (depósito, lista producción, trazabilidad), **Self-checkout tablas MySQL** (`self_checkout_kiosk`, carrito, sesión, …), objetivos ventas |
 | `core` | Comandos `manage.py` (`apply_schema_mpr`, `apply_alter_detalle_trazabilidad`) delegan en el catálogo | Misma lógica que la herramienta web |
 | `tiendanube_administranet` | `AdministraNETService.verify_and_migrate_schema()` → `run_tiendanube_integration_mysql` | `id_tiendanube` en `cliente` / `articulo` |
 | UI supervisor | **Archivo → Parámetros → Migración esquema MySQL (legacy)** (`core:legacy_mysql_schema`) | Ejecutar proveedores sobre `base_empresa` de sesión |
@@ -69,6 +69,72 @@ Los módulos **registran** sus necesidades de esquema; el núcleo **orquesta** p
 2. ~~Vista `core:legacy_mysql_schema`~~ con lista de proveedores y ejecución por ítem o todos.
 3. Enlace opcional desde **Module Management** hacia la misma URL (si se desea).
 4. Añadir nuevos proveedores solo en `catalog.py` + documentación breve del caso de uso.
+
+---
+
+## Si la migración «no termina» y no hay error en el log
+
+La herramienta web (`core:legacy_mysql_schema`) responve **solo cuando MySQL termina** toda la cadena de la petición (un POST = uno o todos los proveedores). Mientras tanto:
+
+- **No** se escribe en log el resultado final (éxito o fallo); es normal que `docker logs` parezca «mudo» hasta que termine el ALTER más lento.
+- Los `ALTER TABLE` (p. ej. `CHANGE COLUMN` en **MPR — trazabilidad lista producción (detalle)**) pueden tardar **minutos** en tablas grandes o quedar **esperando bloqueo** si otra sesión (VB6, otro Synap, backup) mantiene la tabla abierta.
+
+**Qué hacer**
+
+1. Tras actualizar Synap, vigilar el log de la app: deberían aparecer líneas `legacy_mysql_schema:` (inicio/fin por proveedor y duración) y, para ese proveedor, `MPR trazabilidad detalle:` antes de cada paso pesado.
+2. En MySQL, revisar `SHOW PROCESSLIST` (o `performance_schema.metadata_locks` en 8.0) para ver si la sesión está en «Waiting for table metadata lock».
+3. Para evitar timeout del **navegador o del proxy** delante de ALTER largos, ejecutar el mismo cambio por **CLI** en el contenedor, por ejemplo:
+   - `docker exec Synap_app python manage.py apply_alter_detalle_trazabilidad administranet92`
+   - (u otro `manage.py` que delegue en el mismo catálogo).
+
+### Pocas filas y, aun así, «Waiting for table metadata lock»
+
+El tiempo del `ALTER` **no** depende solo del número de filas visibles: si en `SHOW PROCESSLIST` aparece **Waiting for table metadata lock**, hay **cola de bloqueos de metadatos** sobre `lista_produccion_detalle` / `lista_produccion_agrupada` (u otras tablas tocadas en el mismo lote).
+
+Causas típicas:
+
+- Sesiones en **Sleep** muy largas desde clientes (192.168.x, ERP, herramientas SQL) que mantienen **transacción abierta** o dejaron de usar la tabla pero otra sesión sigue con consultas concurrentes.
+- **Varios** `ALTER` o migraciones lanzados a la vez (pestañas duplicadas, Synap + script manual): todos compiten y se encadenan en espera.
+- Algún proceso que **aún no** aparece como «waiting» pero **retiene** el modo de bloqueo compatible (hay que localizar al «dueño» con `performance_schema.metadata_locks` / `metadata_locks_waits` en MySQL 8 o con la vista `sys` de bloqueos, según instalación).
+
+En la **herramienta web** Synap se usa un **candado lógico** `GET_LOCK('synap_mysql_schema:<base_empresa>', …)` para que **no** se solapen dos ejecuciones de migración desde Synap sobre la misma base (reduce duplicar ALTER por doble clic). **No** sustituye a cerrar clientes externos que bloquean el servidor MySQL.
+
+### Cómo liberar el bloqueo (DBA): localizar y `KILL`
+
+**No** hay un comando mágico tipo “UNLOCK TABLE” para MDL: hay que **terminar la sesión que retiene** el bloqueo (o la que está mal encolada) con criterio, preferiblemente tras identificarla.
+
+1. **MySQL 8.0** — ver quién bloquea a quién (si existe el esquema `sys`):
+
+```sql
+SELECT * FROM sys.schema_table_lock_waits;
+```
+
+O inspección directa (sustituir esquema y tablas):
+
+```sql
+SELECT * FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'TABLE'
+  AND OBJECT_SCHEMA = 'administranet92'
+  AND OBJECT_NAME IN ('lista_produccion_detalle', 'lista_produccion_agrupada');
+```
+
+En `metadata_locks`, interesa la fila cuyo `LOCK_STATUS` sea **granted** con `OWNER_THREAD_ID` del proceso que **impide** el `ALTER` (y las demás en *pending*).
+
+2. **Cortar la sesión bloqueadora** (sustituir `N` por el **Id** de `SHOW PROCESSLIST` o el hilo equivalente):
+
+```sql
+KILL N;
+```
+
+En entornos con roles, a veces hace falta `KILL QUERY N` (solo la consulta actual) frente a `KILL N` (toda la conexión). Para sesiones **Sleep** muy largas que sospechan de transacción colgada, suele usarse `KILL N` sobre esa conexión.
+
+3. **Varios ALTER duplicados en espera**  
+   Tras liberar al **primer bloqueador**, muchas sesiones en *Waiting for table metadata lock* pueden seguir o despejarse solas. Si quedaron migraciones **duplicadas** lanzadas por error, el DBA puede **matar** las sesiones que solo esperan el mismo `ALTER` (dejando **una** que ejecutará el cambio), siempre coordinado con el equipo.
+
+4. **MySQL 5.7**  
+   No hay `metadata_locks` tan cómodo; suele usarse `SHOW FULL PROCESSLIST`, revisar sesiones **no** en espera de MDL que toquen el mismo esquema, o herramientas (`pt-deadlock-logger`, etc.). La lógica es la misma: **identificar conexión** → **`KILL`**.
+
+**Riesgo:** `KILL` a una sesión de producción puede dejar transacciones a medias en el cliente (ERP). Coordinar ventana de mantenimiento, cerrar VB6/Heidi antes de migrar y **no** matar a ciegas el hilo del servidor si no está claro qué es.
 
 ---
 

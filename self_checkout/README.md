@@ -48,6 +48,8 @@ python manage.py create_self_checkout_tables --base-empresa <NOMBRE_BASE>
 python manage.py create_self_checkout_tables --base-empresa <NOMBRE_BASE> --dry-run  # Solo ver SQL
 ```
 
+**Alternativa (misma lógica DDL + columnas posteriores para kiosco/TPV):** en Synap, usuario supervisor, **Archivo → Parámetros → Migración esquema MySQL (legacy)** y el proveedor **«Self-checkout — tablas MySQL (kiosco, carrito, sesión)»** (`self_checkout_core_tables` en `core/services/legacy_mysql_schema/catalog.py`).
+
 Script SQL: `self_checkout/sql/001_self_checkout_tables.sql`
 
 **Migración 004** (recuperación de carritos en error):

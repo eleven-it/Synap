@@ -3,17 +3,19 @@ from __future__ import annotations
 from django.http import Http404
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ia.models import AgentConversation, AgentDefinition
+from ia.models import AgentConversation, AgentDefinition, AgentLearningExample, LearningExampleSource, LearningExampleStatus
 from ia.serializers import (
     AgentConversationSerializer,
     AgentDefinitionSerializer,
     AgentMemoryItemSerializer,
     ConversationCreateSerializer,
     ConversationMessageCreateSerializer,
+    LearningExampleReviewSerializer,
 )
 from ia.services.memory_service import MemoryService
 from ia.services.orchestrator import AgentOrchestrator
@@ -143,6 +145,8 @@ class AgentConversationMessageAPIView(APIView):
             {
                 "conversation_uuid": str(conversation.conversation_uuid),
                 "assistant_message": result.assistant_message.content,
+                "phase": result.assistant_message.structured_content.get("phase"),
+                "execution_status": result.execution.status,
                 "selected_model": {
                     "provider_name": result.selected_model.provider_name,
                     "provider_kind": result.selected_model.provider_kind,
@@ -152,8 +156,62 @@ class AgentConversationMessageAPIView(APIView):
                 },
                 "memory_hits": len(result.memories_used),
                 "execution_id": result.execution.id,
+                "learning_example_id": result.learning_example.id if result.learning_example else None,
             },
             status=201,
+        )
+
+
+class AgentLearningExampleReviewAPIView(APIView):
+    """Aprueba, rechaza o marca como exportado un ejemplo de aprendizaje del hilo."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, conversation_uuid, pk, *args, **kwargs):
+        serializer = LearningExampleReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        example = get_object_or_404(
+            AgentLearningExample.objects.select_related("agent", "conversation"),
+            pk=pk,
+        )
+        if str(example.conversation.conversation_uuid) != str(conversation_uuid):
+            raise Http404("Ejemplo no encontrado.")
+        context = PolicyGate.ensure_agent_access(request, example.agent)
+        if not _conversation_belongs_to_request(example.conversation, context):
+            raise Http404("Ejemplo no encontrado.")
+
+        action = serializer.validated_data["action"]
+        notes = serializer.validated_data.get("notes") or ""
+        corrected = (serializer.validated_data.get("corrected_assistant_text") or "").strip()
+
+        if action == "approve":
+            new_status = LearningExampleStatus.APPROVED
+            if corrected:
+                payload = list(example.messages_payload or [])
+                for i in range(len(payload) - 1, -1, -1):
+                    if payload[i].get("role") == "assistant":
+                        payload[i] = {**payload[i], "content": corrected}
+                        break
+                example.messages_payload = payload
+                example.source = LearningExampleSource.USER_CORRECTION
+        elif action == "reject":
+            new_status = LearningExampleStatus.REJECTED
+        else:
+            new_status = LearningExampleStatus.EXPORTED
+
+        example.status = new_status
+        example.review_notes = notes
+        example.reviewed_at = timezone.now()
+        example.reviewed_by = request.user if request.user.is_authenticated else None
+        example.save()
+
+        return Response(
+            {
+                "id": example.id,
+                "status": example.status,
+                "source": example.source,
+            },
+            status=200,
         )
 
 

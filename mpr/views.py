@@ -64,6 +64,7 @@ from .services import (
     listar_opt_listado,
     listar_movimientos_recientes_mpr,
     listar_operarios_crud,
+    docenas_desde_unidades_opt,
     listar_ventana_pack,
     listar_ventana_pack_unidades,
     listar_empleados_operarios,
@@ -146,9 +147,10 @@ def _get_id_puesto(request):
 
 def _log_mpr_schema_error(e):
     """
-    Registra en el log de la aplicación un error de esquema MPR con el mensaje
-    y los datos técnicos (tabla/campo faltante, excepción original si existe).
-    Usa el logger root para asegurar que el mensaje aparezca en consola/archivo.
+    Registra un fallo de esquema MPR (tabla/columna faltante en AdministraNET).
+
+    Para ``MprSchemaError`` no se usa traceback: es un caso operativo frecuente
+    (BD sin tablas MPR o desactualizada) y ya se informa al usuario con modal.
     """
     detalle_tecnico = ""
     if getattr(e, "__cause__", None) is not None:
@@ -157,8 +159,10 @@ def _log_mpr_schema_error(e):
         str(e),
         detalle_tecnico or "(sin excepción original)",
     )
+    if isinstance(e, MprSchemaError):
+        logger.warning("%s", msg)
+        return
     logger.error(msg, exc_info=True)
-    # Asegurar que llegue al handler de consola por si el logger de mpr no está configurado
     logging.getLogger().error(msg)
 
 
@@ -227,7 +231,9 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
         # KPIs y listas desde MySQL si hay empresa; si no, placeholders
         if base_empresa:
             try:
-                agrupada = listar_lista_produccion_agrupada(base_empresa, limit=50)
+                agrupada = listar_lista_produccion_agrupada(
+                    base_empresa, limit=50, excluir_filas_opt_liberadas_mstock=True
+                )
             except MprSchemaError as e:
                 _log_mpr_schema_error(e)
                 context["mpr_schema_error_modal"] = str(e)
@@ -946,6 +952,7 @@ class OpListView(MprLoginRequiredMixin, TemplateView):
             id_articulo=id_articulo,
             estado_en_proceso=estado_en_proceso,
             solo_atrasadas=solo_atrasadas,
+            excluir_filas_opt_liberadas_mstock=True,
         )
         context["base_empresa"] = base_empresa
         context["ordenes"] = ordenes
@@ -2839,6 +2846,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
                     "stock_terminado": f.get("stock_terminado", 0),
                     "cantidad_urgente": f.get("cantidad_urgente", 0),
                     "cantidad_a_fabricar": qty,
+                    "cantidad_promedio_bulto": f.get("cantidad_promedio_bulto", 0),
                 })
         if not filas_sesion:
             messages.error(request, "Seleccione al menos un artículo con cantidad a fabricar mayor a 0.")
@@ -2862,9 +2870,12 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         wizard = self.request.session.get(WIZARD_SESSION_KEY) or {}
         filas_unidades = listar_unidades_desde_seleccion(base_empresa, filas, limit=200)
         for f in filas_unidades:
-            f["cantidad_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
-            f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)
+            f["cantidad_docenas"] = f.get("cantidad_a_fabricar_docenas", 0)
+            f["cantidad_urgente_docenas"] = f.get("cantidad_urgente_docenas", 0)
             f["id_operario_opt"] = None
+        for f in filas:
+            b = f.get("cantidad_promedio_bulto", 0)
+            f["cantidad_docenas"] = docenas_desde_unidades_opt(f.get("cantidad_a_fabricar"), b)
         context["base_empresa"] = base_empresa
         context["filas"] = filas
         context["filas_unidades"] = filas_unidades
@@ -2875,6 +2886,9 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
             context["opcional_op"] = listar_columnas_opcionales_nueva_op(base_empresa)
         else:
             context["opcional_op"] = {"has_fecha_objetivo": False, "has_deposito_produccion": False, "has_prioridad": False}
+        context["mpr_aviso_sin_deposito_semi_bom"] = (
+            bool(base_empresa) and get_deposito_semi_elaborado_mpr(base_empresa) is None
+        )
         return context
 
 
@@ -2908,6 +2922,7 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
                         "stock_terminado": fila.get("stock_terminado", 0),
                         "cantidad_urgente": fila.get("cantidad_urgente", 0),
                         "cantidad_a_fabricar": int(fila.get("cantidad_a_fabricar") or fila.get("cantidad_pendiente_prod") or 0),
+                        "cantidad_promedio_bulto": fila.get("cantidad_promedio_bulto", 0),
                     }]
                     request.session["ventana_pack_seleccion"] = {"filas": filas_sesion}
                     request.session.modified = True
@@ -2963,18 +2978,16 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
                 base_empresa, limit=200, filas_pack=context["filas"]
             )
             for f in context["filas"]:
-                f["cantidad_a_fabricar_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
-                f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)
                 f["pedidos_resumen_json"] = json.dumps(f.get("pedidos_resumen") or [])
-            for f in context["filas_unidades"]:
-                f["cantidad_a_fabricar_docenas"] = round((f.get("cantidad_a_fabricar") or 0) / 12, 2)
-                f["cantidad_urgente_docenas"] = round((f.get("cantidad_urgente_abs") or 0) / 12, 2)
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = str(e)
             context["filas"] = []
             context["filas_unidades"] = []
 
+        context["mpr_aviso_sin_deposito_semi_bom"] = (
+            bool(base_empresa) and get_deposito_semi_elaborado_mpr(base_empresa) is None
+        )
         context["en_wizard"] = wizard.get("paso") == 1
         context["wizard_paso"] = 1
         return context

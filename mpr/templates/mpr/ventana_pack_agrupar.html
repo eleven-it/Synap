@@ -59,21 +59,29 @@
         {% endif %}
 
         {# Solo Unidades: componentes de recetas (BOM) con Cant. a fabricar editable, alineado con VB6 #}
+        {% if mpr_aviso_sin_deposito_semi_bom %}
+        <p class="mb-3 rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-600/60 dark:bg-amber-950/40 dark:text-amber-100" role="status">
+            No hay depósito <strong>Semi elaborado</strong> configurado. El saldo de componentes se muestra en 0 hasta asignar <code class="text-[11px]">tipo_mpr=SemiElaborado</code> en Config. depósitos MPR.
+        </p>
+        {% endif %}
         <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-generar-opt" data-empleados-url="{% url 'mpr:api_empleados' %}">
             {% csrf_token %}
             <input type="hidden" name="accion" value="generar_opt"/>
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente</p>
                 <div class="overflow-x-auto" role="region" aria-label="Confirmación de cantidades">
-                    <table class="min-w-[56rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <table class="min-w-[64rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
                         <caption class="sr-only">Componentes y cantidades a fabricar</caption>
                         <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                             <tr class="align-bottom">
                                 <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Cod. sist.</th>
                                 <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Artículo</th>
-                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="Suma de saldos en depósitos con suma_stock=Si.">Saldo</th>
-                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="Indicador de stock mínimo a garantizar (no es saldo).">Reserva</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="Solo depósito Semi elaborado (tipo MPR).">Saldo</th>
+                                <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4" title="En componentes no aplica maestro de reserva; siempre 0.">Reserva</th>
                                 <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Cant. pedida</th>
+                                <th scope="col" class="px-2 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Dem. pedido</th>
+                                <th scope="col" class="px-2 py-2 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Dem. reserva pack</th>
+                                <th scope="col" class="px-2 py-2 text-center text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Origen</th>
                                 <th scope="colgroup" colspan="2" class="border-l border-gray-200 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-gray-800 align-bottom dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-100">Cantidad a fabricar</th>
                                 <th scope="colgroup" colspan="2" class="border-l-2 border-l-rose-400/70 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-rose-800 align-bottom dark:border-l-rose-500/60 dark:bg-gray-800/90 dark:text-rose-200">Urgente</th>
                                 <th scope="col" class="min-w-[180px] px-3 py-2 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Operario</th>
@@ -84,10 +92,13 @@
                                 <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
                                 <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
                                 <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
+                                <th class="px-2 py-1.5 align-bottom"></th>
+                                <th class="px-2 py-1.5 align-bottom"></th>
+                                <th class="px-2 py-1.5 align-bottom"></th>
                                 <th class="border-l border-gray-200 bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:border-gray-600 dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Unidades</th>
-                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Docenas</th>
+                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4" title="Unidades ÷ articulo.cantidad_promedio_bulto por fila (si bulto ≤ 0, ÷ 12).">Docenas</th>
                                 <th class="border-l-2 border-l-rose-400/50 bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:border-l-rose-500/40 dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Unidades</th>
-                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Docenas</th>
+                                <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4" title="Unidades ÷ articulo.cantidad_promedio_bulto por fila (si bulto ≤ 0, ÷ 12).">Docenas</th>
                                 <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
                             </tr>
                         </thead>
@@ -102,14 +113,29 @@
                                 <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">
                                     <span class="stock-terminado-tooltip-trigger inline-block cursor-help" data-detalle-stock="{{ f.detalle_stock_depositos_json|default:'{}'|escape }}">{{ f.stock_terminado|floatformat:0 }}</span>
                                 </td>
-                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300" title="Indicador de stock mínimo a garantizar (no es saldo).">{{ f.stock_reserva|floatformat:0 }}</td>
+                                <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300" title="No aplica en componentes.">0</td>
                                 <td class="px-4 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{{ f.cantidad_pedida|floatformat:0 }}</td>
+                                <td class="px-2 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{{ f.cantidad_demanda_pedido|default:0|floatformat:0 }}</td>
+                                <td class="px-2 py-2.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300">{{ f.cantidad_demanda_reserva_pack|default:0|floatformat:0 }}</td>
+                                <td class="px-2 py-2.5 text-center align-middle">
+                                    {% with o=f.origen_demanda_unidades_etiqueta|default:"" %}
+                                    {% if o == "Pedido + reserva pack" %}
+                                    <span class="inline-flex rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100">Ped.+res.</span>
+                                    {% elif o == "Reserva pack" %}
+                                    <span class="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100">Res. pack</span>
+                                    {% elif o == "Pedido" %}
+                                    <span class="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100">Pedido</span>
+                                    {% else %}
+                                    <span class="text-gray-400 dark:text-gray-500 text-xs">—</span>
+                                    {% endif %}
+                                    {% endwith %}
+                                </td>
                                 <td class="border-l border-gray-100 bg-gray-50/90 px-4 py-2.5 text-right dark:border-gray-700 dark:bg-gray-800/35">
-                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar }}" min="1" step="1" data-id-art="{{ f.id_articulo }}" data-docenas-id="doc_{{ f.id_articulo }}"
+                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar }}" min="1" step="1" data-id-art="{{ f.id_articulo }}" data-docenas-id="doc_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}"
                                            class="cant-unidades w-24 rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"/>
                                 </td>
                                 <td class="bg-gray-50/90 px-4 py-2.5 text-right dark:bg-gray-800/35">
-                                    <input type="number" id="doc_{{ f.id_articulo }}" data-id-art="{{ f.id_articulo }}" data-unidades-id="cant_{{ f.id_articulo }}" value="{{ f.cantidad_docenas|floatformat:2 }}" min="0" step="0.01"
+                                    <input type="number" id="doc_{{ f.id_articulo }}" data-id-art="{{ f.id_articulo }}" data-unidades-id="cant_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}" value="{{ f.cantidad_docenas|floatformat:2 }}" min="0" step="0.01"
                                            class="cant-docenas w-24 rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"/>
                                 </td>
                                 <td class="border-l-2 border-l-rose-200/80 bg-gray-50/90 px-4 py-2.5 text-right text-sm tabular-nums dark:border-l-rose-900/50 dark:bg-gray-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_abs|floatformat:0 }}</td>
@@ -128,7 +154,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="10" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                <td colspan="13" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
                                     No hay componentes. Los packs seleccionados no tienen receta (BOM) o no se encontraron componentes.
                                 </td>
                             </tr>
@@ -214,8 +240,13 @@
         el.addEventListener('mouseleave', function() { tipStock.style.display = 'none'; });
     });
 
-    // Sincronización Cant. a fabricar: Unidades <-> Docenas (1 docena = 12 unidades)
-    var UNIDADES_POR_DOCENA = 12;
+    // Sincronización Cant. a fabricar: Unidades <-> «docenas» (unidades ÷ articulo.cantidad_promedio_bulto; si bulto ≤ 0, ÷ 12)
+    function unidadesPorBultoDesdeInput(inp) {
+        if (!inp) return 12;
+        var b = parseFloat(inp.getAttribute('data-bulto'));
+        if (!b || b <= 0 || isNaN(b)) return 12;
+        return b;
+    }
     var form = document.getElementById('form-generar-opt');
     if (form) {
         form.querySelectorAll('.cant-unidades').forEach(function(inp) {
@@ -224,7 +255,8 @@
                 var docenasId = this.getAttribute('data-docenas-id');
                 var docInp = docenasId ? document.getElementById(docenasId) : null;
                 if (docInp) {
-                    docInp.value = (val / UNIDADES_POR_DOCENA).toFixed(2);
+                    var div = unidadesPorBultoDesdeInput(this);
+                    docInp.value = (val / div).toFixed(2);
                 }
             });
         });
@@ -234,7 +266,8 @@
                 var unidadesName = this.getAttribute('data-unidades-id');
                 var unidInp = unidadesName ? form.querySelector('input[name="' + unidadesName + '"]') : null;
                 if (unidInp) {
-                    var u = Math.round(val * UNIDADES_POR_DOCENA);
+                    var div = unidadesPorBultoDesdeInput(unidInp);
+                    var u = Math.round(val * div);
                     unidInp.value = u < 1 ? 1 : u;
                 }
             });

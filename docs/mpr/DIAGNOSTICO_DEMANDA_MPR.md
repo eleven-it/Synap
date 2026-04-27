@@ -6,16 +6,17 @@ Comando para verificar por qué podrían no aparecer pedidos en la pantalla **De
 
 ## Comportamiento de la vista Demanda
 
-La vista **Demanda** (ventana pack) **lee lista_produccion_agrupada**: muestra artículos con `cantidad_pendiente_prod > 0` y `en_proceso_produccion = 'No'`.
+La vista **Demanda** (ventana pack) **lee lista_produccion_agrupada** mediante `listar_ventana_pack` → `listar_lista_produccion_agrupada`: filas con `cantidad_pendiente_prod > 0` y `en_proceso_produccion = 'No'`, y además **excluye** filas con `codigo_movimiento_opt > 0` (OPT ya liberada: código real de `movimiento_stock`). Esas filas pertenecen a un lote OPT liberado; no deben sumarse como demanda nueva aunque queden pendientes inconsistentes tras un cierre.
 
 - Esa tabla se alimenta con **actualizar_pedidos_produccion**, que se ejecuta **al cargar la página** (con los filtros de sesión o por defecto: mes actual) o al pulsar el botón **Actualizar**.
 - El origen de Actualizar es la query de pedidos pendientes (comp_ped + stockp + articulo tipo_art_fab='Terminado', estado_pedido_opt en Pendiente/Parcial), con los **filtros de fecha y búsqueda** configurados en la pantalla.
-- **pedidos_resumen** en la tabla se arma desde **lista_produccion_detalle** + comp_ped.
+- **pedidos_resumen** en la tabla se arma desde **lista_produccion_detalle** + `comp_ped` solo para líneas con `codigo_movimiento_pedido <> 0`. La **demanda por reserva** (fila de detalle con código **0**) se muestra aparte en el mismo tooltip y en columnas **Cant. pedido** / **Dem. reserva**.
+- **Actualizar** también **sincroniza** esa demanda por reserva: `max(0, R − S)` con `R = articulo.stock_reserva` y `S` = stock terminado (depósitos `suma_stock = 'Si'`). Si no hay pedidos PED en el rango de fechas, la acción **no falla**: solo aplica la sincronización por reserva y recalcula agrupada.
 
 Por tanto, para que un artículo aparezca en Demanda:
 
-1. Debe haber pedidos pendientes que lo incluyan (en el rango de fechas y búsqueda que tenga la pantalla).
-2. Esos pedidos deben haber sido incorporados a lista_produccion_detalle y agrupada mediante Actualizar (automático al cargar o al pulsar Actualizar).
+1. Debe existir **pendiente** en `lista_produccion_agrupada` (`cantidad_pendiente_prod > 0`, `en_proceso_produccion = 'No'`, sin OPT liberada), alimentado por **Actualizar** desde pedidos **y/o** desde la fila de demanda por reserva.
+2. Los pedidos pendientes entran según rango de fechas y búsqueda; la reserva se evalúa en cada Actualizar aunque no haya PED en el rango.
 
 ---
 
@@ -36,10 +37,34 @@ El comando:
 2. **Sección 2:** Indica cuántos pares (pedido, artículo) están ya en **lista_produccion_detalle**.
 3. **Sección 3:** Muestra la agregación desde lista_produccion_detalle (en_proceso_produccion='No'), que Actualizar usa para escribir en agrupada.
 4. **Sección 3b:** Artículos que están en pedidos pero no en la agregación de detalle (no aparecerán en Demanda hasta ejecutar Actualizar con filtros que los incluyan).
-5. **Sección 4:** Estado actual de **lista_produccion_agrupada** (lo que la vista Demanda muestra: filas con pendiente > 0 y en_proceso='No').
+5. **Sección 4:** Estado actual de **lista_produccion_agrupada** (la pantalla Demanda aplica además exclusión de `codigo_movimiento_opt > 0`; el comando puede listar filas extra que la UI ya no agrega).
 6. **Sección 5:** Nombres de columnas en detalle/agrupada por si hay diferencias de mayúsculas.
 
 **Conclusión:** Si la sección 1 tiene filas válidas pero la 3 o 4 están vacías, hay que cargar la página (o pulsar Actualizar) con el mismo rango de fechas/búsqueda para que se llenen detalle y agrupada. Si tras eso no se ven artículos, revisar filtros y base_empresa en sesión.
+
+---
+
+## Artículo con `stock_reserva` y saldo bajo que no aparece en ventana-pack
+
+La ventana **solo lista filas de `lista_produccion_agrupada`** con `cantidad_pendiente_prod > 0`, `en_proceso_produccion = 'No'` y sin OPT ya liberada (`codigo_movimiento_opt > 0` cuando aplica esa exclusión). Esa agrupada se rellena al ejecutar **Actualizar**, que además sincroniza la demanda por reserva en `lista_produccion_detalle` (código de pedido **0**).
+
+Compruebe en MySQL para el `IDArt` en cuestión:
+
+1. **`articulo.tipo_art_fab`**: debe ser **terminado** (fabricable en MPR). Si es materia prima, semielaborado u otro valor, **no** se genera fila de demanda por reserva (mismo criterio que los ítems de pedidos PED en `actualizar_pedidos_produccion`). Valor esperado en datos típicos: `Terminado` (Synap compara sin distinguir mayúsculas).
+2. **`articulo.stock_reserva > 0`**: si es 0 o NULL, no hay quiebre de reserva que persistir.
+3. **`lista_produccion_agrupada`**: tras **Actualizar**, debe existir una fila pendiente para ese `id_articulo`. Si solo había una línea antigua con `codigo_movimiento_opt > 0` y pendiente inconsistente, la ventana puede **excluirla** y no verá el artículo hasta corregir datos o tener una fila pendiente válida.
+4. **FK hacia `comp_ped` en `lista_produccion_detalle.codigo_movimiento_pedido`**: si existe, MySQL **rechaza** insertar la demanda por reserva (`codigo_movimiento_pedido = 0` porque no hay comprobante PED). Comprobar en `information_schema`; la migración **«MPR — tabla lista_produccion_detalle»** (catálogo Synap) intenta **eliminar** esa FK de forma idempotente.
+
+```sql
+SELECT IDArt, tipo_art_fab, stock_reserva FROM articulo WHERE IDArt = 127;
+SELECT * FROM lista_produccion_detalle WHERE id_articulo = 127 AND COALESCE(en_proceso_produccion,'No')='No';
+SELECT id_lista_produccion, id_articulo, cantidad_pendiente_prod, en_proceso_produccion, codigo_movimiento_opt
+FROM lista_produccion_agrupada WHERE id_articulo = 127;
+SELECT CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lista_produccion_detalle'
+  AND COLUMN_NAME = 'codigo_movimiento_pedido' AND REFERENCED_TABLE_NAME IS NOT NULL;
+```
 
 ---
 
