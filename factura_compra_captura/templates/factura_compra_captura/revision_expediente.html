@@ -109,6 +109,30 @@
           <label for="importe" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Importe total" %}</label>
           <input id="importe" type="text" inputmode="decimal" placeholder="0.00" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
         </div>
+        <div class="sm:col-span-2 border-t border-gray-200 pt-4 dark:border-gray-600">
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Datos AFIP (opcional)" %}</p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{% trans "CAE y comprobante en AFIP: al guardar borrador se consulta WSFE (si hay certificados) y se muestra si coincide con un comprobante real. No bloquea el guardado." %}</p>
+          <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label for="cae_afip" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">CAE</label>
+              <input id="cae_afip" type="text" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="14 dígitos" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            </div>
+            <div>
+              <label for="pto_vta_afip" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Punto de venta AFIP" %}</label>
+              <input id="pto_vta_afip" type="number" inputmode="numeric" min="1" max="99999" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            </div>
+            <div>
+              <label for="nro_cbte_afip" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">{% trans "Nº comprobante AFIP" %}</label>
+              <input id="nro_cbte_afip" type="number" inputmode="numeric" min="1" class="min-h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel_afip_captura" class="hidden mb-4 rounded-lg border border-slate-200 bg-slate-50/90 p-3 text-sm shadow-sm dark:border-slate-600 dark:bg-slate-900/35" role="status">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{% trans "Última verificación AFIP (captura)" %}</h3>
+        <p class="mt-1 text-xs text-gray-600 dark:text-gray-400"><span class="font-mono font-semibold text-gray-800 dark:text-gray-200" id="afip_captura_status">—</span></p>
+        <p id="afip_captura_msg" class="mt-2 text-xs leading-relaxed text-gray-700 dark:text-gray-300"></p>
       </div>
 
       <h3 class="mt-6 text-base font-semibold text-gray-900 dark:text-white">{% trans "Líneas del comprobante" %}</h3>
@@ -195,6 +219,20 @@
       function showErr(t) { errEl.classList.toggle('hidden', !t); errEl.textContent = t || ''; okEl.classList.add('hidden'); }
       function showOk(t) { okEl.classList.toggle('hidden', !t); okEl.textContent = t || ''; errEl.classList.add('hidden'); }
       function showOcrHint(t) { ocrHintEl.classList.toggle('hidden', !t); ocrHintEl.textContent = t || ''; }
+
+      function renderAfipCaptura(f) {
+        const panel = document.getElementById('panel_afip_captura');
+        if (!panel) return;
+        if (!f || !f.status) {
+          panel.classList.add('hidden');
+          return;
+        }
+        panel.classList.remove('hidden');
+        var st = document.getElementById('afip_captura_status');
+        var msg = document.getElementById('afip_captura_msg');
+        if (st) st.textContent = String(f.status);
+        if (msg) msg.textContent = String(f.mensaje || '');
+      }
 
       function renderMotorPanel(d) {
         const panel = document.getElementById('panel_motor_doc');
@@ -669,9 +707,16 @@
         }
 
         renderMotorPanel(d);
+        renderAfipCaptura(d.fiscal_afip_verificacion_captura);
         syncLineasJsonFromCarrito();
         window._revision_last_expediente = d;
         aplicarBotonesWorkflow(d);
+        var elCae = document.getElementById('cae_afip');
+        var elPto = document.getElementById('pto_vta_afip');
+        var elNroAfip = document.getElementById('nro_cbte_afip');
+        if (elCae) elCae.value = h.cae != null && h.cae !== '' ? String(h.cae).trim() : '';
+        if (elPto) elPto.value = h.pto_vta_afip != null && h.pto_vta_afip !== '' ? String(h.pto_vta_afip) : '';
+        if (elNroAfip) elNroAfip.value = h.nro_cbte_afip != null && h.nro_cbte_afip !== '' ? String(h.nro_cbte_afip) : '';
         window._revision_snapshot = {
           nro_comp: document.getElementById('nro_comp').value,
           fecha_comp: document.getElementById('fecha_comp').value,
@@ -679,7 +724,10 @@
           cuit_prov: document.getElementById('cuit_prov').value,
           razon_social_prov: document.getElementById('razon_social_prov').value,
           tipo_fiscal: document.getElementById('tipo_fiscal').value,
-          lineas_json: document.getElementById('lineas_json').value
+          lineas_json: document.getElementById('lineas_json').value,
+          cae_afip: elCae ? elCae.value : '',
+          pto_vta_afip: elPto ? elPto.value : '',
+          nro_cbte_afip: elNroAfip ? elNroAfip.value : ''
         };
 
         let evs;
@@ -775,6 +823,24 @@
         let lineas;
         try { lineas = JSON.parse(document.getElementById('lineas_json').value || '[]'); }
         catch (e) { throw new Error('JSON de líneas inválido.'); }
+        var ph = {
+            nro_comprobante_formateado: document.getElementById('nro_comp').value.trim(),
+            fecha_comprobante: document.getElementById('fecha_comp').value || null,
+            importe_total: document.getElementById('importe').value || null,
+            tipo_factura: document.getElementById('tipo_fiscal').value,
+          };
+        var caeV = (document.getElementById('cae_afip') && document.getElementById('cae_afip').value || '').trim();
+        var ptoS = (document.getElementById('pto_vta_afip') && document.getElementById('pto_vta_afip').value || '').trim();
+        var nroS = (document.getElementById('nro_cbte_afip') && document.getElementById('nro_cbte_afip').value || '').trim();
+        if (caeV) ph.cae = caeV;
+        if (ptoS) {
+          var pi = parseInt(ptoS, 10);
+          if (!isNaN(pi)) ph.pto_vta_afip = pi;
+        }
+        if (nroS) {
+          var ni = parseInt(nroS, 10);
+          if (!isNaN(ni)) ph.nro_cbte_afip = ni;
+        }
         const body = {
           codigo_proveedor_legacy: parseInt(document.getElementById('cod_prov').value, 10) || null,
           origen_datos: document.getElementById('origen').value,
@@ -785,12 +851,7 @@
               razon_social: (document.getElementById('razon_social_prov').value || '').trim(),
             },
           },
-          posting_header: {
-            nro_comprobante_formateado: document.getElementById('nro_comp').value.trim(),
-            fecha_comprobante: document.getElementById('fecha_comp').value || null,
-            importe_total: document.getElementById('importe').value || null,
-            tipo_factura: document.getElementById('tipo_fiscal').value,
-          },
+          posting_header: ph,
         };
         const snap = window._revision_snapshot || null;
         const append = [];
@@ -813,6 +874,15 @@
           }
           if (neq(document.getElementById('tipo_fiscal').value, snap.tipo_fiscal)) {
             append.push({ campo: 'tipo_factura', valor_anterior: snap.tipo_fiscal || null, valor_nuevo: document.getElementById('tipo_fiscal').value || null });
+          }
+          if (snap.cae_afip != null && neq((document.getElementById('cae_afip') && document.getElementById('cae_afip').value || '').trim(), snap.cae_afip)) {
+            append.push({ campo: 'cae', valor_anterior: snap.cae_afip || null, valor_nuevo: (document.getElementById('cae_afip').value || '').trim() || null });
+          }
+          if (snap.pto_vta_afip != null && neq((document.getElementById('pto_vta_afip') && document.getElementById('pto_vta_afip').value || '').trim(), snap.pto_vta_afip)) {
+            append.push({ campo: 'pto_vta_afip', valor_anterior: snap.pto_vta_afip || null, valor_nuevo: (document.getElementById('pto_vta_afip').value || '').trim() || null });
+          }
+          if (snap.nro_cbte_afip != null && neq((document.getElementById('nro_cbte_afip') && document.getElementById('nro_cbte_afip').value || '').trim(), snap.nro_cbte_afip)) {
+            append.push({ campo: 'nro_cbte_afip', valor_anterior: snap.nro_cbte_afip || null, valor_nuevo: (document.getElementById('nro_cbte_afip').value || '').trim() || null });
           }
           syncLineasJsonFromCarrito();
           if (neq(document.getElementById('lineas_json').value, snap.lineas_json)) {

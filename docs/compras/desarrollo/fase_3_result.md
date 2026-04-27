@@ -20,7 +20,10 @@
 ## Permisos y UI
 
 - Permisos por codename: `crear`, `ver`, `editar`, `revisar`, `aprobar`, `rechazar`, `reintentar_posting`.
-- Pantalla de revisión: `/compras/revision/<uuid>/` (mobile-first + split desktop), con foco en escaneo visual rápido y edición eficiente.
+- **Alineación menú Compras / Stock (captura):** acceso web a listado y captura móvil y lecturas API equivalentes (`GET` listado/detalle/eventos/documentos) con `compras.ver` **o** `factura_compra_captura.ver`; alta de expediente y subida inicial de archivo también con `compras.ver` o `factura_compra_captura.crear`. La lógica compartida vive en `factura_compra_captura/permisos_modulo.py`.
+- **Revisión y documento en iframe:** pantalla `revision` y `DocumentoFuenteServeView` exigen `factura_compra_captura.editar`, empresa activa en sesión y coincidencia con la empresa del expediente; se corrigió el caso en que sin empresa en sesión el PDF quedaba accesible.
+- **Reintento OCR (API):** solo `editar` o `reintentar_posting` (no basta con `crear` ni `compras.ver`).
+- Pantalla de revisión: `/compras/captura/revision/<uuid>/` (mobile-first + split desktop), con foco en escaneo visual rápido y edición eficiente.
 
 ## Congelamiento `LegacyPostingCommand` v1
 

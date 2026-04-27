@@ -84,6 +84,7 @@ class ExpedienteFacturaCompraSerializer(serializers.ModelSerializer):
     documentos_fuente = DocumentoFuenteSerializer(many=True, read_only=True)
     acciones_permitidas = serializers.SerializerMethodField()
     revision_engine_context = serializers.SerializerMethodField()
+    fiscal_afip_verificacion_captura = serializers.SerializerMethodField()
 
     class Meta:
         model = ExpedienteFacturaCompra
@@ -107,6 +108,7 @@ class ExpedienteFacturaCompraSerializer(serializers.ModelSerializer):
             "documentos_fuente",
             "acciones_permitidas",
             "revision_engine_context",
+            "fiscal_afip_verificacion_captura",
         ]
         read_only_fields = [
             "id",
@@ -123,6 +125,7 @@ class ExpedienteFacturaCompraSerializer(serializers.ModelSerializer):
             "documentos_fuente",
             "acciones_permitidas",
             "revision_engine_context",
+            "fiscal_afip_verificacion_captura",
         ]
 
     def get_acciones_permitidas(self, obj: ExpedienteFacturaCompra):
@@ -137,6 +140,14 @@ class ExpedienteFacturaCompraSerializer(serializers.ModelSerializer):
         de = raw.get("document_engine_v1")
         af = (obj.metadata or {}).get("analyst_feedback")
         return build_revision_engine_context_for_ui(de, analyst_feedback_persisted=af)
+
+    def get_fiscal_afip_verificacion_captura(self, obj: ExpedienteFacturaCompra):
+        md = obj.metadata or {}
+        compras = md.get("compras")
+        if not isinstance(compras, dict):
+            return None
+        snap = compras.get("fiscal_afip_verificacion_captura")
+        return snap if isinstance(snap, dict) else None
 
 
 class ExpedienteCreateSerializer(serializers.Serializer):
@@ -252,6 +263,7 @@ class ExpedientePatchSerializer(serializers.Serializer):
         ):
             if key in validated_data:
                 kw[key] = validated_data[key]
+        kw["request"] = self.context.get("request")
         try:
             return ExpedienteService.actualizar(instance, **kw)
         except TransicionEstadoInvalida as e:

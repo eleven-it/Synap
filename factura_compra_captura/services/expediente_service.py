@@ -16,6 +16,7 @@ from factura_compra_captura.models import (
 from factura_compra_captura.services.duplicate_detection import DuplicateDetectionService
 from factura_compra_captura.services.fiscal_invoice_validation import (
     FiscalInvoiceValidationService,
+    mensaje_verificacion_fiscal_captura_es,
     resolve_base_empresa_for_compras,
     tipo_factura_desde_expediente_metadata,
 )
@@ -75,6 +76,46 @@ def _cuit_11_digitos_para_resolver(expediente: ExpedienteFacturaCompra) -> str |
 
 
 class ExpedienteService:
+    @staticmethod
+    def _persist_fiscal_verificacion_captura(
+        expediente: ExpedienteFacturaCompra,
+        *,
+        request: HttpRequest | None,
+    ) -> None:
+        """
+        Tras actualizar cabecera de posting, consulta AFIP en modo informativo y guarda en metadata.
+        No bloquea; errores transitorios quedan registrados para la UI.
+        """
+        from django.utils import timezone
+
+        try:
+            expediente.refresh_from_db()
+            be = resolve_base_empresa_for_compras(expediente, request)
+            key = f"captura_afip:{expediente.id}:{timezone.now().timestamp()}"
+            cmd = map_expediente_to_command_v1(expediente, idempotency_key=key)
+            fr = FiscalInvoiceValidationService.validate_for_captura(
+                expediente,
+                cmd,
+                base_empresa=be,
+            )
+            md = dict(expediente.metadata or {})
+            compras = dict(md.get("compras") or {})
+            compras["fiscal_afip_verificacion_captura"] = {
+                "evaluado_en": timezone.now().isoformat(),
+                "status": fr.status.value,
+                "reason_codes": list(fr.reason_codes),
+                "details": dict(fr.details),
+                "mensaje": mensaje_verificacion_fiscal_captura_es(fr),
+            }
+            md["compras"] = compras
+            expediente.metadata = md
+            expediente.save(update_fields=["metadata", "modificado_en"])
+        except Exception:
+            logger.exception(
+                "fiscal_afip_verificacion_captura falló (expediente=%s)",
+                expediente.pk,
+            )
+
     @staticmethod
     def _merge_proveedor_metadata(
         expediente: ExpedienteFacturaCompra,
@@ -219,6 +260,7 @@ class ExpedienteService:
         posting_context: dict[str, Any] | None = None,
         vales_codigos: list[int] | None = None,
         analyst_feedback_append: list[dict[str, Any]] | None = None,
+        request: HttpRequest | None = None,
     ) -> ExpedienteFacturaCompra:
         if expediente.estado not in (
             ExpedienteFacturaCompra.Estado.BORRADOR,
@@ -300,6 +342,12 @@ class ExpedienteService:
             tipo="expediente_actualizado",
             payload={"campos": True, "lineas": lineas is not None},
         )
+        # Verificación AFIP informativa solo vía HTTP (request en contexto API/revisión web).
+        if posting_header is not None and request is not None:
+            ExpedienteService._persist_fiscal_verificacion_captura(
+                expediente,
+                request=request,
+            )
         return expediente
 
     @staticmethod

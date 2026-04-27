@@ -9,19 +9,23 @@ from django.views import View
 from django.views.generic import ListView, TemplateView
 
 from factura_compra_captura.models import DocumentoFuente, ExpedienteFacturaCompra
+from factura_compra_captura.permisos_modulo import usuario_puede_acceder_modulo_captura
 from factura_compra_captura.session_empresa import empresa_synap_id_desde_sesion
 
 # Alias usado en esta app (misma función que API)
 empresa_id_desde_sesion = empresa_synap_id_desde_sesion
 
 
-class CapturaMovilView(LoginRequiredMixin, TemplateView):
+class CapturaMovilView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
     """
     Shell móvil mínimo (Fase 2): cámara/archivo + subida a la API.
-    Requiere sesión; ajustar empresa en query ?empresa=ID.
+    Mismo criterio de acceso que el listado de expedientes (``compras.ver`` o ``factura_compra_captura.ver``).
     """
 
     template_name = "factura_compra_captura/captura_movil.html"
+
+    def test_func(self):
+        return usuario_puede_acceder_modulo_captura(self.request.user)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -43,7 +47,15 @@ class RevisionExpedienteView(LoginRequiredMixin, UserPassesTestMixin, TemplateVi
             return False
         if getattr(u, "is_superuser", False):
             return True
-        return u.has_perm("factura_compra_captura.editar")
+        if not u.has_perm("factura_compra_captura.editar"):
+            return False
+        expediente = ExpedienteFacturaCompra.objects.filter(pk=self.kwargs.get("pk")).first()
+        if expediente is None:
+            return True
+        eid = empresa_id_desde_sesion(self.request)
+        if eid is None:
+            return False
+        return int(expediente.empresa_id) == int(eid)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -84,19 +96,26 @@ class RevisionExpedienteView(LoginRequiredMixin, UserPassesTestMixin, TemplateVi
 class DocumentoFuenteServeView(View):
     """
     Sirve PDF/imagen para el iframe de revisión.
-    Autorización: solo sesión administraNET (request.session[\"user\"]) y
-    id_empresa de esa sesión = empresa del expediente (no usa permisos Django).
+    Requiere usuario autenticado (middleware Synap), permiso de edición del expediente
+    y empresa activa en sesión coincidente con el expediente.
     """
 
     def dispatch(self, request, *args, **kwargs):
-        if not request.session.get("user"):
+        if not request.user.is_authenticated:
+            raise Http404()
+        if not (
+            getattr(request.user, "is_superuser", False)
+            or request.user.has_perm("factura_compra_captura.editar")
+        ):
             raise Http404()
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, pk, doc_pk):
         expediente = get_object_or_404(ExpedienteFacturaCompra, pk=pk)
         sess_emp = empresa_id_desde_sesion(request)
-        if sess_emp is not None and int(expediente.empresa_id) != int(sess_emp):
+        if sess_emp is None:
+            raise Http404()
+        if int(expediente.empresa_id) != int(sess_emp):
             raise Http404()
         doc = get_object_or_404(
             DocumentoFuente, pk=doc_pk, expediente_id=expediente.pk
@@ -131,12 +150,7 @@ class ListaExpedientesCompraView(LoginRequiredMixin, UserPassesTestMixin, ListVi
     paginate_by = 25
 
     def test_func(self):
-        u = self.request.user
-        if not u.is_authenticated:
-            return False
-        if getattr(u, "is_superuser", False):
-            return True
-        return u.has_perm("compras.ver") or u.has_perm("factura_compra_captura.ver")
+        return usuario_puede_acceder_modulo_captura(self.request.user)
 
     def get_queryset(self):
         eid = empresa_id_desde_sesion(self.request)
