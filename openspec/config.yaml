@@ -1,0 +1,57 @@
+# Configuración SDD (OpenSpec) — Synap
+# Convención: ~/.claude/skills/_shared/openspec-convention.md
+
+schema: spec-driven
+
+context: |
+  Synap: Django 4.2, DRF, PostgreSQL, MySQL legacy AdministraNET, Redis, Celery en deps.
+  Contenedor: `Synap_app` para manage.py, pytest y comandos de app (ver .cursorrules).
+  Apps principales: core, login, reports, compras, legacy_db, self_checkout, ecom, ventas, stock, ia.
+  UI: Tailwind/django-tailwind + `theme/`; `support/frontend` (Vite, React 18, TS, ESLint).
+  Convenciones: español en repo/UI; tipos legacy `core.utils.administranet_types`; docs en `docs/`.
+
+strict_tdd: true
+
+testing:
+  strict_tdd_mode: enabled
+  runner: pytest
+  framework: pytest-django
+  command: docker exec Synap_app pytest
+  coverage_command: docker exec Synap_app pytest --cov
+  markers:
+    integration: tests que requieren MySQL legacy u otros servicios (pytest.ini)
+  layers:
+    unit: available
+    integration: partial
+    e2e: not_installed_in_backend_requirements
+  quality:
+    python_linter: not_configured_in_root
+    frontend_lint: "npm run lint (en support/frontend)"
+    frontend_types: "tsc -b (script build en support/frontend)"
+
+rules:
+  proposal:
+    - Incluir plan de rollback en cambios riesgosos
+    - Identificar apps y módulos Django afectados
+  specs:
+    - Escenarios en formato Dado/Cuando/Entonces
+    - Palabras clave RFC 2119 (MUST, SHALL, SHOULD, MAY) donde aplique contrato técnico
+  design:
+    - Diagramas de secuencia en flujos complejos (p. ej. Mermaid)
+    - Decisiones de arquitectura con alternativas descartadas y motivo
+  tasks:
+    - Agrupar por fase (infra, implementación, pruebas)
+    - Numeración jerárquica (1.1, 1.2); tareas cerrables en una sesión
+  apply:
+    - Respetar patrones existentes y .cursorrules
+    - Migraciones MySQL legacy vía catálogo en core/services/legacy_mysql_schema/catalog.py
+    tdd: true
+    test_command: docker exec Synap_app pytest
+  verify:
+    - Ejecutar tests si existen para el ámbito del cambio
+    - Contrastar implementación con cada escenario del spec
+    test_command: docker exec Synap_app pytest
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Advertir antes de fusionar deltas destructivos (eliminaciones grandes)

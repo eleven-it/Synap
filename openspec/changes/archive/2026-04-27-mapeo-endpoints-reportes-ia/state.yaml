@@ -1,0 +1,12 @@
+change: mapeo-endpoints-reportes-ia
+status: archived
+archived_at: "2026-04-27"
+phases:
+  explore: optional
+  proposal: done
+  spec: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done
+main_spec: openspec/specs/reports-api-ia-bridge/spec.md

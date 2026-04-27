@@ -6,6 +6,10 @@ Este documento define las herramientas permitidas para el Asistente de Reportes,
 
 El objetivo es permitir acceso seguro, controlado y trazable a la información necesaria para responder consultas de usuarios sin convertir al agente en un ejecutor libre de base de datos.
 
+## Contrato API de reportes (HTTP)
+
+La implementación actual del asistente usa **servicios in-process** (`ReportToolsService` → `QueryRunnerService`) con las mismas reglas de permisos y payload que las vistas REST. El **inventario** de rutas bajo **`/api/reports/`** (método, permisos, query y cuerpos) está en **`docs/reports/REPORTS_API_IA.md`**. Los requisitos normativos están en **`openspec/specs/reports-api-ia-bridge/spec.md`** (histórico SDD: `openspec/changes/archive/2026-04-27-mapeo-endpoints-reportes-ia/`).
+
 ## Principios generales
 
 - usar la herramienta más segura y específica posible;
